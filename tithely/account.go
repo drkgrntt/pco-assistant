@@ -12,6 +12,14 @@ type Address struct {
 	Country       string `json:"country"`
 }
 
+func (a *Address) IsEmpty() (isEmpty bool) {
+	return a.StreetAddress == "" &&
+		a.City == "" &&
+		a.State == "" &&
+		a.Postal == "" &&
+		a.Country == ""
+}
+
 type Account struct {
 	AccountID   string  `json:"account_id"`
 	CreatedDate string  `json:"created_date"`
@@ -20,6 +28,27 @@ type Account struct {
 	LastName    string  `json:"last_name"`
 	Address     Address `json:"address"`
 	PhoneNumber string  `json:"phone_number"`
+}
+
+func (a *Account) IsBlank() bool {
+	hasInfo := false
+	if a.FirstName != "" {
+		hasInfo = true
+	}
+	if a.LastName != "" {
+		hasInfo = true
+	}
+	if a.Email != "" {
+		hasInfo = true
+	}
+	if a.PhoneNumber != "" {
+		hasInfo = true
+	}
+	if !a.Address.IsEmpty() {
+		hasInfo = true
+	}
+
+	return !hasInfo
 }
 
 type AccountsResponse struct {

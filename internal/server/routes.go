@@ -50,8 +50,7 @@ func (s *FiberServer) tithely(c *fiber.Ctx) error {
 
 func (s *FiberServer) pco(c *fiber.Ctx) error {
 	people, _ := pco.GetPeople(&pco.PeopleParams{
-		FirstName: "test_first",
-		LastName:  "test_last",
+		Email: "yourgiving.co",
 	})
 
 	return c.JSON(people)

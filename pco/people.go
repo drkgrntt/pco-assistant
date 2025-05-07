@@ -105,7 +105,7 @@ func GetPeople(params *PeopleParams) (response PersonListResponse, err error) {
 
 	if params.Email != "" {
 		email := strings.ReplaceAll(params.Email, " ", "_")
-		url += fmt.Sprintf("&where[email]=%s", email)
+		url += fmt.Sprintf("&where[search_name_or_email]=%s", email)
 	}
 
 	if params.SearchPhoneNumber != "" {
