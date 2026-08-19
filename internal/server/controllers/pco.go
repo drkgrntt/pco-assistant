@@ -3,7 +3,7 @@ package controllers
 import (
 	"strings"
 
-	"church/internal/server/middleware"
+	"pco-assistant/internal/server/middleware"
 
 	pco "github.com/drkgrntt/go-pco"
 	"github.com/gofiber/fiber/v2"

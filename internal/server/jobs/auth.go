@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"church/internal/auth"
+	"pco-assistant/internal/auth"
 
 	"github.com/go-co-op/gocron/v2"
 )

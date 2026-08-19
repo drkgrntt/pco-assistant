@@ -1,12 +1,12 @@
 package main
 
 import (
-	"church/internal/server"
 	"context"
 	"fmt"
 	"log"
 	"os"
 	"os/signal"
+	"pco-assistant/internal/server"
 	"strconv"
 	"syscall"
 	"time"

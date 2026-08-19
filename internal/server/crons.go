@@ -3,7 +3,7 @@ package server
 import (
 	"log"
 
-	"church/internal/server/jobs"
+	"pco-assistant/internal/server/jobs"
 
 	"github.com/go-co-op/gocron/v2"
 )

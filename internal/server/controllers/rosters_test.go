@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"church/internal/scheduling"
+	"pco-assistant/internal/scheduling"
 
 	pco "github.com/drkgrntt/go-pco"
 )

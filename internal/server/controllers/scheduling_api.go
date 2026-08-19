@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"errors"
 
-	"church/internal/scheduling"
+	"pco-assistant/internal/scheduling"
 
 	"github.com/gofiber/fiber/v2"
 )

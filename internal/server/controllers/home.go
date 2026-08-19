@@ -1,8 +1,8 @@
 package controllers
 
 import (
-	"church/internal/server/middleware"
-	"church/internal/views"
+	"pco-assistant/internal/server/middleware"
+	"pco-assistant/internal/views"
 
 	"github.com/gofiber/fiber/v2"
 )

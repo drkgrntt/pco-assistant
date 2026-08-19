@@ -1,4 +1,4 @@
-module church
+module pco-assistant
 
 go 1.26.5
 

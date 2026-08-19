@@ -3,9 +3,9 @@ package server
 import (
 	"github.com/gofiber/fiber/v2"
 
-	"church/internal/auth"
-	"church/internal/database"
-	"church/internal/scheduling"
+	"pco-assistant/internal/auth"
+	"pco-assistant/internal/database"
+	"pco-assistant/internal/scheduling"
 )
 
 type FiberServer struct {
@@ -21,8 +21,8 @@ func New() *FiberServer {
 
 	server := &FiberServer{
 		App: fiber.New(fiber.Config{
-			ServerHeader: "church",
-			AppName:      "church",
+			ServerHeader: "pco-assistant",
+			AppName:      "pco-assistant",
 		}),
 
 		db:              db,

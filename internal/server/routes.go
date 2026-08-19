@@ -3,8 +3,8 @@ package server
 import (
 	"log"
 
-	"church/internal/server/controllers"
-	"church/internal/server/middleware"
+	"pco-assistant/internal/server/controllers"
+	"pco-assistant/internal/server/middleware"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"

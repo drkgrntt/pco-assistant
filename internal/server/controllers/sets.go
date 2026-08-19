@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"strings"
 
-	"church/internal/scheduling"
-	"church/internal/server/middleware"
-	views "church/internal/views/scheduling"
+	"pco-assistant/internal/scheduling"
+	"pco-assistant/internal/server/middleware"
+	views "pco-assistant/internal/views/scheduling"
 
 	pco "github.com/drkgrntt/go-pco"
 	"github.com/gofiber/fiber/v2"

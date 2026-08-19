@@ -3,7 +3,7 @@ package middleware
 import (
 	"strings"
 
-	"church/internal/auth"
+	"pco-assistant/internal/auth"
 
 	"github.com/gofiber/fiber/v2"
 )

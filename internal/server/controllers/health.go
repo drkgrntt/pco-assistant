@@ -1,7 +1,7 @@
 package controllers
 
 import (
-	"church/internal/database"
+	"pco-assistant/internal/database"
 
 	"github.com/gofiber/fiber/v2"
 )

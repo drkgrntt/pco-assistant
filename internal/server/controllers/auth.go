@@ -5,9 +5,9 @@ import (
 	"encoding/base64"
 	"time"
 
-	"church/internal/auth"
-	"church/internal/server/middleware"
-	"church/internal/views"
+	"pco-assistant/internal/auth"
+	"pco-assistant/internal/server/middleware"
+	"pco-assistant/internal/views"
 
 	"github.com/gofiber/fiber/v2"
 )
