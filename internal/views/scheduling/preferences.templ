@@ -1,0 +1,109 @@
+package scheduling
+
+import (
+	"fmt"
+
+	pco "github.com/drkgrntt/go-pco"
+
+	"church/internal/scheduling"
+	"church/internal/views"
+)
+
+templ Preferences(personName string, songs []pco.SongData, preferences []scheduling.SongPersonPreference, songTitles map[string]string, personNames map[string]string, errMsg string) {
+	@views.Layout("Song Preferences", personName) {
+		<h1>Song / Person Preferences</h1>
+		<p class="muted">Note which people are preferred or discouraged for a given song - pick the song from your Planning Center library and search for the person by name.</p>
+		<form class="inline" hx-post="/scheduling/song-preferences" hx-target="#preferences-table" hx-swap="outerHTML">
+			<label>
+				Song
+				<select name="song_id" required>
+					<option value="" selected disabled>Choose a song</option>
+					for _, song := range songs {
+						<option value={ song.ID }>{ song.Attributes.Title }</option>
+					}
+				</select>
+			</label>
+			@PersonPickerField("Person", "person_id", "")
+			<label>
+				Preference
+				<select name="preference">
+					<option value="preferred">Preferred</option>
+					<option value="discouraged">Discouraged</option>
+				</select>
+			</label>
+			<label>
+				Notes
+				<input type="text" name="notes"/>
+			</label>
+			<button type="submit" class="primary">Save</button>
+		</form>
+		@PreferencesTable(preferences, songTitles, personNames, errMsg)
+	}
+}
+
+// PreferencesTable is both the initial-render fragment and the htmx swap
+// target (id="preferences-table") - see RelationshipsTable for why errMsg
+// lives inside it rather than the page around it. songTitles/personNames
+// resolve a preference's raw PCO song/person IDs back to display values
+// (see songTitleMap/personNameMap in the scheduling controller); an ID
+// missing from its map falls back to showing the raw ID.
+templ PreferencesTable(preferences []scheduling.SongPersonPreference, songTitles map[string]string, personNames map[string]string, errMsg string) {
+	<div id="preferences-table">
+		if errMsg != "" {
+			<p class="error">{ errMsg }</p>
+		}
+		<div class="table-wrap">
+			<table class="sortable">
+				<thead>
+					<tr>
+						<th>Song</th>
+						<th>Person</th>
+						<th>Preference</th>
+						<th>Notes</th>
+						<th></th>
+					</tr>
+				</thead>
+				<tbody>
+					for _, pref := range preferences {
+						<tr>
+							<td>
+								if title, ok := songTitles[pref.SongID]; ok {
+									{ title }
+								} else {
+									{ pref.SongID }
+								}
+							</td>
+							<td>
+								if name, ok := personNames[pref.PersonID]; ok {
+									{ name }
+								} else {
+									{ pref.PersonID }
+								}
+							</td>
+							<td>{ pref.Preference }</td>
+							<td>{ pref.Notes }</td>
+							<td>
+								<button
+									class="danger icon-btn"
+									aria-label="Delete preference"
+									title="Delete preference"
+									hx-delete={ fmt.Sprintf("/scheduling/song-preferences/%d", pref.ID) }
+									hx-target="#preferences-table"
+									hx-swap="outerHTML"
+									hx-confirm="Delete this preference?"
+								>
+									@views.IconRemove()
+								</button>
+							</td>
+						</tr>
+					}
+					if len(preferences) == 0 {
+						<tr>
+							<td colspan="5" class="muted">No preferences set yet.</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+}

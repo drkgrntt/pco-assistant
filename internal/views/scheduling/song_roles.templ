@@ -1,0 +1,91 @@
+package scheduling
+
+import (
+	"fmt"
+
+	pco "github.com/drkgrntt/go-pco"
+
+	"church/internal/scheduling"
+	"church/internal/views"
+)
+
+templ SongRoles(personName string, songs []pco.SongData, roles []scheduling.SongRole, songTitles map[string]string, errMsg string) {
+	@views.Layout("Song Roles", personName) {
+		<h1>Song Roles</h1>
+		<p class="muted">Tag songs as good openers or good response songs, for use when building a set.</p>
+		<form class="inline" hx-post="/scheduling/song-roles" hx-target="#song-roles-table" hx-swap="outerHTML">
+			<label>
+				Song
+				<select name="song_id" required>
+					<option value="" selected disabled>Choose a song</option>
+					for _, song := range songs {
+						<option value={ song.ID }>{ song.Attributes.Title }</option>
+					}
+				</select>
+			</label>
+			<label>
+				Role
+				<select name="role">
+					<option value="opener">Opener</option>
+					<option value="response">Response</option>
+				</select>
+			</label>
+			<button type="submit" class="primary">Add</button>
+		</form>
+		@SongRolesTable(roles, songTitles, errMsg)
+	}
+}
+
+// SongRolesTable is both the initial-render fragment and the htmx swap
+// target (id="song-roles-table") - see RelationshipsTable for why errMsg
+// lives inside it rather than the page around it.
+templ SongRolesTable(roles []scheduling.SongRole, songTitles map[string]string, errMsg string) {
+	<div id="song-roles-table">
+		if errMsg != "" {
+			<p class="error">{ errMsg }</p>
+		}
+		<div class="table-wrap">
+			<table class="sortable">
+				<thead>
+					<tr>
+						<th>Song</th>
+						<th>Role</th>
+						<th></th>
+					</tr>
+				</thead>
+				<tbody>
+					for _, role := range roles {
+						<tr>
+							<td>
+								if title, ok := songTitles[role.SongID]; ok {
+									{ title }
+								} else {
+									{ role.SongID }
+								}
+							</td>
+							<td>{ role.Role }</td>
+							<td>
+								<button
+									class="danger icon-btn"
+									aria-label="Remove tag"
+									title="Remove tag"
+									hx-delete={ fmt.Sprintf("/scheduling/song-roles/%d", role.ID) }
+									hx-target="#song-roles-table"
+									hx-swap="outerHTML"
+									hx-confirm="Remove this tag?"
+								>
+									@views.IconRemove()
+								</button>
+							</td>
+						</tr>
+					}
+					if len(roles) == 0 {
+						<tr>
+							<td colspan="3" class="muted">No songs tagged yet.</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+}

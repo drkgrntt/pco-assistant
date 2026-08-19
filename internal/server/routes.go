@@ -1,10 +1,10 @@
 package server
 
 import (
-	"church/internal/lib"
-	"church/pco"
-	"church/tithely"
 	"log"
+
+	"church/internal/server/controllers"
+	"church/internal/server/middleware"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -20,50 +20,29 @@ func (s *FiberServer) RegisterFiberRoutes() {
 		MaxAge:           300,
 	}))
 
-	s.App.Get("/", s.HelloWorldHandler)
+	s.App.Static("/static", "./web/static")
 
-	s.App.Get("/health", s.healthHandler)
+	// Served from the root, not /static/, so the service worker's default
+	// scope covers the whole app rather than just /static/* - see
+	// register-sw.js.
+	s.App.Get("/sw.js", func(c *fiber.Ctx) error {
+		return c.SendFile("./web/static/sw.js")
+	})
+	s.App.Get("/manifest.json", func(c *fiber.Ctx) error {
+		return c.SendFile("./web/static/manifest.json")
+	})
 
-	s.App.Get("/process", s.process)
-	s.App.Get("/pco", s.pco)
-	s.App.Get("/tithely", s.tithely)
+	// RequireAuth allowlists /health, /login, /auth/*, and /static/*
+	// internally, so it's safe to apply globally ahead of every route.
+	s.App.Use(middleware.RequireAuth(s.authStore))
+
+	controllers.NewHealthController(s.db).RegisterRoutes(s.App)
+	controllers.NewAuthController(s.authStore).RegisterRoutes(s.App)
+	controllers.NewHomeController().RegisterRoutes(s.App)
+	controllers.NewTithelyController().RegisterRoutes(s.App)
+	controllers.NewPCOController().RegisterRoutes(s.App)
+	controllers.NewSchedulingAPIController(s.schedulingStore).RegisterRoutes(s.App)
+	controllers.NewSchedulingController(s.schedulingStore).RegisterRoutes(s.App)
 
 	log.Println("Routes registered")
-}
-
-func (s *FiberServer) process(c *fiber.Ctx) error {
-	processed, errors := lib.ProcessTithelyPeopleToPCO()
-
-	return c.JSON(map[string]any{
-		"processed": processed,
-		"errors":    errors,
-	})
-}
-
-func (s *FiberServer) tithely(c *fiber.Ctx) error {
-	data, _ := tithely.GetAccounts(&tithely.AccountsParams{
-		Limit: 20,
-	})
-
-	return c.JSON(data)
-}
-
-func (s *FiberServer) pco(c *fiber.Ctx) error {
-	people, _ := pco.GetPeople(&pco.PeopleParams{
-		Email: "yourgiving.co",
-	})
-
-	return c.JSON(people)
-}
-
-func (s *FiberServer) HelloWorldHandler(c *fiber.Ctx) error {
-	resp := fiber.Map{
-		"message": "Hello World",
-	}
-
-	return c.JSON(resp)
-}
-
-func (s *FiberServer) healthHandler(c *fiber.Ctx) error {
-	return c.JSON(s.db.Health())
 }

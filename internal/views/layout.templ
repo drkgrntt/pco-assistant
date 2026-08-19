@@ -1,0 +1,51 @@
+package views
+
+templ Layout(title string, personName string) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>{ title } - Church</title>
+			<link rel="manifest" href="/manifest.json"/>
+			<link rel="icon" href="/static/icon-192.png"/>
+			<link rel="apple-touch-icon" href="/static/icon-192.png"/>
+			<meta name="theme-color" content="#2b7770"/>
+			<link rel="preconnect" href="https://fonts.googleapis.com"/>
+			<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"/>
+			<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+			<link rel="stylesheet" href="/static/app.css"/>
+			<script src="/static/htmx.min.js"></script>
+			<script src="/static/scheduling.js"></script>
+			<script src="/static/register-sw.js"></script>
+		</head>
+		<body>
+			<header class="site">
+				<strong>Church</strong>
+				<nav>
+					<a href="/">Home</a>
+					<a href="/scheduling/sets">Build a Set</a>
+					<a href="/scheduling/song-relationships">Song Relationships</a>
+					<a href="/scheduling/song-roles">Song Roles</a>
+					<a href="/scheduling/song-preferences">Song Preferences</a>
+					<a href="/scheduling/rosters">Build a Team</a>
+					<a href="/scheduling/person-relationships">Person Relationships</a>
+					<a href="/scheduling/position-preferences">Position Preferences</a>
+				</nav>
+				<button type="button" class="theme-toggle" onclick="toggleTheme()" aria-label="Switch between light and dark theme" title="Switch between light and dark theme">
+					@IconSun()
+					@IconMoon()
+				</button>
+				if personName != "" {
+					<form method="post" action="/auth/logout">
+						<span class="muted">{ personName }</span>
+						<button type="submit">Log out</button>
+					</form>
+				}
+			</header>
+			<main>
+				{ children... }
+			</main>
+		</body>
+	</html>
+}

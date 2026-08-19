@@ -1,0 +1,97 @@
+package scheduling
+
+import (
+	"fmt"
+
+	"church/internal/scheduling"
+	"church/internal/views"
+)
+
+templ PersonRelationships(personName string, relationships []scheduling.PersonRelationship, personNames map[string]string, errMsg string) {
+	@views.Layout("Person Relationships", personName) {
+		<h1>Person Relationships</h1>
+		<p class="muted">Relate people to each other - "works well with," "mentorship," or "doesn't work well with" - searching your Planning Center people directory.</p>
+		<form class="inline" hx-post="/scheduling/person-relationships" hx-target="#person-relationships-table" hx-swap="outerHTML">
+			@PersonPickerField("Person A", "person_id_a", "a")
+			@PersonPickerField("Person B", "person_id_b", "b")
+			<label>
+				Relationship
+				<select name="relationship_type">
+					<option value="works_well">Works well with</option>
+					<option value="mentorship">Mentorship (A mentors B)</option>
+					<option value="avoid_pairing">Doesn't work well with</option>
+				</select>
+			</label>
+			<label>
+				Notes
+				<input type="text" name="notes"/>
+			</label>
+			<button type="submit" class="primary">Add</button>
+		</form>
+		@PersonRelationshipsTable(relationships, personNames, errMsg)
+	}
+}
+
+// PersonRelationshipsTable is both the initial-render fragment and the htmx
+// swap target (id="person-relationships-table") - see RelationshipsTable for
+// why errMsg lives inside it rather than the page around it.
+templ PersonRelationshipsTable(relationships []scheduling.PersonRelationship, personNames map[string]string, errMsg string) {
+	<div id="person-relationships-table">
+		if errMsg != "" {
+			<p class="error">{ errMsg }</p>
+		}
+		<div class="table-wrap">
+			<table class="sortable">
+				<thead>
+					<tr>
+						<th>Person A</th>
+						<th>Person B</th>
+						<th>Type</th>
+						<th>Notes</th>
+						<th></th>
+					</tr>
+				</thead>
+				<tbody>
+					for _, rel := range relationships {
+						<tr>
+							<td>
+								if name, ok := personNames[rel.PersonIDA]; ok {
+									{ name }
+								} else {
+									{ rel.PersonIDA }
+								}
+							</td>
+							<td>
+								if name, ok := personNames[rel.PersonIDB]; ok {
+									{ name }
+								} else {
+									{ rel.PersonIDB }
+								}
+							</td>
+							<td>{ rel.RelationshipType }</td>
+							<td>{ rel.Notes }</td>
+							<td>
+								<button
+									class="danger icon-btn"
+									aria-label="Delete relationship"
+									title="Delete relationship"
+									hx-delete={ fmt.Sprintf("/scheduling/person-relationships/%d", rel.ID) }
+									hx-target="#person-relationships-table"
+									hx-swap="outerHTML"
+									hx-confirm="Delete this relationship?"
+								>
+									@views.IconRemove()
+								</button>
+							</td>
+						</tr>
+					}
+					if len(relationships) == 0 {
+						<tr>
+							<td colspan="5" class="muted">No relationships yet.</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+}

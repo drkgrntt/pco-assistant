@@ -1,0 +1,76 @@
+package scheduling
+
+import (
+	pco "github.com/drkgrntt/go-pco"
+
+	"church/internal/views"
+)
+
+templ Rosters(personName string, serviceTypes []pco.ServiceTypeData, selectedServiceTypeID string, initialPlans []PlanRow, errMsg string) {
+	@views.Layout("Build a Team", personName) {
+		<h1>Build a Team</h1>
+		<p class="muted">Pick a service type, then an upcoming plan, to start filling its positions.</p>
+		<form class="inline" hx-get="/scheduling/rosters/plans" hx-target="#rosters-plans" hx-swap="outerHTML">
+			<label>
+				Service type
+				<select name="service_type_id">
+					if selectedServiceTypeID == "" {
+						<option value="" selected disabled>Choose a service type</option>
+					}
+					for _, st := range serviceTypes {
+						if st.ID == selectedServiceTypeID {
+							<option value={ st.ID } selected>{ st.Attributes.Name }</option>
+						} else {
+							<option value={ st.ID }>{ st.Attributes.Name }</option>
+						}
+					}
+				</select>
+			</label>
+			<button type="submit" class="primary">Show upcoming plans</button>
+		</form>
+		if errMsg != "" {
+			<p class="error">{ errMsg }</p>
+		}
+		@RostersPlansList(initialPlans, selectedServiceTypeID, "")
+	}
+}
+
+// RostersPlansList is the htmx swap target (id="rosters-plans") for the
+// service type picker above - see SetsPlansList, which this mirrors exactly
+// (status badges included).
+templ RostersPlansList(plans []PlanRow, serviceTypeID string, errMsg string) {
+	<div id="rosters-plans">
+		if errMsg != "" {
+			<p class="error">{ errMsg }</p>
+		}
+		if serviceTypeID != "" {
+			<ul class="plan-list">
+				for _, plan := range plans {
+					<li>
+						<a href={ templ.URL("/scheduling/rosters/" + serviceTypeID + "/" + plan.ID) }>
+							if plan.Title != "" {
+								{ plan.Title }
+							} else {
+								{ plan.Dates }
+							}
+						</a>
+						if plan.Title != "" {
+							<span class="muted">{ plan.Dates }</span>
+						}
+						switch plan.Status {
+							case "planned":
+								<span class="badge published">Planned</span>
+							case "pending":
+								<span class="badge status-pending">Pending</span>
+							case "todo":
+								<span class="badge status-todo">Todo</span>
+						}
+					</li>
+				}
+				if len(plans) == 0 {
+					<li class="muted">No upcoming plans found.</li>
+				}
+			</ul>
+		}
+	</div>
+}

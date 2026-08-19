@@ -1,0 +1,719 @@
+:root {
+  color-scheme: light dark;
+  /* Teal/cyan primary, salmon secondary (danger/destructive) - soft,
+     desaturated versions of both rather than a vivid brand-book teal or an
+     alarm-red salmon, consistent with how the rest of the palette avoids
+     "alert dialog" colors. Background and text are soft warm off-white/
+     near-black rather than stark white/black, for the same reason. */
+  --bg: #faf8f5;
+  --text: #322f2b;
+  --border: #dcd6d0;
+  --muted: #726d67;
+  --danger: #b04c37;
+  --accent: #2b7770;
+  /* Fixed (not overridden below) for white text laid on top of it - .role
+     buttons, badges, etc. - which needs a darker, more constant surface
+     than --accent ends up being once --accent lightens for dark mode. */
+  --accent-solid: #2b7770;
+  --success: #4a754a;
+  --pending: #8a6519;
+}
+
+/* Dark-mode counterparts for the tokens above - bg/text/border/muted flip
+   entirely; accent/danger just get lightened a bit further so text set in
+   them (nav links, .error) still clears 4.5:1 against the darker
+   background. Applies on system preference (unless the theme toggle - see
+   setTheme in scheduling.js - has forced light) or on an explicit dark
+   override, whichever matches. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #211f1d;
+    --text: #e9e4de;
+    --border: #45403a;
+    --muted: #a89f95;
+    --accent: #6cc4ba;
+    --danger: #e08d78;
+    --success: #8fbf8f;
+    --pending: #d9b264;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #211f1d;
+  --text: #e9e4de;
+  --border: #45403a;
+  --muted: #a89f95;
+  --accent: #6cc4ba;
+  --danger: #e08d78;
+  --success: #8fbf8f;
+  --pending: #d9b264;
+}
+
+/* color-scheme itself (native form control/scrollbar theming) follows the
+   same override - without this, an explicit choice would recolor the page
+   but leave checkboxes, selects, etc. following the OS setting instead. */
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  margin: 0;
+  line-height: 1.4;
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* Mobile-first: header stacks (brand, then nav, then the logout form).
+   Widened into a single row once there's room for all three side by side. */
+header.site {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.6rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+header.site nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+}
+
+header.site nav a {
+  text-decoration: none;
+  color: var(--accent);
+  padding: 0.3rem 0;
+}
+
+header.site form {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Icons follow the surrounding button/text color (currentColor) rather
+   than carrying their own, so they never need theme-specific handling. */
+.icon {
+  vertical-align: -0.15em;
+  flex-shrink: 0;
+}
+
+.icon-drag {
+  cursor: grab;
+  color: var(--muted);
+}
+
+/* Two-state (not three-way) toggle: it starts wherever the system
+   preference resolves to and flips to an explicit choice from there - see
+   toggleTheme in scheduling.js. Which icon shows is driven entirely by
+   these selectors (mirroring the ones the palette itself uses above), so
+   it can't drift out of sync with the actual applied theme. */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: flex-start;
+  padding: 0.4rem;
+  min-width: 2.25rem;
+}
+
+.theme-toggle .icon:nth-child(2) {
+  display: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .theme-toggle .icon:first-child {
+    display: none;
+  }
+  :root:not([data-theme="light"]) .theme-toggle .icon:nth-child(2) {
+    display: block;
+  }
+}
+
+:root[data-theme="dark"] .theme-toggle .icon:first-child {
+  display: none;
+}
+
+:root[data-theme="dark"] .theme-toggle .icon:nth-child(2) {
+  display: block;
+}
+
+:root[data-theme="light"] .theme-toggle .icon:first-child {
+  display: block;
+}
+
+:root[data-theme="light"] .theme-toggle .icon:nth-child(2) {
+  display: none;
+}
+
+@media (min-width: 640px) {
+  header.site {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1.5rem;
+  }
+}
+
+main {
+  max-width: 60rem;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+/* A little brand color on headings, not just links/buttons/badges - each
+   page's title gets an accent underline, section headings pick up the
+   accent color itself. */
+h1 {
+  border-bottom: 3px solid var(--accent);
+  padding-bottom: 0.4rem;
+  margin-bottom: 1rem;
+}
+
+h2 {
+  color: var(--accent);
+}
+
+header.site strong {
+  color: var(--accent);
+  font-size: 1.15rem;
+}
+
+@media (min-width: 640px) {
+  main {
+    padding: 1.5rem;
+  }
+}
+
+/* Tables scroll horizontally within their own box instead of overflowing
+   the page - narrow phones can't fit 5 columns without it. */
+.table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-block: 1rem;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 32rem;
+  margin-block: 0;
+}
+
+th,
+td {
+  text-align: left;
+  vertical-align: middle;
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+}
+
+/* A little branding on table headers, not just page headings - bolder,
+   spaced-out label text under an accent-colored rule. */
+thead th {
+  border-bottom: 2px solid var(--accent);
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* Sortable admin tables (see makeSortable in scheduling.js) - never used
+   on the set builder's order-of-service table, where row order is real
+   data, not just a display convenience. */
+.sortable-col {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.sortable-col::after {
+  content: "\21C5"; /* ⇅, both-directions - neutral until sorted */
+  display: inline-block;
+  margin-left: 0.35rem;
+  opacity: 0.4;
+  font-size: 0.85em;
+}
+
+.sortable-col.sort-asc::after {
+  content: "\2191"; /* ↑ */
+  opacity: 1;
+}
+
+.sortable-col.sort-desc::after {
+  content: "\2193"; /* ↓ */
+  opacity: 1;
+}
+
+/* Mobile-first: form fields stack full-width (easier to tap and read on a
+   phone). From 640px up they flow into an inline row, wrapping as needed. */
+form.inline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-block: 1rem;
+}
+
+form.inline label {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.9rem;
+  gap: 0.25rem;
+}
+
+form.inline input,
+form.inline select {
+  width: 100%;
+}
+
+@media (min-width: 640px) {
+  form.inline {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: end;
+  }
+
+  form.inline label {
+    flex: 1 1 auto;
+    min-width: 10rem;
+  }
+
+  form.inline input,
+  form.inline select {
+    width: auto;
+  }
+
+  form.inline button {
+    flex: 0 0 auto;
+  }
+}
+
+/* Strip native OS chrome (the "weird border" look) so our own
+   border/background fully replace it instead of fighting with it. select's
+   native dropdown arrow is left alone - restyling that needs a custom icon
+   and isn't worth it here. */
+input,
+select,
+button {
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+/* Sized for comfortable tapping (~44px) on top of being readable - a win on
+   desktop too, so this isn't gated behind a breakpoint. */
+input,
+select,
+button {
+  font: inherit;
+  padding: 0.4rem 0.7rem;
+  min-height: 2.25rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+input:focus-visible,
+select:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+button {
+  cursor: pointer;
+  font-weight: 500;
+  background: color-mix(in srgb, var(--text) 4%, var(--bg));
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+button:hover {
+  background: color-mix(in srgb, var(--text) 9%, var(--bg));
+  border-color: color-mix(in srgb, var(--text) 25%, var(--border));
+}
+
+button:active {
+  background: color-mix(in srgb, var(--text) 14%, var(--bg));
+}
+
+/* The one or two clearest calls to action per page (Publish, the top-of-
+   form Add/Save, "sign in") - everything else stays the neutral outline
+   style above so these actually stand out. */
+.primary {
+  /* border-width/style too, not just border-color - the base rule that
+     normally supplies those only targets input/select/button, and .primary
+     is also used on a plain <a> (the sign-in link). */
+  border: 1px solid var(--accent-solid);
+  background: var(--accent-solid);
+  color: white;
+}
+
+.primary:hover {
+  background: color-mix(in srgb, var(--accent-solid) 85%, black);
+  border-color: color-mix(in srgb, var(--accent-solid) 85%, black);
+}
+
+button.danger {
+  background: var(--bg);
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+  color: var(--danger);
+}
+
+button.danger:hover {
+  background: color-mix(in srgb, var(--danger) 12%, var(--bg));
+  border-color: var(--danger);
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.warning {
+  border: 1px solid var(--danger);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  margin-block: 0.75rem;
+}
+
+.error {
+  color: var(--danger);
+}
+
+.success {
+  color: var(--success);
+}
+
+.quick-links {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-block: 1rem;
+}
+
+.quick-links a {
+  padding: 0.4rem 0;
+}
+
+@media (min-width: 640px) {
+  .quick-links {
+    flex-direction: row;
+    gap: 1.5rem;
+  }
+}
+
+.search-wrap {
+  position: relative;
+}
+
+.search-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  max-height: 12rem;
+  overflow-y: auto;
+}
+
+.search-results:empty {
+  border: none;
+}
+
+.search-result {
+  padding: 0.5rem 0.6rem;
+  cursor: pointer;
+}
+
+.search-result:hover {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+.search-result-empty {
+  padding: 0.5rem 0.6rem;
+}
+
+.badge {
+  display: inline-block;
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+  border-radius: 999px;
+  padding: 0.15rem 0.6rem;
+  font-size: 0.8rem;
+  margin-right: 0.3rem;
+}
+
+.badge.published {
+  background: color-mix(in srgb, var(--success) 15%, transparent);
+  color: var(--success);
+}
+
+.badge.status-pending {
+  background: color-mix(in srgb, var(--pending) 15%, transparent);
+  color: var(--pending);
+}
+
+.badge.status-todo {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+}
+
+.publish-panel {
+  margin-block: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.publish-panel form {
+  margin: 0 0 0.5rem;
+}
+
+.publish-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.conflict-badge {
+  display: inline-block;
+  color: var(--danger);
+  font-size: 0.85rem;
+}
+
+.plan-list,
+.suggestion-list,
+.candidate-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.plan-list li,
+.suggestion-list li,
+.candidate-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.suggestion-list li > span:first-child,
+.candidate-row > span:first-child {
+  flex: 1 1 auto;
+  font-weight: 600;
+}
+
+.suggestion-list form,
+.candidate-row form {
+  margin: 0;
+}
+
+.set-song-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.set-song-actions button {
+  min-height: 2.25rem;
+  padding: 0.3rem 0.6rem;
+}
+
+/* Icon-only buttons - square, just enough padding to keep the icon from
+   touching the edges. aria-label/title on each one carries the label that
+   would otherwise be visible text. */
+/* Ghost style - transparent until hovered - since these are dense,
+   frequently-repeated row actions (remove/duplicate/replace/add); a full
+   outline on every one of them would be a lot of visual noise. */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.35rem;
+  min-width: 2.25rem;
+  background: transparent;
+  border-color: transparent;
+}
+
+.icon-btn:hover {
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+  border-color: transparent;
+}
+
+.icon-btn.danger {
+  background: transparent;
+  border-color: transparent;
+}
+
+.icon-btn.danger:hover {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  border-color: transparent;
+}
+
+.replace-form {
+  display: flex;
+  gap: 0.3rem;
+  margin: 0;
+}
+
+.replace-form select {
+  min-height: 2.25rem;
+  padding: 0.3rem 0.5rem;
+  max-width: 12rem;
+}
+
+.replace-form button {
+  min-height: 2.25rem;
+  padding: 0.3rem 0.6rem;
+}
+
+.foreign-row {
+  color: var(--muted);
+}
+
+.foreign-row td:first-child {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Header items are section dividers in the real order of service (e.g.
+   "Welcome," "Sermon") - rendered as their own full-width row rather than
+   a normal 4-column one, so they read as landmarks rather than content. */
+.section-row td {
+  padding-top: 0.9rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  border-bottom-color: var(--text);
+}
+
+/* display: flex directly on the <td> (rather than an inner wrapper) used
+   to break the cell out of the table's normal row-height/vertical-align
+   handling in some browsers - the drag handle and number would end up
+   misaligned with the rest of the row whenever a neighboring cell (e.g.
+   the actions column, with its buttons/select) made the row taller. The
+   flex layout now lives on .row-number, an inline element inside the
+   <td>, so the <td> itself stays a normal, vertically-centered cell. */
+.row-number {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* touch-action: none stops a touch-drag on the handle from also scrolling
+   the page - without it, dragging on a touchscreen just scrolls instead of
+   moving the row (see the pointer-events drag logic in scheduling.js). */
+.drag-handle {
+  display: inline-flex;
+  cursor: grab;
+  color: var(--muted);
+  touch-action: none;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+/* The row being dragged reads as "picked up" - tinted and lifted with a
+   soft shadow - rather than just faded out. */
+tr.dragging {
+  position: relative;
+  z-index: 1;
+  opacity: 0.85;
+  background: color-mix(in srgb, var(--accent-solid) 10%, var(--bg));
+  box-shadow: 0 6px 14px -6px rgba(0, 0, 0, 0.35);
+}
+
+/* Drop indicator. A drop always means "place after the row the pointer is
+   below the midpoint of" (see findDropTargetRow in scheduling.js), so the
+   marker line belongs on that row's *bottom* edge, not its top - a
+   top-edge line would visually point at the row above instead of the one
+   actually being targeted. The inset line plus a matching outer glow reads
+   as a deliberate insertion marker rather than a stray 1px border. */
+tr.drag-over {
+  position: relative;
+  box-shadow:
+    inset 0 -3px 0 0 var(--accent-solid),
+    0 2px 6px -2px var(--accent-solid);
+}
+
+/* Dropping above every row (top of service) - same treatment, top edge,
+   applied to the first row since there's no "row above" to attach a
+   bottom-edge line to. */
+tr.drag-over-top {
+  position: relative;
+  box-shadow:
+    inset 0 3px 0 0 var(--accent-solid),
+    0 -2px 6px -2px var(--accent-solid);
+}
+
+.icon-inline {
+  display: inline-flex;
+  vertical-align: -0.2em;
+}
+
+.role-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-block: 0.5rem;
+}
+
+.role-filter.active {
+  background: var(--accent-solid);
+  color: white;
+  border-color: var(--accent-solid);
+}
+
+#candidate-search {
+  width: 100%;
+  margin-bottom: 0.5rem;
+}
+
+@media (min-width: 640px) {
+  #candidate-search {
+    width: auto;
+    min-width: 16rem;
+  }
+}
+
+.sign-in {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 4rem;
+  padding: 0 1rem;
+  text-align: center;
+}
+
+.sign-in a.button {
+  display: inline-block;
+  text-decoration: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 6px;
+}

@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"time"
 
+	_ "github.com/jackc/pgx/v5/stdlib"
 	_ "github.com/joho/godotenv/autoload"
-	_ "github.com/mattn/go-sqlite3"
 )
 
 // Service represents a service that interacts with a database.
@@ -22,6 +22,10 @@ type Service interface {
 	// Close terminates the database connection.
 	// It returns an error if the connection cannot be closed.
 	Close() error
+
+	// DB returns the underlying connection pool, for packages (like
+	// internal/scheduling) that need to run their own queries against it.
+	DB() *sql.DB
 }
 
 type service struct {
@@ -29,9 +33,26 @@ type service struct {
 }
 
 var (
-	dburl      = os.Getenv("BLUEPRINT_DB_URL")
+	dbHost     = os.Getenv("DB_HOST")
+	dbPort     = os.Getenv("DB_PORT")
+	dbDatabase = os.Getenv("DB_DATABASE")
+	dbUsername = os.Getenv("DB_USERNAME")
+	dbPassword = os.Getenv("DB_PASSWORD")
+	dbSchema   = os.Getenv("DB_SCHEMA")
 	dbInstance *service
 )
+
+func connString() string {
+	schema := dbSchema
+	if schema == "" {
+		schema = "public"
+	}
+
+	return fmt.Sprintf(
+		"postgres://%s:%s@%s:%s/%s?sslmode=disable&search_path=%s",
+		dbUsername, dbPassword, dbHost, dbPort, dbDatabase, schema,
+	)
+}
 
 func New() Service {
 	// Reuse Connection
@@ -39,10 +60,14 @@ func New() Service {
 		return dbInstance
 	}
 
-	db, err := sql.Open("sqlite3", dburl)
+	db, err := sql.Open("pgx", connString())
 	if err != nil {
 		// This will not be a connection error, but a DSN parse error or
 		// another initialization error.
+		log.Fatal(err)
+	}
+
+	if err := migrate(db); err != nil {
 		log.Fatal(err)
 	}
 
@@ -50,6 +75,11 @@ func New() Service {
 		db: db,
 	}
 	return dbInstance
+}
+
+// DB returns the underlying connection pool.
+func (s *service) DB() *sql.DB {
+	return s.db
 }
 
 // Health checks the health of the database connection by pinging the database.
@@ -108,6 +138,6 @@ func (s *service) Health() map[string]string {
 // If the connection is successfully closed, it returns nil.
 // If an error occurs while closing the connection, it returns the error.
 func (s *service) Close() error {
-	log.Printf("Disconnected from database: %s", dburl)
+	log.Printf("Disconnected from database: %s", dbDatabase)
 	return s.db.Close()
 }

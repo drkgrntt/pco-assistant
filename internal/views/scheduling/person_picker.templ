@@ -1,0 +1,65 @@
+package scheduling
+
+import (
+	pco "github.com/drkgrntt/go-pco"
+)
+
+// PersonPickerField renders a labeled search-as-you-type person picker -
+// text box + hidden id input + live results container (see
+// PersonSearchResults, selectPerson in web/static/scheduling.js). suffix
+// disambiguates multiple pickers on one form (e.g. person relationships'
+// "Person A"/"Person B" both need their own search box/hidden input/results
+// container) - "" reproduces the single-picker ids the Song/Person
+// Preferences page has always used, so it's unaffected by this becoming
+// shared. name is the hidden input's form field name (e.g. "person_id",
+// "person_id_a").
+templ PersonPickerField(label, name, suffix string) {
+	<label>
+		{ label }
+		<div class="search-wrap">
+			<input
+				type="text"
+				id={ "person-search-input" + idSuffix(suffix) }
+				placeholder="Search people..."
+				autocomplete="off"
+				hx-get={ "/scheduling/people-search?suffix=" + suffix }
+				hx-trigger="input changed delay:300ms"
+				hx-target={ "#person-search-results" + idSuffix(suffix) }
+				hx-swap="innerHTML"
+				name="q"
+			/>
+			<div id={ "person-search-results" + idSuffix(suffix) } class="search-results"></div>
+		</div>
+		<input type="hidden" name={ name } id={ "person-id-input" + idSuffix(suffix) }/>
+	</label>
+}
+
+func idSuffix(suffix string) string {
+	if suffix == "" {
+		return ""
+	}
+	return "-" + suffix
+}
+
+// PersonSearchResults is a person picker's live search results fragment - it
+// swaps into that picker's "person-search-results[-suffix]" div's
+// innerHTML, so it renders just the option rows, not another wrapping
+// element with that same id. Clicking a result calls selectPerson
+// (web/static/scheduling.js), which reads data-suffix off the clicked row
+// to find that same picker's hidden id input and visible search box.
+templ PersonSearchResults(people []pco.PersonData, suffix string) {
+	for _, person := range people {
+		<div
+			class="search-result"
+			data-person-id={ person.ID }
+			data-person-name={ person.Attributes.Name }
+			data-suffix={ suffix }
+			onclick="selectPerson(this)"
+		>
+			{ person.Attributes.Name }
+		</div>
+	}
+	if len(people) == 0 {
+		<div class="muted search-result-empty">No matches</div>
+	}
+}

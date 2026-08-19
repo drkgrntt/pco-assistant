@@ -1,0 +1,16 @@
+package views
+
+templ Home(personName string) {
+	@Layout("Home", personName) {
+		<h1>Welcome, { personName }</h1>
+		<nav class="quick-links">
+			<a href="/scheduling/sets">Build a set</a>
+			<a href="/scheduling/song-relationships">Song relationships</a>
+			<a href="/scheduling/song-roles">Song roles</a>
+			<a href="/scheduling/song-preferences">Song / person preferences</a>
+			<a href="/scheduling/rosters">Build a team</a>
+			<a href="/scheduling/person-relationships">Person relationships</a>
+			<a href="/scheduling/position-preferences">Position preferences</a>
+		</nav>
+	}
+}

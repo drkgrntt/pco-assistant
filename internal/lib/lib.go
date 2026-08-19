@@ -1,9 +1,11 @@
 package lib
 
 import (
-	"church/pco"
-	"church/tithely"
 	"log"
+
+	"church/tithely"
+
+	pco "github.com/drkgrntt/go-pco"
 )
 
 func ProcessTithelyPeopleToPCO() (processed []*tithely.Account, errors []error) {

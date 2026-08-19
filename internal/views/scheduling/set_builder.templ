@@ -1,0 +1,267 @@
+package scheduling
+
+import (
+	"fmt"
+	"strconv"
+	"strings"
+
+	"church/internal/views"
+
+	pco "github.com/drkgrntt/go-pco"
+)
+
+templ SetBuilder(personName string, data SetBuilderData) {
+	@views.Layout("Build a Set", personName) {
+		<h1>
+			if data.PlanTitle != "" {
+				{ data.PlanTitle }
+			} else if data.PlanDates != "" {
+				{ data.PlanDates }
+			} else {
+				Set
+			}
+		</h1>
+		if data.PlanTitle != "" && data.PlanDates != "" {
+			<p class="muted">{ data.PlanDates }</p>
+		}
+		<p><a href="/scheduling/sets">&larr; Choose a different plan</a></p>
+		@SetBuilderBody(data)
+	}
+}
+
+// SetBuilderBody is both the initial-render fragment and the htmx swap
+// target (id="set-builder-body") for every add/remove/move action below -
+// the whole thing re-renders each time since adding or removing a song can
+// change the current set, the recommendations (based on the last song
+// added), and the candidate list's conflict warnings all at once.
+templ SetBuilderBody(data SetBuilderData) {
+	<div id="set-builder-body">
+		if data.ErrMsg != "" {
+			<p class="error">{ data.ErrMsg }</p>
+		}
+		if data.PublishMsg != "" {
+			<p class="success">{ data.PublishMsg }</p>
+		}
+
+		for _, msg := range data.ExistingConflicts {
+			<div class="warning">{ msg }</div>
+		}
+		for _, msg := range data.RepeatWarnings {
+			<div class="warning">{ msg }</div>
+		}
+
+		<h2>Order of service</h2>
+		<p class="muted">
+			Everything Planning Center already has for this plan, with your songs
+			placed where you've put them. Non-song items are shown for context
+			only - this tool doesn't manage them. Drag a song's
+			<span class="icon-inline">@views.IconDrag()</span>
+			handle to move it anywhere in the order, including onto or past a
+			section header.
+		</p>
+		<div class="table-wrap">
+			<table>
+				<thead>
+					<tr>
+						<th>#</th>
+						<th>Item</th>
+						<th>Tags</th>
+						<th></th>
+					</tr>
+				</thead>
+				<tbody>
+					for i, row := range data.ServiceOrder {
+						if row.IsSong {
+							<tr
+								class="song-row"
+								data-token={ fmt.Sprintf("row:%d", row.Song.ID) }
+								data-row-id={ fmt.Sprintf("%d", row.Song.ID) }
+								data-reposition-url={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/reposition", data.ServiceTypeID, data.PlanID, row.Song.ID) }
+							>
+								<td>
+									<span class="row-number">
+										<span class="drag-handle" title="Drag to reorder">
+											@views.IconDrag()
+										</span>
+										{ strconv.Itoa(i + 1) }
+									</span>
+								</td>
+								<td>{ row.Song.Title }</td>
+								<td>
+									if row.Song.IsOpener {
+										<span class="badge">Opener</span>
+									}
+									if row.Song.IsResponse {
+										<span class="badge">Response</span>
+									}
+									if row.Song.Published {
+										<span class="badge published">Published</span>
+									}
+								</td>
+								<td class="set-song-actions">
+									<button
+										type="button"
+										class="icon-btn"
+										aria-label="Duplicate song (e.g. reprise as the response)"
+										title="Duplicate song (e.g. reprise as the response)"
+										hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/duplicate", data.ServiceTypeID, data.PlanID, row.Song.ID) }
+										hx-target="#set-builder-body"
+										hx-swap="outerHTML"
+									>
+										@views.IconCopy()
+									</button>
+									<button
+										type="button"
+										class="danger icon-btn"
+										aria-label="Remove from set"
+										title="Remove from set"
+										hx-delete={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d", data.ServiceTypeID, data.PlanID, row.Song.ID) }
+										hx-target="#set-builder-body"
+										hx-swap="outerHTML"
+										hx-confirm="Remove this song from the set?"
+									>
+										@views.IconRemove()
+									</button>
+									if len(data.Candidates) > 0 {
+										<form
+											class="replace-form"
+											hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/replace", data.ServiceTypeID, data.PlanID, row.Song.ID) }
+											hx-target="#set-builder-body"
+											hx-swap="outerHTML"
+											hx-confirm={ fmt.Sprintf("Replace %q with the selected song?", row.Song.Title) }
+										>
+											<select name="song_id" required>
+												<option value="" selected disabled>Replace with...</option>
+												for _, cand := range data.Candidates {
+													<option value={ cand.SongID }>{ cand.Title }</option>
+												}
+											</select>
+											<button type="submit" class="icon-btn" aria-label="Replace song" title="Replace song">
+												@views.IconEdit()
+											</button>
+										</form>
+									}
+								</td>
+							</tr>
+						} else if row.ItemType == pco.ItemTypeHeader {
+							<tr class="section-row" data-token={ "item:" + row.ItemID }>
+								<td colspan="4">{ row.ItemTitle }</td>
+							</tr>
+						} else {
+							<tr class="foreign-row" data-token={ "item:" + row.ItemID }>
+								<td>{ strconv.Itoa(i + 1) }</td>
+								<td>{ row.ItemTitle }</td>
+								<td><span class="muted">{ row.ItemType }</span></td>
+								<td></td>
+							</tr>
+						}
+					}
+					if len(data.ServiceOrder) == 0 {
+						<tr>
+							<td colspan="4" class="muted">Nothing in this plan yet - add a song below to get started.</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+
+		if len(data.SetSongs) > 0 || data.PendingDeleteCount > 0 {
+			<div class="publish-panel">
+				if data.PendingDeleteCount > 0 {
+					<div class="warning">
+						{ fmt.Sprintf("%d song(s) removed/replaced here are still live in Planning Center - publishing will delete them there too.", data.PendingDeleteCount) }
+					</div>
+				}
+				<div class="publish-actions">
+					<form
+						hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/publish", data.ServiceTypeID, data.PlanID) }
+						hx-target="#set-builder-body"
+						hx-swap="outerHTML"
+						hx-confirm={ fmt.Sprintf("Sync this set to Planning Center? %d song(s) added, %d removed, and any already-published songs reordered to match.", data.UnpublishedCount, data.PendingDeleteCount) }
+					>
+						<button type="submit" class="primary">Publish to Planning Center</button>
+					</form>
+					if data.UnpublishedCount > 0 || data.PendingDeleteCount > 0 {
+						<form
+							hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/revert", data.ServiceTypeID, data.PlanID) }
+							hx-target="#set-builder-body"
+							hx-swap="outerHTML"
+							hx-confirm="Discard every change you've made here and rebuild this set from what's currently live in Planning Center? This can't be undone."
+						>
+							<button type="submit" class="danger">Discard changes</button>
+						</form>
+					}
+				</div>
+				<p class="muted">
+					Publishing fully syncs this set to the plan: adds new songs, deletes
+					ones you removed/replaced here, and reorders everything to match
+					the order of service above - including each song's chosen
+					position. It never touches or reorders plan items this tool didn't
+					create. Discarding does the opposite - it throws away every local
+					change and rebuilds this set from what's live in Planning Center
+					right now.
+				</p>
+			</div>
+		}
+
+		if len(data.Suggestions) > 0 {
+			<h2>Recommended next</h2>
+			<p class="muted">Based on the last song in the set.</p>
+			<ul class="suggestion-list">
+				for _, sug := range data.Suggestions {
+					<li>
+						<span>{ sug.Title }</span>
+						<span class="muted">{ sug.RelationshipLabel }</span>
+						<form hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/songs", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
+							<input type="hidden" name="song_id" value={ sug.SongID }/>
+							<button type="submit" class="icon-btn" aria-label="Add to set" title="Add to set">
+								@views.IconAdd()
+							</button>
+						</form>
+					</li>
+				}
+			</ul>
+		}
+
+		<h2>Find songs to add</h2>
+		<div class="role-filters">
+			<button type="button" class="role-filter" data-role="opener" onclick="toggleRoleFilter(this)">Openers</button>
+			<button type="button" class="role-filter" data-role="response" onclick="toggleRoleFilter(this)">Response songs</button>
+		</div>
+		<input
+			type="text"
+			id="candidate-search"
+			placeholder="Search songs..."
+			autocomplete="off"
+			oninput="filterCandidates()"
+		/>
+		<ul id="set-candidates" class="candidate-list">
+			for _, cand := range data.Candidates {
+				<li class="candidate-row" data-title={ cand.Title } data-roles={ cand.RolesAttr }>
+					<span>{ cand.Title }</span>
+					if cand.IsOpener {
+						<span class="badge">Opener</span>
+					}
+					if cand.IsResponse {
+						<span class="badge">Response</span>
+					}
+					if len(cand.ConflictTitles) > 0 {
+						<span class="conflict-badge">⚠ avoid pairing with { strings.Join(cand.ConflictTitles, ", ") }</span>
+					}
+					if cand.RecentlyRepeated {
+						<span class="conflict-badge">⚠ sung in each of the last two plans</span>
+					}
+					<form hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/songs", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
+						<input type="hidden" name="song_id" value={ cand.SongID }/>
+						<button type="submit" class="icon-btn" aria-label="Add to set" title="Add to set">
+							@views.IconAdd()
+						</button>
+					</form>
+				</li>
+			}
+			if len(data.Candidates) == 0 {
+				<li class="muted">No more songs to add.</li>
+			}
+		</ul>
+	</div>
+}

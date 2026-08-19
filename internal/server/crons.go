@@ -1,38 +1,25 @@
 package server
 
 import (
-	"church/internal/lib"
 	"log"
-	"time"
+
+	"church/internal/server/jobs"
 
 	"github.com/go-co-op/gocron/v2"
 )
-
-var scheduleDuration = time.Hour * time.Duration(1)
 
 func (s *FiberServer) RegisterCrons() {
 	scheduler, err := gocron.NewScheduler()
 	if err != nil {
 		log.Println("Error starting scheduler", err.Error())
+		return
 	}
 
-	// Create the next time
-	_, err = scheduler.NewJob(
-		gocron.DurationJob(scheduleDuration),
-		gocron.NewTask(processTithelyPeopleToPCO),
-	)
-	if err != nil {
-		log.Println("Error starting scheduler", err.Error())
-	}
+	jobs.NewTithelyJobs().Register(scheduler)
+	jobs.NewPCOJobs().Register(scheduler)
+	jobs.NewAuthJobs(s.authStore).Register(scheduler)
 
 	scheduler.Start()
 
 	log.Println("Crons registered")
-}
-
-func processTithelyPeopleToPCO() {
-	processed, errors := lib.ProcessTithelyPeopleToPCO()
-
-	log.Println("processed", processed)
-	log.Println("errors", errors)
 }

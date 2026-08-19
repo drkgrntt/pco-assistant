@@ -1,0 +1,120 @@
+package scheduling
+
+import (
+	"fmt"
+
+	pco "github.com/drkgrntt/go-pco"
+
+	"church/internal/scheduling"
+	"church/internal/views"
+)
+
+templ Relationships(personName string, songs []pco.SongData, relationships []scheduling.SongRelationship, songTitles map[string]string, errMsg string) {
+	@views.Layout("Song Relationships", personName) {
+		<h1>Song Relationships</h1>
+		<p class="muted">Relate songs to each other - e.g. "flows well lyrically" or "same theme" - picking from your Planning Center song library.</p>
+		<form class="inline" hx-post="/scheduling/song-relationships" hx-target="#relationships-table" hx-swap="outerHTML">
+			<label>
+				Song A
+				<select name="song_id_a" required>
+					<option value="" selected disabled>Choose a song</option>
+					for _, song := range songs {
+						<option value={ song.ID }>{ song.Attributes.Title }</option>
+					}
+				</select>
+			</label>
+			<label>
+				Song B
+				<select name="song_id_b" required>
+					<option value="" selected disabled>Choose a song</option>
+					for _, song := range songs {
+						<option value={ song.ID }>{ song.Attributes.Title }</option>
+					}
+				</select>
+			</label>
+			<label>
+				Relationship
+				<select name="relationship_type">
+					<option value="flows_well">Flows well</option>
+					<option value="same_theme">Same theme</option>
+					<option value="avoid_pairing">Avoid pairing</option>
+				</select>
+			</label>
+			<label>
+				Notes
+				<input type="text" name="notes"/>
+			</label>
+			<button type="submit" class="primary">Add</button>
+		</form>
+		@RelationshipsTable(relationships, songTitles, errMsg)
+	}
+}
+
+// RelationshipsTable is both the initial-render fragment and the htmx swap
+// target (id="relationships-table", matched by the form/delete buttons'
+// hx-target above) - errMsg surfaces inline here so it shows up the same
+// way whether this is a full page load or a partial swap. songTitles
+// resolves a relationship's raw PCO song IDs back to display titles (see
+// songTitleMap in the scheduling controller); an ID missing from the map
+// (song deleted/hidden in PCO since the relationship was created) falls
+// back to showing the raw ID.
+templ RelationshipsTable(relationships []scheduling.SongRelationship, songTitles map[string]string, errMsg string) {
+	<div id="relationships-table">
+		if errMsg != "" {
+			<p class="error">{ errMsg }</p>
+		}
+		<div class="table-wrap">
+			<table class="sortable">
+				<thead>
+					<tr>
+						<th>Song A</th>
+						<th>Song B</th>
+						<th>Type</th>
+						<th>Notes</th>
+						<th></th>
+					</tr>
+				</thead>
+				<tbody>
+					for _, rel := range relationships {
+						<tr>
+							<td>
+								if title, ok := songTitles[rel.SongIDA]; ok {
+									{ title }
+								} else {
+									{ rel.SongIDA }
+								}
+							</td>
+							<td>
+								if title, ok := songTitles[rel.SongIDB]; ok {
+									{ title }
+								} else {
+									{ rel.SongIDB }
+								}
+							</td>
+							<td>{ rel.RelationshipType }</td>
+							<td>{ rel.Notes }</td>
+							<td>
+								<button
+									class="danger icon-btn"
+									aria-label="Delete relationship"
+									title="Delete relationship"
+									hx-delete={ fmt.Sprintf("/scheduling/song-relationships/%d", rel.ID) }
+									hx-target="#relationships-table"
+									hx-swap="outerHTML"
+									hx-confirm="Delete this relationship?"
+								>
+									@views.IconRemove()
+								</button>
+							</td>
+						</tr>
+					}
+					if len(relationships) == 0 {
+						<tr>
+							<td colspan="5" class="muted">No relationships yet.</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+}

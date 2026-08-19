@@ -1,0 +1,119 @@
+package scheduling
+
+import (
+	"fmt"
+
+	pco "github.com/drkgrntt/go-pco"
+
+	"church/internal/views"
+)
+
+templ PositionPreferences(personName string, serviceTypes []pco.ServiceTypeData, positionGroups []PositionGroup, selectedServiceTypeID, errMsg string) {
+	@views.Layout("Position Preferences", personName) {
+		<h1>Position Preferences</h1>
+		<p class="muted">Set how often someone wants to serve in a position - Planning Center's own per-position scheduling preference ("every other week," "once a month," etc.), so it's respected everywhere in Planning Center, not just here.</p>
+		<form class="inline" method="get">
+			<label>
+				Service type
+				<select name="service_type_id" onchange="this.form.submit()">
+					if selectedServiceTypeID == "" {
+						<option value="" selected disabled>Choose a service type</option>
+					}
+					for _, st := range serviceTypes {
+						if st.ID == selectedServiceTypeID {
+							<option value={ st.ID } selected>{ st.Attributes.Name }</option>
+						} else {
+							<option value={ st.ID }>{ st.Attributes.Name }</option>
+						}
+					}
+				</select>
+			</label>
+		</form>
+		if errMsg != "" {
+			<p class="error">{ errMsg }</p>
+		}
+		if selectedServiceTypeID != "" {
+			<form class="inline" hx-get="/scheduling/position-preferences/assignments" hx-target="#position-assignments" hx-swap="outerHTML">
+				<label>
+					Position
+					<select name="position" onchange="this.form.requestSubmit()" required>
+						<option value="" selected disabled>Choose a position</option>
+						for _, group := range positionGroups {
+							<optgroup label={ group.TeamName }>
+								for _, pos := range group.Positions {
+									<option value={ pos.TeamID + ":" + pos.TeamPositionID }>{ pos.TeamPositionName }</option>
+								}
+							</optgroup>
+						}
+					</select>
+				</label>
+			</form>
+			@PositionAssignmentsFragment(nil, "", "", nil, "")
+		}
+	}
+}
+
+// PositionAssignmentsFragment is the htmx swap target (id="position-
+// assignments") for both the position picker above and every add/remove
+// action within it - it renders empty (no table, no add form) until a
+// position is actually selected.
+templ PositionAssignmentsFragment(rows []PreferenceRow, teamID, teamPositionID string, options []SchedulePreferenceOption, errMsg string) {
+	<div id="position-assignments">
+		if errMsg != "" {
+			<p class="error">{ errMsg }</p>
+		}
+		if teamID != "" && teamPositionID != "" {
+			<div class="table-wrap">
+				<table>
+					<thead>
+						<tr>
+							<th>Person</th>
+							<th>Preference</th>
+							<th></th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, row := range rows {
+							<tr>
+								<td>{ row.PersonName }</td>
+								<td>{ row.SchedulePreference }</td>
+								<td>
+									<button
+										class="danger icon-btn"
+										aria-label="Remove from position"
+										title="Remove from position"
+										hx-delete={ fmt.Sprintf("/scheduling/position-preferences/%s/%s/%s", teamID, teamPositionID, row.AssignmentID) }
+										hx-target="#position-assignments"
+										hx-swap="outerHTML"
+										hx-confirm="Remove this person from this position?"
+									>
+										@views.IconRemove()
+									</button>
+								</td>
+							</tr>
+						}
+						if len(rows) == 0 {
+							<tr>
+								<td colspan="3" class="muted">No one assigned to this position yet.</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+			<form class="inline" hx-post="/scheduling/position-preferences" hx-target="#position-assignments" hx-swap="outerHTML">
+				<input type="hidden" name="team_id" value={ teamID }/>
+				<input type="hidden" name="team_position_id" value={ teamPositionID }/>
+				@PersonPickerField("Person", "person_id", "pref")
+				<label>
+					Preference
+					<select name="schedule_preference">
+						for _, opt := range options {
+							<option value={ opt.Value }>{ opt.Label }</option>
+						}
+					</select>
+				</label>
+				<button type="submit" class="primary">Save</button>
+			</form>
+		}
+	</div>
+}
