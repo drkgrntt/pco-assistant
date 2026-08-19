@@ -9,7 +9,7 @@ func NewPCOJobs() *PCOJobs {
 }
 
 // Register is a placeholder for PCO-specific scheduled jobs (e.g. syncing
-// data out of PCO on a schedule). Empty for now, mirroring TithelyJobs so
-// new jobs have an obvious home.
+// data out of PCO on a schedule). Empty for now, mirroring AuthJobs so new
+// jobs have an obvious home.
 func (j *PCOJobs) Register(scheduler gocron.Scheduler) {
 }

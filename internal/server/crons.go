@@ -15,7 +15,6 @@ func (s *FiberServer) RegisterCrons() {
 		return
 	}
 
-	jobs.NewTithelyJobs().Register(scheduler)
 	jobs.NewPCOJobs().Register(scheduler)
 	jobs.NewAuthJobs(s.authStore).Register(scheduler)
 

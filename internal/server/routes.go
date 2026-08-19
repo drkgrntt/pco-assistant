@@ -39,7 +39,6 @@ func (s *FiberServer) RegisterFiberRoutes() {
 	controllers.NewHealthController(s.db).RegisterRoutes(s.App)
 	controllers.NewAuthController(s.authStore).RegisterRoutes(s.App)
 	controllers.NewHomeController().RegisterRoutes(s.App)
-	controllers.NewTithelyController().RegisterRoutes(s.App)
 	controllers.NewPCOController().RegisterRoutes(s.App)
 	controllers.NewSchedulingAPIController(s.schedulingStore).RegisterRoutes(s.App)
 	controllers.NewSchedulingController(s.schedulingStore).RegisterRoutes(s.App)
