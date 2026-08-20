@@ -578,6 +578,27 @@ button.danger:hover {
   color: var(--accent);
 }
 
+/* The Build page's plan list tags each row with two independent statuses
+   (songs, team) - this labels which badge is which, small and muted so it
+   doesn't compete with the badges themselves. */
+.badge-label {
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-left: 0.5rem;
+}
+
+.badge-label:first-of-type {
+  margin-left: 0.75rem;
+}
+
+/* Separates the two independently-interactive sections of the combined
+   Build a Service page (order of service, then team) - enough visual
+   weight to read as "new section," not just another <h2>. */
+.builder-section-divider {
+  border-top: 1px solid var(--border);
+  margin-block: 2rem;
+}
+
 .publish-panel {
   margin-block: 1rem;
   padding: 0.75rem 1rem;

@@ -1,0 +1,112 @@
+package scheduling
+
+import (
+	pco "github.com/drkgrntt/go-pco"
+
+	"pco-assistant/internal/views"
+)
+
+templ Build(personName string, serviceTypes []pco.ServiceTypeData, selectedServiceTypeID string, initialPlans []PlanRow, errMsg string) {
+	@views.Layout("Build a Service", personName) {
+		<h1>Build a Service</h1>
+		<p class="muted">Pick a service type, then an upcoming plan, to build its song lineup and fill its team - both on one page.</p>
+		<form class="inline" hx-get="/scheduling/build/plans" hx-target="#build-plans" hx-swap="outerHTML">
+			<label>
+				Service type
+				<select name="service_type_id">
+					if selectedServiceTypeID == "" {
+						<option value="" selected disabled>Choose a service type</option>
+					}
+					for _, st := range serviceTypes {
+						if st.ID == selectedServiceTypeID {
+							<option value={ st.ID } selected>{ st.Attributes.Name }</option>
+						} else {
+							<option value={ st.ID }>{ st.Attributes.Name }</option>
+						}
+					}
+				</select>
+			</label>
+			<button type="submit" class="primary">Show upcoming plans</button>
+		</form>
+		if errMsg != "" {
+			<p class="error">{ errMsg }</p>
+		}
+		@BuildPlansList(initialPlans, selectedServiceTypeID, "")
+	}
+}
+
+// BuildPlansList is the htmx swap target (id="build-plans") for the service
+// type picker above - it lists that service type's upcoming plans, each
+// linking straight into its combined builder, tagged with its song lineup
+// status and its team status independently (see the scheduling
+// controller's planStatus/rosterStatus) - a plan can be fully planned on
+// one and still todo on the other.
+templ BuildPlansList(plans []PlanRow, serviceTypeID string, errMsg string) {
+	<div id="build-plans">
+		if errMsg != "" {
+			<p class="error">{ errMsg }</p>
+		}
+		if serviceTypeID != "" {
+			<ul class="plan-list">
+				for _, plan := range plans {
+					<li>
+						<a href={ templ.URL("/scheduling/build/" + serviceTypeID + "/" + plan.ID) }>
+							if plan.Title != "" {
+								{ plan.Title }
+							} else {
+								{ plan.Dates }
+							}
+						</a>
+						if plan.Title != "" {
+							<span class="muted">{ plan.Dates }</span>
+						}
+						<span class="badge-label">Songs</span>
+						@planStatusBadge(plan.SetStatus)
+						<span class="badge-label">Team</span>
+						@planStatusBadge(plan.RosterStatus)
+					</li>
+				}
+				if len(plans) == 0 {
+					<li class="muted">No upcoming plans found.</li>
+				}
+			</ul>
+		}
+	</div>
+}
+
+templ planStatusBadge(status string) {
+	switch status {
+		case "planned":
+			<span class="badge published">Planned</span>
+		case "pending":
+			<span class="badge status-pending">Pending</span>
+		case "todo":
+			<span class="badge status-todo">Todo</span>
+	}
+}
+
+// BuildPlan is one plan's combined builder - the song order of service and
+// the team, stacked on one page under a shared heading/back-link, instead
+// of two separate pages. Each section (@SetBuilderBody/@RosterBuilderBody)
+// is fully self-contained, including its own <h2> and its own htmx swap
+// target, so interacting with one never touches the other.
+templ BuildPlan(personName string, setData SetBuilderData, rosterData RosterBuilderData) {
+	@views.Layout("Build a Service", personName) {
+		<h1>
+			if setData.PlanTitle != "" {
+				{ setData.PlanTitle }
+			} else if setData.PlanDates != "" {
+				{ setData.PlanDates }
+			} else {
+				Service
+			}
+		</h1>
+		if setData.PlanTitle != "" && setData.PlanDates != "" {
+			<p class="muted">{ setData.PlanDates }</p>
+		}
+		<p><a href="/scheduling/build">&larr; Choose a different plan</a></p>
+		@SetBuilderBody(setData)
+		<div class="builder-section-divider"></div>
+		@RosterBuilderBody(rosterData)
+	}
+}

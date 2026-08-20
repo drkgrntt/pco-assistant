@@ -10,25 +10,6 @@ import (
 	pco "github.com/drkgrntt/go-pco"
 )
 
-templ SetBuilder(personName string, data SetBuilderData) {
-	@views.Layout("Build a Set", personName) {
-		<h1>
-			if data.PlanTitle != "" {
-				{ data.PlanTitle }
-			} else if data.PlanDates != "" {
-				{ data.PlanDates }
-			} else {
-				Set
-			}
-		</h1>
-		if data.PlanTitle != "" && data.PlanDates != "" {
-			<p class="muted">{ data.PlanDates }</p>
-		}
-		<p><a href="/scheduling/sets">&larr; Choose a different plan</a></p>
-		@SetBuilderBody(data)
-	}
-}
-
 // SetBuilderBody is both the initial-render fragment and the htmx swap
 // target (id="set-builder-body") for every add/remove/move action below -
 // the whole thing re-renders each time since adding or removing a song can

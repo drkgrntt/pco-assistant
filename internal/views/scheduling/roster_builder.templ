@@ -7,25 +7,6 @@ import (
 	"pco-assistant/internal/views"
 )
 
-templ RosterBuilder(personName string, data RosterBuilderData) {
-	@views.Layout("Build a Team", personName) {
-		<h1>
-			if data.PlanTitle != "" {
-				{ data.PlanTitle }
-			} else if data.PlanDates != "" {
-				{ data.PlanDates }
-			} else {
-				Team
-			}
-		</h1>
-		if data.PlanTitle != "" && data.PlanDates != "" {
-			<p class="muted">{ data.PlanDates }</p>
-		}
-		<p><a href="/scheduling/rosters">&larr; Choose a different plan</a></p>
-		@RosterBuilderBody(data)
-	}
-}
-
 // RosterBuilderBody is both the initial-render fragment and the htmx swap
 // target (id="roster-builder-body") for every add/remove action below - see
 // SetBuilderBody, which this mirrors.

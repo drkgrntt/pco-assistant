@@ -77,56 +77,6 @@ func (sc *SchedulingController) DeleteSongRole(c *fiber.Ctx) error {
 
 // --- Set builder ------------------------------------------------------------
 
-// SetsPage renders the service-type picker. With only one service type,
-// there's nothing to actually pick, so its plans are loaded immediately
-// instead of waiting for a submit that would only ever have one option.
-func (sc *SchedulingController) SetsPage(c *fiber.Ctx) error {
-	_, personName := middleware.CurrentPerson(c)
-
-	serviceTypes, err := pco.GetServiceTypes(middleware.RequestContext(c), nil)
-	if err != nil {
-		return render(c, views.Sets(personName, nil, "", nil, err.Error()))
-	}
-
-	if len(serviceTypes.Data) == 1 {
-		serviceTypeID := serviceTypes.Data[0].ID
-		rows, errMsg := sc.plansForServiceType(middleware.RequestContext(c), serviceTypeID)
-		return render(c, views.Sets(personName, serviceTypes.Data, serviceTypeID, rows, errMsg))
-	}
-
-	return render(c, views.Sets(personName, serviceTypes.Data, "", nil, ""))
-}
-
-// SetsPlans lists a service type's upcoming plans, each linking to its set
-// builder - the htmx target for the service-type picker on the Sets page.
-func (sc *SchedulingController) SetsPlans(c *fiber.Ctx) error {
-	serviceTypeID := c.Query("service_type_id")
-	if serviceTypeID == "" {
-		return render(c, views.SetsPlansList(nil, "", ""))
-	}
-
-	rows, errMsg := sc.plansForServiceType(middleware.RequestContext(c), serviceTypeID)
-	return render(c, views.SetsPlansList(rows, serviceTypeID, errMsg))
-}
-
-func (sc *SchedulingController) plansForServiceType(ctx context.Context, serviceTypeID string) ([]views.PlanRow, string) {
-	plans, err := pco.GetPlans(ctx, serviceTypeID, &pco.PlansParams{Filter: "future", OrderBy: "sort_date"})
-	if err != nil {
-		return nil, err.Error()
-	}
-
-	rows := make([]views.PlanRow, len(plans.Data))
-	for i, plan := range plans.Data {
-		rows[i] = views.PlanRow{
-			ID:        plan.ID,
-			Title:     plan.Attributes.Title,
-			Dates:     plan.Attributes.Dates,
-			SetStatus: sc.planStatus(ctx, serviceTypeID, plan.ID),
-		}
-	}
-	return rows, ""
-}
-
 // planStatus classifies a plan for the picker list:
 //   - "planned": a local draft exists, has songs, and none are unpublished
 //     or queued for deletion - fully synced with Planning Center.
@@ -162,14 +112,6 @@ func (sc *SchedulingController) planStatus(ctx context.Context, serviceTypeID, p
 		}
 	}
 	return ""
-}
-
-func (sc *SchedulingController) SetBuilderPage(c *fiber.Ctx) error {
-	_, personName := middleware.CurrentPerson(c)
-
-	data := sc.buildSetBuilderData(middleware.RequestContext(c), c.Params("service_type_id"), c.Params("plan_id"))
-
-	return render(c, views.SetBuilder(personName, data))
 }
 
 func (sc *SchedulingController) AddSetSong(c *fiber.Ctx) error {

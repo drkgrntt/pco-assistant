@@ -21,53 +21,6 @@ import (
 
 // --- Rosters (Team Builder) list/status --------------------------------------
 
-// RostersPage renders the service-type picker, mirroring SetsPage: with only
-// one service type, its plans load immediately.
-func (sc *SchedulingController) RostersPage(c *fiber.Ctx) error {
-	_, personName := middleware.CurrentPerson(c)
-
-	serviceTypes, err := pco.GetServiceTypes(middleware.RequestContext(c), nil)
-	if err != nil {
-		return render(c, views.Rosters(personName, nil, "", nil, err.Error()))
-	}
-
-	if len(serviceTypes.Data) == 1 {
-		serviceTypeID := serviceTypes.Data[0].ID
-		rows, errMsg := sc.rosterPlansForServiceType(middleware.RequestContext(c), serviceTypeID)
-		return render(c, views.Rosters(personName, serviceTypes.Data, serviceTypeID, rows, errMsg))
-	}
-
-	return render(c, views.Rosters(personName, serviceTypes.Data, "", nil, ""))
-}
-
-func (sc *SchedulingController) RostersPlans(c *fiber.Ctx) error {
-	serviceTypeID := c.Query("service_type_id")
-	if serviceTypeID == "" {
-		return render(c, views.RostersPlansList(nil, "", ""))
-	}
-
-	rows, errMsg := sc.rosterPlansForServiceType(middleware.RequestContext(c), serviceTypeID)
-	return render(c, views.RostersPlansList(rows, serviceTypeID, errMsg))
-}
-
-func (sc *SchedulingController) rosterPlansForServiceType(ctx context.Context, serviceTypeID string) ([]views.PlanRow, string) {
-	plans, err := pco.GetPlans(ctx, serviceTypeID, &pco.PlansParams{Filter: "future", OrderBy: "sort_date"})
-	if err != nil {
-		return nil, err.Error()
-	}
-
-	rows := make([]views.PlanRow, len(plans.Data))
-	for i, plan := range plans.Data {
-		rows[i] = views.PlanRow{
-			ID:           plan.ID,
-			Title:        plan.Attributes.Title,
-			Dates:        plan.Attributes.Dates,
-			RosterStatus: sc.rosterStatus(ctx, serviceTypeID, plan.ID),
-		}
-	}
-	return rows, ""
-}
-
 // rosterStatus classifies a plan for the picker list - see the scheduling
 // controller's planStatus, which this mirrors exactly (substituting
 // team_members for items as the "does Planning Center already have content
@@ -100,14 +53,6 @@ func (sc *SchedulingController) rosterStatus(ctx context.Context, serviceTypeID,
 }
 
 // --- Roster builder page ------------------------------------------------------
-
-func (sc *SchedulingController) RosterBuilderPage(c *fiber.Ctx) error {
-	_, personName := middleware.CurrentPerson(c)
-
-	data := sc.buildRosterBuilderData(middleware.RequestContext(c), c.Params("service_type_id"), c.Params("plan_id"))
-
-	return render(c, views.RosterBuilder(personName, data))
-}
 
 func (sc *SchedulingController) AddRosterAssignment(c *fiber.Ctx) error {
 	serviceTypeID := c.Params("service_type_id")

@@ -125,17 +125,15 @@ func (sc *SchedulingController) RegisterRoutes(router fiber.Router) {
 	group.Post("/position-preferences", sc.SetPositionPreference)
 	group.Delete("/position-preferences/:team_id/:team_position_id/:assignment_id", sc.DeletePositionPreference)
 
-	group.Get("/rosters", sc.RostersPage)
-	group.Get("/rosters/plans", sc.RostersPlans)
-	group.Get("/rosters/:service_type_id/:plan_id", sc.RosterBuilderPage)
+	group.Get("/build", sc.BuildPage)
+	group.Get("/build/plans", sc.BuildPlans)
+	group.Get("/build/:service_type_id/:plan_id", sc.BuildPlanPage)
+
 	group.Post("/rosters/:service_type_id/:plan_id/assignments", sc.AddRosterAssignment)
 	group.Delete("/rosters/:service_type_id/:plan_id/assignments/:assignment_id", sc.RemoveRosterAssignment)
 	group.Post("/rosters/:service_type_id/:plan_id/publish", sc.PublishRoster)
 	group.Post("/rosters/:service_type_id/:plan_id/revert", sc.RevertRoster)
 
-	group.Get("/sets", sc.SetsPage)
-	group.Get("/sets/plans", sc.SetsPlans)
-	group.Get("/sets/:service_type_id/:plan_id", sc.SetBuilderPage)
 	group.Post("/sets/:service_type_id/:plan_id/songs", sc.AddSetSong)
 	group.Delete("/sets/:service_type_id/:plan_id/set-songs/:set_song_id", sc.RemoveSetSong)
 	group.Post("/sets/:service_type_id/:plan_id/set-songs/:set_song_id/replace", sc.ReplaceSetSong)
