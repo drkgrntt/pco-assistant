@@ -483,8 +483,19 @@ button.danger:hover {
   margin-block: 1rem;
 }
 
-.quick-links a {
+/* :not(.button) so this doesn't fight with .button's own padding - it
+   collapsed the workflow buttons' horizontal padding to zero before this
+   exclusion existed (equal specificity, but this rule came later). */
+.quick-links a:not(.button) {
   padding: 0.4rem 0;
+}
+
+/* The homepage's workflow buttons get a little more room than a standard
+   .button/.primary - they're the page's whole reason for being, not one
+   action among several. */
+.quick-links .button {
+  padding: 0.65rem 1.5rem;
+  font-size: 1.05rem;
 }
 
 /* The homepage's setup links - plain text, not buttons, so the two
