@@ -1,52 +1,77 @@
 :root {
   color-scheme: light dark;
-  /* Teal/cyan primary, salmon secondary (danger/destructive) - soft,
-     desaturated versions of both rather than a vivid brand-book teal or an
-     alarm-red salmon, consistent with how the rest of the palette avoids
-     "alert dialog" colors. Background and text are soft warm off-white/
-     near-black rather than stark white/black, for the same reason. */
+
+  /* Canvas & Elevation */
   --bg: #faf8f5;
+  --surface: #ffffff;
+  --surface-hover: #f3efe9;
   --text: #322f2b;
   --border: #dcd6d0;
-  --muted: #726d67;
-  --danger: #b04c37;
+  --muted: #635e58;
+
+  /* Brand & Accents */
   --accent: #2b7770;
-  /* Fixed (not overridden below) for white text laid on top of it - .role
-     buttons, badges, etc. - which needs a darker, more constant surface
-     than --accent ends up being once --accent lightens for dark mode. */
   --accent-solid: #2b7770;
-  --success: #4a754a;
+  --accent-subtle: #e6f0ef;
+
+  /* Status Tokens (Softened, contextual) */
+  --danger: #b04c37;
+  --danger-subtle: #f9ebe8;
+  
+  --success: #3f683f;
+  --success-subtle: #ebf2eb;
+  
   --pending: #8a6519;
+  --pending-subtle: #f7f1e3;
 }
 
-/* Dark-mode counterparts for the tokens above - bg/text/border/muted flip
-   entirely; accent/danger just get lightened a bit further so text set in
-   them (nav links, .error) still clears 4.5:1 against the darker
-   background. Applies on system preference (unless the theme toggle - see
-   setTheme in scheduling.js - has forced light) or on an explicit dark
-   override, whichever matches. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #211f1d;
+    /* Canvas & Elevation */
+    --bg: #1c1a18;         /* Slightly deeper dark for better contrast */
+    --surface: #272421;    /* Elevated card surface */
+    --surface-hover: #322e2a;
     --text: #e9e4de;
-    --border: #45403a;
+    --border: #3d3832;
     --muted: #a89f95;
+
+    /* Brand & Accents */
     --accent: #6cc4ba;
+    --accent-subtle: #1c3330;
+
+    /* Status Tokens */
     --danger: #e08d78;
+    --danger-subtle: #3a221c;
+
     --success: #8fbf8f;
+    --success-subtle: #1e2b1e;
+
     --pending: #d9b264;
+    --pending-subtle: #332a18;
   }
 }
-
 :root[data-theme="dark"] {
-  --bg: #211f1d;
-  --text: #e9e4de;
-  --border: #45403a;
-  --muted: #a89f95;
-  --accent: #6cc4ba;
-  --danger: #e08d78;
-  --success: #8fbf8f;
-  --pending: #d9b264;
+    /* Canvas & Elevation */
+    --bg: #1c1a18;         /* Slightly deeper dark for better contrast */
+    --surface: #272421;    /* Elevated card surface */
+    --surface-hover: #322e2a;
+    --text: #e9e4de;
+    --border: #3d3832;
+    --muted: #a89f95;
+
+    /* Brand & Accents */
+    --accent: #6cc4ba;
+    --accent-subtle: #1c3330;
+
+    /* Status Tokens */
+    --danger: #e08d78;
+    --danger-subtle: #3a221c;
+
+    --success: #8fbf8f;
+    --success-subtle: #1e2b1e;
+
+    --pending: #d9b264;
+    --pending-subtle: #332a18;
 }
 
 /* color-scheme itself (native form control/scrollbar theming) follows the
@@ -80,6 +105,7 @@ header.site {
   align-items: stretch;
   gap: 0.6rem;
   padding: 0.75rem 1rem;
+  background: var(--surface);
   border-bottom: 1px solid var(--border);
 }
 
@@ -129,7 +155,7 @@ header.site nav a {
   min-width: 12rem;
   margin-top: 0.4rem;
   padding: 0.4rem;
-  background: var(--bg);
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
@@ -147,7 +173,7 @@ header.site nav a {
 }
 
 .nav-dropdown-menu a:hover {
-  background: color-mix(in srgb, var(--accent) 10%, var(--bg));
+  background: var(--accent-subtle);
 }
 
 header.site form {
@@ -251,11 +277,16 @@ header.site strong {
 }
 
 /* Tables scroll horizontally within their own box instead of overflowing
-   the page - narrow phones can't fit 5 columns without it. */
+   the page - narrow phones can't fit 5 columns without it. Also doubles as
+   the table's card: elevated off the page on --surface, rather than a bare
+   table floating directly on --bg. */
 .table-wrap {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   margin-block: 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
 }
 
 table {
@@ -274,7 +305,12 @@ td {
 }
 
 /* A little branding on table headers, not just page headings - bolder,
-   spaced-out label text under an accent-colored rule. */
+   spaced-out label text under an accent-colored rule, on its own subtly
+   raised bar so the header row reads as a fixture, not just another row. */
+thead {
+  background: var(--surface-hover);
+}
+
 thead th {
   border-bottom: 2px solid var(--accent);
   color: var(--muted);
@@ -282,6 +318,15 @@ thead th {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.03em;
+}
+
+/* Row-level hover only where rows are actually distinct records browsed
+   one at a time - not the set builder's order-of-service table, where
+   .dragging/.drag-over already carry their own, differently-purposed
+   highlight states this would visually compete with. */
+table.sortable tbody tr:hover,
+#position-assignments tbody tr:hover {
+  background: var(--surface-hover);
 }
 
 /* Sortable admin tables (see makeSortable in scheduling.js) - never used
@@ -366,7 +411,11 @@ button {
 }
 
 /* Sized for comfortable tapping (~44px) on top of being readable - a win on
-   desktop too, so this isn't gated behind a breakpoint. */
+   desktop too, so this isn't gated behind a breakpoint. Controls sit on
+   --surface, not --bg - they're interactive elements floating above the
+   page, and now that tables/cards/list rows are --surface too, a --bg
+   control inside one of them would look like a mismatched cutout rather
+   than a field (most visible in dark mode, where the two diverge most). */
 input,
 select,
 button {
@@ -375,7 +424,7 @@ button {
   min-height: 2.25rem;
   border-radius: 6px;
   border: 1px solid var(--border);
-  background: var(--bg);
+  background: var(--surface);
   color: var(--text);
 }
 
@@ -389,17 +438,17 @@ button:focus-visible {
 button {
   cursor: pointer;
   font-weight: 500;
-  background: color-mix(in srgb, var(--text) 4%, var(--bg));
+  background: color-mix(in srgb, var(--text) 4%, var(--surface));
   transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
 button:hover {
-  background: color-mix(in srgb, var(--text) 9%, var(--bg));
+  background: var(--surface-hover);
   border-color: color-mix(in srgb, var(--text) 25%, var(--border));
 }
 
 button:active {
-  background: color-mix(in srgb, var(--text) 14%, var(--bg));
+  background: color-mix(in srgb, var(--text) 14%, var(--surface));
 }
 
 /* A <button>-shaped <a> - link-driven actions (the sign-in link, the
@@ -416,7 +465,7 @@ button:active {
   min-height: 2.25rem;
   border-radius: 6px;
   border: 1px solid var(--border);
-  background: var(--bg);
+  background: var(--surface);
   color: var(--text);
   text-decoration: none;
   cursor: pointer;
@@ -424,7 +473,7 @@ button:active {
 }
 
 .button:hover {
-  background: color-mix(in srgb, var(--text) 9%, var(--bg));
+  background: var(--surface-hover);
   border-color: color-mix(in srgb, var(--text) 25%, var(--border));
 }
 
@@ -446,13 +495,13 @@ button:active {
 }
 
 button.danger {
-  background: var(--bg);
+  background: var(--surface);
   border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
   color: var(--danger);
 }
 
 button.danger:hover {
-  background: color-mix(in srgb, var(--danger) 12%, var(--bg));
+  background: color-mix(in srgb, var(--danger) 12%, var(--surface));
   border-color: var(--danger);
 }
 
@@ -461,18 +510,33 @@ button.danger:hover {
   font-size: 0.9rem;
 }
 
+/* Tinted banners rather than bare colored text/borders - the *-subtle
+   tokens exist for exactly this (a wash you can put body text on, not just
+   a badge pill), so a page-level message reads as a real alert instead of
+   a stray sentence in an alarming color. */
 .warning {
-  border: 1px solid var(--danger);
+  background: var(--danger-subtle);
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--border));
   border-radius: 6px;
   padding: 0.75rem 1rem;
   margin-block: 0.75rem;
 }
 
+.error,
+.success {
+  display: inline-block;
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  margin-block: 0.5rem;
+}
+
 .error {
+  background: var(--danger-subtle);
   color: var(--danger);
 }
 
 .success {
+  background: var(--success-subtle);
   color: var(--success);
 }
 
@@ -501,10 +565,17 @@ button.danger:hover {
 /* The homepage's setup links - plain text, not buttons, so the two
    workflow buttons above stay the visually obvious "start here." */
 .quick-links-secondary a {
-  padding: 0.2rem 0;
+  padding: 0.2rem 0.5rem;
+  margin-left: -0.5rem;
+  border-radius: 6px;
   color: var(--accent);
   text-decoration: none;
   font-size: 0.95rem;
+  transition: background-color 0.15s ease;
+}
+
+.quick-links-secondary a:hover {
+  background: var(--accent-subtle);
 }
 
 @media (min-width: 640px) {
@@ -529,11 +600,12 @@ button.danger:hover {
   left: 0;
   right: 0;
   z-index: 10;
-  background: var(--bg);
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 4px;
   max-height: 12rem;
   overflow-y: auto;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
 }
 
 .search-results:empty {
@@ -546,7 +618,7 @@ button.danger:hover {
 }
 
 .search-result:hover {
-  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  background: var(--accent-subtle);
 }
 
 .search-result-empty {
@@ -555,7 +627,7 @@ button.danger:hover {
 
 .badge {
   display: inline-block;
-  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  background: var(--accent-subtle);
   color: var(--accent);
   border-radius: 999px;
   padding: 0.15rem 0.6rem;
@@ -564,17 +636,17 @@ button.danger:hover {
 }
 
 .badge.published {
-  background: color-mix(in srgb, var(--success) 15%, transparent);
+  background: var(--success-subtle);
   color: var(--success);
 }
 
 .badge.status-pending {
-  background: color-mix(in srgb, var(--pending) 15%, transparent);
+  background: var(--pending-subtle);
   color: var(--pending);
 }
 
 .badge.status-todo {
-  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  background: var(--accent-subtle);
   color: var(--accent);
 }
 
@@ -602,6 +674,7 @@ button.danger:hover {
 .publish-panel {
   margin-block: 1rem;
   padding: 0.75rem 1rem;
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 6px;
 }
@@ -616,15 +689,34 @@ button.danger:hover {
   gap: 0.5rem;
 }
 
+/* Each position on the roster builder gets its own card - previously an
+   unstyled div, so positions ran together with nothing but an <h3> to tell
+   them apart. */
+.position-group {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  margin-block: 1rem;
+}
+
+.position-group h3 {
+  margin-top: 0;
+}
+
 .conflict-badge {
   display: inline-block;
+  background: var(--danger-subtle);
   color: var(--danger);
-  font-size: 0.85rem;
+  border-radius: 999px;
+  padding: 0.15rem 0.6rem;
+  font-size: 0.8rem;
 }
 
 .plan-list,
 .suggestion-list,
-.candidate-list {
+.candidate-list,
+.assignment-list {
   list-style: none;
   padding: 0;
   margin: 0.5rem 0 1rem;
@@ -635,18 +727,29 @@ button.danger:hover {
 
 .plan-list li,
 .suggestion-list li,
-.candidate-row {
+.candidate-row,
+.assignment-list li {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem 0.6rem;
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 6px;
+  transition: background-color 0.15s ease;
+}
+
+.plan-list li:hover,
+.suggestion-list li:hover,
+.candidate-row:hover,
+.assignment-list li:hover {
+  background: var(--surface-hover);
 }
 
 .suggestion-list li > span:first-child,
-.candidate-row > span:first-child {
+.candidate-row > span:first-child,
+.assignment-list li > span:first-child {
   flex: 1 1 auto;
   font-weight: 600;
 }
@@ -685,7 +788,7 @@ button.danger:hover {
 }
 
 .icon-btn:hover {
-  background: color-mix(in srgb, var(--text) 10%, transparent);
+  background: var(--surface-hover);
   border-color: transparent;
 }
 
@@ -771,7 +874,7 @@ tr.dragging {
   position: relative;
   z-index: 1;
   opacity: 0.85;
-  background: color-mix(in srgb, var(--accent-solid) 10%, var(--bg));
+  background: color-mix(in srgb, var(--accent-solid) 10%, var(--surface));
   box-shadow: 0 6px 14px -6px rgba(0, 0, 0, 0.35);
 }
 
