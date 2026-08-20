@@ -14,8 +14,10 @@
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
-# Go workspace file
+# Go workspace file (e.g. from workspace-mode local dev against the
+# go-pco sibling checkout - see README)
 go.work
+go.work.sum
 tmp/
 
 # IDE specific files
