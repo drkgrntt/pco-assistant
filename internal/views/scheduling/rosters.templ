@@ -57,7 +57,7 @@ templ RostersPlansList(plans []PlanRow, serviceTypeID string, errMsg string) {
 						if plan.Title != "" {
 							<span class="muted">{ plan.Dates }</span>
 						}
-						switch plan.Status {
+						switch plan.RosterStatus {
 							case "planned":
 								<span class="badge published">Planned</span>
 							case "pending":

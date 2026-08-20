@@ -83,17 +83,21 @@ type ServiceOrderRow struct {
 	Song SetSongView
 }
 
-// PlanRow is one row of the Sets page's plan-picker list. Status is one of
-// "" (nothing local, and Planning Center has no songs here either),
-// "todo" (Planning Center already has song content but there's no local
-// draft yet), "pending" (a local draft exists with unpublished or
-// pending-deletion songs), or "planned" (a local draft exists and is fully
-// synced) - see the scheduling controller's planStatus.
+// PlanRow is one row of the Build page's plan-picker list - one row per
+// plan, with independent statuses for its song lineup and its team, since
+// a plan can be e.g. fully planned on songs but still todo on people.
+// Each status is one of "" (nothing local, and Planning Center has no
+// content here either), "todo" (Planning Center already has content but
+// there's no local draft yet), "pending" (a local draft exists with
+// unpublished and/or pending-deletion rows), or "planned" (a local draft
+// exists and is fully synced) - see the scheduling controller's
+// planStatus/rosterStatus.
 type PlanRow struct {
-	ID     string
-	Title  string
-	Dates  string
-	Status string
+	ID           string
+	Title        string
+	Dates        string
+	SetStatus    string
+	RosterStatus string
 }
 
 // CandidateSongView is a song not yet in the set, offered for adding via
