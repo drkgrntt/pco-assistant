@@ -95,6 +95,61 @@ header.site nav a {
   padding: 0.3rem 0;
 }
 
+/* "Setup" - the granular relationships/preferences pages - tucked into a
+   dropdown so the header nav leads with the two pages that actually matter
+   week to week (Build a Set, Build a Team), not eight same-weight links. */
+.nav-dropdown {
+  position: relative;
+}
+
+.nav-dropdown-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: none;
+  border: none;
+  min-height: 0;
+  padding: 0.3rem 0;
+  font: inherit;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.nav-dropdown-toggle:hover {
+  background: none;
+}
+
+.nav-dropdown-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 20;
+  flex-direction: column;
+  min-width: 12rem;
+  margin-top: 0.4rem;
+  padding: 0.4rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+}
+
+.nav-dropdown.open .nav-dropdown-menu {
+  display: flex;
+}
+
+.nav-dropdown-menu a {
+  padding: 0.5rem 0.6rem;
+  border-radius: 6px;
+  text-decoration: none;
+  color: var(--text);
+}
+
+.nav-dropdown-menu a:hover {
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg));
+}
+
 header.site form {
   display: flex;
   align-items: center;
@@ -347,6 +402,32 @@ button:active {
   background: color-mix(in srgb, var(--text) 14%, var(--bg));
 }
 
+/* A <button>-shaped <a> - link-driven actions (the sign-in link, the
+   homepage's workflow shortcuts) that should look identical to a real
+   button rather than plain text, since the input/select/button base rule
+   above only reaches actual form controls. */
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font: inherit;
+  font-weight: 500;
+  padding: 0.4rem 0.7rem;
+  min-height: 2.25rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.button:hover {
+  background: color-mix(in srgb, var(--text) 9%, var(--bg));
+  border-color: color-mix(in srgb, var(--text) 25%, var(--border));
+}
+
 /* The one or two clearest calls to action per page (Publish, the top-of-
    form Add/Save, "sign in") - everything else stays the neutral outline
    style above so these actually stand out. */
@@ -406,10 +487,24 @@ button.danger:hover {
   padding: 0.4rem 0;
 }
 
+/* The homepage's setup links - plain text, not buttons, so the two
+   workflow buttons above stay the visually obvious "start here." */
+.quick-links-secondary a {
+  padding: 0.2rem 0;
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 0.95rem;
+}
+
 @media (min-width: 640px) {
   .quick-links {
     flex-direction: row;
-    gap: 1.5rem;
+    flex-wrap: wrap;
+    gap: 0.75rem 1rem;
+  }
+
+  .quick-links-secondary {
+    gap: 0.5rem 1.5rem;
   }
 }
 

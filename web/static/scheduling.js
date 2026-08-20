@@ -31,6 +31,37 @@ function toggleTheme() {
   localStorage.setItem("theme", next);
 }
 
+// The header nav's "Setup" dropdown (see layout.templ) - a plain
+// open/closed toggle, closed by clicking its button again, clicking
+// anywhere else on the page, or pressing Escape.
+function toggleNavDropdown(button) {
+  var dropdown = button.closest(".nav-dropdown");
+  var open = dropdown.classList.toggle("open");
+  button.setAttribute("aria-expanded", open ? "true" : "false");
+}
+
+function closeNavDropdowns() {
+  document.querySelectorAll(".nav-dropdown.open").forEach(function (dropdown) {
+    dropdown.classList.remove("open");
+    var toggle = dropdown.querySelector(".nav-dropdown-toggle");
+    if (toggle) {
+      toggle.setAttribute("aria-expanded", "false");
+    }
+  });
+}
+
+document.addEventListener("click", function (event) {
+  if (!event.target.closest(".nav-dropdown")) {
+    closeNavDropdowns();
+  }
+});
+
+document.addEventListener("keydown", function (event) {
+  if (event.key === "Escape") {
+    closeNavDropdowns();
+  }
+});
+
 // selectPerson fills a person picker's hidden person_id input and visible
 // search box from a clicked search result's data attributes (see
 // PersonSearchResults in internal/views/scheduling/person_picker.templ),
