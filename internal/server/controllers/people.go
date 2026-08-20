@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"strings"
@@ -23,7 +24,7 @@ func (sc *SchedulingController) PersonRelationshipsPage(c *fiber.Ctx) error {
 		return render(c, views.PersonRelationships(personName, relationships, nil, err.Error()))
 	}
 
-	names := personNameMapForIDs(relationshipPersonIDs(relationships))
+	names := personNameMapForIDs(middleware.RequestContext(c), relationshipPersonIDs(relationships))
 
 	return render(c, views.PersonRelationships(personName, relationships, names, ""))
 }
@@ -42,7 +43,7 @@ func (sc *SchedulingController) CreatePersonRelationship(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
 	}
 
-	names := personNameMapForIDs(relationshipPersonIDs(relationships))
+	names := personNameMapForIDs(middleware.RequestContext(c), relationshipPersonIDs(relationships))
 
 	return render(c, views.PersonRelationshipsTable(relationships, names, errMsg))
 }
@@ -61,7 +62,7 @@ func (sc *SchedulingController) DeletePersonRelationship(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
 	}
 
-	names := personNameMapForIDs(relationshipPersonIDs(relationships))
+	names := personNameMapForIDs(middleware.RequestContext(c), relationshipPersonIDs(relationships))
 
 	return render(c, views.PersonRelationshipsTable(relationships, names, errMsg))
 }
@@ -88,10 +89,10 @@ func relationshipPersonIDs(relationships []scheduling.PersonRelationship) []stri
 // relationships, rosters) that already know exactly which ids they need
 // rather than deriving them from a preferences list. An id that fails to
 // resolve is simply left out; callers fall back to showing the raw id.
-func personNameMapForIDs(ids []string) map[string]string {
+func personNameMapForIDs(ctx context.Context, ids []string) map[string]string {
 	names := make(map[string]string, len(ids))
 	for _, id := range ids {
-		if person, err := pco.GetPerson(id); err == nil {
+		if person, err := pco.GetPerson(ctx, id); err == nil {
 			names[id] = person.Data.Attributes.Name
 		}
 	}
@@ -103,7 +104,8 @@ func personNameMapForIDs(ids []string) map[string]string {
 func (sc *SchedulingController) PositionPreferencesPage(c *fiber.Ctx) error {
 	_, personName := middleware.CurrentPerson(c)
 
-	serviceTypes, err := pco.GetServiceTypes(nil)
+	ctx := middleware.RequestContext(c)
+	serviceTypes, err := pco.GetServiceTypes(ctx, nil)
 	if err != nil {
 		return render(c, views.PositionPreferences(personName, nil, nil, "", err.Error()))
 	}
@@ -113,7 +115,7 @@ func (sc *SchedulingController) PositionPreferencesPage(c *fiber.Ctx) error {
 		serviceTypeID = serviceTypes.Data[0].ID
 	}
 
-	positionGroups, err := fetchTeamPositions(serviceTypeID)
+	positionGroups, err := fetchTeamPositions(ctx, serviceTypeID)
 	errMsg := ""
 	if err != nil {
 		errMsg = "loading teams from Planning Center: " + err.Error()
@@ -128,12 +130,12 @@ func (sc *SchedulingController) PositionPreferencesPage(c *fiber.Ctx) error {
 // an error. Like fetchAllSongs, it returns whatever it managed to fetch even
 // after a mid-walk error on one team, since a partial list beats an empty
 // one.
-func fetchTeamPositions(serviceTypeID string) ([]views.PositionGroup, error) {
+func fetchTeamPositions(ctx context.Context, serviceTypeID string) ([]views.PositionGroup, error) {
 	if serviceTypeID == "" {
 		return nil, nil
 	}
 
-	teams, err := pco.GetTeams(serviceTypeID, &pco.TeamsParams{OrderBy: "name"})
+	teams, err := pco.GetTeams(ctx, serviceTypeID, &pco.TeamsParams{OrderBy: "name"})
 	if err != nil {
 		return nil, err
 	}
@@ -141,7 +143,7 @@ func fetchTeamPositions(serviceTypeID string) ([]views.PositionGroup, error) {
 	var groups []views.PositionGroup
 	var firstErr error
 	for _, team := range teams.Data {
-		positions, err := pco.GetTeamPositions(team.ID, &pco.TeamPositionsParams{OrderBy: "name"})
+		positions, err := pco.GetTeamPositions(ctx, team.ID, &pco.TeamPositionsParams{OrderBy: "name"})
 		if err != nil {
 			if firstErr == nil {
 				firstErr = err
@@ -209,7 +211,7 @@ func (sc *SchedulingController) SetPositionPreference(c *fiber.Ctx) error {
 		errMsg = err.Error()
 	} else if body.TeamID == "" || body.TeamPositionID == "" || body.PersonID == "" {
 		errMsg = "team, position, and person are required"
-	} else if err := setPersonTeamPositionPreference(body.TeamID, body.TeamPositionID, body.PersonID, body.SchedulePreference); err != nil {
+	} else if err := setPersonTeamPositionPreference(middleware.RequestContext(c), body.TeamID, body.TeamPositionID, body.PersonID, body.SchedulePreference); err != nil {
 		errMsg = err.Error()
 	}
 
@@ -221,22 +223,22 @@ func (sc *SchedulingController) SetPositionPreference(c *fiber.Ctx) error {
 // upsert endpoint, so this looks the existing list up first (small and
 // already fetched fresh for the same position elsewhere on this page, so the
 // extra round trip is cheap).
-func setPersonTeamPositionPreference(teamID, teamPositionID, personID, schedulePreference string) error {
-	existing, err := pco.GetPersonTeamPositionAssignments(teamID, teamPositionID, nil)
+func setPersonTeamPositionPreference(ctx context.Context, teamID, teamPositionID, personID, schedulePreference string) error {
+	existing, err := pco.GetPersonTeamPositionAssignments(ctx, teamID, teamPositionID, nil)
 	if err != nil {
 		return err
 	}
 
 	for _, a := range existing.Data {
 		if a.Relationships.Person.Data != nil && a.Relationships.Person.Data.ID == personID {
-			_, err := pco.UpdatePersonTeamPositionAssignment(teamID, teamPositionID, a.ID, &pco.UpdatePersonTeamPositionAssignmentParams{
+			_, err := pco.UpdatePersonTeamPositionAssignment(ctx, teamID, teamPositionID, a.ID, &pco.UpdatePersonTeamPositionAssignmentParams{
 				SchedulePreference: schedulePreference,
 			})
 			return err
 		}
 	}
 
-	_, err = pco.CreatePersonTeamPositionAssignment(teamID, teamPositionID, &pco.CreatePersonTeamPositionAssignmentParams{
+	_, err = pco.CreatePersonTeamPositionAssignment(ctx, teamID, teamPositionID, &pco.CreatePersonTeamPositionAssignmentParams{
 		PersonID:           personID,
 		SchedulePreference: schedulePreference,
 	})
@@ -249,7 +251,7 @@ func (sc *SchedulingController) DeletePositionPreference(c *fiber.Ctx) error {
 	assignmentID := c.Params("assignment_id")
 
 	errMsg := ""
-	if err := pco.DeletePersonTeamPositionAssignment(teamID, teamPositionID, assignmentID); err != nil {
+	if err := pco.DeletePersonTeamPositionAssignment(middleware.RequestContext(c), teamID, teamPositionID, assignmentID); err != nil {
 		errMsg = err.Error()
 	}
 
@@ -261,7 +263,8 @@ func (sc *SchedulingController) renderPositionAssignments(c *fiber.Ctx, teamID, 
 		return render(c, views.PositionAssignmentsFragment(nil, teamID, teamPositionID, nil, errMsg))
 	}
 
-	assignments, err := pco.GetPersonTeamPositionAssignments(teamID, teamPositionID, nil)
+	ctx := middleware.RequestContext(c)
+	assignments, err := pco.GetPersonTeamPositionAssignments(ctx, teamID, teamPositionID, nil)
 	if err != nil {
 		return render(c, views.PositionAssignmentsFragment(nil, teamID, teamPositionID, schedulePreferenceOptions(), appendErr(errMsg, err.Error())))
 	}
@@ -272,7 +275,7 @@ func (sc *SchedulingController) renderPositionAssignments(c *fiber.Ctx, teamID, 
 			ids[i] = a.Relationships.Person.Data.ID
 		}
 	}
-	names := personNameMapForIDs(ids)
+	names := personNameMapForIDs(ctx, ids)
 
 	rows := make([]views.PreferenceRow, len(assignments.Data))
 	for i, a := range assignments.Data {

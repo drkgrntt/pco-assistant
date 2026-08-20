@@ -1,14 +1,23 @@
 package middleware
 
 import (
+	"context"
+	"log"
 	"strings"
+	"time"
 
 	"pco-assistant/internal/auth"
 
+	pco "github.com/drkgrntt/go-pco"
 	"github.com/gofiber/fiber/v2"
 )
 
 const SessionCookieName = "church_session"
+
+// refreshBuffer is how far ahead of a session's PCO token actually
+// expiring RequireAuth proactively refreshes it - big enough that a
+// request's own handling time can never land past the real expiry.
+const refreshBuffer = 5 * time.Minute
 
 // publicPrefixes never require a session: infra health checks, the sign-in
 // flow itself, static assets, and the PWA manifest/service worker (which
@@ -18,7 +27,12 @@ var publicPrefixes = []string{"/health", "/login", "/auth/", "/static/", "/sw.js
 
 // RequireAuth gates every route not covered by publicPrefixes behind a
 // valid, unexpired session. On success it stashes the signed-in person's id
-// and name in fiber locals for handlers/views to use.
+// and name in fiber locals for handlers/views to use, and - the reason this
+// runs on every request rather than just once at login - builds the
+// context every downstream PCO API call for this request needs to
+// authenticate as that person (see RequestContext) instead of a fixed
+// Personal Access Token, refreshing their PCO access token first if it's
+// close to expiring.
 func RequireAuth(store *auth.Store) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		for _, prefix := range publicPrefixes {
@@ -31,19 +45,44 @@ func RequireAuth(store *auth.Store) fiber.Handler {
 		// through to the redirect below.
 		if token := c.Cookies(SessionCookieName); token != "" {
 			if session, err := store.GetSession(c.Context(), token); err == nil {
+				accessToken := session.AccessToken
+
+				if time.Now().Add(refreshBuffer).After(session.TokenExpiresAt) {
+					result, err := auth.RefreshAccessToken(c.Context(), session.RefreshToken)
+					if err != nil {
+						// Their PCO grant may have been revoked, or the
+						// refresh token itself expired - there's no PAT to
+						// fall back to for a specific person, so this has
+						// to be treated as session-invalid, not ignored.
+						log.Println("refreshing PCO token failed, signing out:", err.Error())
+						_ = store.DeleteSession(c.Context(), token)
+						return redirectToLogin(c)
+					}
+
+					if err := store.UpdateSessionTokens(c.Context(), token, result.AccessToken, result.RefreshToken, result.ExpiresAt); err != nil {
+						log.Println("saving refreshed PCO token failed:", err.Error())
+					}
+					accessToken = result.AccessToken
+				}
+
 				c.Locals("person_id", session.PersonID)
 				c.Locals("person_name", session.PersonName)
+				c.Locals("pco_ctx", pco.WithAccessToken(c.Context(), accessToken))
 				return c.Next()
 			}
 		}
 
-		if c.Get("HX-Request") == "true" {
-			c.Set("HX-Redirect", "/login")
-			return c.SendStatus(fiber.StatusOK)
-		}
-
-		return c.Redirect("/login")
+		return redirectToLogin(c)
 	}
+}
+
+func redirectToLogin(c *fiber.Ctx) error {
+	if c.Get("HX-Request") == "true" {
+		c.Set("HX-Redirect", "/login")
+		return c.SendStatus(fiber.StatusOK)
+	}
+
+	return c.Redirect("/login")
 }
 
 // CurrentPerson reads the signed-in person's id/name that RequireAuth
@@ -52,4 +91,18 @@ func CurrentPerson(c *fiber.Ctx) (id, name string) {
 	id, _ = c.Locals("person_id").(string)
 	name, _ = c.Locals("person_name").(string)
 	return id, name
+}
+
+// RequestContext returns the context RequireAuth built for this request -
+// c.Context() wrapped with the signed-in person's PCO access token (see
+// go-pco.WithAccessToken), so every pco.* call made with it authenticates
+// as them. Use this instead of c.Context() anywhere a handler is about to
+// call into go-pco. Falls back to plain c.Context() on routes RequireAuth
+// didn't run a token into (the public routes - none of which call PCO
+// today, but this keeps that safe by default rather than panicking).
+func RequestContext(c *fiber.Ctx) context.Context {
+	if ctx, ok := c.Locals("pco_ctx").(context.Context); ok {
+		return ctx
+	}
+	return c.Context()
 }

@@ -55,7 +55,7 @@ func (pc *PCOController) People(c *fiber.Ctx) error {
 		params.Include = strings.Split(include, ",")
 	}
 
-	people, err := pco.GetPeople(params)
+	people, err := pco.GetPeople(middleware.RequestContext(c), params)
 	if err != nil {
 		return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -76,8 +76,10 @@ func (pc *PCOController) Plans(c *fiber.Ctx) error {
 		Offset:  c.QueryInt("offset"),
 	}
 
+	ctx := middleware.RequestContext(c)
+
 	if serviceTypeID := c.Query("service_type_id"); serviceTypeID != "" {
-		plans, err := pco.GetPlans(serviceTypeID, plansParams)
+		plans, err := pco.GetPlans(ctx, serviceTypeID, plansParams)
 		if err != nil {
 			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{"error": err.Error()})
 		}
@@ -85,7 +87,7 @@ func (pc *PCOController) Plans(c *fiber.Ctx) error {
 		return c.JSON(plans)
 	}
 
-	serviceTypes, err := pco.GetServiceTypes(nil)
+	serviceTypes, err := pco.GetServiceTypes(ctx, nil)
 	if err != nil {
 		return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -99,7 +101,7 @@ func (pc *PCOController) Plans(c *fiber.Ctx) error {
 	var errs []string
 
 	for _, serviceType := range serviceTypes.Data {
-		plans, err := pco.GetPlans(serviceType.ID, plansParams)
+		plans, err := pco.GetPlans(ctx, serviceType.ID, plansParams)
 		if err != nil {
 			errs = append(errs, serviceType.ID+": "+err.Error())
 			continue
@@ -122,7 +124,7 @@ func (pc *PCOController) Plans(c *fiber.Ctx) error {
 //	                     descend
 //	per_page, offset  - pagination
 func (pc *PCOController) Songs(c *fiber.Ctx) error {
-	songs, err := pco.GetSongs(&pco.SongsParams{
+	songs, err := pco.GetSongs(middleware.RequestContext(c), &pco.SongsParams{
 		OrderBy: c.Query("order"),
 		PerPage: c.QueryInt("per_page"),
 		Offset:  c.QueryInt("offset"),

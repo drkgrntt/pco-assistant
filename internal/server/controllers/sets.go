@@ -22,7 +22,7 @@ import (
 func (sc *SchedulingController) SongRolesPage(c *fiber.Ctx) error {
 	_, personName := middleware.CurrentPerson(c)
 
-	songs, songsErr := fetchAllSongs()
+	songs, songsErr := fetchAllSongs(middleware.RequestContext(c))
 
 	roles, err := sc.store.ListSongRoles(c.Context(), "", "")
 	if err != nil {
@@ -51,7 +51,7 @@ func (sc *SchedulingController) CreateSongRole(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
 	}
 
-	songs, _ := fetchAllSongs()
+	songs, _ := fetchAllSongs(middleware.RequestContext(c))
 
 	return render(c, views.SongRolesTable(roles, songTitleMap(songs), errMsg))
 }
@@ -70,7 +70,7 @@ func (sc *SchedulingController) DeleteSongRole(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
 	}
 
-	songs, _ := fetchAllSongs()
+	songs, _ := fetchAllSongs(middleware.RequestContext(c))
 
 	return render(c, views.SongRolesTable(roles, songTitleMap(songs), errMsg))
 }
@@ -83,14 +83,14 @@ func (sc *SchedulingController) DeleteSongRole(c *fiber.Ctx) error {
 func (sc *SchedulingController) SetsPage(c *fiber.Ctx) error {
 	_, personName := middleware.CurrentPerson(c)
 
-	serviceTypes, err := pco.GetServiceTypes(nil)
+	serviceTypes, err := pco.GetServiceTypes(middleware.RequestContext(c), nil)
 	if err != nil {
 		return render(c, views.Sets(personName, nil, "", nil, err.Error()))
 	}
 
 	if len(serviceTypes.Data) == 1 {
 		serviceTypeID := serviceTypes.Data[0].ID
-		rows, errMsg := sc.plansForServiceType(c.Context(), serviceTypeID)
+		rows, errMsg := sc.plansForServiceType(middleware.RequestContext(c), serviceTypeID)
 		return render(c, views.Sets(personName, serviceTypes.Data, serviceTypeID, rows, errMsg))
 	}
 
@@ -105,12 +105,12 @@ func (sc *SchedulingController) SetsPlans(c *fiber.Ctx) error {
 		return render(c, views.SetsPlansList(nil, "", ""))
 	}
 
-	rows, errMsg := sc.plansForServiceType(c.Context(), serviceTypeID)
+	rows, errMsg := sc.plansForServiceType(middleware.RequestContext(c), serviceTypeID)
 	return render(c, views.SetsPlansList(rows, serviceTypeID, errMsg))
 }
 
 func (sc *SchedulingController) plansForServiceType(ctx context.Context, serviceTypeID string) ([]views.PlanRow, string) {
-	plans, err := pco.GetPlans(serviceTypeID, &pco.PlansParams{Filter: "future", OrderBy: "sort_date"})
+	plans, err := pco.GetPlans(ctx, serviceTypeID, &pco.PlansParams{Filter: "future", OrderBy: "sort_date"})
 	if err != nil {
 		return nil, err.Error()
 	}
@@ -118,10 +118,10 @@ func (sc *SchedulingController) plansForServiceType(ctx context.Context, service
 	rows := make([]views.PlanRow, len(plans.Data))
 	for i, plan := range plans.Data {
 		rows[i] = views.PlanRow{
-			ID:     plan.ID,
-			Title:  plan.Attributes.Title,
-			Dates:  plan.Attributes.Dates,
-			Status: sc.planStatus(ctx, serviceTypeID, plan.ID),
+			ID:        plan.ID,
+			Title:     plan.Attributes.Title,
+			Dates:     plan.Attributes.Dates,
+			SetStatus: sc.planStatus(ctx, serviceTypeID, plan.ID),
 		}
 	}
 	return rows, ""
@@ -152,7 +152,7 @@ func (sc *SchedulingController) planStatus(ctx context.Context, serviceTypeID, p
 		}
 	}
 
-	items, err := pco.GetItems(serviceTypeID, planID, nil)
+	items, err := pco.GetItems(ctx, serviceTypeID, planID, nil)
 	if err != nil {
 		return ""
 	}
@@ -167,7 +167,7 @@ func (sc *SchedulingController) planStatus(ctx context.Context, serviceTypeID, p
 func (sc *SchedulingController) SetBuilderPage(c *fiber.Ctx) error {
 	_, personName := middleware.CurrentPerson(c)
 
-	data := sc.buildSetBuilderData(c.Context(), c.Params("service_type_id"), c.Params("plan_id"))
+	data := sc.buildSetBuilderData(middleware.RequestContext(c), c.Params("service_type_id"), c.Params("plan_id"))
 
 	return render(c, views.SetBuilder(personName, data))
 }
@@ -190,7 +190,7 @@ func (sc *SchedulingController) AddSetSong(c *fiber.Ctx) error {
 		errMsg = err.Error()
 	}
 
-	return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(c.Context(), serviceTypeID, planID, errMsg)))
+	return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(middleware.RequestContext(c), serviceTypeID, planID, errMsg)))
 }
 
 func (sc *SchedulingController) RemoveSetSong(c *fiber.Ctx) error {
@@ -206,7 +206,7 @@ func (sc *SchedulingController) RemoveSetSong(c *fiber.Ctx) error {
 		errMsg = err.Error()
 	}
 
-	return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(c.Context(), serviceTypeID, planID, errMsg)))
+	return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(middleware.RequestContext(c), serviceTypeID, planID, errMsg)))
 }
 
 // DuplicateSetSong creates a second occurrence of an existing set song
@@ -226,7 +226,7 @@ func (sc *SchedulingController) DuplicateSetSong(c *fiber.Ctx) error {
 		errMsg = err.Error()
 	}
 
-	return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(c.Context(), serviceTypeID, planID, errMsg)))
+	return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(middleware.RequestContext(c), serviceTypeID, planID, errMsg)))
 }
 
 // PublishSet fully syncs the draft set to the real Planning Center plan:
@@ -248,7 +248,7 @@ func (sc *SchedulingController) DuplicateSetSong(c *fiber.Ctx) error {
 // buildSetBuilderData. A failure on one song doesn't stop the rest; the
 // summary reports counts for each step plus what failed.
 func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
-	ctx := c.Context()
+	ctx := middleware.RequestContext(c)
 	serviceTypeID := c.Params("service_type_id")
 	planID := c.Params("plan_id")
 
@@ -270,7 +270,7 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 	var failures []string
 	deleted, created, updated := 0, 0, 0
 
-	songs, _ := fetchAllSongs()
+	songs, _ := fetchAllSongs(middleware.RequestContext(c))
 	titles := songTitleMap(songs)
 
 	// 1. Deletions - clear out what was removed/replaced locally before
@@ -278,7 +278,7 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 	for _, ss := range pendingDeletions {
 		title := titleOrID(titles, ss.SongID)
 
-		if err := pco.DeleteItem(serviceTypeID, planID, ss.PCOItemID); err != nil {
+		if err := pco.DeleteItem(ctx, serviceTypeID, planID, ss.PCOItemID); err != nil {
 			failures = append(failures, fmt.Sprintf("removing %s: %s", title, err.Error()))
 			continue
 		}
@@ -294,7 +294,7 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 	// the plan's other (foreign) items, the same merge the builder page
 	// displays.
 	if len(setSongs) > 0 {
-		existingItems, err := pco.GetItems(serviceTypeID, planID, nil)
+		existingItems, err := pco.GetItems(ctx, serviceTypeID, planID, nil)
 		if err != nil {
 			failures = append(failures, "loading existing plan items from Planning Center: "+err.Error())
 		} else {
@@ -318,7 +318,7 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 				title := titleOrID(titles, ss.SongID)
 
 				if ss.PCOItemID == "" {
-					item, err := pco.CreateItem(serviceTypeID, planID, &pco.CreateItemParams{
+					item, err := pco.CreateItem(ctx, serviceTypeID, planID, &pco.CreateItemParams{
 						Title:    title,
 						ItemType: pco.ItemTypeSong,
 						Sequence: nextSequence + i,
@@ -351,7 +351,7 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 					}
 				}
 
-				if err := pco.ReorderItems(serviceTypeID, planID, finalOrder); err != nil {
+				if err := pco.ReorderItems(ctx, serviceTypeID, planID, finalOrder); err != nil {
 					failures = append(failures, "reordering plan items: "+err.Error())
 					updated = 0 // the reorder that would have applied this failed
 				}
@@ -399,7 +399,7 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 // same walk mergeServiceOrder does in reverse. This never calls a PCO
 // write endpoint - it's a pure local reset from a fresh read.
 func (sc *SchedulingController) RevertSet(c *fiber.Ctx) error {
-	ctx := c.Context()
+	ctx := middleware.RequestContext(c)
 	serviceTypeID := c.Params("service_type_id")
 	planID := c.Params("plan_id")
 
@@ -409,7 +409,7 @@ func (sc *SchedulingController) RevertSet(c *fiber.Ctx) error {
 	if err != nil {
 		errMsg = err.Error()
 	} else {
-		items, err := pco.GetItems(serviceTypeID, planID, nil)
+		items, err := pco.GetItems(ctx, serviceTypeID, planID, nil)
 		if err != nil {
 			errMsg = "loading plan items from Planning Center: " + err.Error()
 		} else {
@@ -459,7 +459,7 @@ func (sc *SchedulingController) ReplaceSetSong(c *fiber.Ctx) error {
 		errMsg = err.Error()
 	}
 
-	return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(c.Context(), serviceTypeID, planID, errMsg)))
+	return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(middleware.RequestContext(c), serviceTypeID, planID, errMsg)))
 }
 
 // RepositionSetSong is what the order-of-service drag-and-drop calls: the
@@ -490,7 +490,7 @@ func (sc *SchedulingController) RepositionSetSong(c *fiber.Ctx) error {
 		}
 	}
 
-	return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(c.Context(), serviceTypeID, planID, errMsg)))
+	return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(middleware.RequestContext(c), serviceTypeID, planID, errMsg)))
 }
 
 // parseAfterToken decodes the drag-and-drop "after" token: "" (top of
@@ -528,7 +528,7 @@ func (sc *SchedulingController) buildSetBuilderDataWithErr(ctx context.Context, 
 func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, serviceTypeID, planID string) views.SetBuilderData {
 	data := views.SetBuilderData{ServiceTypeID: serviceTypeID, PlanID: planID}
 
-	if plan, err := pco.GetPlan(serviceTypeID, planID); err == nil {
+	if plan, err := pco.GetPlan(ctx, serviceTypeID, planID); err == nil {
 		data.PlanTitle = plan.Data.Attributes.Title
 		data.PlanDates = plan.Data.Attributes.Dates
 	} else {
@@ -547,7 +547,7 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, service
 		return data
 	}
 
-	songs, songsErr := fetchAllSongs()
+	songs, songsErr := fetchAllSongs(ctx)
 	if songsErr != nil {
 		data.ErrMsg = appendErr(data.ErrMsg, "loading songs from Planning Center: "+songsErr.Error())
 	}
@@ -587,7 +587,7 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, service
 	// replaces the old song-only "current set" list, since seeing (and
 	// placing songs against) the whole order of service, template headers
 	// included, is the point.
-	if pcoItems, err := pco.GetItems(serviceTypeID, planID, nil); err != nil {
+	if pcoItems, err := pco.GetItems(ctx, serviceTypeID, planID, nil); err != nil {
 		data.ErrMsg = appendErr(data.ErrMsg, "loading plan items from Planning Center: "+err.Error())
 	} else {
 		sort.Slice(pcoItems.Data, func(i, j int) bool {
@@ -626,7 +626,7 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, service
 	// against songs already in this set (a banner, alongside the same-set
 	// avoid-pairing conflicts above) and against not-yet-added candidates
 	// (a badge, so it's visible before adding rather than only after).
-	repeated := recentlyRepeatedSongs(serviceTypeID)
+	repeated := recentlyRepeatedSongs(ctx, serviceTypeID)
 	for _, ss := range data.SetSongs {
 		if repeated[ss.SongID] {
 			data.RepeatWarnings = append(data.RepeatWarnings, fmt.Sprintf(
@@ -682,8 +682,8 @@ const recentTwoPlanLookback = 2
 // the builder, not something that should block it. The actual overlap
 // computation lives in songsInBoth so it can be unit tested without hitting
 // Planning Center.
-func recentlyRepeatedSongs(serviceTypeID string) map[string]bool {
-	plans, err := pco.GetPlans(serviceTypeID, &pco.PlansParams{
+func recentlyRepeatedSongs(ctx context.Context, serviceTypeID string) map[string]bool {
+	plans, err := pco.GetPlans(ctx, serviceTypeID, &pco.PlansParams{
 		Filter:  "past",
 		OrderBy: "-sort_date",
 		PerPage: recentTwoPlanLookback,
@@ -692,11 +692,11 @@ func recentlyRepeatedSongs(serviceTypeID string) map[string]bool {
 		return nil
 	}
 
-	items, err := pco.GetItems(serviceTypeID, plans.Data[0].ID, nil)
+	items, err := pco.GetItems(ctx, serviceTypeID, plans.Data[0].ID, nil)
 	if err != nil {
 		return nil
 	}
-	prevItems, err := pco.GetItems(serviceTypeID, plans.Data[1].ID, nil)
+	prevItems, err := pco.GetItems(ctx, serviceTypeID, plans.Data[1].ID, nil)
 	if err != nil {
 		return nil
 	}

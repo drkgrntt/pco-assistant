@@ -8,7 +8,9 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -16,11 +18,14 @@ const (
 	tokenURL     = "https://api.planningcenteronline.com/oauth/token"
 	userinfoURL  = "https://api.planningcenteronline.com/oauth/userinfo"
 
-	// oauthScope only needs to identify who's signing in - "openid" gets us
-	// the OIDC userinfo endpoint (clean sub/name/email claims); "people" is
-	// requested alongside it since PCO documents scope as a per-product
-	// grant and openid alone wasn't confirmed sufficient on its own.
-	oauthScope = "openid people"
+	// oauthScope needs to cover both who's signing in and what they can
+	// then do: "openid" gets the OIDC userinfo endpoint (clean
+	// sub/name/email claims); PCO scopes everything else per-product, so
+	// "people" and "services" are requested alongside it - this app's own
+	// API calls now authenticate as the signed-in user (see
+	// go-pco.WithAccessToken), not a fixed Personal Access Token, so their
+	// token needs to actually be allowed to call those products.
+	oauthScope = "openid people services"
 )
 
 func oauthClientID() string     { return os.Getenv("PCO_OAUTH_CLIENT_ID") }
@@ -42,56 +47,99 @@ func AuthorizeURL(state string) string {
 	return authorizeURL + "?" + q.Encode()
 }
 
+// TokenResult is what PCO's token endpoint hands back - both ExchangeCode
+// (the initial sign-in) and RefreshAccessToken (renewing an expiring one)
+// return this same shape, since both are calls to the same endpoint with a
+// different grant_type.
+type TokenResult struct {
+	AccessToken string
+	// RefreshToken - PCO issues a *new* one on every refresh, not just at
+	// initial sign-in, and the old one stops working once it has - always
+	// store whatever comes back here, not just the first one.
+	RefreshToken string
+	ExpiresAt    time.Time
+}
+
 // ExchangeCode trades the authorization code PCO redirected back with for an
-// access token. The token is used once, by FetchIdentity, and is not
-// persisted anywhere.
-func ExchangeCode(ctx context.Context, code string) (accessToken string, err error) {
-	body := url.Values{
+// access token (plus refresh token/expiry) - see requestToken.
+func ExchangeCode(ctx context.Context, code string) (TokenResult, error) {
+	return requestToken(ctx, url.Values{
 		"grant_type":    {"authorization_code"},
 		"code":          {code},
 		"client_id":     {oauthClientID()},
 		"client_secret": {oauthClientSecret()},
 		"redirect_uri":  {oauthRedirectURI()},
-	}
+	})
+}
 
+// RefreshAccessToken trades a still-valid refresh token for a new access
+// token (and a new refresh token - see TokenResult.RefreshToken) once the
+// current one is at or near expiry. A failure here (e.g. the user revoked
+// this app's access in PCO) should be treated like an invalid session, not
+// silently ignored - there's no PAT to fall back to for a specific user.
+func RefreshAccessToken(ctx context.Context, refreshToken string) (TokenResult, error) {
+	return requestToken(ctx, url.Values{
+		"grant_type":    {"refresh_token"},
+		"refresh_token": {refreshToken},
+		"client_id":     {oauthClientID()},
+		"client_secret": {oauthClientSecret()},
+	})
+}
+
+func requestToken(ctx context.Context, body url.Values) (TokenResult, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenURL, strings.NewReader(body.Encode()))
 	if err != nil {
-		return "", err
+		return TokenResult{}, err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return "", err
+		return TokenResult{}, err
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", err
+		return TokenResult{}, err
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("pco oauth token exchange failed with status %d: %s", resp.StatusCode, respBody)
+		return TokenResult{}, fmt.Errorf("pco oauth token request failed with status %d: %s", resp.StatusCode, respBody)
 	}
 
 	var parsed struct {
 		AccessToken string `json:"access_token"`
+		// ExpiresIn is documented in seconds (PCO's token responses have
+		// been observed sending it as either a JSON number or a numeric
+		// string, hence json.Number rather than plain int).
+		ExpiresIn    json.Number `json:"expires_in"`
+		RefreshToken string      `json:"refresh_token"`
 	}
 	if err := json.Unmarshal(respBody, &parsed); err != nil {
-		return "", fmt.Errorf("parse token response: %w", err)
+		return TokenResult{}, fmt.Errorf("parse token response: %w", err)
 	}
 	if parsed.AccessToken == "" {
-		return "", fmt.Errorf("pco oauth token response had no access_token: %s", respBody)
+		return TokenResult{}, fmt.Errorf("pco oauth token response had no access_token: %s", respBody)
 	}
 
-	return parsed.AccessToken, nil
+	expiresInSeconds, err := strconv.Atoi(parsed.ExpiresIn.String())
+	if err != nil {
+		return TokenResult{}, fmt.Errorf("pco oauth token response had a non-numeric expires_in %q: %w", parsed.ExpiresIn, err)
+	}
+
+	return TokenResult{
+		AccessToken:  parsed.AccessToken,
+		RefreshToken: parsed.RefreshToken,
+		ExpiresAt:    time.Now().Add(time.Duration(expiresInSeconds) * time.Second),
+	}, nil
 }
 
 // FetchIdentity looks up who just signed in via PCO's OIDC userinfo
 // endpoint, using the access token from ExchangeCode. Only the sub/name are
-// kept (as the session's person id/name) - the access token itself is
-// discarded after this call.
+// returned (as the session's person id/name) - the token itself is the
+// caller's concern (see sessions.go, which persists it for later API
+// calls) and isn't touched here.
 func FetchIdentity(ctx context.Context, accessToken string) (personID, personName string, err error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, userinfoURL, nil)
 	if err != nil {

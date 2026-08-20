@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"strings"
@@ -32,11 +33,11 @@ const personSearchResultLimit = 8
 // use as a picker's option list (song relationships, song/person
 // preferences). It returns whatever it managed to fetch even on a
 // mid-pagination error, since a stale-but-nonempty picker beats an empty one.
-func fetchAllSongs() ([]pco.SongData, error) {
+func fetchAllSongs(ctx context.Context) ([]pco.SongData, error) {
 	var songs []pco.SongData
 
 	for page := 0; page < pcoSongPickerMaxPages; page++ {
-		resp, err := pco.GetSongs(&pco.SongsParams{
+		resp, err := pco.GetSongs(ctx, &pco.SongsParams{
 			OrderBy: "title",
 			PerPage: pcoSongPickerPageSize,
 			Offset:  page * pcoSongPickerPageSize,
@@ -72,14 +73,14 @@ func songTitleMap(songs []pco.SongData) map[string]string {
 // it looks up only the handful of IDs actually in use, one GetPerson call
 // each. An ID that fails to resolve (e.g. the person was since deleted) is
 // simply left out of the map; callers fall back to showing the raw ID.
-func personNameMap(preferences []scheduling.SongPersonPreference) map[string]string {
+func personNameMap(ctx context.Context, preferences []scheduling.SongPersonPreference) map[string]string {
 	names := make(map[string]string, len(preferences))
 	for _, pref := range preferences {
 		if _, ok := names[pref.PersonID]; ok {
 			continue
 		}
 
-		if person, err := pco.GetPerson(pref.PersonID); err == nil {
+		if person, err := pco.GetPerson(ctx, pref.PersonID); err == nil {
 			names[pref.PersonID] = person.Data.Attributes.Name
 		}
 	}
@@ -147,7 +148,7 @@ func (sc *SchedulingController) RegisterRoutes(router fiber.Router) {
 func (sc *SchedulingController) RelationshipsPage(c *fiber.Ctx) error {
 	_, personName := middleware.CurrentPerson(c)
 
-	songs, songsErr := fetchAllSongs()
+	songs, songsErr := fetchAllSongs(middleware.RequestContext(c))
 
 	relationships, err := sc.store.ListSongRelationships(c.Context(), "")
 	if err != nil {
@@ -179,7 +180,7 @@ func (sc *SchedulingController) CreateRelationship(c *fiber.Ctx) error {
 	// Best-effort: song titles are a display nicety for the table, so a
 	// failure here just falls back to showing raw IDs rather than failing
 	// the whole request.
-	songs, _ := fetchAllSongs()
+	songs, _ := fetchAllSongs(middleware.RequestContext(c))
 
 	return render(c, views.RelationshipsTable(relationships, songTitleMap(songs), errMsg))
 }
@@ -198,7 +199,7 @@ func (sc *SchedulingController) DeleteRelationship(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
 	}
 
-	songs, _ := fetchAllSongs()
+	songs, _ := fetchAllSongs(middleware.RequestContext(c))
 
 	return render(c, views.RelationshipsTable(relationships, songTitleMap(songs), errMsg))
 }
@@ -206,7 +207,8 @@ func (sc *SchedulingController) DeleteRelationship(c *fiber.Ctx) error {
 func (sc *SchedulingController) PreferencesPage(c *fiber.Ctx) error {
 	_, personName := middleware.CurrentPerson(c)
 
-	songs, songsErr := fetchAllSongs()
+	ctx := middleware.RequestContext(c)
+	songs, songsErr := fetchAllSongs(ctx)
 
 	preferences, err := sc.store.ListSongPersonPreferences(c.Context(), "", "")
 	if err != nil {
@@ -218,7 +220,7 @@ func (sc *SchedulingController) PreferencesPage(c *fiber.Ctx) error {
 		errMsg = "loading songs from Planning Center: " + songsErr.Error()
 	}
 
-	return render(c, views.Preferences(personName, songs, preferences, songTitleMap(songs), personNameMap(preferences), errMsg))
+	return render(c, views.Preferences(personName, songs, preferences, songTitleMap(songs), personNameMap(ctx, preferences), errMsg))
 }
 
 func (sc *SchedulingController) SetPreference(c *fiber.Ctx) error {
@@ -238,9 +240,10 @@ func (sc *SchedulingController) SetPreference(c *fiber.Ctx) error {
 	// Best-effort: song/person display names are a table nicety, so a
 	// lookup failure just falls back to raw IDs rather than failing the
 	// whole request.
-	songs, _ := fetchAllSongs()
+	ctx := middleware.RequestContext(c)
+	songs, _ := fetchAllSongs(ctx)
 
-	return render(c, views.PreferencesTable(preferences, songTitleMap(songs), personNameMap(preferences), errMsg))
+	return render(c, views.PreferencesTable(preferences, songTitleMap(songs), personNameMap(ctx, preferences), errMsg))
 }
 
 func (sc *SchedulingController) DeletePreference(c *fiber.Ctx) error {
@@ -257,9 +260,10 @@ func (sc *SchedulingController) DeletePreference(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
 	}
 
-	songs, _ := fetchAllSongs()
+	ctx := middleware.RequestContext(c)
+	songs, _ := fetchAllSongs(ctx)
 
-	return render(c, views.PreferencesTable(preferences, songTitleMap(songs), personNameMap(preferences), errMsg))
+	return render(c, views.PreferencesTable(preferences, songTitleMap(songs), personNameMap(ctx, preferences), errMsg))
 }
 
 // PeopleSearch backs the person picker's search-as-you-type on the
@@ -274,7 +278,7 @@ func (sc *SchedulingController) PeopleSearch(c *fiber.Ctx) error {
 		return render(c, views.PersonSearchResults(nil, suffix))
 	}
 
-	people, err := pco.GetPeople(&pco.PeopleParams{
+	people, err := pco.GetPeople(middleware.RequestContext(c), &pco.PeopleParams{
 		Email:   q,
 		OrderBy: "last_name",
 		PerPage: personSearchResultLimit,

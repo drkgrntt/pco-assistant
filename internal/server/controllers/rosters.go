@@ -26,14 +26,14 @@ import (
 func (sc *SchedulingController) RostersPage(c *fiber.Ctx) error {
 	_, personName := middleware.CurrentPerson(c)
 
-	serviceTypes, err := pco.GetServiceTypes(nil)
+	serviceTypes, err := pco.GetServiceTypes(middleware.RequestContext(c), nil)
 	if err != nil {
 		return render(c, views.Rosters(personName, nil, "", nil, err.Error()))
 	}
 
 	if len(serviceTypes.Data) == 1 {
 		serviceTypeID := serviceTypes.Data[0].ID
-		rows, errMsg := sc.rosterPlansForServiceType(c.Context(), serviceTypeID)
+		rows, errMsg := sc.rosterPlansForServiceType(middleware.RequestContext(c), serviceTypeID)
 		return render(c, views.Rosters(personName, serviceTypes.Data, serviceTypeID, rows, errMsg))
 	}
 
@@ -46,12 +46,12 @@ func (sc *SchedulingController) RostersPlans(c *fiber.Ctx) error {
 		return render(c, views.RostersPlansList(nil, "", ""))
 	}
 
-	rows, errMsg := sc.rosterPlansForServiceType(c.Context(), serviceTypeID)
+	rows, errMsg := sc.rosterPlansForServiceType(middleware.RequestContext(c), serviceTypeID)
 	return render(c, views.RostersPlansList(rows, serviceTypeID, errMsg))
 }
 
 func (sc *SchedulingController) rosterPlansForServiceType(ctx context.Context, serviceTypeID string) ([]views.PlanRow, string) {
-	plans, err := pco.GetPlans(serviceTypeID, &pco.PlansParams{Filter: "future", OrderBy: "sort_date"})
+	plans, err := pco.GetPlans(ctx, serviceTypeID, &pco.PlansParams{Filter: "future", OrderBy: "sort_date"})
 	if err != nil {
 		return nil, err.Error()
 	}
@@ -59,10 +59,10 @@ func (sc *SchedulingController) rosterPlansForServiceType(ctx context.Context, s
 	rows := make([]views.PlanRow, len(plans.Data))
 	for i, plan := range plans.Data {
 		rows[i] = views.PlanRow{
-			ID:     plan.ID,
-			Title:  plan.Attributes.Title,
-			Dates:  plan.Attributes.Dates,
-			Status: sc.rosterStatus(ctx, serviceTypeID, plan.ID),
+			ID:           plan.ID,
+			Title:        plan.Attributes.Title,
+			Dates:        plan.Attributes.Dates,
+			RosterStatus: sc.rosterStatus(ctx, serviceTypeID, plan.ID),
 		}
 	}
 	return rows, ""
@@ -89,7 +89,7 @@ func (sc *SchedulingController) rosterStatus(ctx context.Context, serviceTypeID,
 		}
 	}
 
-	members, err := pco.GetTeamMembers(serviceTypeID, planID, nil)
+	members, err := pco.GetTeamMembers(ctx, serviceTypeID, planID, nil)
 	if err != nil {
 		return ""
 	}
@@ -104,7 +104,7 @@ func (sc *SchedulingController) rosterStatus(ctx context.Context, serviceTypeID,
 func (sc *SchedulingController) RosterBuilderPage(c *fiber.Ctx) error {
 	_, personName := middleware.CurrentPerson(c)
 
-	data := sc.buildRosterBuilderData(c.Context(), c.Params("service_type_id"), c.Params("plan_id"))
+	data := sc.buildRosterBuilderData(middleware.RequestContext(c), c.Params("service_type_id"), c.Params("plan_id"))
 
 	return render(c, views.RosterBuilder(personName, data))
 }
@@ -127,7 +127,7 @@ func (sc *SchedulingController) AddRosterAssignment(c *fiber.Ctx) error {
 		errMsg = err.Error()
 	}
 
-	return render(c, views.RosterBuilderBody(sc.buildRosterBuilderDataWithErr(c.Context(), serviceTypeID, planID, errMsg)))
+	return render(c, views.RosterBuilderBody(sc.buildRosterBuilderDataWithErr(middleware.RequestContext(c), serviceTypeID, planID, errMsg)))
 }
 
 func (sc *SchedulingController) RemoveRosterAssignment(c *fiber.Ctx) error {
@@ -143,14 +143,14 @@ func (sc *SchedulingController) RemoveRosterAssignment(c *fiber.Ctx) error {
 		errMsg = err.Error()
 	}
 
-	return render(c, views.RosterBuilderBody(sc.buildRosterBuilderDataWithErr(c.Context(), serviceTypeID, planID, errMsg)))
+	return render(c, views.RosterBuilderBody(sc.buildRosterBuilderDataWithErr(middleware.RequestContext(c), serviceTypeID, planID, errMsg)))
 }
 
 // PublishRoster fully syncs the draft roster to the real Planning Center
 // plan - the people equivalent of PublishSet, but simpler: there's no
 // reorder step at all, since position assignments have no sequence.
 func (sc *SchedulingController) PublishRoster(c *fiber.Ctx) error {
-	ctx := c.Context()
+	ctx := middleware.RequestContext(c)
 	serviceTypeID := c.Params("service_type_id")
 	planID := c.Params("plan_id")
 
@@ -172,12 +172,12 @@ func (sc *SchedulingController) PublishRoster(c *fiber.Ctx) error {
 	var failures []string
 	deleted, created := 0, 0
 
-	names := personNameMapForIDs(assignmentPersonIDs(append(append([]scheduling.RosterAssignment{}, assignments...), pendingDeletions...)))
+	names := personNameMapForIDs(ctx, assignmentPersonIDs(append(append([]scheduling.RosterAssignment{}, assignments...), pendingDeletions...)))
 
 	for _, ra := range pendingDeletions {
 		name := titleOrID(names, ra.PersonID)
 
-		if err := pco.DeleteTeamMember(serviceTypeID, planID, ra.PCOPlanPersonID); err != nil {
+		if err := pco.DeleteTeamMember(ctx, serviceTypeID, planID, ra.PCOPlanPersonID); err != nil {
 			failures = append(failures, fmt.Sprintf("removing %s: %s", name, err.Error()))
 			continue
 		}
@@ -194,7 +194,7 @@ func (sc *SchedulingController) PublishRoster(c *fiber.Ctx) error {
 		}
 		name := titleOrID(names, ra.PersonID)
 
-		member, err := pco.CreateTeamMember(serviceTypeID, planID, &pco.CreateTeamMemberParams{
+		member, err := pco.CreateTeamMember(ctx, serviceTypeID, planID, &pco.CreateTeamMemberParams{
 			PersonID:         ra.PersonID,
 			TeamID:           ra.TeamID,
 			TeamPositionName: ra.TeamPositionName,
@@ -243,7 +243,7 @@ func (sc *SchedulingController) PublishRoster(c *fiber.Ctx) error {
 // Planning Center's plan currently has - see sets.RevertSet, which this
 // mirrors.
 func (sc *SchedulingController) RevertRoster(c *fiber.Ctx) error {
-	ctx := c.Context()
+	ctx := middleware.RequestContext(c)
 	serviceTypeID := c.Params("service_type_id")
 	planID := c.Params("plan_id")
 
@@ -253,7 +253,7 @@ func (sc *SchedulingController) RevertRoster(c *fiber.Ctx) error {
 	if err != nil {
 		errMsg = err.Error()
 	} else {
-		members, err := pco.GetTeamMembers(serviceTypeID, planID, nil)
+		members, err := pco.GetTeamMembers(ctx, serviceTypeID, planID, nil)
 		if err != nil {
 			errMsg = "loading plan team members from Planning Center: " + err.Error()
 		} else {
@@ -521,8 +521,8 @@ func planSortDatesFromIncluded(included []any) map[string]time.Time {
 // wrapper frequencyWarning's pure check runs against. PCO's plan_people
 // endpoint filters by team_id server-side but not by position name, so the
 // position match happens here client-side.
-func otherAssignmentDates(personID, teamID, teamPositionName, excludePlanID string) []time.Time {
-	history, err := pco.GetPersonPlanPeople(personID, &pco.PersonPlanPeopleParams{
+func otherAssignmentDates(ctx context.Context, personID, teamID, teamPositionName, excludePlanID string) []time.Time {
+	history, err := pco.GetPersonPlanPeople(ctx, personID, &pco.PersonPlanPeopleParams{
 		TeamID:  teamID,
 		Include: []string{"plan"},
 		PerPage: 25,
@@ -564,7 +564,7 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, serv
 	data := views.RosterBuilderData{ServiceTypeID: serviceTypeID, PlanID: planID}
 
 	var planDate time.Time
-	if plan, err := pco.GetPlan(serviceTypeID, planID); err == nil {
+	if plan, err := pco.GetPlan(ctx, serviceTypeID, planID); err == nil {
 		data.PlanTitle = plan.Data.Attributes.Title
 		data.PlanDates = plan.Data.Attributes.Dates
 		planDate = plan.Data.Attributes.SortDate
@@ -595,14 +595,14 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, serv
 	}
 	data.PendingDeleteCount = len(pending)
 
-	needed, err := pco.GetNeededPositions(serviceTypeID, planID, nil)
+	needed, err := pco.GetNeededPositions(ctx, serviceTypeID, planID, nil)
 	if err != nil {
 		data.ErrMsg = appendErr(data.ErrMsg, "loading needed positions from Planning Center: "+err.Error())
 	}
 	groups := groupNeededPositions(needed.Data, assignments)
 
 	teamNames := map[string]string{}
-	if teams, err := pco.GetTeams(serviceTypeID, nil); err != nil {
+	if teams, err := pco.GetTeams(ctx, serviceTypeID, nil); err != nil {
 		data.ErrMsg = appendErr(data.ErrMsg, "loading teams from Planning Center: "+err.Error())
 	} else {
 		for _, t := range teams.Data {
@@ -618,7 +618,7 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, serv
 		byName, ok := positionIDsByTeam[teamID]
 		if !ok {
 			byName = map[string]string{}
-			if positions, err := pco.GetTeamPositions(teamID, nil); err == nil {
+			if positions, err := pco.GetTeamPositions(ctx, teamID, nil); err == nil {
 				for _, p := range positions.Data {
 					byName[p.Attributes.Name] = p.ID
 				}
@@ -641,7 +641,7 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, serv
 		if posID == "" {
 			continue
 		}
-		people, err := pco.GetPersonTeamPositionAssignments(g.TeamID, posID, nil)
+		people, err := pco.GetPersonTeamPositionAssignments(ctx, g.TeamID, posID, nil)
 		if err != nil {
 			continue // best-effort - one position's candidate pool failing doesn't sink the page
 		}
@@ -657,11 +657,11 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, serv
 	for id := range relevantPersonIDs {
 		relevantIDs = append(relevantIDs, id)
 	}
-	names := personNameMapForIDs(relevantIDs)
+	names := personNameMapForIDs(ctx, relevantIDs)
 
 	blockoutsByPerson := map[string][]pco.BlockoutData{}
 	for id := range relevantPersonIDs {
-		if bo, err := pco.GetBlockouts(id, &pco.BlockoutsParams{Filter: "future"}); err == nil {
+		if bo, err := pco.GetBlockouts(ctx, id, &pco.BlockoutsParams{Filter: "future"}); err == nil {
 			blockoutsByPerson[id] = bo.Data
 		}
 	}
@@ -690,7 +690,7 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, serv
 			pref := schedulePreferenceFor(candidatesByGroup[i], ra.PersonID)
 			var freqWarn string
 			if pref != "" && !planDate.IsZero() {
-				freqWarn = frequencyWarning(pref, planDate, otherAssignmentDates(ra.PersonID, g.TeamID, g.TeamPositionName, planID))
+				freqWarn = frequencyWarning(pref, planDate, otherAssignmentDates(ctx, ra.PersonID, g.TeamID, g.TeamPositionName, planID))
 			}
 
 			pg.Assigned = append(pg.Assigned, views.AssignmentView{
@@ -715,7 +715,7 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, serv
 
 			var freqWarn string
 			if pa.Attributes.SchedulePreference != "" && !planDate.IsZero() {
-				freqWarn = frequencyWarning(pa.Attributes.SchedulePreference, planDate, otherAssignmentDates(personID, g.TeamID, g.TeamPositionName, planID))
+				freqWarn = frequencyWarning(pa.Attributes.SchedulePreference, planDate, otherAssignmentDates(ctx, personID, g.TeamID, g.TeamPositionName, planID))
 			}
 
 			pg.Candidates = append(pg.Candidates, views.CandidatePersonView{

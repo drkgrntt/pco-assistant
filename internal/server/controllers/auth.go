@@ -66,17 +66,17 @@ func (ac *AuthController) Callback(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).SendString("missing code")
 	}
 
-	accessToken, err := auth.ExchangeCode(c.Context(), code)
+	tokenResult, err := auth.ExchangeCode(c.Context(), code)
 	if err != nil {
 		return c.Status(fiber.StatusBadGateway).SendString(err.Error())
 	}
 
-	personID, personName, err := auth.FetchIdentity(c.Context(), accessToken)
+	personID, personName, err := auth.FetchIdentity(c.Context(), tokenResult.AccessToken)
 	if err != nil {
 		return c.Status(fiber.StatusBadGateway).SendString(err.Error())
 	}
 
-	token, err := ac.store.CreateSession(c.Context(), personID, personName)
+	token, err := ac.store.CreateSession(c.Context(), personID, personName, tokenResult.AccessToken, tokenResult.RefreshToken, tokenResult.ExpiresAt)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
 	}

@@ -19,21 +19,34 @@ type Session struct {
 	PersonName string
 	CreatedAt  time.Time
 	ExpiresAt  time.Time
+	// AccessToken/RefreshToken/TokenExpiresAt are this session's own PCO
+	// OAuth token - unlike PersonID/PersonName (looked up once at sign-in
+	// and never touched again), these get refreshed over the session's
+	// life (see RequireAuth in middleware/auth.go) as the access token
+	// nears its ~2 hour PCO-imposed expiry. Every PCO API call this
+	// session makes authenticates with AccessToken (go-pco.WithAccessToken)
+	// - there's no other credential backing it.
+	AccessToken    string
+	RefreshToken   string
+	TokenExpiresAt time.Time
 }
 
 // CreateSession mints a new session and returns the raw token to set as the
 // cookie value. Only its SHA-256 hash is stored, so reading the sessions
-// table doesn't hand out anything replayable.
-func (s *Store) CreateSession(ctx context.Context, personID, personName string) (token string, err error) {
+// table doesn't hand out anything replayable - that protection doesn't
+// extend to accessToken/refreshToken, which have to be stored recoverable
+// since outbound PCO calls need the literal value back (see the migration
+// that added these columns for the tradeoff this implies).
+func (s *Store) CreateSession(ctx context.Context, personID, personName, accessToken, refreshToken string, tokenExpiresAt time.Time) (token string, err error) {
 	token, err = randomToken()
 	if err != nil {
 		return "", err
 	}
 
 	_, err = s.db.ExecContext(ctx, `
-		INSERT INTO sessions (id, person_id, person_name, expires_at)
-		VALUES ($1, $2, $3, $4)
-	`, hashToken(token), personID, personName, time.Now().Add(SessionTTL))
+		INSERT INTO sessions (id, person_id, person_name, expires_at, access_token, refresh_token, token_expires_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+	`, hashToken(token), personID, personName, time.Now().Add(SessionTTL), accessToken, refreshToken, tokenExpiresAt)
 	if err != nil {
 		return "", err
 	}
@@ -46,15 +59,30 @@ func (s *Store) CreateSession(ctx context.Context, personID, personName string) 
 func (s *Store) GetSession(ctx context.Context, token string) (Session, error) {
 	var session Session
 	err := s.db.QueryRowContext(ctx, `
-		SELECT person_id, person_name, created_at, expires_at
+		SELECT person_id, person_name, created_at, expires_at, access_token, refresh_token, token_expires_at
 		FROM sessions
 		WHERE id = $1 AND expires_at > now()
-	`, hashToken(token)).Scan(&session.PersonID, &session.PersonName, &session.CreatedAt, &session.ExpiresAt)
+	`, hashToken(token)).Scan(
+		&session.PersonID, &session.PersonName, &session.CreatedAt, &session.ExpiresAt,
+		&session.AccessToken, &session.RefreshToken, &session.TokenExpiresAt,
+	)
 	if err != nil {
 		return Session{}, err
 	}
 
 	return session, nil
+}
+
+// UpdateSessionTokens overwrites a session's PCO OAuth token after a
+// refresh (see RequireAuth) - the session itself (its id, expiry, person)
+// is unaffected, only which PCO credentials it authenticates API calls
+// with going forward.
+func (s *Store) UpdateSessionTokens(ctx context.Context, token, accessToken, refreshToken string, tokenExpiresAt time.Time) error {
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE sessions SET access_token = $2, refresh_token = $3, token_expires_at = $4
+		WHERE id = $1
+	`, hashToken(token), accessToken, refreshToken, tokenExpiresAt)
+	return err
 }
 
 func (s *Store) DeleteSession(ctx context.Context, token string) error {
