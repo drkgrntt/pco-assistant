@@ -4,7 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 const (
@@ -57,6 +60,42 @@ func (s *Store) SetSongPersonPreference(ctx context.Context, params SetSongPerso
 	`, params.SongID, params.PersonID, params.Preference, params.Notes).Scan(
 		&pref.ID, &pref.SongID, &pref.PersonID, &pref.Preference, &pref.Notes, &pref.CreatedAt, &pref.UpdatedAt,
 	)
+	if err != nil {
+		return SongPersonPreference{}, err
+	}
+
+	return pref, nil
+}
+
+// UpdateSongPersonPreference overwrites an existing preference's fields in
+// place, keyed by id - unlike SetSongPersonPreference's upsert-by-pair
+// (song_id, person_id), this is a true edit: changing which song or person
+// a row is about updates that same row rather than upserting a different
+// one and leaving the original behind.
+func (s *Store) UpdateSongPersonPreference(ctx context.Context, id int64, params SetSongPersonPreferenceParams) (SongPersonPreference, error) {
+	if params.SongID == "" || params.PersonID == "" {
+		return SongPersonPreference{}, errors.New("song_id and person_id are required")
+	}
+	if !validPreferences[params.Preference] {
+		return SongPersonPreference{}, errors.New(`preference must be "preferred" or "discouraged"`)
+	}
+
+	var pref SongPersonPreference
+	err := s.db.QueryRowContext(ctx, `
+		UPDATE song_person_preferences
+		SET song_id = $1, person_id = $2, preference = $3, notes = $4, updated_at = now()
+		WHERE id = $5
+		RETURNING id, song_id, person_id, preference, notes, created_at, updated_at
+	`, params.SongID, params.PersonID, params.Preference, params.Notes, id).Scan(
+		&pref.ID, &pref.SongID, &pref.PersonID, &pref.Preference, &pref.Notes, &pref.CreatedAt, &pref.UpdatedAt,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return SongPersonPreference{}, fmt.Errorf("that preference no longer exists - it may have been deleted")
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		return SongPersonPreference{}, fmt.Errorf("a preference for that song and person already exists")
+	}
 	if err != nil {
 		return SongPersonPreference{}, err
 	}

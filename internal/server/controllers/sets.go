@@ -42,6 +42,12 @@ func (sc *SchedulingController) CreateSongRole(c *fiber.Ctx) error {
 	errMsg := ""
 	if err := c.BodyParser(&body); err != nil {
 		errMsg = err.Error()
+	} else if id, editing, idErr := parseFormID(c); idErr != nil {
+		errMsg = "id must be an integer"
+	} else if editing {
+		if _, err := sc.store.UpdateSongRole(c.Context(), id, body); err != nil {
+			errMsg = err.Error()
+		}
 	} else if _, err := sc.store.CreateSongRole(c.Context(), body); err != nil {
 		errMsg = err.Error()
 	}

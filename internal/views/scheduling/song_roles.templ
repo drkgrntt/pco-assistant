@@ -2,6 +2,7 @@ package scheduling
 
 import (
 	"fmt"
+	"strconv"
 
 	pco "github.com/drkgrntt/go-pco"
 
@@ -13,7 +14,15 @@ templ SongRoles(personName string, songs []pco.SongData, roles []scheduling.Song
 	@views.Layout("Song Roles", personName) {
 		<h1>Song Roles</h1>
 		<p class="muted">Tag songs as good openers or good response songs, for use when building a set.</p>
-		<form class="inline" hx-post="/scheduling/song-roles" hx-target="#song-roles-table" hx-swap="outerHTML">
+		<form
+			id="song-role-form"
+			class="inline"
+			hx-post="/scheduling/song-roles"
+			hx-target="#song-roles-table"
+			hx-swap="outerHTML"
+			hx-on::after-request="if(event.detail.successful) resetSetupForm(this)"
+		>
+			<input type="hidden" name="id"/>
 			<label>
 				Song
 				<select name="song_id" required>
@@ -31,6 +40,7 @@ templ SongRoles(personName string, songs []pco.SongData, roles []scheduling.Song
 				</select>
 			</label>
 			<button type="submit" class="primary">Add</button>
+			<button type="button" class="cancel-edit" onclick="cancelSetupEdit(this)" hidden>Cancel</button>
 		</form>
 		@SongRolesTable(roles, songTitles, errMsg)
 	}
@@ -65,6 +75,20 @@ templ SongRolesTable(roles []scheduling.SongRole, songTitles map[string]string, 
 							</td>
 							<td>{ role.Role }</td>
 							<td>
+								<button
+									class="icon-btn"
+									aria-label="Edit tag"
+									title="Edit tag"
+									data-edit-form="song-role-form"
+									data-edit-fields={ editFieldsAttr(map[string]string{
+										"id":      strconv.FormatInt(role.ID, 10),
+										"song_id": role.SongID,
+										"role":    role.Role,
+									}) }
+									onclick="editRow(this)"
+								>
+									@views.IconEdit()
+								</button>
 								<button
 									class="danger icon-btn"
 									aria-label="Remove tag"

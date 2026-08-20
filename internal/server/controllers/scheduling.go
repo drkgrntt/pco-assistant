@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strconv"
 	"strings"
 
 	"pco-assistant/internal/scheduling"
@@ -87,6 +88,21 @@ func personNameMap(ctx context.Context, preferences []scheduling.SongPersonPrefe
 	return names
 }
 
+// parseFormID reads the "id" field a setup page's create/edit form carries
+// when editing an existing row (see editRow in web/static/scheduling.js,
+// populated from a table row's Edit button) - present=false means "no id",
+// i.e. this submit is a create, not an edit. A non-nil err means the field
+// was there but wasn't a valid integer, which the caller should treat as
+// bad input rather than silently falling back to create.
+func parseFormID(c *fiber.Ctx) (id int64, present bool, err error) {
+	raw := strings.TrimSpace(c.FormValue("id"))
+	if raw == "" {
+		return 0, false, nil
+	}
+	id, err = strconv.ParseInt(raw, 10, 64)
+	return id, true, err
+}
+
 // SchedulingController serves the htmx-driven HTML pages for scheduling
 // data, calling the same *scheduling.Store the JSON API
 // (SchedulingAPIController, mounted at /api/scheduling) uses - these are
@@ -166,6 +182,12 @@ func (sc *SchedulingController) CreateRelationship(c *fiber.Ctx) error {
 	errMsg := ""
 	if err := c.BodyParser(&body); err != nil {
 		errMsg = err.Error()
+	} else if id, editing, idErr := parseFormID(c); idErr != nil {
+		errMsg = "id must be an integer"
+	} else if editing {
+		if _, err := sc.store.UpdateSongRelationship(c.Context(), id, body); err != nil {
+			errMsg = err.Error()
+		}
 	} else if _, err := sc.store.CreateSongRelationship(c.Context(), body); err != nil {
 		errMsg = err.Error()
 	}
@@ -226,6 +248,12 @@ func (sc *SchedulingController) SetPreference(c *fiber.Ctx) error {
 	errMsg := ""
 	if err := c.BodyParser(&body); err != nil {
 		errMsg = err.Error()
+	} else if id, editing, idErr := parseFormID(c); idErr != nil {
+		errMsg = "id must be an integer"
+	} else if editing {
+		if _, err := sc.store.UpdateSongPersonPreference(c.Context(), id, body); err != nil {
+			errMsg = err.Error()
+		}
 	} else if _, err := sc.store.SetSongPersonPreference(c.Context(), body); err != nil {
 		errMsg = err.Error()
 	}

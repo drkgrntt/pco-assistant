@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // Relationship types are free text (validated here, not via a DB CHECK) so
@@ -74,6 +76,50 @@ func (s *Store) CreatePersonRelationship(ctx context.Context, params CreatePerso
 		&rel.ID, &rel.PersonIDA, &rel.PersonIDB, &rel.RelationshipType, &rel.Notes, &rel.CreatedAt, &rel.UpdatedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
+		return PersonRelationship{}, fmt.Errorf("that relationship already exists")
+	}
+	if err != nil {
+		return PersonRelationship{}, err
+	}
+
+	return rel, nil
+}
+
+// UpdatePersonRelationship overwrites an existing relationship's fields in
+// place, keyed by id - same validation and canonical/mentorship-direction
+// handling as CreatePersonRelationship (see its doc comment), but an
+// actual edit of that row rather than an insert-or-conflict on the natural
+// key.
+func (s *Store) UpdatePersonRelationship(ctx context.Context, id int64, params CreatePersonRelationshipParams) (PersonRelationship, error) {
+	if params.PersonIDA == "" || params.PersonIDB == "" {
+		return PersonRelationship{}, errors.New("person_id_a and person_id_b are required")
+	}
+	if params.PersonIDA == params.PersonIDB {
+		return PersonRelationship{}, errors.New("person_id_a and person_id_b must be different people")
+	}
+	if !validPersonRelationshipTypes[params.RelationshipType] {
+		return PersonRelationship{}, fmt.Errorf("unknown relationship_type %q", params.RelationshipType)
+	}
+
+	personIDA, personIDB := params.PersonIDA, params.PersonIDB
+	if params.RelationshipType != PersonRelationshipMentorship && personIDA > personIDB {
+		personIDA, personIDB = personIDB, personIDA
+	}
+
+	var rel PersonRelationship
+	err := s.db.QueryRowContext(ctx, `
+		UPDATE person_relationships
+		SET person_id_a = $1, person_id_b = $2, relationship_type = $3, notes = $4, updated_at = now()
+		WHERE id = $5
+		RETURNING id, person_id_a, person_id_b, relationship_type, notes, created_at, updated_at
+	`, personIDA, personIDB, params.RelationshipType, params.Notes, id).Scan(
+		&rel.ID, &rel.PersonIDA, &rel.PersonIDB, &rel.RelationshipType, &rel.Notes, &rel.CreatedAt, &rel.UpdatedAt,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return PersonRelationship{}, fmt.Errorf("that relationship no longer exists - it may have been deleted")
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 		return PersonRelationship{}, fmt.Errorf("that relationship already exists")
 	}
 	if err != nil {

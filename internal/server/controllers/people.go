@@ -34,6 +34,12 @@ func (sc *SchedulingController) CreatePersonRelationship(c *fiber.Ctx) error {
 	errMsg := ""
 	if err := c.BodyParser(&body); err != nil {
 		errMsg = err.Error()
+	} else if id, editing, idErr := parseFormID(c); idErr != nil {
+		errMsg = "id must be an integer"
+	} else if editing {
+		if _, err := sc.store.UpdatePersonRelationship(c.Context(), id, body); err != nil {
+			errMsg = err.Error()
+		}
 	} else if _, err := sc.store.CreatePersonRelationship(c.Context(), body); err != nil {
 		errMsg = err.Error()
 	}

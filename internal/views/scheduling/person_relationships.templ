@@ -2,6 +2,7 @@ package scheduling
 
 import (
 	"fmt"
+	"strconv"
 
 	"pco-assistant/internal/scheduling"
 	"pco-assistant/internal/views"
@@ -11,7 +12,15 @@ templ PersonRelationships(personName string, relationships []scheduling.PersonRe
 	@views.Layout("Person Relationships", personName) {
 		<h1>Person Relationships</h1>
 		<p class="muted">Relate people to each other - "works well with," "mentorship," or "doesn't work well with" - searching your Planning Center people directory.</p>
-		<form class="inline" hx-post="/scheduling/person-relationships" hx-target="#person-relationships-table" hx-swap="outerHTML">
+		<form
+			id="person-relationship-form"
+			class="inline"
+			hx-post="/scheduling/person-relationships"
+			hx-target="#person-relationships-table"
+			hx-swap="outerHTML"
+			hx-on::after-request="if(event.detail.successful) resetSetupForm(this)"
+		>
+			<input type="hidden" name="id"/>
 			@PersonPickerField("Person A", "person_id_a", "a")
 			@PersonPickerField("Person B", "person_id_b", "b")
 			<label>
@@ -27,6 +36,7 @@ templ PersonRelationships(personName string, relationships []scheduling.PersonRe
 				<input type="text" name="notes"/>
 			</label>
 			<button type="submit" class="primary">Add</button>
+			<button type="button" class="cancel-edit" onclick="cancelSetupEdit(this)" hidden>Cancel</button>
 		</form>
 		@PersonRelationshipsTable(relationships, personNames, errMsg)
 	}
@@ -71,6 +81,24 @@ templ PersonRelationshipsTable(relationships []scheduling.PersonRelationship, pe
 							<td>{ rel.RelationshipType }</td>
 							<td>{ rel.Notes }</td>
 							<td>
+								<button
+									class="icon-btn"
+									aria-label="Edit relationship"
+									title="Edit relationship"
+									data-edit-form="person-relationship-form"
+									data-edit-fields={ editFieldsAttr(map[string]string{
+										"id":                strconv.FormatInt(rel.ID, 10),
+										"relationship_type": rel.RelationshipType,
+										"notes":             rel.Notes,
+									}) }
+									data-edit-people={ editPeopleAttr(map[string]editPerson{
+										"a": {ID: rel.PersonIDA, Name: displayNameOrID(personNames, rel.PersonIDA)},
+										"b": {ID: rel.PersonIDB, Name: displayNameOrID(personNames, rel.PersonIDB)},
+									}) }
+									onclick="editRow(this)"
+								>
+									@views.IconEdit()
+								</button>
 								<button
 									class="danger icon-btn"
 									aria-label="Delete relationship"

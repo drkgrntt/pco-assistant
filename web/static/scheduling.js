@@ -96,6 +96,82 @@ document.addEventListener("input", function (event) {
   }
 });
 
+// Shared reset for the setup pages' create/edit forms (song relationships,
+// song/person preferences, song roles, person relationships) - restores a
+// form to its "add a new one" state: native reset() (clears every field,
+// including person pickers - see selectPerson - whose hidden id and
+// visible search box both default back to empty) along with the hidden
+// "id" field that switches the next submit from update back to create,
+// plus the submit button/Cancel affordance out of "editing" mode. Called
+// both after a successful create/update submit (hx-on::after-request
+// below) and from the Cancel button (cancelSetupEdit).
+function resetSetupForm(form) {
+  form.reset();
+  form.classList.remove("editing");
+  var submitBtn = form.querySelector("button[type=submit]");
+  if (submitBtn && submitBtn.dataset.createLabel) {
+    submitBtn.textContent = submitBtn.dataset.createLabel;
+  }
+  var cancelBtn = form.querySelector(".cancel-edit");
+  if (cancelBtn) {
+    cancelBtn.hidden = true;
+  }
+}
+
+// editRow fills a setup page's create/edit form from a table row's Edit
+// button and switches it into "editing" mode, so the next submit updates
+// this row (via its now-populated hidden "id" field) instead of creating a
+// new one. data-edit-fields is a JSON object of plain form-field name ->
+// value (see editFieldsAttr); data-edit-people is a JSON object of person-
+// picker suffix -> {id, name} (see editPeopleAttr, PersonPickerField) for
+// pages that search people rather than using a plain <select>.
+function editRow(button) {
+  var form = document.getElementById(button.dataset.editForm);
+  if (!form) {
+    return;
+  }
+
+  var fields = JSON.parse(button.dataset.editFields || "{}");
+  Object.keys(fields).forEach(function (name) {
+    var el = form.elements.namedItem(name);
+    if (el) {
+      el.value = fields[name];
+    }
+  });
+
+  var people = JSON.parse(button.dataset.editPeople || "{}");
+  Object.keys(people).forEach(function (suffix) {
+    var idSuffix = suffix ? "-" + suffix : "";
+    var idInput = document.getElementById("person-id-input" + idSuffix);
+    var searchInput = document.getElementById("person-search-input" + idSuffix);
+    if (idInput) {
+      idInput.value = people[suffix].id;
+    }
+    if (searchInput) {
+      searchInput.value = people[suffix].name;
+    }
+  });
+
+  form.classList.add("editing");
+  var submitBtn = form.querySelector("button[type=submit]");
+  if (submitBtn) {
+    if (!submitBtn.dataset.createLabel) {
+      submitBtn.dataset.createLabel = submitBtn.textContent;
+    }
+    submitBtn.textContent = "Update";
+  }
+  var cancelBtn = form.querySelector(".cancel-edit");
+  if (cancelBtn) {
+    cancelBtn.hidden = false;
+  }
+
+  form.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function cancelSetupEdit(button) {
+  resetSetupForm(button.closest("form"));
+}
+
 // Client-side filtering for the set builder's "find songs to add" list (see
 // set_builder.templ) - the whole candidate pool is already rendered on the
 // page (song libraries are small enough to fetch in full, unlike people),

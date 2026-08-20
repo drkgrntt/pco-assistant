@@ -2,6 +2,7 @@ package scheduling
 
 import (
 	"fmt"
+	"strconv"
 
 	pco "github.com/drkgrntt/go-pco"
 
@@ -13,7 +14,15 @@ templ Preferences(personName string, songs []pco.SongData, preferences []schedul
 	@views.Layout("Song Preferences", personName) {
 		<h1>Song / Person Preferences</h1>
 		<p class="muted">Note which people are preferred or discouraged for a given song - pick the song from your Planning Center library and search for the person by name.</p>
-		<form class="inline" hx-post="/scheduling/song-preferences" hx-target="#preferences-table" hx-swap="outerHTML">
+		<form
+			id="preference-form"
+			class="inline"
+			hx-post="/scheduling/song-preferences"
+			hx-target="#preferences-table"
+			hx-swap="outerHTML"
+			hx-on::after-request="if(event.detail.successful) resetSetupForm(this)"
+		>
+			<input type="hidden" name="id"/>
 			<label>
 				Song
 				<select name="song_id" required>
@@ -36,6 +45,7 @@ templ Preferences(personName string, songs []pco.SongData, preferences []schedul
 				<input type="text" name="notes"/>
 			</label>
 			<button type="submit" class="primary">Save</button>
+			<button type="button" class="cancel-edit" onclick="cancelSetupEdit(this)" hidden>Cancel</button>
 		</form>
 		@PreferencesTable(preferences, songTitles, personNames, errMsg)
 	}
@@ -83,6 +93,24 @@ templ PreferencesTable(preferences []scheduling.SongPersonPreference, songTitles
 							<td>{ pref.Preference }</td>
 							<td>{ pref.Notes }</td>
 							<td>
+								<button
+									class="icon-btn"
+									aria-label="Edit preference"
+									title="Edit preference"
+									data-edit-form="preference-form"
+									data-edit-fields={ editFieldsAttr(map[string]string{
+										"id":         strconv.FormatInt(pref.ID, 10),
+										"song_id":    pref.SongID,
+										"preference": pref.Preference,
+										"notes":      pref.Notes,
+									}) }
+									data-edit-people={ editPeopleAttr(map[string]editPerson{
+										"": {ID: pref.PersonID, Name: displayNameOrID(personNames, pref.PersonID)},
+									}) }
+									onclick="editRow(this)"
+								>
+									@views.IconEdit()
+								</button>
 								<button
 									class="danger icon-btn"
 									aria-label="Delete preference"

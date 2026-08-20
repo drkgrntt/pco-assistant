@@ -79,6 +79,21 @@ templ PositionAssignmentsFragment(rows []PreferenceRow, teamID, teamPositionID s
 								<td>{ row.SchedulePreference }</td>
 								<td>
 									<button
+										class="icon-btn"
+										aria-label="Edit preference"
+										title="Edit preference"
+										data-edit-form="position-preference-form"
+										data-edit-fields={ editFieldsAttr(map[string]string{
+											"schedule_preference": row.SchedulePreference,
+										}) }
+										data-edit-people={ editPeopleAttr(map[string]editPerson{
+											"pref": {ID: row.PersonID, Name: row.PersonName},
+										}) }
+										onclick="editRow(this)"
+									>
+										@views.IconEdit()
+									</button>
+									<button
 										class="danger icon-btn"
 										aria-label="Remove from position"
 										title="Remove from position"
@@ -100,7 +115,14 @@ templ PositionAssignmentsFragment(rows []PreferenceRow, teamID, teamPositionID s
 					</tbody>
 				</table>
 			</div>
-			<form class="inline" hx-post="/scheduling/position-preferences" hx-target="#position-assignments" hx-swap="outerHTML">
+			<form
+				id="position-preference-form"
+				class="inline"
+				hx-post="/scheduling/position-preferences"
+				hx-target="#position-assignments"
+				hx-swap="outerHTML"
+				hx-on::after-request="if(event.detail.successful) resetSetupForm(this)"
+			>
 				<input type="hidden" name="team_id" value={ teamID }/>
 				<input type="hidden" name="team_position_id" value={ teamPositionID }/>
 				@PersonPickerField("Person", "person_id", "pref")
@@ -113,6 +135,7 @@ templ PositionAssignmentsFragment(rows []PreferenceRow, teamID, teamPositionID s
 					</select>
 				</label>
 				<button type="submit" class="primary">Save</button>
+				<button type="button" class="cancel-edit" onclick="cancelSetupEdit(this)" hidden>Cancel</button>
 			</form>
 		}
 	</div>

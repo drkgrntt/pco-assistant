@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // Relationship types are free text (validated here, not via a DB CHECK) so
@@ -75,6 +77,51 @@ func (s *Store) CreateSongRelationship(ctx context.Context, params CreateSongRel
 		&rel.ID, &rel.SongIDA, &rel.SongIDB, &rel.RelationshipType, &rel.Notes, &rel.CreatedAt, &rel.UpdatedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
+		return SongRelationship{}, fmt.Errorf("that relationship already exists")
+	}
+	if err != nil {
+		return SongRelationship{}, err
+	}
+
+	return rel, nil
+}
+
+// UpdateSongRelationship overwrites an existing relationship's fields in
+// place - same validation and canonical-order handling as
+// CreateSongRelationship, but keyed by id rather than by the song
+// pair/type, so changing which songs or type a row represents (an actual
+// edit, not "add a new pair") doesn't leave the original row behind as an
+// orphaned duplicate.
+func (s *Store) UpdateSongRelationship(ctx context.Context, id int64, params CreateSongRelationshipParams) (SongRelationship, error) {
+	if params.SongIDA == "" || params.SongIDB == "" {
+		return SongRelationship{}, errors.New("song_id_a and song_id_b are required")
+	}
+	if params.SongIDA == params.SongIDB {
+		return SongRelationship{}, errors.New("song_id_a and song_id_b must be different songs")
+	}
+	if !validRelationshipTypes[params.RelationshipType] {
+		return SongRelationship{}, fmt.Errorf("unknown relationship_type %q", params.RelationshipType)
+	}
+
+	songIDA, songIDB := params.SongIDA, params.SongIDB
+	if songIDA > songIDB {
+		songIDA, songIDB = songIDB, songIDA
+	}
+
+	var rel SongRelationship
+	err := s.db.QueryRowContext(ctx, `
+		UPDATE song_relationships
+		SET song_id_a = $1, song_id_b = $2, relationship_type = $3, notes = $4, updated_at = now()
+		WHERE id = $5
+		RETURNING id, song_id_a, song_id_b, relationship_type, notes, created_at, updated_at
+	`, songIDA, songIDB, params.RelationshipType, params.Notes, id).Scan(
+		&rel.ID, &rel.SongIDA, &rel.SongIDB, &rel.RelationshipType, &rel.Notes, &rel.CreatedAt, &rel.UpdatedAt,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return SongRelationship{}, fmt.Errorf("that relationship no longer exists - it may have been deleted")
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 		return SongRelationship{}, fmt.Errorf("that relationship already exists")
 	}
 	if err != nil {

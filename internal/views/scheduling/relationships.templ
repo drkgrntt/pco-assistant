@@ -2,6 +2,7 @@ package scheduling
 
 import (
 	"fmt"
+	"strconv"
 
 	pco "github.com/drkgrntt/go-pco"
 
@@ -13,7 +14,15 @@ templ Relationships(personName string, songs []pco.SongData, relationships []sch
 	@views.Layout("Song Relationships", personName) {
 		<h1>Song Relationships</h1>
 		<p class="muted">Relate songs to each other - e.g. "flows well lyrically" or "same theme" - picking from your Planning Center song library.</p>
-		<form class="inline" hx-post="/scheduling/song-relationships" hx-target="#relationships-table" hx-swap="outerHTML">
+		<form
+			id="relationship-form"
+			class="inline"
+			hx-post="/scheduling/song-relationships"
+			hx-target="#relationships-table"
+			hx-swap="outerHTML"
+			hx-on::after-request="if(event.detail.successful) resetSetupForm(this)"
+		>
+			<input type="hidden" name="id"/>
 			<label>
 				Song A
 				<select name="song_id_a" required>
@@ -45,6 +54,7 @@ templ Relationships(personName string, songs []pco.SongData, relationships []sch
 				<input type="text" name="notes"/>
 			</label>
 			<button type="submit" class="primary">Add</button>
+			<button type="button" class="cancel-edit" onclick="cancelSetupEdit(this)" hidden>Cancel</button>
 		</form>
 		@RelationshipsTable(relationships, songTitles, errMsg)
 	}
@@ -94,6 +104,22 @@ templ RelationshipsTable(relationships []scheduling.SongRelationship, songTitles
 							<td>{ rel.RelationshipType }</td>
 							<td>{ rel.Notes }</td>
 							<td>
+								<button
+									class="icon-btn"
+									aria-label="Edit relationship"
+									title="Edit relationship"
+									data-edit-form="relationship-form"
+									data-edit-fields={ editFieldsAttr(map[string]string{
+										"id":                strconv.FormatInt(rel.ID, 10),
+										"song_id_a":         rel.SongIDA,
+										"song_id_b":         rel.SongIDB,
+										"relationship_type": rel.RelationshipType,
+										"notes":             rel.Notes,
+									}) }
+									onclick="editRow(this)"
+								>
+									@views.IconEdit()
+								</button>
 								<button
 									class="danger icon-btn"
 									aria-label="Delete relationship"

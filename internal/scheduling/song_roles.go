@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // Role types are free text (validated here, not via a DB CHECK), same
@@ -47,6 +49,40 @@ func (s *Store) CreateSongRole(ctx context.Context, params CreateSongRoleParams)
 		ON CONFLICT (song_id, role) DO UPDATE SET role = EXCLUDED.role
 		RETURNING id, song_id, role, created_at
 	`, params.SongID, params.Role).Scan(&role.ID, &role.SongID, &role.Role, &role.CreatedAt)
+	if err != nil {
+		return SongRole{}, err
+	}
+
+	return role, nil
+}
+
+// UpdateSongRole overwrites an existing tag's song/role in place, keyed by
+// id - CreateSongRole's ON CONFLICT DO UPDATE upserts by (song_id, role),
+// which only coincidentally acts like an edit when the song doesn't
+// change; moving a tag to a different song needs an id-keyed update so it
+// doesn't leave the original row behind.
+func (s *Store) UpdateSongRole(ctx context.Context, id int64, params CreateSongRoleParams) (SongRole, error) {
+	if params.SongID == "" {
+		return SongRole{}, errors.New("song_id is required")
+	}
+	if !validRoles[params.Role] {
+		return SongRole{}, fmt.Errorf("unknown role %q", params.Role)
+	}
+
+	var role SongRole
+	err := s.db.QueryRowContext(ctx, `
+		UPDATE song_roles
+		SET song_id = $1, role = $2
+		WHERE id = $3
+		RETURNING id, song_id, role, created_at
+	`, params.SongID, params.Role, id).Scan(&role.ID, &role.SongID, &role.Role, &role.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return SongRole{}, fmt.Errorf("that tag no longer exists - it may have been deleted")
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		return SongRole{}, fmt.Errorf("that song is already tagged with that role")
+	}
 	if err != nil {
 		return SongRole{}, err
 	}
