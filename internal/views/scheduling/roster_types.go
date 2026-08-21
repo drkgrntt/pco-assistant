@@ -27,6 +27,12 @@ type RosterBuilderData struct {
 	// renders, same as SetBuilderData.
 	UnpublishedCount   int
 	PendingDeleteCount int
+
+	// ImportableAssignmentCount is how many people Planning Center already
+	// has assigned to this plan's positions that aren't reflected here yet -
+	// see SetBuilderData.ImportableSongCount, which this mirrors, and
+	// buildRosterBuilderData for why it can't just be read off Positions.
+	ImportableAssignmentCount int
 }
 
 // PositionGroupView is one open slot - a team + position name, how many are

@@ -1,12 +1,12 @@
 package views
 
-templ Layout(title string, personName string) {
+templ Layout(title string, personName string, organizationName string) {
 	<!DOCTYPE html>
 	<html lang="en">
 		<head>
 			<meta charset="UTF-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
-			<title>{ title } - Church</title>
+			<title>{ title } - Resonance</title>
 			<link rel="manifest" href="/manifest.json"/>
 			<link rel="icon" href="/static/icon-192.png"/>
 			<link rel="apple-touch-icon" href="/static/icon-192.png"/>
@@ -20,41 +20,52 @@ templ Layout(title string, personName string) {
 			<script src="/static/register-sw.js"></script>
 		</head>
 		<body>
+			<div id="htmx-progress-bar" aria-hidden="true"></div>
 			<header class="site">
-				<strong>Church</strong>
-				<nav>
-					<a href="/">Home</a>
-					<a href="/scheduling/build">Build a Service</a>
-					<div class="nav-dropdown">
-						<button
-							type="button"
-							class="nav-dropdown-toggle"
-							onclick="toggleNavDropdown(this)"
-							aria-haspopup="true"
-							aria-expanded="false"
-						>
-							Setup
-							@IconChevronDown()
-						</button>
-						<div class="nav-dropdown-menu">
-							<a href="/scheduling/song-relationships">Song Relationships</a>
-							<a href="/scheduling/song-roles">Song Roles</a>
-							<a href="/scheduling/song-preferences">Song Preferences</a>
-							<a href="/scheduling/person-relationships">Person Relationships</a>
-							<a href="/scheduling/position-preferences">Position Preferences</a>
+				<div class="site-primary">
+					<strong>Resonance</strong>
+					<nav>
+						<a href="/">Home</a>
+						<a href="/scheduling/build">Build a Service</a>
+						<div class="nav-dropdown">
+							<button
+								type="button"
+								class="nav-dropdown-toggle"
+								onclick="toggleNavDropdown(this)"
+								aria-haspopup="true"
+								aria-expanded="false"
+							>
+								Setup
+								@IconChevronDown()
+							</button>
+							<div class="nav-dropdown-menu">
+								<a href="/scheduling/song-relationships">Song Relationships</a>
+								<a href="/scheduling/song-roles">Song Roles</a>
+								<a href="/scheduling/song-tags">Song Tags</a>
+								<a href="/scheduling/song-preferences">Song Preferences</a>
+								<a href="/scheduling/person-relationships">Person Relationships</a>
+								<a href="/scheduling/position-preferences">Position Preferences</a>
+							</div>
 						</div>
-					</div>
-				</nav>
-				<button type="button" class="theme-toggle" onclick="toggleTheme()" aria-label="Switch between light and dark theme" title="Switch between light and dark theme">
-					@IconSun()
-					@IconMoon()
-				</button>
-				if personName != "" {
-					<form method="post" action="/auth/logout">
-						<span class="muted">{ personName }</span>
-						<button type="submit">Log out</button>
-					</form>
-				}
+					</nav>
+				</div>
+				<div class="site-actions">
+					<button type="button" class="theme-toggle" onclick="toggleTheme()" aria-label="Switch between light and dark theme" title="Switch between light and dark theme">
+						@IconSun()
+						@IconMoon()
+					</button>
+					if personName != "" {
+						<div class="account">
+							if organizationName != "" {
+								<span class="account-org">{ organizationName }</span>
+							}
+							<span class="account-person">{ personName }</span>
+						</div>
+						<form method="post" action="/auth/logout">
+							<button type="submit">Log out</button>
+						</form>
+					}
+				</div>
 			</header>
 			<main>
 				{ children... }

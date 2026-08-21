@@ -10,8 +10,8 @@ import (
 	"pco-assistant/internal/views"
 )
 
-templ SongRoles(personName string, songs []pco.SongData, roles []scheduling.SongRole, songTitles map[string]string, errMsg string) {
-	@views.Layout("Song Roles", personName) {
+templ SongRoles(personName, organizationName string, songs []pco.SongData, roles []scheduling.SongRole, roleTypes []scheduling.SongRoleType, songTitles map[string]string, roleLabels map[string]string, errMsg string) {
+	@views.Layout("Song Roles", personName, organizationName) {
 		<h1>Song Roles</h1>
 		<p class="muted">Tag songs as good openers or good response songs, for use when building a set.</p>
 		<form
@@ -20,7 +20,7 @@ templ SongRoles(personName string, songs []pco.SongData, roles []scheduling.Song
 			hx-post="/scheduling/song-roles"
 			hx-target="#song-roles-table"
 			hx-swap="outerHTML"
-			hx-on::after-request="if(event.detail.successful) resetSetupForm(this)"
+			hx-on::after-request="if(event.detail.successful && event.detail.elt === this) resetSetupForm(this)"
 		>
 			<input type="hidden" name="id"/>
 			<label>
@@ -35,21 +35,25 @@ templ SongRoles(personName string, songs []pco.SongData, roles []scheduling.Song
 			<label>
 				Role
 				<select name="role">
-					<option value="opener">Opener</option>
-					<option value="response">Response</option>
+					for _, t := range roleTypes {
+						<option value={ t.Code }>{ t.Label }</option>
+					}
 				</select>
 			</label>
 			<button type="submit" class="primary">Add</button>
 			<button type="button" class="cancel-edit" onclick="cancelSetupEdit(this)" hidden>Cancel</button>
 		</form>
-		@SongRolesTable(roles, songTitles, errMsg)
+		@SongRolesTable(roles, songTitles, roleLabels, errMsg)
 	}
 }
 
 // SongRolesTable is both the initial-render fragment and the htmx swap
 // target (id="song-roles-table") - see RelationshipsTable for why errMsg
-// lives inside it rather than the page around it.
-templ SongRolesTable(roles []scheduling.SongRole, songTitles map[string]string, errMsg string) {
+// lives inside it rather than the page around it. roleLabels resolves role
+// codes to their song_role_types label (see songRoleTypeLabelMap in the
+// scheduling controller) - a code removed from that table since the tag
+// was created falls back to showing the raw code.
+templ SongRolesTable(roles []scheduling.SongRole, songTitles map[string]string, roleLabels map[string]string, errMsg string) {
 	<div id="song-roles-table">
 		if errMsg != "" {
 			<p class="error">{ errMsg }</p>
@@ -73,7 +77,7 @@ templ SongRolesTable(roles []scheduling.SongRole, songTitles map[string]string, 
 									{ role.SongID }
 								}
 							</td>
-							<td>{ role.Role }</td>
+							<td>{ displayNameOrID(roleLabels, role.Role) }</td>
 							<td>
 								<button
 									class="icon-btn"

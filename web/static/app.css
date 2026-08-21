@@ -2,76 +2,76 @@
   color-scheme: light dark;
 
   /* Canvas & Elevation */
-  --bg: #faf8f5;
-  --surface: #ffffff;
-  --surface-hover: #f3efe9;
-  --text: #322f2b;
-  --border: #dcd6d0;
-  --muted: #635e58;
+  --bg: hsl(40deg 38% 96%);
+  --surface: hsl(0deg 0% 100%);
+  --surface-hover: hsl(36deg 71% 99%);
+  --text: hsl(34deg 8% 18%);
+  --border: hsl(39deg 45% 90%);
+  --muted: hsl(31deg 11% 38%);
 
   /* Brand & Accents */
-  --accent: #2b7770;
-  --accent-solid: #2b7770;
-  --accent-subtle: #e6f0ef;
+  --accent: hsl(174deg 47% 32%);
+  --accent-solid: hsl(174deg 47% 32%);
+  --accent-subtle: hsl(174deg 25% 92%);
 
   /* Status Tokens (Softened, contextual) */
-  --danger: #b04c37;
-  --danger-subtle: #f9ebe8;
-  
-  --success: #3f683f;
-  --success-subtle: #ebf2eb;
-  
-  --pending: #8a6519;
-  --pending-subtle: #f7f1e3;
+  --danger: hsl(10deg 52% 45%);
+  --danger-subtle: hsl(11deg 59% 94%);
+
+  --success: hsl(120deg 25% 33%);
+  --success-subtle: hsl(120deg 21% 94%);
+
+  --pending: hsl(40deg 69% 32%);
+  --pending-subtle: hsl(42deg 56% 93%);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     /* Canvas & Elevation */
-    --bg: #1c1a18;         /* Slightly deeper dark for better contrast */
-    --surface: #272421;    /* Elevated card surface */
-    --surface-hover: #322e2a;
-    --text: #e9e4de;
-    --border: #3d3832;
-    --muted: #a89f95;
+    --bg: hsl(30deg 8% 10%);         /* Slightly deeper dark for better contrast */
+    --surface: hsl(30deg 8% 14%);    /* Elevated card surface */
+    --surface-hover: hsl(30deg 9% 18%);
+    --text: hsl(33deg 20% 89%);
+    --border: hsl(33deg 10% 22%);
+    --muted: hsl(32deg 10% 62%);
 
     /* Brand & Accents */
-    --accent: #6cc4ba;
-    --accent-subtle: #1c3330;
+    --accent: hsl(173deg 43% 60%);
+    --accent-subtle: hsl(172deg 29% 15%);
 
     /* Status Tokens */
-    --danger: #e08d78;
-    --danger-subtle: #3a221c;
+    --danger: hsl(12deg 63% 67%);
+    --danger-subtle: hsl(12deg 35% 17%);
 
-    --success: #8fbf8f;
-    --success-subtle: #1e2b1e;
+    --success: hsl(120deg 27% 65%);
+    --success-subtle: hsl(120deg 18% 14%);
 
-    --pending: #d9b264;
-    --pending-subtle: #332a18;
+    --pending: hsl(40deg 61% 62%);
+    --pending-subtle: hsl(40deg 36% 15%);
   }
 }
 :root[data-theme="dark"] {
     /* Canvas & Elevation */
-    --bg: #1c1a18;         /* Slightly deeper dark for better contrast */
-    --surface: #272421;    /* Elevated card surface */
-    --surface-hover: #322e2a;
-    --text: #e9e4de;
-    --border: #3d3832;
-    --muted: #a89f95;
+    --bg: hsl(30deg 8% 10%);         /* Slightly deeper dark for better contrast */
+    --surface: hsl(30deg 8% 14%);    /* Elevated card surface */
+    --surface-hover: hsl(30deg 9% 18%);
+    --text: hsl(33deg 20% 89%);
+    --border: hsl(33deg 10% 22%);
+    --muted: hsl(32deg 10% 62%);
 
     /* Brand & Accents */
-    --accent: #6cc4ba;
-    --accent-subtle: #1c3330;
+    --accent: hsl(173deg 43% 60%);
+    --accent-subtle: hsl(172deg 29% 15%);
 
     /* Status Tokens */
-    --danger: #e08d78;
-    --danger-subtle: #3a221c;
+    --danger: hsl(12deg 63% 67%);
+    --danger-subtle: hsl(12deg 35% 17%);
 
-    --success: #8fbf8f;
-    --success-subtle: #1e2b1e;
+    --success: hsl(120deg 27% 65%);
+    --success-subtle: hsl(120deg 18% 14%);
 
-    --pending: #d9b264;
-    --pending-subtle: #332a18;
+    --pending: hsl(40deg 61% 62%);
+    --pending-subtle: hsl(40deg 36% 15%);
 }
 
 /* color-scheme itself (native form control/scrollbar theming) follows the
@@ -97,16 +97,91 @@ body {
   color: var(--text);
 }
 
-/* Mobile-first: header stacks (brand, then nav, then the logout form).
-   Widened into a single row once there's room for all three side by side. */
+/* App-wide "something is happening" indicator - see scheduling.js, which
+   toggles .active on this for the duration of every htmx request. Fixed at
+   the very top of the viewport rather than inside any one page's layout,
+   since it's meant to read as "the app is working," not "this section is."
+   Invisible and inert (opacity 0, pointer-events none) until then, so it
+   never affects layout or intercepts a click on what's underneath it. */
+#htmx-progress-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 1000;
+  transition: opacity 0.2s ease;
+}
+
+#htmx-progress-bar.active {
+  opacity: 1;
+}
+
+/* A single "comet" that slides continuously left to right and loops - the
+   standard indeterminate-progress trick (nprogress, Material's linear
+   progress). Only ever animates transform, and never changes direction or
+   its transform-origin mid-flight (an earlier version scaled from the left
+   then flipped to scale from the right at the midpoint, which was the
+   "clunky in the middle" stutter - a transform-origin change can't be
+   smoothly interpolated, so it always looked like a jump no matter the
+   easing), so there's nothing for the eye to catch on. */
+#htmx-progress-bar::before {
+  content: "";
+  display: block;
+  height: 100%;
+  width: 40%;
+  background: var(--accent-solid);
+  border-radius: 999px;
+  transform: translateX(-100%);
+}
+
+#htmx-progress-bar.active::before {
+  animation: htmx-progress-sweep 1.3s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes htmx-progress-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(350%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #htmx-progress-bar.active::before {
+    animation: none;
+    width: 100%;
+    transform: translateX(0);
+  }
+}
+
+/* Two clusters, not four loose items: .site-primary (brand + nav) and
+   .site-actions (theme toggle + account + logout) each read as one group,
+   so what widens into "brand/nav on the left, account stuff on the right"
+   at desktop width doesn't depend on how much text happens to be in the
+   person's name or the logout button - the two clusters are what
+   space-between balances, not their contents individually. Mobile-first:
+   the two clusters stack (each wrapping internally if it needs to);
+   widened into a single row once there's room. */
 header.site {
   display: flex;
   flex-direction: column;
-  align-items: stretch;
   gap: 0.6rem;
   padding: 0.75rem 1rem;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
+}
+
+.site-primary,
+.site-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
 }
 
 header.site nav {
@@ -182,6 +257,25 @@ header.site form {
   gap: 0.5rem;
 }
 
+/* The signed-in person's name, with their PCO organization (church) name
+   above it when known (see Session.OrganizationName - it's not always
+   available) - stacked rather than run together inline so it reads as
+   "which church, which person" at a glance instead of one long string. */
+.account {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.account-org {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.account-person {
+  font-size: 0.9rem;
+}
+
 /* Icons follow the surrounding button/text color (currentColor) rather
    than carrying their own, so they never need theme-specific handling. */
 .icon {
@@ -203,7 +297,6 @@ header.site form {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  align-self: flex-start;
   padding: 0.4rem;
   min-width: 2.25rem;
 }
@@ -243,6 +336,10 @@ header.site form {
     align-items: center;
     justify-content: space-between;
     padding: 0.75rem 1.5rem;
+  }
+
+  .site-actions {
+    justify-content: flex-end;
   }
 }
 
@@ -444,11 +541,16 @@ button {
 
 button:hover {
   background: var(--surface-hover);
-  border-color: color-mix(in srgb, var(--text) 25%, var(--border));
+  border-color: color-mix(in srgb, var(--text) 8%, var(--border));
 }
 
 button:active {
-  background: color-mix(in srgb, var(--text) 14%, var(--surface));
+  background: color-mix(in srgb, var(--text) 4%, var(--surface));
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 /* A <button>-shaped <a> - link-driven actions (the sign-in link, the
@@ -474,7 +576,7 @@ button:active {
 
 .button:hover {
   background: var(--surface-hover);
-  border-color: color-mix(in srgb, var(--text) 25%, var(--border));
+  border-color: color-mix(in srgb, var(--text) 8%, var(--border));
 }
 
 /* The one or two clearest calls to action per page (Publish, the top-of-
@@ -520,6 +622,26 @@ button.danger:hover {
   border-radius: 6px;
   padding: 0.75rem 1rem;
   margin-block: 0.75rem;
+}
+
+/* The "this plan's already built in Planning Center - import it?" prompt
+   (see SetBuilderBody/RosterBuilderBody) - same tinted-banner treatment as
+   .warning, but on the accent tokens rather than danger: this is an
+   invitation, not an alert. */
+.import-banner {
+  background: var(--accent-subtle);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  margin-block: 0.75rem;
+}
+
+.import-banner p {
+  margin-top: 0;
+}
+
+.import-banner form {
+  margin: 0;
 }
 
 .error,
@@ -648,6 +770,15 @@ button.danger:hover {
 .badge.status-todo {
   background: var(--accent-subtle);
   color: var(--accent);
+}
+
+/* Theme/scripture/idea tags (see song_tags.go) on the set builder's
+   candidate list - deliberately muted rather than accent-colored like the
+   opener/response role badges beside them, since a song can carry several
+   of these and they're descriptive, not a set-builder signal. */
+.tag-badge {
+  background: color-mix(in srgb, var(--text) 8%, var(--surface));
+  color: var(--muted);
 }
 
 /* The Build page's plan list tags each row with two independent statuses
@@ -929,6 +1060,29 @@ tr.drag-over-top {
     width: auto;
     min-width: 16rem;
   }
+}
+
+/* The Build page's plan search - an input + Search button side by side,
+   submitted as a real form (see build.templ) rather than searched live on
+   type, so unlike #candidate-search this needs to flex alongside a
+   sibling button instead of sitting alone. */
+.search-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.search-bar input {
+  flex: 1 1 12rem;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-block: 1rem;
 }
 
 .sign-in {

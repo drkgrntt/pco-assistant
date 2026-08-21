@@ -16,17 +16,34 @@ import (
 
 // --- Person relationships & position preferences ---------------------------
 
+// personRelationshipTypeLabelMap builds a relationship_type code -> label
+// lookup from ListPersonRelationshipTypes, for resolving a relationship's
+// stored type code back to its display label (see PersonRelationshipsTable).
+func personRelationshipTypeLabelMap(types []scheduling.PersonRelationshipType) map[string]string {
+	labels := make(map[string]string, len(types))
+	for _, t := range types {
+		labels[t.Code] = t.Label
+	}
+	return labels
+}
+
 func (sc *SchedulingController) PersonRelationshipsPage(c *fiber.Ctx) error {
 	_, personName := middleware.CurrentPerson(c)
+	orgName := middleware.CurrentOrganization(c)
+
+	relationshipTypes, err := sc.store.ListPersonRelationshipTypes(c.Context())
+	if err != nil {
+		return render(c, views.PersonRelationships(personName, orgName, nil, nil, nil, nil, err.Error()))
+	}
 
 	relationships, err := sc.store.ListPersonRelationships(c.Context(), "")
 	if err != nil {
-		return render(c, views.PersonRelationships(personName, relationships, nil, err.Error()))
+		return render(c, views.PersonRelationships(personName, orgName, nil, relationshipTypes, nil, personRelationshipTypeLabelMap(relationshipTypes), err.Error()))
 	}
 
 	names := personNameMapForIDs(middleware.RequestContext(c), relationshipPersonIDs(relationships))
 
-	return render(c, views.PersonRelationships(personName, relationships, names, ""))
+	return render(c, views.PersonRelationships(personName, orgName, relationships, relationshipTypes, names, personRelationshipTypeLabelMap(relationshipTypes), ""))
 }
 
 func (sc *SchedulingController) CreatePersonRelationship(c *fiber.Ctx) error {
@@ -50,8 +67,9 @@ func (sc *SchedulingController) CreatePersonRelationship(c *fiber.Ctx) error {
 	}
 
 	names := personNameMapForIDs(middleware.RequestContext(c), relationshipPersonIDs(relationships))
+	relationshipTypes, _ := sc.store.ListPersonRelationshipTypes(c.Context())
 
-	return render(c, views.PersonRelationshipsTable(relationships, names, errMsg))
+	return render(c, views.PersonRelationshipsTable(relationships, names, personRelationshipTypeLabelMap(relationshipTypes), errMsg))
 }
 
 func (sc *SchedulingController) DeletePersonRelationship(c *fiber.Ctx) error {
@@ -69,8 +87,9 @@ func (sc *SchedulingController) DeletePersonRelationship(c *fiber.Ctx) error {
 	}
 
 	names := personNameMapForIDs(middleware.RequestContext(c), relationshipPersonIDs(relationships))
+	relationshipTypes, _ := sc.store.ListPersonRelationshipTypes(c.Context())
 
-	return render(c, views.PersonRelationshipsTable(relationships, names, errMsg))
+	return render(c, views.PersonRelationshipsTable(relationships, names, personRelationshipTypeLabelMap(relationshipTypes), errMsg))
 }
 
 // relationshipPersonIDs collects every distinct person id referenced by a
@@ -109,11 +128,12 @@ func personNameMapForIDs(ctx context.Context, ids []string) map[string]string {
 
 func (sc *SchedulingController) PositionPreferencesPage(c *fiber.Ctx) error {
 	_, personName := middleware.CurrentPerson(c)
+	orgName := middleware.CurrentOrganization(c)
 
 	ctx := middleware.RequestContext(c)
 	serviceTypes, err := pco.GetServiceTypes(ctx, nil)
 	if err != nil {
-		return render(c, views.PositionPreferences(personName, nil, nil, "", err.Error()))
+		return render(c, views.PositionPreferences(personName, orgName, nil, nil, "", err.Error()))
 	}
 
 	serviceTypeID := c.Query("service_type_id")
@@ -127,7 +147,7 @@ func (sc *SchedulingController) PositionPreferencesPage(c *fiber.Ctx) error {
 		errMsg = "loading teams from Planning Center: " + err.Error()
 	}
 
-	return render(c, views.PositionPreferences(personName, serviceTypes.Data, positionGroups, serviceTypeID, errMsg))
+	return render(c, views.PositionPreferences(personName, orgName, serviceTypes.Data, positionGroups, serviceTypeID, errMsg))
 }
 
 // fetchTeamPositions lists every position across every team on a service

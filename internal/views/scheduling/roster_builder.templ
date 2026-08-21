@@ -23,9 +23,29 @@ templ RosterBuilderBody(data RosterBuilderData) {
 			<div class="warning">{ msg }</div>
 		}
 
+		if data.ImportableAssignmentCount > 0 {
+			<div class="import-banner">
+				<p>
+					{ fmt.Sprintf("Looks like this service is already planned in Planning Center - it has %d position(s) filled.", data.ImportableAssignmentCount) }
+					Want to import them here so you can reassign or remove people?
+				</p>
+				<form
+					hx-post={ fmt.Sprintf("/scheduling/rosters/%s/%s/revert", data.ServiceTypeID, data.PlanID) }
+					hx-target="#roster-builder-body"
+					hx-swap="outerHTML"
+				>
+					<button type="submit" class="primary">Import from Planning Center</button>
+				</form>
+			</div>
+		}
+
 		<h2>Positions</h2>
 		if len(data.Positions) == 0 {
-			<p class="muted">Nothing needed yet - Planning Center has no open positions configured for this plan.</p>
+			if data.ImportableAssignmentCount > 0 {
+				<p class="muted">Planning Center has no open positions left on this plan - everything's filled (see above).</p>
+			} else {
+				<p class="muted">Nothing needed yet - Planning Center has no open positions configured for this plan.</p>
+			}
 		}
 		for _, pos := range data.Positions {
 			<div class="position-group">

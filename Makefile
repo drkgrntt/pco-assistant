@@ -23,6 +23,15 @@ clean:
 	@echo "Cleaning..."
 	@rm -f main
 
+# Wipe the local database and rebuild it from migrations - see cmd/dbreset.
+# Interactive (asks for confirmation); pass ARGS=-yes to skip that.
+db-reset:
+	@go run ./cmd/dbreset $(ARGS)
+
+# Populate the local database with example scheduling data - see cmd/dbseed.
+db-seed:
+	@go run ./cmd/dbseed
+
 # Live Reload
 watch:
 	@if command -v air > /dev/null; then \
@@ -40,4 +49,4 @@ watch:
             fi; \
         fi
 
-.PHONY: all build run test clean watch
+.PHONY: all build run test clean watch db-reset db-seed

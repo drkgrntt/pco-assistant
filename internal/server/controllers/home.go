@@ -19,5 +19,5 @@ func (hc *HomeController) RegisterRoutes(router fiber.Router) {
 
 func (hc *HomeController) Index(c *fiber.Ctx) error {
 	_, personName := middleware.CurrentPerson(c)
-	return render(c, views.Home(personName))
+	return render(c, views.Home(personName, middleware.CurrentOrganization(c)))
 }

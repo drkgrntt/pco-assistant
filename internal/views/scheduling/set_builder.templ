@@ -31,6 +31,22 @@ templ SetBuilderBody(data SetBuilderData) {
 			<div class="warning">{ msg }</div>
 		}
 
+		if data.ImportableSongCount > 0 {
+			<div class="import-banner">
+				<p>
+					{ fmt.Sprintf("Looks like this service is already planned in Planning Center - it has %d song(s).", data.ImportableSongCount) }
+					Want to import them here so you can reorder, replace, or tag them?
+				</p>
+				<form
+					hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/revert", data.ServiceTypeID, data.PlanID) }
+					hx-target="#set-builder-body"
+					hx-swap="outerHTML"
+				>
+					<button type="submit" class="primary">Import from Planning Center</button>
+				</form>
+			</div>
+		}
+
 		<h2>Order of service</h2>
 		<p class="muted">
 			Everything Planning Center already has for this plan, with your songs
@@ -212,19 +228,22 @@ templ SetBuilderBody(data SetBuilderData) {
 		<input
 			type="text"
 			id="candidate-search"
-			placeholder="Search songs..."
+			placeholder="Search songs or tags..."
 			autocomplete="off"
 			oninput="filterCandidates()"
 		/>
 		<ul id="set-candidates" class="candidate-list">
 			for _, cand := range data.Candidates {
-				<li class="candidate-row" data-title={ cand.Title } data-roles={ cand.RolesAttr }>
+				<li class="candidate-row" data-title={ cand.Title } data-roles={ cand.RolesAttr } data-tags={ cand.TagsAttr }>
 					<span>{ cand.Title }</span>
 					if cand.IsOpener {
 						<span class="badge">Opener</span>
 					}
 					if cand.IsResponse {
 						<span class="badge">Response</span>
+					}
+					for _, tag := range cand.Tags {
+						<span class="badge tag-badge" title={ tag.Category }>{ tag.Value }</span>
 					}
 					if len(cand.ConflictTitles) > 0 {
 						<span class="conflict-badge">⚠ avoid pairing with { strings.Join(cand.ConflictTitles, ", ") }</span>

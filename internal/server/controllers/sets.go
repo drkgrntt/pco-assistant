@@ -19,14 +19,31 @@ import (
 
 // --- Song roles (opener / response tagging) -------------------------------
 
+// songRoleTypeLabelMap builds a role code -> label lookup from
+// ListSongRoleTypes, for resolving a tag's stored role code back to its
+// display label (see SongRolesTable).
+func songRoleTypeLabelMap(types []scheduling.SongRoleType) map[string]string {
+	labels := make(map[string]string, len(types))
+	for _, t := range types {
+		labels[t.Code] = t.Label
+	}
+	return labels
+}
+
 func (sc *SchedulingController) SongRolesPage(c *fiber.Ctx) error {
 	_, personName := middleware.CurrentPerson(c)
+	orgName := middleware.CurrentOrganization(c)
 
 	songs, songsErr := fetchAllSongs(middleware.RequestContext(c))
 
+	roleTypes, err := sc.store.ListSongRoleTypes(c.Context())
+	if err != nil {
+		return render(c, views.SongRoles(personName, orgName, songs, nil, nil, songTitleMap(songs), nil, err.Error()))
+	}
+
 	roles, err := sc.store.ListSongRoles(c.Context(), "", "")
 	if err != nil {
-		return render(c, views.SongRoles(personName, songs, nil, songTitleMap(songs), err.Error()))
+		return render(c, views.SongRoles(personName, orgName, songs, nil, roleTypes, songTitleMap(songs), songRoleTypeLabelMap(roleTypes), err.Error()))
 	}
 
 	errMsg := ""
@@ -34,7 +51,7 @@ func (sc *SchedulingController) SongRolesPage(c *fiber.Ctx) error {
 		errMsg = "loading songs from Planning Center: " + songsErr.Error()
 	}
 
-	return render(c, views.SongRoles(personName, songs, roles, songTitleMap(songs), errMsg))
+	return render(c, views.SongRoles(personName, orgName, songs, roles, roleTypes, songTitleMap(songs), songRoleTypeLabelMap(roleTypes), errMsg))
 }
 
 func (sc *SchedulingController) CreateSongRole(c *fiber.Ctx) error {
@@ -58,8 +75,9 @@ func (sc *SchedulingController) CreateSongRole(c *fiber.Ctx) error {
 	}
 
 	songs, _ := fetchAllSongs(middleware.RequestContext(c))
+	roleTypes, _ := sc.store.ListSongRoleTypes(c.Context())
 
-	return render(c, views.SongRolesTable(roles, songTitleMap(songs), errMsg))
+	return render(c, views.SongRolesTable(roles, songTitleMap(songs), songRoleTypeLabelMap(roleTypes), errMsg))
 }
 
 func (sc *SchedulingController) DeleteSongRole(c *fiber.Ctx) error {
@@ -77,8 +95,9 @@ func (sc *SchedulingController) DeleteSongRole(c *fiber.Ctx) error {
 	}
 
 	songs, _ := fetchAllSongs(middleware.RequestContext(c))
+	roleTypes, _ := sc.store.ListSongRoleTypes(c.Context())
 
-	return render(c, views.SongRolesTable(roles, songTitleMap(songs), errMsg))
+	return render(c, views.SongRolesTable(roles, songTitleMap(songs), songRoleTypeLabelMap(roleTypes), errMsg))
 }
 
 // --- Set builder ------------------------------------------------------------
@@ -506,6 +525,14 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, service
 	openers := songIDSet(openerRoles)
 	responses := songIDSet(responseRoles)
 
+	// Best-effort, same as titles/roles above: tags are a search/display
+	// nicety on the candidate list, so a lookup failure just means no tag
+	// badges/search text rather than failing the whole page.
+	allTags, _ := sc.store.ListSongTags(ctx, "", "")
+	tagCategories, _ := sc.store.ListSongTagCategories(ctx)
+	tagsBySong := songTagsBySong(allTags)
+	tagCategoryLabels := songTagCategoryLabelMap(tagCategories)
+
 	inSet := make(map[string]bool, len(setSongs))
 	for _, ss := range setSongs {
 		inSet[ss.SongID] = true
@@ -543,6 +570,20 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, service
 		})
 		merged := mergeServiceOrder(pcoItems.Data, setSongs)
 		data.ServiceOrder = renderServiceOrder(merged, titles, openers, responses)
+
+		// ImportableSongCount only matters the first time this set is opened:
+		// once it has anything of its own (active or tombstoned - see
+		// data.PendingDeleteCount), every song-linked item is either already
+		// one of setSongs or was deliberately removed, so there's nothing
+		// left to offer importing. Reuses pcoItems rather than a fresh PCO
+		// call, since ServiceOrder just fetched the exact same list.
+		if len(setSongs) == 0 && data.PendingDeleteCount == 0 {
+			for _, item := range pcoItems.Data {
+				if item.Attributes.ItemType == pco.ItemTypeSong {
+					data.ImportableSongCount++
+				}
+			}
+		}
 	}
 
 	suggestions, err := sc.store.Recommendations(ctx, set.ID)
@@ -602,6 +643,16 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, service
 			conflictTitles = append(conflictTitles, titleOrID(titles, conflictSongID))
 		}
 
+		var tagViews []views.SongTagView
+		var tagValues []string
+		for _, tag := range tagsBySong[song.ID] {
+			tagViews = append(tagViews, views.SongTagView{
+				Category: titleOrID(tagCategoryLabels, tag.Category),
+				Value:    tag.Value,
+			})
+			tagValues = append(tagValues, strings.ToLower(tag.Value))
+		}
+
 		data.Candidates = append(data.Candidates, views.CandidateSongView{
 			SongID:           song.ID,
 			Title:            song.Attributes.Title,
@@ -610,6 +661,8 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, service
 			ConflictTitles:   conflictTitles,
 			RecentlyRepeated: repeated[song.ID],
 			RolesAttr:        strings.Join(roles, " "),
+			Tags:             tagViews,
+			TagsAttr:         strings.Join(tagValues, " "),
 		})
 	}
 
@@ -821,6 +874,10 @@ func songIDSet(roles []scheduling.SongRole) map[string]bool {
 	return set
 }
 
+// titleOrID looks up id in a string->string map, falling back to id itself
+// when there's no entry - originally just for song titles, but the same
+// "resolved label, or the raw code if it doesn't resolve" shape fits any
+// code->label map, e.g. tag category labels above.
 func titleOrID(titles map[string]string, id string) string {
 	if title, ok := titles[id]; ok {
 		return title

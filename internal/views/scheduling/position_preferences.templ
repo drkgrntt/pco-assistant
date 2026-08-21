@@ -8,8 +8,8 @@ import (
 	"pco-assistant/internal/views"
 )
 
-templ PositionPreferences(personName string, serviceTypes []pco.ServiceTypeData, positionGroups []PositionGroup, selectedServiceTypeID, errMsg string) {
-	@views.Layout("Position Preferences", personName) {
+templ PositionPreferences(personName, organizationName string, serviceTypes []pco.ServiceTypeData, positionGroups []PositionGroup, selectedServiceTypeID, errMsg string) {
+	@views.Layout("Position Preferences", personName, organizationName) {
 		<h1>Position Preferences</h1>
 		<p class="muted">Set how often someone wants to serve in a position - Planning Center's own per-position scheduling preference ("every other week," "once a month," etc.), so it's respected everywhere in Planning Center, not just here.</p>
 		<form class="inline" method="get">
@@ -121,7 +121,7 @@ templ PositionAssignmentsFragment(rows []PreferenceRow, teamID, teamPositionID s
 				hx-post="/scheduling/position-preferences"
 				hx-target="#position-assignments"
 				hx-swap="outerHTML"
-				hx-on::after-request="if(event.detail.successful) resetSetupForm(this)"
+				hx-on::after-request="if(event.detail.successful && event.detail.elt === this) resetSetupForm(this)"
 			>
 				<input type="hidden" name="team_id" value={ teamID }/>
 				<input type="hidden" name="team_position_id" value={ teamPositionID }/>

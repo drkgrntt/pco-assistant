@@ -10,8 +10,8 @@ import (
 	"pco-assistant/internal/views"
 )
 
-templ Relationships(personName string, songs []pco.SongData, relationships []scheduling.SongRelationship, songTitles map[string]string, errMsg string) {
-	@views.Layout("Song Relationships", personName) {
+templ Relationships(personName, organizationName string, songs []pco.SongData, relationships []scheduling.SongRelationship, relationshipTypes []scheduling.SongRelationshipType, songTitles map[string]string, typeLabels map[string]string, errMsg string) {
+	@views.Layout("Song Relationships", personName, organizationName) {
 		<h1>Song Relationships</h1>
 		<p class="muted">Relate songs to each other - e.g. "flows well lyrically" or "same theme" - picking from your Planning Center song library.</p>
 		<form
@@ -20,7 +20,7 @@ templ Relationships(personName string, songs []pco.SongData, relationships []sch
 			hx-post="/scheduling/song-relationships"
 			hx-target="#relationships-table"
 			hx-swap="outerHTML"
-			hx-on::after-request="if(event.detail.successful) resetSetupForm(this)"
+			hx-on::after-request="if(event.detail.successful && event.detail.elt === this) resetSetupForm(this)"
 		>
 			<input type="hidden" name="id"/>
 			<label>
@@ -44,9 +44,9 @@ templ Relationships(personName string, songs []pco.SongData, relationships []sch
 			<label>
 				Relationship
 				<select name="relationship_type">
-					<option value="flows_well">Flows well</option>
-					<option value="same_theme">Same theme</option>
-					<option value="avoid_pairing">Avoid pairing</option>
+					for _, t := range relationshipTypes {
+						<option value={ t.Code }>{ t.Label }</option>
+					}
 				</select>
 			</label>
 			<label>
@@ -56,7 +56,7 @@ templ Relationships(personName string, songs []pco.SongData, relationships []sch
 			<button type="submit" class="primary">Add</button>
 			<button type="button" class="cancel-edit" onclick="cancelSetupEdit(this)" hidden>Cancel</button>
 		</form>
-		@RelationshipsTable(relationships, songTitles, errMsg)
+		@RelationshipsTable(relationships, songTitles, typeLabels, errMsg)
 	}
 }
 
@@ -67,8 +67,12 @@ templ Relationships(personName string, songs []pco.SongData, relationships []sch
 // resolves a relationship's raw PCO song IDs back to display titles (see
 // songTitleMap in the scheduling controller); an ID missing from the map
 // (song deleted/hidden in PCO since the relationship was created) falls
-// back to showing the raw ID.
-templ RelationshipsTable(relationships []scheduling.SongRelationship, songTitles map[string]string, errMsg string) {
+// back to showing the raw ID. typeLabels resolves relationship_type codes
+// to their song_relationship_types label the same way (see
+// songRelationshipTypeLabelMap in the scheduling controller) - a code
+// removed from that table since the relationship was created falls back to
+// showing the raw code.
+templ RelationshipsTable(relationships []scheduling.SongRelationship, songTitles map[string]string, typeLabels map[string]string, errMsg string) {
 	<div id="relationships-table">
 		if errMsg != "" {
 			<p class="error">{ errMsg }</p>
@@ -101,7 +105,7 @@ templ RelationshipsTable(relationships []scheduling.SongRelationship, songTitles
 									{ rel.SongIDB }
 								}
 							</td>
-							<td>{ rel.RelationshipType }</td>
+							<td>{ displayNameOrID(typeLabels, rel.RelationshipType) }</td>
 							<td>{ rel.Notes }</td>
 							<td>
 								<button

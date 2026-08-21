@@ -9,6 +9,7 @@ import (
 	"pco-assistant/internal/server/middleware"
 	"pco-assistant/internal/views"
 
+	pco "github.com/drkgrntt/go-pco"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -76,7 +77,15 @@ func (ac *AuthController) Callback(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadGateway).SendString(err.Error())
 	}
 
-	token, err := ac.store.CreateSession(c.Context(), personID, personName, tokenResult.AccessToken, tokenResult.RefreshToken, tokenResult.ExpiresAt)
+	// Best-effort: the org name is a header nicety (see layout.templ), not
+	// something sign-in should fail over - a lookup failure here just means
+	// it shows nothing next to the person's name instead of blocking login.
+	organizationName := ""
+	if org, err := pco.GetOrganization(pco.WithAccessToken(c.Context(), tokenResult.AccessToken)); err == nil {
+		organizationName = org.Data.Attributes.Name
+	}
+
+	token, err := ac.store.CreateSession(c.Context(), personID, personName, organizationName, tokenResult.AccessToken, tokenResult.RefreshToken, tokenResult.ExpiresAt)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
 	}
