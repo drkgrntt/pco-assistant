@@ -10,18 +10,50 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-// Relationship types are free text (validated here, not via a DB CHECK) so
-// new ones don't need a migration. These are just a starting set.
+// These are the relationship_type codes the candidate-suggestion algorithm
+// (see sets.go) gives special meaning to - flows_well/same_theme boost a
+// song as a suggested next pick, avoid_pairing flags a conflict. They're
+// seeded into song_relationship_types by migration 00015, but that table is
+// the source of truth for which codes actually exist: an admin can add
+// more (e.g. "same_key") straight into the DB and they'll show up as a
+// selectable, displayable relationship type with no special algorithmic
+// behavior, same as any code the algorithm doesn't recognize.
 const (
 	RelationshipFlowsWell    = "flows_well"
 	RelationshipSameTheme    = "same_theme"
 	RelationshipAvoidPairing = "avoid_pairing"
 )
 
-var validRelationshipTypes = map[string]bool{
-	RelationshipFlowsWell:    true,
-	RelationshipSameTheme:    true,
-	RelationshipAvoidPairing: true,
+type SongRelationshipType struct {
+	Code      string `json:"code"`
+	Label     string `json:"label"`
+	SortOrder int    `json:"sort_order"`
+}
+
+// ListSongRelationshipTypes returns every selectable relationship type,
+// ordered for display in the picker - add a row to song_relationship_types
+// to make a new one available, no code change needed.
+func (s *Store) ListSongRelationshipTypes(ctx context.Context) ([]SongRelationshipType, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT code, label, sort_order
+		FROM song_relationship_types
+		ORDER BY sort_order, label
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	types := []SongRelationshipType{}
+	for rows.Next() {
+		var t SongRelationshipType
+		if err := rows.Scan(&t.Code, &t.Label, &t.SortOrder); err != nil {
+			return nil, err
+		}
+		types = append(types, t)
+	}
+
+	return types, rows.Err()
 }
 
 type SongRelationship struct {
@@ -52,9 +84,6 @@ func (s *Store) CreateSongRelationship(ctx context.Context, params CreateSongRel
 	if params.SongIDA == params.SongIDB {
 		return SongRelationship{}, errors.New("song_id_a and song_id_b must be different songs")
 	}
-	if !validRelationshipTypes[params.RelationshipType] {
-		return SongRelationship{}, fmt.Errorf("unknown relationship_type %q", params.RelationshipType)
-	}
 
 	// Store the pair in a canonical order (lexicographically smaller ID
 	// first). A relationship has no inherent direction - "A flows well
@@ -79,6 +108,13 @@ func (s *Store) CreateSongRelationship(ctx context.Context, params CreateSongRel
 	if errors.Is(err, sql.ErrNoRows) {
 		return SongRelationship{}, fmt.Errorf("that relationship already exists")
 	}
+	// relationship_type references song_relationship_types (see migration
+	// 00015) - a code that isn't a row there fails as a foreign key
+	// violation rather than a Go-side map lookup now.
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23503" {
+		return SongRelationship{}, fmt.Errorf("unknown relationship_type %q", params.RelationshipType)
+	}
 	if err != nil {
 		return SongRelationship{}, err
 	}
@@ -98,9 +134,6 @@ func (s *Store) UpdateSongRelationship(ctx context.Context, id int64, params Cre
 	}
 	if params.SongIDA == params.SongIDB {
 		return SongRelationship{}, errors.New("song_id_a and song_id_b must be different songs")
-	}
-	if !validRelationshipTypes[params.RelationshipType] {
-		return SongRelationship{}, fmt.Errorf("unknown relationship_type %q", params.RelationshipType)
 	}
 
 	songIDA, songIDB := params.SongIDA, params.SongIDB
@@ -123,6 +156,9 @@ func (s *Store) UpdateSongRelationship(ctx context.Context, id int64, params Cre
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 		return SongRelationship{}, fmt.Errorf("that relationship already exists")
+	}
+	if errors.As(err, &pgErr) && pgErr.Code == "23503" {
+		return SongRelationship{}, fmt.Errorf("unknown relationship_type %q", params.RelationshipType)
 	}
 	if err != nil {
 		return SongRelationship{}, err

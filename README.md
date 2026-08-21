@@ -52,28 +52,15 @@ Mobile-first, installable as a PWA, with light/dark theming.
   [htmx](https://htmx.org/) - no client-side framework
 - PostgreSQL, migrated with [goose](https://github.com/pressly/goose)
   (embedded migrations, run automatically on startup)
-- [`go-pco`](https://github.com/drkgrntt/go-pco) - a local Planning Center
-  API SDK, pulled in via a `replace` directive against a sibling checkout
-  (see Setup below)
+- [`go-pco`](https://github.com/drkgrntt/go-pco) - a Planning Center API SDK,
+  its own separate repo/module, pulled in as a normal tagged dependency
 
 ## Setup
 
-1. **Clone `go-pco` as a sibling directory.** `go.mod` points at it via
-   `replace github.com/drkgrntt/go-pco => ../go-pco`, so it needs to live
-   next to this repo, e.g.:
-   ```
-   projects/
-     pco-assistant/   (this repo)
-     go-pco/
-   ```
-   If you use `air` for live reload, note that it only watches this repo -
-   editing files in `../go-pco` needs a touch inside this repo to trigger a
-   rebuild.
-
-2. **Postgres.** Create a database and set the `DB_*` variables below to
+1. **Postgres.** Create a database and set the `DB_*` variables below to
    point at it - migrations run automatically on startup.
 
-3. **Planning Center credentials.** You need two separate things from PCO:
+2. **Planning Center credentials.** You need two separate things from PCO:
    - A [Personal Access Token](https://api.planningcenteronline.com/oauth/applications)
      (`PCO_CLIENT_ID` / `PCO_SECRET`) - used for every server-side API call
    - An [OAuth application](https://api.planningcenteronline.com/oauth/applications)
@@ -81,7 +68,7 @@ Mobile-first, installable as a PWA, with light/dark theming.
      `http://localhost:8080/auth/pco/callback` - used for "Sign in with
      Planning Center"
 
-4. **`.env`**:
+3. **`.env`**:
    ```
    PORT=8080
    APP_ENV=local
@@ -132,3 +119,25 @@ Clean up binary from the last build:
 ```bash
 make clean
 ```
+
+Wipe the local database and rebuild it from migrations (asks for
+confirmation - pass `ARGS=-yes` to skip it):
+```bash
+make db-reset
+```
+
+Populate the local database with a small set of example scheduling data
+(song relationships, roles, tags, preferences, person relationships) - safe
+to run more than once, it won't create duplicates:
+```bash
+make db-seed
+```
+
+Both refuse to run unless `APP_ENV=local`, and can also be run directly with
+`go run ./cmd/dbreset` / `go run ./cmd/dbseed` (each accepts `-h` for its
+flags). Seeded rows reference songs/people by ID, and songs/people
+themselves live in Planning Center, not this database - if you've signed
+into the app in your browser at least once, `db-seed` borrows that
+session's PCO token to seed against a few of your org's real songs and
+people; otherwise it falls back to placeholder IDs that still exercise every
+page, just without a resolvable title/name.

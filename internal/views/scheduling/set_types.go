@@ -42,6 +42,15 @@ type SetBuilderData struct {
 	// its confirmation text.
 	UnpublishedCount   int
 	PendingDeleteCount int
+
+	// ImportableSongCount is how many of this plan's Planning Center songs
+	// aren't reflected here yet - always 0 once this set has anything of its
+	// own (see buildSetBuilderData), so it only ever fires for a plan that
+	// was already built out directly in Planning Center and never opened
+	// here before. Drives the "import from Planning Center" prompt in
+	// SetBuilderBody, so someone can start editing an already-planned
+	// service instead of just seeing it read-only.
+	ImportableSongCount int
 }
 
 type SetSongView struct {
@@ -118,6 +127,22 @@ type CandidateSongView struct {
 	// third time in a row.
 	RecentlyRepeated bool
 	RolesAttr        string
+	// Tags is this song's theme/scripture/idea tags (see song_tags.go), for
+	// display as badges. TagsAttr is the same tags' values, space-joined and
+	// lowercased, as a data attribute for the candidate list's client-side
+	// search - see filterCandidates in web/static/scheduling.js, which
+	// matches typed text against title or tags the same way RolesAttr
+	// already backs the opener/response filter buttons.
+	Tags     []SongTagView
+	TagsAttr string
+}
+
+// SongTagView is one tag on a candidate song, already resolved to its
+// display category label (see songTagCategoryLabelMap) rather than the raw
+// category code.
+type SongTagView struct {
+	Category string
+	Value    string
 }
 
 type SuggestionView struct {

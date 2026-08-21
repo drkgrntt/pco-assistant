@@ -8,8 +8,8 @@ import (
 	"pco-assistant/internal/views"
 )
 
-templ PersonRelationships(personName string, relationships []scheduling.PersonRelationship, personNames map[string]string, errMsg string) {
-	@views.Layout("Person Relationships", personName) {
+templ PersonRelationships(personName, organizationName string, relationships []scheduling.PersonRelationship, relationshipTypes []scheduling.PersonRelationshipType, personNames map[string]string, typeLabels map[string]string, errMsg string) {
+	@views.Layout("Person Relationships", personName, organizationName) {
 		<h1>Person Relationships</h1>
 		<p class="muted">Relate people to each other - "works well with," "mentorship," or "doesn't work well with" - searching your Planning Center people directory.</p>
 		<form
@@ -18,7 +18,7 @@ templ PersonRelationships(personName string, relationships []scheduling.PersonRe
 			hx-post="/scheduling/person-relationships"
 			hx-target="#person-relationships-table"
 			hx-swap="outerHTML"
-			hx-on::after-request="if(event.detail.successful) resetSetupForm(this)"
+			hx-on::after-request="if(event.detail.successful && event.detail.elt === this) resetSetupForm(this)"
 		>
 			<input type="hidden" name="id"/>
 			@PersonPickerField("Person A", "person_id_a", "a")
@@ -26,9 +26,9 @@ templ PersonRelationships(personName string, relationships []scheduling.PersonRe
 			<label>
 				Relationship
 				<select name="relationship_type">
-					<option value="works_well">Works well with</option>
-					<option value="mentorship">Mentorship (A mentors B)</option>
-					<option value="avoid_pairing">Doesn't work well with</option>
+					for _, t := range relationshipTypes {
+						<option value={ t.Code }>{ t.Label }</option>
+					}
 				</select>
 			</label>
 			<label>
@@ -38,14 +38,18 @@ templ PersonRelationships(personName string, relationships []scheduling.PersonRe
 			<button type="submit" class="primary">Add</button>
 			<button type="button" class="cancel-edit" onclick="cancelSetupEdit(this)" hidden>Cancel</button>
 		</form>
-		@PersonRelationshipsTable(relationships, personNames, errMsg)
+		@PersonRelationshipsTable(relationships, personNames, typeLabels, errMsg)
 	}
 }
 
 // PersonRelationshipsTable is both the initial-render fragment and the htmx
 // swap target (id="person-relationships-table") - see RelationshipsTable for
-// why errMsg lives inside it rather than the page around it.
-templ PersonRelationshipsTable(relationships []scheduling.PersonRelationship, personNames map[string]string, errMsg string) {
+// why errMsg lives inside it rather than the page around it. typeLabels
+// resolves relationship_type codes to their person_relationship_types label
+// (see personRelationshipTypeLabelMap in the scheduling controller) - a
+// code removed from that table since the relationship was created falls
+// back to showing the raw code.
+templ PersonRelationshipsTable(relationships []scheduling.PersonRelationship, personNames map[string]string, typeLabels map[string]string, errMsg string) {
 	<div id="person-relationships-table">
 		if errMsg != "" {
 			<p class="error">{ errMsg }</p>
@@ -78,7 +82,7 @@ templ PersonRelationshipsTable(relationships []scheduling.PersonRelationship, pe
 									{ rel.PersonIDB }
 								}
 							</td>
-							<td>{ rel.RelationshipType }</td>
+							<td>{ displayNameOrID(typeLabels, rel.RelationshipType) }</td>
 							<td>{ rel.Notes }</td>
 							<td>
 								<button

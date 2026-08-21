@@ -1,13 +1,15 @@
 package scheduling
 
 import (
+	"fmt"
+
 	pco "github.com/drkgrntt/go-pco"
 
 	"pco-assistant/internal/views"
 )
 
-templ Build(personName string, serviceTypes []pco.ServiceTypeData, selectedServiceTypeID string, initialPlans []PlanRow, errMsg string) {
-	@views.Layout("Build a Service", personName) {
+templ Build(personName, organizationName string, serviceTypes []pco.ServiceTypeData, selectedServiceTypeID string, initialPlans []PlanRow, page, totalPages int, errMsg string) {
+	@views.Layout("Build a Service", personName, organizationName) {
 		<h1>Build a Service</h1>
 		<p class="muted">Pick a service type, then an upcoming plan, to build its song lineup and fill its team - both on one page.</p>
 		<form class="inline" hx-get="/scheduling/build/plans" hx-target="#build-plans" hx-swap="outerHTML">
@@ -31,7 +33,7 @@ templ Build(personName string, serviceTypes []pco.ServiceTypeData, selectedServi
 		if errMsg != "" {
 			<p class="error">{ errMsg }</p>
 		}
-		@BuildPlansList(initialPlans, selectedServiceTypeID, "")
+		@BuildPlansList(initialPlans, selectedServiceTypeID, "", page, totalPages, "")
 	}
 }
 
@@ -41,37 +43,111 @@ templ Build(personName string, serviceTypes []pco.ServiceTypeData, selectedServi
 // status and its team status independently (see the scheduling
 // controller's planStatus/rosterStatus) - a plan can be fully planned on
 // one and still todo on the other.
-templ BuildPlansList(plans []PlanRow, serviceTypeID string, errMsg string) {
+//
+// Search and pagination both go through this one <form>'s own hx-get,
+// triggered only by a real submit (Enter, the Search button, or a
+// pagination button) - never by hx-get on an individual input/button of
+// its own. Per-element hx-get inside a form turned out to be unreliable
+// here for both the live-search-on-type box and the pagination buttons
+// (missing params in practice); routing everything through one native
+// form submission sidesteps that entirely, since a submitted form's own
+// fields - including whichever submit button was actually clicked, see
+// BuildPlansResults' page buttons below - are always included, no
+// per-element htmx wiring to get subtly wrong.
+templ BuildPlansList(plans []PlanRow, serviceTypeID, search string, page, totalPages int, errMsg string) {
 	<div id="build-plans">
 		if errMsg != "" {
 			<p class="error">{ errMsg }</p>
 		}
 		if serviceTypeID != "" {
-			<ul class="plan-list">
-				for _, plan := range plans {
-					<li>
-						<a href={ templ.URL("/scheduling/build/" + serviceTypeID + "/" + plan.ID) }>
-							if plan.Title != "" {
-								{ plan.Title }
-							} else {
-								{ plan.Dates }
-							}
-						</a>
-						if plan.Title != "" {
-							<span class="muted">{ plan.Dates }</span>
-						}
-						<span class="badge-label">Songs</span>
-						@planStatusBadge(plan.SetStatus)
-						<span class="badge-label">Team</span>
-						@planStatusBadge(plan.RosterStatus)
-					</li>
-				}
-				if len(plans) == 0 {
-					<li class="muted">No upcoming plans found.</li>
-				}
-			</ul>
+			<!--
+				Deliberately not class="inline" - that class flex-rows its
+				children (label+input+button, side by side) once the
+				viewport is wide enough, which is right for the multi-field
+				setup-page forms it was built for but wrong here: it would
+				squeeze #build-plans-results (the list) into a narrow column
+				beside the search box instead of stacking full-width below
+				it. This form only has a couple of small fields, so plain
+				block flow (search row, then the list beneath it) is what
+				we want.
+			-->
+			<form
+				hx-get="/scheduling/build/plans/search"
+				hx-target="#build-plans-results"
+				hx-swap="innerHTML"
+			>
+				<input type="hidden" name="service_type_id" value={ serviceTypeID }/>
+				<div class="search-bar">
+					<input
+						type="text"
+						id="build-plans-search"
+						placeholder="Search by plan title or date..."
+						autocomplete="off"
+						value={ search }
+						name="search"
+					/>
+					<button type="submit">Search</button>
+				</div>
+				<div id="build-plans-results">
+					@BuildPlansResults(plans, serviceTypeID, search, page, totalPages, "")
+				</div>
+			</form>
 		}
 	</div>
+}
+
+// BuildPlansResults is #build-plans-results' content - the plan list plus
+// pagination, re-rendered whenever BuildPlansList's <form> is submitted
+// (see its doc comment for why every trigger here is a real submit, not a
+// per-element hx-get). The Prev/Next buttons are plain submit buttons
+// named "page" - clicking one submits the enclosing form with that
+// button's own value included alongside every other field, exactly like
+// clicking Search does, just requesting a different page of the same
+// search instead of a fresh one.
+templ BuildPlansResults(plans []PlanRow, serviceTypeID, search string, page, totalPages int, errMsg string) {
+	if errMsg != "" {
+		<p class="error">{ errMsg }</p>
+	}
+	<ul class="plan-list">
+		for _, plan := range plans {
+			<li>
+				<a href={ templ.URL("/scheduling/build/" + serviceTypeID + "/" + plan.ID) }>
+					if plan.Title != "" {
+						{ plan.Title }
+					} else {
+						{ plan.Dates }
+					}
+				</a>
+				if plan.Title != "" {
+					<span class="muted">{ plan.Dates }</span>
+				}
+				<span class="badge-label">Songs</span>
+				@planStatusBadge(plan.SetStatus)
+				<span class="badge-label">Team</span>
+				@planStatusBadge(plan.RosterStatus)
+			</li>
+		}
+		if len(plans) == 0 {
+			<li class="muted">No upcoming plans found.</li>
+		}
+	</ul>
+	if totalPages > 1 {
+		<div class="pagination">
+			<button
+				type="submit"
+				name="page"
+				value={ fmt.Sprintf("%d", page-1) }
+				disabled?={ page <= 1 }
+			>&larr; Prev</button>
+			<span class="muted">{ fmt.Sprintf("Page %d of %d", page, totalPages) }</span>
+			<button
+				type="submit"
+				name="page"
+				value={ fmt.Sprintf("%d", page+1) }
+				disabled?={ page >= totalPages }
+			>Next &rarr;</button>
+		</div>
+	}
 }
 
 templ planStatusBadge(status string) {
@@ -90,8 +166,8 @@ templ planStatusBadge(status string) {
 // of two separate pages. Each section (@SetBuilderBody/@RosterBuilderBody)
 // is fully self-contained, including its own <h2> and its own htmx swap
 // target, so interacting with one never touches the other.
-templ BuildPlan(personName string, setData SetBuilderData, rosterData RosterBuilderData) {
-	@views.Layout("Build a Service", personName) {
+templ BuildPlan(personName, organizationName string, setData SetBuilderData, rosterData RosterBuilderData) {
+	@views.Layout("Build a Service", personName, organizationName) {
 		<h1>
 			if setData.PlanTitle != "" {
 				{ setData.PlanTitle }
@@ -104,7 +180,11 @@ templ BuildPlan(personName string, setData SetBuilderData, rosterData RosterBuil
 		if setData.PlanTitle != "" && setData.PlanDates != "" {
 			<p class="muted">{ setData.PlanDates }</p>
 		}
-		<p><a href="/scheduling/build">&larr; Choose a different plan</a></p>
+		<p>
+			<a href="/scheduling/build">&larr; Choose a different plan</a>
+			<span class="muted">·</span>
+			<a href={ templ.URL(pcoPlanURL(setData.PlanID)) } target="_blank" rel="noopener">Open in Planning Center ↗</a>
+		</p>
 		@SetBuilderBody(setData)
 		<div class="builder-section-divider"></div>
 		@RosterBuilderBody(rosterData)

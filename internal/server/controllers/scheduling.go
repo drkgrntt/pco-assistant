@@ -67,6 +67,49 @@ func songTitleMap(songs []pco.SongData) map[string]string {
 	return titles
 }
 
+// songRelationshipTypeLabelMap builds a relationship_type code -> label
+// lookup from ListSongRelationshipTypes, for resolving a relationship's
+// stored type code back to its display label (see RelationshipsTable).
+func songRelationshipTypeLabelMap(types []scheduling.SongRelationshipType) map[string]string {
+	labels := make(map[string]string, len(types))
+	for _, t := range types {
+		labels[t.Code] = t.Label
+	}
+	return labels
+}
+
+// songPreferenceTypeLabelMap is songRelationshipTypeLabelMap's counterpart
+// for ListSongPreferenceTypes (see PreferencesTable).
+func songPreferenceTypeLabelMap(types []scheduling.SongPreferenceType) map[string]string {
+	labels := make(map[string]string, len(types))
+	for _, t := range types {
+		labels[t.Code] = t.Label
+	}
+	return labels
+}
+
+// songTagCategoryLabelMap is songRelationshipTypeLabelMap's counterpart for
+// ListSongTagCategories (see SongTagsTable and the set builder's candidate
+// tag badges).
+func songTagCategoryLabelMap(categories []scheduling.SongTagCategory) map[string]string {
+	labels := make(map[string]string, len(categories))
+	for _, cat := range categories {
+		labels[cat.Code] = cat.Label
+	}
+	return labels
+}
+
+// songTagsBySong groups a flat tag list by song id, for annotating either
+// one setup-page table row or the whole set-builder candidate pool at once
+// without a query per song.
+func songTagsBySong(tags []scheduling.SongTag) map[string][]scheduling.SongTag {
+	bySong := make(map[string][]scheduling.SongTag, len(tags))
+	for _, tag := range tags {
+		bySong[tag.SongID] = append(bySong[tag.SongID], tag)
+	}
+	return bySong
+}
+
 // personNameMap resolves each unique person ID referenced by preferences to
 // its PCO display name, for showing names instead of raw IDs in the
 // preferences table. Unlike songTitleMap, this doesn't come from a bulk
@@ -132,6 +175,10 @@ func (sc *SchedulingController) RegisterRoutes(router fiber.Router) {
 	group.Post("/song-roles", sc.CreateSongRole)
 	group.Delete("/song-roles/:id", sc.DeleteSongRole)
 
+	group.Get("/song-tags", sc.SongTagsPage)
+	group.Post("/song-tags", sc.CreateSongTag)
+	group.Delete("/song-tags/:id", sc.DeleteSongTag)
+
 	group.Get("/person-relationships", sc.PersonRelationshipsPage)
 	group.Post("/person-relationships", sc.CreatePersonRelationship)
 	group.Delete("/person-relationships/:id", sc.DeletePersonRelationship)
@@ -143,6 +190,7 @@ func (sc *SchedulingController) RegisterRoutes(router fiber.Router) {
 
 	group.Get("/build", sc.BuildPage)
 	group.Get("/build/plans", sc.BuildPlans)
+	group.Get("/build/plans/search", sc.BuildPlansSearch)
 	group.Get("/build/:service_type_id/:plan_id", sc.BuildPlanPage)
 
 	group.Post("/rosters/:service_type_id/:plan_id/assignments", sc.AddRosterAssignment)
@@ -161,12 +209,18 @@ func (sc *SchedulingController) RegisterRoutes(router fiber.Router) {
 
 func (sc *SchedulingController) RelationshipsPage(c *fiber.Ctx) error {
 	_, personName := middleware.CurrentPerson(c)
+	orgName := middleware.CurrentOrganization(c)
 
 	songs, songsErr := fetchAllSongs(middleware.RequestContext(c))
 
+	relationshipTypes, err := sc.store.ListSongRelationshipTypes(c.Context())
+	if err != nil {
+		return render(c, views.Relationships(personName, orgName, songs, nil, nil, songTitleMap(songs), nil, err.Error()))
+	}
+
 	relationships, err := sc.store.ListSongRelationships(c.Context(), "")
 	if err != nil {
-		return render(c, views.Relationships(personName, songs, nil, songTitleMap(songs), err.Error()))
+		return render(c, views.Relationships(personName, orgName, songs, nil, relationshipTypes, songTitleMap(songs), songRelationshipTypeLabelMap(relationshipTypes), err.Error()))
 	}
 
 	errMsg := ""
@@ -174,7 +228,7 @@ func (sc *SchedulingController) RelationshipsPage(c *fiber.Ctx) error {
 		errMsg = "loading songs from Planning Center: " + songsErr.Error()
 	}
 
-	return render(c, views.Relationships(personName, songs, relationships, songTitleMap(songs), errMsg))
+	return render(c, views.Relationships(personName, orgName, songs, relationships, relationshipTypes, songTitleMap(songs), songRelationshipTypeLabelMap(relationshipTypes), errMsg))
 }
 
 func (sc *SchedulingController) CreateRelationship(c *fiber.Ctx) error {
@@ -197,12 +251,13 @@ func (sc *SchedulingController) CreateRelationship(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
 	}
 
-	// Best-effort: song titles are a display nicety for the table, so a
-	// failure here just falls back to showing raw IDs rather than failing
-	// the whole request.
+	// Best-effort: song titles and relationship type labels are a display
+	// nicety for the table, so a failure here just falls back to showing
+	// raw IDs/codes rather than failing the whole request.
 	songs, _ := fetchAllSongs(middleware.RequestContext(c))
+	relationshipTypes, _ := sc.store.ListSongRelationshipTypes(c.Context())
 
-	return render(c, views.RelationshipsTable(relationships, songTitleMap(songs), errMsg))
+	return render(c, views.RelationshipsTable(relationships, songTitleMap(songs), songRelationshipTypeLabelMap(relationshipTypes), errMsg))
 }
 
 func (sc *SchedulingController) DeleteRelationship(c *fiber.Ctx) error {
@@ -220,19 +275,26 @@ func (sc *SchedulingController) DeleteRelationship(c *fiber.Ctx) error {
 	}
 
 	songs, _ := fetchAllSongs(middleware.RequestContext(c))
+	relationshipTypes, _ := sc.store.ListSongRelationshipTypes(c.Context())
 
-	return render(c, views.RelationshipsTable(relationships, songTitleMap(songs), errMsg))
+	return render(c, views.RelationshipsTable(relationships, songTitleMap(songs), songRelationshipTypeLabelMap(relationshipTypes), errMsg))
 }
 
 func (sc *SchedulingController) PreferencesPage(c *fiber.Ctx) error {
 	_, personName := middleware.CurrentPerson(c)
+	orgName := middleware.CurrentOrganization(c)
 
 	ctx := middleware.RequestContext(c)
 	songs, songsErr := fetchAllSongs(ctx)
 
+	preferenceTypes, err := sc.store.ListSongPreferenceTypes(c.Context())
+	if err != nil {
+		return render(c, views.Preferences(personName, orgName, songs, nil, nil, songTitleMap(songs), nil, nil, err.Error()))
+	}
+
 	preferences, err := sc.store.ListSongPersonPreferences(c.Context(), "", "")
 	if err != nil {
-		return render(c, views.Preferences(personName, songs, nil, songTitleMap(songs), nil, err.Error()))
+		return render(c, views.Preferences(personName, orgName, songs, nil, preferenceTypes, songTitleMap(songs), nil, songPreferenceTypeLabelMap(preferenceTypes), err.Error()))
 	}
 
 	errMsg := ""
@@ -240,7 +302,7 @@ func (sc *SchedulingController) PreferencesPage(c *fiber.Ctx) error {
 		errMsg = "loading songs from Planning Center: " + songsErr.Error()
 	}
 
-	return render(c, views.Preferences(personName, songs, preferences, songTitleMap(songs), personNameMap(ctx, preferences), errMsg))
+	return render(c, views.Preferences(personName, orgName, songs, preferences, preferenceTypes, songTitleMap(songs), personNameMap(ctx, preferences), songPreferenceTypeLabelMap(preferenceTypes), errMsg))
 }
 
 func (sc *SchedulingController) SetPreference(c *fiber.Ctx) error {
@@ -263,13 +325,14 @@ func (sc *SchedulingController) SetPreference(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
 	}
 
-	// Best-effort: song/person display names are a table nicety, so a
-	// lookup failure just falls back to raw IDs rather than failing the
-	// whole request.
+	// Best-effort: song/person display names and preference type labels are
+	// a table nicety, so a lookup failure just falls back to raw IDs/codes
+	// rather than failing the whole request.
 	ctx := middleware.RequestContext(c)
 	songs, _ := fetchAllSongs(ctx)
+	preferenceTypes, _ := sc.store.ListSongPreferenceTypes(c.Context())
 
-	return render(c, views.PreferencesTable(preferences, songTitleMap(songs), personNameMap(ctx, preferences), errMsg))
+	return render(c, views.PreferencesTable(preferences, songTitleMap(songs), personNameMap(ctx, preferences), songPreferenceTypeLabelMap(preferenceTypes), errMsg))
 }
 
 func (sc *SchedulingController) DeletePreference(c *fiber.Ctx) error {
@@ -288,8 +351,9 @@ func (sc *SchedulingController) DeletePreference(c *fiber.Ctx) error {
 
 	ctx := middleware.RequestContext(c)
 	songs, _ := fetchAllSongs(ctx)
+	preferenceTypes, _ := sc.store.ListSongPreferenceTypes(c.Context())
 
-	return render(c, views.PreferencesTable(preferences, songTitleMap(songs), personNameMap(ctx, preferences), errMsg))
+	return render(c, views.PreferencesTable(preferences, songTitleMap(songs), personNameMap(ctx, preferences), songPreferenceTypeLabelMap(preferenceTypes), errMsg))
 }
 
 // PeopleSearch backs the person picker's search-as-you-type on the

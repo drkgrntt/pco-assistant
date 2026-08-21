@@ -17,8 +17,14 @@ const SessionTTL = 30 * 24 * time.Hour
 type Session struct {
 	PersonID   string
 	PersonName string
-	CreatedAt  time.Time
-	ExpiresAt  time.Time
+	// OrganizationName is the signed-in person's PCO organization (church)
+	// name - fetched once at sign-in (see auth.Callback) and shown next to
+	// PersonName in the header (see layout.templ). Can be "" if that lookup
+	// failed at sign-in; callers should treat that as "unknown," not retry
+	// it themselves.
+	OrganizationName string
+	CreatedAt        time.Time
+	ExpiresAt        time.Time
 	// AccessToken/RefreshToken/TokenExpiresAt are this session's own PCO
 	// OAuth token - unlike PersonID/PersonName (looked up once at sign-in
 	// and never touched again), these get refreshed over the session's
@@ -37,16 +43,16 @@ type Session struct {
 // extend to accessToken/refreshToken, which have to be stored recoverable
 // since outbound PCO calls need the literal value back (see the migration
 // that added these columns for the tradeoff this implies).
-func (s *Store) CreateSession(ctx context.Context, personID, personName, accessToken, refreshToken string, tokenExpiresAt time.Time) (token string, err error) {
+func (s *Store) CreateSession(ctx context.Context, personID, personName, organizationName, accessToken, refreshToken string, tokenExpiresAt time.Time) (token string, err error) {
 	token, err = randomToken()
 	if err != nil {
 		return "", err
 	}
 
 	_, err = s.db.ExecContext(ctx, `
-		INSERT INTO sessions (id, person_id, person_name, expires_at, access_token, refresh_token, token_expires_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-	`, hashToken(token), personID, personName, time.Now().Add(SessionTTL), accessToken, refreshToken, tokenExpiresAt)
+		INSERT INTO sessions (id, person_id, person_name, organization_name, expires_at, access_token, refresh_token, token_expires_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+	`, hashToken(token), personID, personName, organizationName, time.Now().Add(SessionTTL), accessToken, refreshToken, tokenExpiresAt)
 	if err != nil {
 		return "", err
 	}
@@ -59,11 +65,39 @@ func (s *Store) CreateSession(ctx context.Context, personID, personName, accessT
 func (s *Store) GetSession(ctx context.Context, token string) (Session, error) {
 	var session Session
 	err := s.db.QueryRowContext(ctx, `
-		SELECT person_id, person_name, created_at, expires_at, access_token, refresh_token, token_expires_at
+		SELECT person_id, person_name, organization_name, created_at, expires_at, access_token, refresh_token, token_expires_at
 		FROM sessions
 		WHERE id = $1 AND expires_at > now()
 	`, hashToken(token)).Scan(
-		&session.PersonID, &session.PersonName, &session.CreatedAt, &session.ExpiresAt,
+		&session.PersonID, &session.PersonName, &session.OrganizationName, &session.CreatedAt, &session.ExpiresAt,
+		&session.AccessToken, &session.RefreshToken, &session.TokenExpiresAt,
+	)
+	if err != nil {
+		return Session{}, err
+	}
+
+	return session, nil
+}
+
+// MostRecentSession returns the most recently created still-valid session,
+// if any - cmd/dbseed uses this to borrow a real signed-in person's PCO
+// access token so seeded data can reference real songs/people instead of
+// synthetic placeholders. Deliberately read-only: unlike GetSession (looked
+// up by the session's own raw token, for authenticating a request), this
+// never refreshes or writes anything back, since it doesn't have - and
+// shouldn't need - the raw session token UpdateSessionTokens is keyed by
+// (see hashToken), and rotating a stored refresh token from a background
+// script risks invalidating the real browser session that's still using it.
+func (s *Store) MostRecentSession(ctx context.Context) (Session, error) {
+	var session Session
+	err := s.db.QueryRowContext(ctx, `
+		SELECT person_id, person_name, organization_name, created_at, expires_at, access_token, refresh_token, token_expires_at
+		FROM sessions
+		WHERE expires_at > now()
+		ORDER BY created_at DESC
+		LIMIT 1
+	`).Scan(
+		&session.PersonID, &session.PersonName, &session.OrganizationName, &session.CreatedAt, &session.ExpiresAt,
 		&session.AccessToken, &session.RefreshToken, &session.TokenExpiresAt,
 	)
 	if err != nil {

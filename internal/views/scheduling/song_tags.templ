@@ -1,0 +1,126 @@
+package scheduling
+
+import (
+	"fmt"
+	"strconv"
+
+	pco "github.com/drkgrntt/go-pco"
+
+	"pco-assistant/internal/scheduling"
+	"pco-assistant/internal/views"
+)
+
+templ SongTags(personName, organizationName string, songs []pco.SongData, tags []scheduling.SongTag, categories []scheduling.SongTagCategory, songTitles map[string]string, categoryLabels map[string]string, errMsg string) {
+	@views.Layout("Song Tags", personName, organizationName) {
+		<h1>Song Tags</h1>
+		<p class="muted">Tag songs with themes, scripture references, or ideas, so they're easier to find when planning around a sermon.</p>
+		<form
+			id="song-tag-form"
+			class="inline"
+			hx-post="/scheduling/song-tags"
+			hx-target="#song-tags-table"
+			hx-swap="outerHTML"
+			hx-on::after-request="if(event.detail.successful && event.detail.elt === this) resetSetupForm(this)"
+		>
+			<input type="hidden" name="id"/>
+			<label>
+				Song
+				<select name="song_id" required>
+					<option value="" selected disabled>Choose a song</option>
+					for _, song := range songs {
+						<option value={ song.ID }>{ song.Attributes.Title }</option>
+					}
+				</select>
+			</label>
+			<label>
+				Category
+				<select name="category">
+					for _, cat := range categories {
+						<option value={ cat.Code }>{ cat.Label }</option>
+					}
+				</select>
+			</label>
+			<label>
+				Value
+				<input type="text" name="value" placeholder="e.g. Grace, Romans 8:1, New beginnings" required/>
+			</label>
+			<button type="submit" class="primary">Add</button>
+			<button type="button" class="cancel-edit" onclick="cancelSetupEdit(this)" hidden>Cancel</button>
+		</form>
+		@SongTagsTable(tags, songTitles, categoryLabels, errMsg)
+	}
+}
+
+// SongTagsTable is both the initial-render fragment and the htmx swap target
+// (id="song-tags-table") - see RelationshipsTable for why errMsg lives
+// inside it rather than the page around it. categoryLabels resolves
+// category codes to their song_tag_categories label (see
+// songTagCategoryLabelMap in the controllers package) - a code removed from
+// that table since the tag was created falls back to showing the raw code.
+templ SongTagsTable(tags []scheduling.SongTag, songTitles map[string]string, categoryLabels map[string]string, errMsg string) {
+	<div id="song-tags-table">
+		if errMsg != "" {
+			<p class="error">{ errMsg }</p>
+		}
+		<div class="table-wrap">
+			<table class="sortable">
+				<thead>
+					<tr>
+						<th>Song</th>
+						<th>Category</th>
+						<th>Value</th>
+						<th></th>
+					</tr>
+				</thead>
+				<tbody>
+					for _, tag := range tags {
+						<tr>
+							<td>
+								if title, ok := songTitles[tag.SongID]; ok {
+									{ title }
+								} else {
+									{ tag.SongID }
+								}
+							</td>
+							<td>{ displayNameOrID(categoryLabels, tag.Category) }</td>
+							<td>{ tag.Value }</td>
+							<td>
+								<button
+									class="icon-btn"
+									aria-label="Edit tag"
+									title="Edit tag"
+									data-edit-form="song-tag-form"
+									data-edit-fields={ editFieldsAttr(map[string]string{
+										"id":       strconv.FormatInt(tag.ID, 10),
+										"song_id":  tag.SongID,
+										"category": tag.Category,
+										"value":    tag.Value,
+									}) }
+									onclick="editRow(this)"
+								>
+									@views.IconEdit()
+								</button>
+								<button
+									class="danger icon-btn"
+									aria-label="Remove tag"
+									title="Remove tag"
+									hx-delete={ fmt.Sprintf("/scheduling/song-tags/%d", tag.ID) }
+									hx-target="#song-tags-table"
+									hx-swap="outerHTML"
+									hx-confirm="Remove this tag?"
+								>
+									@views.IconRemove()
+								</button>
+							</td>
+						</tr>
+					}
+					if len(tags) == 0 {
+						<tr>
+							<td colspan="4" class="muted">No songs tagged yet.</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+}

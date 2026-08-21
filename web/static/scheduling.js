@@ -62,6 +62,86 @@ document.addEventListener("keydown", function (event) {
   }
 });
 
+// App-wide "your click registered" feedback for every htmx-driven action.
+// Several of this app's own endpoints are themselves several sequential PCO
+// API calls deep (Publish/Revert/Import walk every song or assignment one
+// at a time - see the scheduling controller), so a click can go a real
+// moment with nothing on screen changing. Two things happen for the
+// duration of any htmx request, app-wide, with no per-template changes
+// needed:
+//   1. The thin bar in layout.templ (#htmx-progress-bar) sweeps across the
+//      top of the page, the same idea as a browser tab's own loading
+//      spinner - visible regardless of where on the page the action was.
+//   2. The actual control clicked gets really disabled (not just dimmed),
+//      both giving that specific button/form its own immediate feedback and
+//      stopping an impatient second click from firing a duplicate request.
+//      Where hx-post/hx-delete/etc. lives on a <form> rather than the
+//      button inside it (most setup-page forms), evt.detail.elt is the
+//      form, so the actual submit button is found within it.
+// Listens on `document`, not `document.body` - this script tag is in
+// <head> (see layout.templ), so it runs before the parser has even reached
+// <body>, and document.body is still null at that point. document itself
+// always exists, and htmx's events bubble up to it exactly the same way,
+// so nothing here needs to wait for DOMContentLoaded. #htmx-progress-bar is
+// looked up fresh inside each handler for the same reason - caching
+// document.getElementById("htmx-progress-bar") at parse time would just
+// cache null.
+(function () {
+  var requestsInFlight = 0;
+
+  function progressBar() {
+    return document.getElementById("htmx-progress-bar");
+  }
+
+  function submitControlFor(el) {
+    if (!el || !el.matches) {
+      return null;
+    }
+    if (el.matches("button, input[type=submit]")) {
+      return el;
+    }
+    return el.querySelector ? el.querySelector("button[type=submit], button:not([type])") : null;
+  }
+
+  document.addEventListener("htmx:beforeRequest", function (event) {
+    requestsInFlight++;
+    var bar = progressBar();
+    if (bar) {
+      bar.classList.add("active");
+    }
+
+    var control = submitControlFor(event.detail.elt);
+    if (control && !control.disabled) {
+      control.disabled = true;
+      control.dataset.htmxWasEnabled = "1";
+    }
+  });
+
+  function requestSettled(event) {
+    requestsInFlight = Math.max(0, requestsInFlight - 1);
+    if (requestsInFlight === 0) {
+      var bar = progressBar();
+      if (bar) {
+        bar.classList.remove("active");
+      }
+    }
+
+    var control = submitControlFor(event.detail.elt);
+    if (control && control.dataset.htmxWasEnabled) {
+      control.disabled = false;
+      delete control.dataset.htmxWasEnabled;
+    }
+  }
+
+  // afterRequest covers both a normal response and an HTTP error status;
+  // sendError/timeout cover the request never getting a response at all
+  // (offline, connection refused, timed out) - either way the button needs
+  // to come back, or a real failure would leave it disabled forever.
+  document.addEventListener("htmx:afterRequest", requestSettled);
+  document.addEventListener("htmx:sendError", requestSettled);
+  document.addEventListener("htmx:timeout", requestSettled);
+})();
+
 // selectPerson fills a person picker's hidden person_id input and visible
 // search box from a clicked search result's data attributes (see
 // PersonSearchResults in internal/views/scheduling/person_picker.templ),
@@ -176,14 +256,18 @@ function cancelSetupEdit(button) {
 // set_builder.templ) - the whole candidate pool is already rendered on the
 // page (song libraries are small enough to fetch in full, unlike people),
 // so filtering by typed text and/or an active role button doesn't need a
-// round trip.
+// round trip. Typed text matches either the song title or its tags
+// (data-tags - see CandidateSongView.TagsAttr), so searching a sermon theme
+// or scripture reference surfaces songs tagged with it even when the title
+// itself doesn't mention it.
 function filterCandidates() {
   var search = (document.getElementById("candidate-search").value || "").toLowerCase();
   var activeFilter = document.querySelector(".role-filter.active");
   var role = activeFilter ? activeFilter.dataset.role : "";
 
   document.querySelectorAll("#set-candidates .candidate-row").forEach(function (row) {
-    var matchesSearch = !search || row.dataset.title.toLowerCase().indexOf(search) !== -1;
+    var haystack = row.dataset.title.toLowerCase() + " " + (row.dataset.tags || "").toLowerCase();
+    var matchesSearch = !search || haystack.indexOf(search) !== -1;
     var matchesRole = !role || (" " + row.dataset.roles + " ").indexOf(" " + role + " ") !== -1;
     row.style.display = matchesSearch && matchesRole ? "" : "none";
   });

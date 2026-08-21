@@ -27,3 +27,13 @@ func migrate(db *sql.DB) error {
 
 	return nil
 }
+
+// Migrate is migrate's exported counterpart, for callers that need a
+// connection before all of New()'s other setup (or that already have a raw
+// *sql.DB - see Open) - cmd/dbreset uses it to rebuild the schema
+// immediately after Reset empties it, and cmd/dbseed uses it defensively so
+// seeding still works against a database nothing has ever pointed the real
+// server at yet.
+func Migrate(db *sql.DB) error {
+	return migrate(db)
+}

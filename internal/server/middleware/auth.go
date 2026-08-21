@@ -67,6 +67,7 @@ func RequireAuth(store *auth.Store) fiber.Handler {
 
 				c.Locals("person_id", session.PersonID)
 				c.Locals("person_name", session.PersonName)
+				c.Locals("organization_name", session.OrganizationName)
 				c.Locals("pco_ctx", pco.WithAccessToken(c.Context(), accessToken))
 				return c.Next()
 			}
@@ -91,6 +92,14 @@ func CurrentPerson(c *fiber.Ctx) (id, name string) {
 	id, _ = c.Locals("person_id").(string)
 	name, _ = c.Locals("person_name").(string)
 	return id, name
+}
+
+// CurrentOrganization reads the signed-in person's PCO organization (church)
+// name that RequireAuth stashed in locals - see Session.OrganizationName for
+// why this can be "". Only meaningful on routes RequireAuth let through.
+func CurrentOrganization(c *fiber.Ctx) string {
+	name, _ := c.Locals("organization_name").(string)
+	return name
 }
 
 // RequestContext returns the context RequireAuth built for this request -

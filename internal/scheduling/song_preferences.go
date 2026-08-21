@@ -10,14 +10,48 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
+// PreferencePreferred/PreferenceDiscouraged aren't given any special
+// algorithmic meaning today (see ListSongPersonPreferences' callers - it's
+// purely informational), but are kept as named constants since they're the
+// two values every preference has always had. They're seeded into
+// song_preference_types by migration 00015, which is the source of truth
+// for which codes actually exist - add a row there for another option, no
+// code change needed.
 const (
 	PreferencePreferred   = "preferred"
 	PreferenceDiscouraged = "discouraged"
 )
 
-var validPreferences = map[string]bool{
-	PreferencePreferred:   true,
-	PreferenceDiscouraged: true,
+type SongPreferenceType struct {
+	Code      string `json:"code"`
+	Label     string `json:"label"`
+	SortOrder int    `json:"sort_order"`
+}
+
+// ListSongPreferenceTypes returns every selectable preference, ordered for
+// display in the picker - add a row to song_preference_types to make a new
+// one available, no code change needed.
+func (s *Store) ListSongPreferenceTypes(ctx context.Context) ([]SongPreferenceType, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT code, label, sort_order
+		FROM song_preference_types
+		ORDER BY sort_order, label
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	types := []SongPreferenceType{}
+	for rows.Next() {
+		var t SongPreferenceType
+		if err := rows.Scan(&t.Code, &t.Label, &t.SortOrder); err != nil {
+			return nil, err
+		}
+		types = append(types, t)
+	}
+
+	return types, rows.Err()
 }
 
 type SongPersonPreference struct {
@@ -44,9 +78,6 @@ func (s *Store) SetSongPersonPreference(ctx context.Context, params SetSongPerso
 	if params.SongID == "" || params.PersonID == "" {
 		return SongPersonPreference{}, errors.New("song_id and person_id are required")
 	}
-	if !validPreferences[params.Preference] {
-		return SongPersonPreference{}, errors.New(`preference must be "preferred" or "discouraged"`)
-	}
 
 	var pref SongPersonPreference
 	err := s.db.QueryRowContext(ctx, `
@@ -60,6 +91,12 @@ func (s *Store) SetSongPersonPreference(ctx context.Context, params SetSongPerso
 	`, params.SongID, params.PersonID, params.Preference, params.Notes).Scan(
 		&pref.ID, &pref.SongID, &pref.PersonID, &pref.Preference, &pref.Notes, &pref.CreatedAt, &pref.UpdatedAt,
 	)
+	// preference references song_preference_types (see migration 00015) - a
+	// code that isn't a row there fails as a foreign key violation.
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23503" {
+		return SongPersonPreference{}, fmt.Errorf("unknown preference %q", params.Preference)
+	}
 	if err != nil {
 		return SongPersonPreference{}, err
 	}
@@ -75,9 +112,6 @@ func (s *Store) SetSongPersonPreference(ctx context.Context, params SetSongPerso
 func (s *Store) UpdateSongPersonPreference(ctx context.Context, id int64, params SetSongPersonPreferenceParams) (SongPersonPreference, error) {
 	if params.SongID == "" || params.PersonID == "" {
 		return SongPersonPreference{}, errors.New("song_id and person_id are required")
-	}
-	if !validPreferences[params.Preference] {
-		return SongPersonPreference{}, errors.New(`preference must be "preferred" or "discouraged"`)
 	}
 
 	var pref SongPersonPreference
@@ -95,6 +129,9 @@ func (s *Store) UpdateSongPersonPreference(ctx context.Context, id int64, params
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 		return SongPersonPreference{}, fmt.Errorf("a preference for that song and person already exists")
+	}
+	if errors.As(err, &pgErr) && pgErr.Code == "23503" {
+		return SongPersonPreference{}, fmt.Errorf("unknown preference %q", params.Preference)
 	}
 	if err != nil {
 		return SongPersonPreference{}, err

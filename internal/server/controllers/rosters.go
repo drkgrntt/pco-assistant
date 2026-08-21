@@ -540,6 +540,21 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, serv
 	}
 	data.PendingDeleteCount = len(pending)
 
+	// ImportableAssignmentCount only matters the first time this roster is
+	// opened - see SetBuilderData.ImportableSongCount, which this mirrors.
+	// The extra GetTeamMembers call only happens in that narrow case: once
+	// this roster has anything of its own, PCO's already-filled positions
+	// are either reflected in assignments or were deliberately removed, so
+	// there's nothing left to import. This is also why it can't reuse
+	// needed (fetched right below) - GetNeededPositions only reports
+	// *unfilled* slots, so a plan PCO already has fully staffed - the whole
+	// point of this prompt - shows zero needed positions.
+	if len(assignments) == 0 && data.PendingDeleteCount == 0 {
+		if members, err := pco.GetTeamMembers(ctx, serviceTypeID, planID, nil); err == nil {
+			data.ImportableAssignmentCount = len(members.Data)
+		}
+	}
+
 	needed, err := pco.GetNeededPositions(ctx, serviceTypeID, planID, nil)
 	if err != nil {
 		data.ErrMsg = appendErr(data.ErrMsg, "loading needed positions from Planning Center: "+err.Error())

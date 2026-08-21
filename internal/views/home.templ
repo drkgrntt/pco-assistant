@@ -1,7 +1,7 @@
 package views
 
-templ Home(personName string) {
-	@Layout("Home", personName) {
+templ Home(personName, organizationName string) {
+	@Layout("Home", personName, organizationName) {
 		<h1>Welcome, { personName }</h1>
 
 		<h2>Workflows</h2>
