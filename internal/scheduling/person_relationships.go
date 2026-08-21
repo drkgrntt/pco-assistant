@@ -10,18 +10,69 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-// Relationship types are free text (validated here, not via a DB CHECK) so
-// new ones don't need a migration - same approach as song relationships.
+// These are the relationship_type codes the roster-suggestion algorithm
+// (see rosters.go) gives special meaning to - works_well/mentorship boost a
+// pairing, avoid_pairing flags a conflict. They're seeded into
+// person_relationship_types by migration 00015, but that table is the
+// source of truth for which codes actually exist and whether each is
+// directional - see personRelationshipType, which CreatePersonRelationship
+// and UpdatePersonRelationship query instead of comparing against
+// PersonRelationshipMentorship by name. An admin can add more codes
+// straight into the DB and they'll show up as a selectable, displayable
+// relationship type with no special algorithmic behavior, same as any code
+// the algorithm doesn't recognize.
 const (
 	PersonRelationshipWorksWell    = "works_well"
 	PersonRelationshipMentorship   = "mentorship"
 	PersonRelationshipAvoidPairing = "avoid_pairing"
 )
 
-var validPersonRelationshipTypes = map[string]bool{
-	PersonRelationshipWorksWell:    true,
-	PersonRelationshipMentorship:   true,
-	PersonRelationshipAvoidPairing: true,
+type PersonRelationshipType struct {
+	Code        string `json:"code"`
+	Label       string `json:"label"`
+	Directional bool   `json:"directional"`
+	SortOrder   int    `json:"sort_order"`
+}
+
+// ListPersonRelationshipTypes returns every selectable relationship type,
+// ordered for display in the picker - add a row to
+// person_relationship_types to make a new one available, no code change
+// needed.
+func (s *Store) ListPersonRelationshipTypes(ctx context.Context) ([]PersonRelationshipType, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT code, label, directional, sort_order
+		FROM person_relationship_types
+		ORDER BY sort_order, label
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	types := []PersonRelationshipType{}
+	for rows.Next() {
+		var t PersonRelationshipType
+		if err := rows.Scan(&t.Code, &t.Label, &t.Directional, &t.SortOrder); err != nil {
+			return nil, err
+		}
+		types = append(types, t)
+	}
+
+	return types, rows.Err()
+}
+
+// personRelationshipTypeDirectional looks up whether relationshipType is
+// directional (e.g. mentorship: "A mentors B" and "B mentors A" are
+// different facts, so the pair is never reordered) or symmetric (e.g. works
+// well with: reorder to a canonical person_id_a < person_id_b so the same
+// pair entered either order dedupes to one row). sql.ErrNoRows means the
+// code isn't in person_relationship_types at all - an unknown type.
+func (s *Store) personRelationshipTypeDirectional(ctx context.Context, relationshipType string) (bool, error) {
+	var directional bool
+	err := s.db.QueryRowContext(ctx, `
+		SELECT directional FROM person_relationship_types WHERE code = $1
+	`, relationshipType).Scan(&directional)
+	return directional, err
 }
 
 type PersonRelationship struct {
@@ -57,17 +108,21 @@ func (s *Store) CreatePersonRelationship(ctx context.Context, params CreatePerso
 	if params.PersonIDA == params.PersonIDB {
 		return PersonRelationship{}, errors.New("person_id_a and person_id_b must be different people")
 	}
-	if !validPersonRelationshipTypes[params.RelationshipType] {
+	directional, err := s.personRelationshipTypeDirectional(ctx, params.RelationshipType)
+	if errors.Is(err, sql.ErrNoRows) {
 		return PersonRelationship{}, fmt.Errorf("unknown relationship_type %q", params.RelationshipType)
+	}
+	if err != nil {
+		return PersonRelationship{}, err
 	}
 
 	personIDA, personIDB := params.PersonIDA, params.PersonIDB
-	if params.RelationshipType != PersonRelationshipMentorship && personIDA > personIDB {
+	if !directional && personIDA > personIDB {
 		personIDA, personIDB = personIDB, personIDA
 	}
 
 	var rel PersonRelationship
-	err := s.db.QueryRowContext(ctx, `
+	err = s.db.QueryRowContext(ctx, `
 		INSERT INTO person_relationships (person_id_a, person_id_b, relationship_type, notes)
 		VALUES ($1, $2, $3, $4)
 		ON CONFLICT (person_id_a, person_id_b, relationship_type) DO NOTHING
@@ -97,17 +152,21 @@ func (s *Store) UpdatePersonRelationship(ctx context.Context, id int64, params C
 	if params.PersonIDA == params.PersonIDB {
 		return PersonRelationship{}, errors.New("person_id_a and person_id_b must be different people")
 	}
-	if !validPersonRelationshipTypes[params.RelationshipType] {
+	directional, err := s.personRelationshipTypeDirectional(ctx, params.RelationshipType)
+	if errors.Is(err, sql.ErrNoRows) {
 		return PersonRelationship{}, fmt.Errorf("unknown relationship_type %q", params.RelationshipType)
+	}
+	if err != nil {
+		return PersonRelationship{}, err
 	}
 
 	personIDA, personIDB := params.PersonIDA, params.PersonIDB
-	if params.RelationshipType != PersonRelationshipMentorship && personIDA > personIDB {
+	if !directional && personIDA > personIDB {
 		personIDA, personIDB = personIDB, personIDA
 	}
 
 	var rel PersonRelationship
-	err := s.db.QueryRowContext(ctx, `
+	err = s.db.QueryRowContext(ctx, `
 		UPDATE person_relationships
 		SET person_id_a = $1, person_id_b = $2, relationship_type = $3, notes = $4, updated_at = now()
 		WHERE id = $5
