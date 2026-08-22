@@ -98,19 +98,63 @@ header.site nav {
   gap: 0.4rem var(--space-4);
 }
 
-/* Always-on, un-dismissible strip under the header (see layout.templ) -
-   this app is still pre-release, and its database has already been reset
-   once for a real security fix (see migration 00019) with more resets
-   plausible before things stabilize, so every page carries the warning
-   rather than something a viewer can close once and forget. Same danger
-   tokens as .warning (components.css), but full-bleed and margin-free
-   since this is site chrome, not a message inside a page's content. */
+/* Early-preview warning strip under the header (see layout.templ) - this
+   app is still pre-release, and its database has already been reset once
+   for a real security fix (see migration 00019) with more resets
+   plausible before things stabilize. A proper alert box (icon, tinted
+   fill, actual border/radius) rather than a bare colored line, same
+   treatment as .warning (components.css) but sized for site chrome:
+   full-width strip, no inline margin. Dismissible - see the
+   .banner-dismissed toggle below - since it's a standing disclaimer, not
+   a one-time change worth re-surfacing on every visit. */
 .site-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
   background: var(--danger-subtle);
   border-bottom: 1px solid color-mix(in srgb, var(--danger) 35%, var(--border));
-  padding: var(--space-2) var(--space-4);
-  text-align: center;
+  padding: var(--space-3) var(--space-4);
   font-size: var(--text-sm);
+}
+
+.site-banner-content {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--danger);
+}
+
+.site-banner-content .icon {
+  flex-shrink: 0;
+}
+
+.site-banner-content span {
+  color: var(--text);
+}
+
+.site-banner-dismiss {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: var(--space-1);
+  color: var(--danger);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+.site-banner-dismiss:hover {
+  background: color-mix(in srgb, var(--danger) 15%, transparent);
+}
+
+/* Set on <html> by scheduling.js before <body> parses - same
+   flash-prevention approach as the theme toggle, so a viewer who already
+   dismissed this doesn't see it flash in on every page load. */
+.banner-dismissed .site-banner {
+  display: none;
 }
 
 header.site nav a {
