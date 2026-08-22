@@ -98,6 +98,21 @@ header.site nav {
   gap: 0.4rem var(--space-4);
 }
 
+/* Always-on, un-dismissible strip under the header (see layout.templ) -
+   this app is still pre-release, and its database has already been reset
+   once for a real security fix (see migration 00019) with more resets
+   plausible before things stabilize, so every page carries the warning
+   rather than something a viewer can close once and forget. Same danger
+   tokens as .warning (components.css), but full-bleed and margin-free
+   since this is site chrome, not a message inside a page's content. */
+.site-banner {
+  background: var(--danger-subtle);
+  border-bottom: 1px solid color-mix(in srgb, var(--danger) 35%, var(--border));
+  padding: var(--space-2) var(--space-4);
+  text-align: center;
+  font-size: var(--text-sm);
+}
+
 header.site nav a {
   text-decoration: none;
   color: var(--accent);
