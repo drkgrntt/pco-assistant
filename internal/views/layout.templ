@@ -71,7 +71,13 @@ templ Layout(title string, personName string, organizationName string) {
 				</div>
 			</header>
 			<div class="site-banner" role="note">
-				<strong>Early preview:</strong> this app is still in active development. Data can be wiped or reset without notice - use at your own risk, and don't rely on it as your only copy of anything.
+				<div class="site-banner-content">
+					@IconAlertTriangle()
+					<span><strong>Early preview:</strong> this app is still in active development. Data can be wiped or reset without notice - use at your own risk, and don't rely on it as your only copy of anything.</span>
+				</div>
+				<button type="button" class="site-banner-dismiss" onclick="dismissSiteBanner()" aria-label="Dismiss this notice" title="Dismiss this notice">
+					@IconX()
+				</button>
 			</div>
 			<main>
 				{ children... }

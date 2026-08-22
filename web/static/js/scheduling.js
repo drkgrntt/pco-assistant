@@ -10,6 +10,17 @@
   }
 })();
 
+// Same flash-prevention trick as the theme preference above, for the
+// early-preview banner (layout.templ): if it's already been dismissed,
+// mark <html> before <body> parses so app.css's .banner-dismissed rule
+// hides it immediately, rather than showing it for a moment and then
+// yanking it away once this file's dismissSiteBanner() runs.
+(function () {
+  if (localStorage.getItem("bannerDismissed") === "true") {
+    document.documentElement.classList.add("banner-dismissed");
+  }
+})();
+
 // The theme toggle in the header (see layout.templ) is a simple two-state
 // switch, not a three-way system/light/dark picker - it starts wherever
 // the system preference currently resolves to (no saved override yet) and
@@ -29,6 +40,14 @@ function toggleTheme() {
   var next = currentEffectiveTheme() === "dark" ? "light" : "dark";
   document.documentElement.setAttribute("data-theme", next);
   localStorage.setItem("theme", next);
+}
+
+// Dismisses the early-preview banner (layout.templ) for good - it's a
+// standing disclaimer, not a one-time notice, so once someone's seen it
+// there's no need to show it again on every page/visit.
+function dismissSiteBanner() {
+  document.documentElement.classList.add("banner-dismissed");
+  localStorage.setItem("bannerDismissed", "true");
 }
 
 // The header nav's "Setup" dropdown (see layout.templ) - a plain
