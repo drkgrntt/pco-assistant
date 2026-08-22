@@ -65,6 +65,27 @@ function toggleNavDropdown(button) {
   var dropdown = button.closest(".nav-dropdown");
   var open = dropdown.classList.toggle("open");
   button.setAttribute("aria-expanded", open ? "true" : "false");
+
+  if (open) {
+    positionNavDropdown(dropdown);
+  }
+}
+
+// .nav-dropdown-menu's default (left: 0, see app.css) grows rightward from
+// the toggle - fine when there's room, but "Setup" sits near the right
+// edge of the header, so on a narrow/mobile viewport that growth runs the
+// menu off the edge of the screen. Re-measured every time the menu opens
+// (not just once) so rotating the device or resizing the window never
+// leaves it stuck on the wrong side.
+function positionNavDropdown(dropdown) {
+  var menu = dropdown.querySelector(".nav-dropdown-menu");
+  if (!menu) {
+    return;
+  }
+
+  dropdown.classList.remove("align-right");
+  var overflowsRight = menu.getBoundingClientRect().right > window.innerWidth;
+  dropdown.classList.toggle("align-right", overflowsRight);
 }
 
 function closeNavDropdowns() {
