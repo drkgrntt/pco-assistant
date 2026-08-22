@@ -15,8 +15,14 @@
 // mark <html> before <body> parses so app.css's .banner-dismissed rule
 // hides it immediately, rather than showing it for a moment and then
 // yanking it away once this file's dismissSiteBanner() runs.
+//
+// sessionStorage, not localStorage: the warning it's attached to needs to
+// stay apparent until it's genuinely no longer true, not something a
+// viewer can silence for good on one visit and then never see again -
+// closing it just keeps the current visit clutter-free, and it's back
+// next time they open the app.
 (function () {
-  if (localStorage.getItem("bannerDismissed") === "true") {
+  if (sessionStorage.getItem("bannerDismissed") === "true") {
     document.documentElement.classList.add("banner-dismissed");
   }
 })();
@@ -42,12 +48,14 @@ function toggleTheme() {
   localStorage.setItem("theme", next);
 }
 
-// Dismisses the early-preview banner (layout.templ) for good - it's a
-// standing disclaimer, not a one-time notice, so once someone's seen it
-// there's no need to show it again on every page/visit.
+// Dismisses the early-preview banner (layout.templ) for the rest of this
+// browser session only (see the sessionStorage note above) - it comes
+// back next time the tab/browser is reopened, so it stays something a
+// viewer is actually reminded of rather than a one-time notice they can
+// permanently opt out of.
 function dismissSiteBanner() {
   document.documentElement.classList.add("banner-dismissed");
-  localStorage.setItem("bannerDismissed", "true");
+  sessionStorage.setItem("bannerDismissed", "true");
 }
 
 // The header nav's "Setup" dropdown (see layout.templ) - a plain
