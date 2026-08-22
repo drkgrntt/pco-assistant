@@ -33,6 +33,7 @@ func songRoleTypeLabelMap(types []scheduling.SongRoleType) map[string]string {
 func (sc *SchedulingController) SongRolesPage(c *fiber.Ctx) error {
 	_, personName := middleware.CurrentPerson(c)
 	orgName := middleware.CurrentOrganization(c)
+	orgID := middleware.CurrentOrganizationID(c)
 
 	songs, songsErr := fetchAllSongs(middleware.RequestContext(c))
 
@@ -41,7 +42,7 @@ func (sc *SchedulingController) SongRolesPage(c *fiber.Ctx) error {
 		return render(c, views.SongRoles(personName, orgName, songs, nil, nil, songTitleMap(songs), nil, err.Error()))
 	}
 
-	roles, err := sc.store.ListSongRoles(c.Context(), "", "")
+	roles, err := sc.store.ListSongRoles(c.Context(), orgID, "", "")
 	if err != nil {
 		return render(c, views.SongRoles(personName, orgName, songs, nil, roleTypes, songTitleMap(songs), songRoleTypeLabelMap(roleTypes), err.Error()))
 	}
@@ -55,6 +56,8 @@ func (sc *SchedulingController) SongRolesPage(c *fiber.Ctx) error {
 }
 
 func (sc *SchedulingController) CreateSongRole(c *fiber.Ctx) error {
+	orgID := middleware.CurrentOrganizationID(c)
+
 	var body scheduling.CreateSongRoleParams
 	errMsg := ""
 	if err := c.BodyParser(&body); err != nil {
@@ -62,14 +65,14 @@ func (sc *SchedulingController) CreateSongRole(c *fiber.Ctx) error {
 	} else if id, editing, idErr := parseFormID(c); idErr != nil {
 		errMsg = "id must be an integer"
 	} else if editing {
-		if _, err := sc.store.UpdateSongRole(c.Context(), id, body); err != nil {
+		if _, err := sc.store.UpdateSongRole(c.Context(), orgID, id, body); err != nil {
 			errMsg = err.Error()
 		}
-	} else if _, err := sc.store.CreateSongRole(c.Context(), body); err != nil {
+	} else if _, err := sc.store.CreateSongRole(c.Context(), orgID, body); err != nil {
 		errMsg = err.Error()
 	}
 
-	roles, err := sc.store.ListSongRoles(c.Context(), "", "")
+	roles, err := sc.store.ListSongRoles(c.Context(), orgID, "", "")
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
 	}
@@ -81,15 +84,17 @@ func (sc *SchedulingController) CreateSongRole(c *fiber.Ctx) error {
 }
 
 func (sc *SchedulingController) DeleteSongRole(c *fiber.Ctx) error {
+	orgID := middleware.CurrentOrganizationID(c)
+
 	id, err := c.ParamsInt("id")
 	errMsg := ""
 	if err != nil {
 		errMsg = "id must be an integer"
-	} else if delErr := sc.store.DeleteSongRole(c.Context(), int64(id)); delErr != nil && !errors.Is(delErr, sql.ErrNoRows) {
+	} else if delErr := sc.store.DeleteSongRole(c.Context(), orgID, int64(id)); delErr != nil && !errors.Is(delErr, sql.ErrNoRows) {
 		errMsg = delErr.Error()
 	}
 
-	roles, err := sc.store.ListSongRoles(c.Context(), "", "")
+	roles, err := sc.store.ListSongRoles(c.Context(), orgID, "", "")
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
 	}
@@ -110,8 +115,8 @@ func (sc *SchedulingController) DeleteSongRole(c *fiber.Ctx) error {
 //   - "todo": no local draft (or an empty one), but Planning Center already
 //     has song items in this plan - probably a template worth building out.
 //   - "" : neither - nothing to flag either way.
-func (sc *SchedulingController) planStatus(ctx context.Context, serviceTypeID, planID string) string {
-	if set, found, err := sc.store.FindSet(ctx, serviceTypeID, planID); err == nil && found {
+func (sc *SchedulingController) planStatus(ctx context.Context, organizationID, serviceTypeID, planID string) string {
+	if set, found, err := sc.store.FindSet(ctx, organizationID, serviceTypeID, planID); err == nil && found {
 		setSongs, songsErr := sc.store.ListSetSongs(ctx, set.ID)
 		pending, pendingErr := sc.store.ListPendingDeletions(ctx, set.ID)
 		if songsErr == nil && pendingErr == nil && len(setSongs) > 0 {
@@ -140,6 +145,7 @@ func (sc *SchedulingController) planStatus(ctx context.Context, serviceTypeID, p
 }
 
 func (sc *SchedulingController) AddSetSong(c *fiber.Ctx) error {
+	orgID := middleware.CurrentOrganizationID(c)
 	serviceTypeID := c.Params("service_type_id")
 	planID := c.Params("plan_id")
 
@@ -151,29 +157,30 @@ func (sc *SchedulingController) AddSetSong(c *fiber.Ctx) error {
 		errMsg = err.Error()
 	} else if body.SongID == "" {
 		errMsg = "song_id is required"
-	} else if set, err := sc.store.GetOrCreateSet(c.Context(), serviceTypeID, planID); err != nil {
+	} else if set, err := sc.store.GetOrCreateSet(c.Context(), orgID, serviceTypeID, planID); err != nil {
 		errMsg = err.Error()
 	} else if _, err := sc.store.AddSongToSet(c.Context(), set.ID, body.SongID); err != nil {
 		errMsg = err.Error()
 	}
 
-	return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(middleware.RequestContext(c), serviceTypeID, planID, errMsg)))
+	return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(middleware.RequestContext(c), orgID, serviceTypeID, planID, errMsg)))
 }
 
 func (sc *SchedulingController) RemoveSetSong(c *fiber.Ctx) error {
+	orgID := middleware.CurrentOrganizationID(c)
 	serviceTypeID := c.Params("service_type_id")
 	planID := c.Params("plan_id")
 
 	errMsg := ""
 	if rowID, err := c.ParamsInt("set_song_id"); err != nil {
 		errMsg = "set_song_id must be an integer"
-	} else if set, err := sc.store.GetOrCreateSet(c.Context(), serviceTypeID, planID); err != nil {
+	} else if set, err := sc.store.GetOrCreateSet(c.Context(), orgID, serviceTypeID, planID); err != nil {
 		errMsg = err.Error()
 	} else if err := sc.store.RemoveSongFromSet(c.Context(), set.ID, int64(rowID)); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		errMsg = err.Error()
 	}
 
-	return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(middleware.RequestContext(c), serviceTypeID, planID, errMsg)))
+	return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(middleware.RequestContext(c), orgID, serviceTypeID, planID, errMsg)))
 }
 
 // DuplicateSetSong creates a second occurrence of an existing set song
@@ -181,19 +188,20 @@ func (sc *SchedulingController) RemoveSetSong(c *fiber.Ctx) error {
 // after it - for a song that's reprised elsewhere in the service, e.g. the
 // same opener sung again as the response.
 func (sc *SchedulingController) DuplicateSetSong(c *fiber.Ctx) error {
+	orgID := middleware.CurrentOrganizationID(c)
 	serviceTypeID := c.Params("service_type_id")
 	planID := c.Params("plan_id")
 
 	errMsg := ""
 	if rowID, err := c.ParamsInt("set_song_id"); err != nil {
 		errMsg = "set_song_id must be an integer"
-	} else if set, err := sc.store.GetOrCreateSet(c.Context(), serviceTypeID, planID); err != nil {
+	} else if set, err := sc.store.GetOrCreateSet(c.Context(), orgID, serviceTypeID, planID); err != nil {
 		errMsg = err.Error()
 	} else if _, err := sc.store.DuplicateSongInSet(c.Context(), set.ID, int64(rowID)); err != nil {
 		errMsg = err.Error()
 	}
 
-	return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(middleware.RequestContext(c), serviceTypeID, planID, errMsg)))
+	return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(middleware.RequestContext(c), orgID, serviceTypeID, planID, errMsg)))
 }
 
 // PublishSet fully syncs the draft set to the real Planning Center plan:
@@ -216,22 +224,23 @@ func (sc *SchedulingController) DuplicateSetSong(c *fiber.Ctx) error {
 // summary reports counts for each step plus what failed.
 func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 	ctx := middleware.RequestContext(c)
+	orgID := middleware.CurrentOrganizationID(c)
 	serviceTypeID := c.Params("service_type_id")
 	planID := c.Params("plan_id")
 
-	set, err := sc.store.GetOrCreateSet(ctx, serviceTypeID, planID)
+	set, err := sc.store.GetOrCreateSet(ctx, orgID, serviceTypeID, planID)
 	if err != nil {
-		return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(ctx, serviceTypeID, planID, err.Error())))
+		return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(ctx, orgID, serviceTypeID, planID, err.Error())))
 	}
 
 	setSongs, err := sc.store.ListSetSongs(ctx, set.ID)
 	if err != nil {
-		return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(ctx, serviceTypeID, planID, err.Error())))
+		return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(ctx, orgID, serviceTypeID, planID, err.Error())))
 	}
 
 	pendingDeletions, err := sc.store.ListPendingDeletions(ctx, set.ID)
 	if err != nil {
-		return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(ctx, serviceTypeID, planID, err.Error())))
+		return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(ctx, orgID, serviceTypeID, planID, err.Error())))
 	}
 
 	var failures []string
@@ -363,7 +372,7 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 		errMsg = "Failed to sync: " + strings.Join(failures, "; ")
 	}
 
-	data := sc.buildSetBuilderData(ctx, serviceTypeID, planID)
+	data := sc.buildSetBuilderData(ctx, orgID, serviceTypeID, planID)
 	data.PublishMsg = publishMsg
 	if errMsg != "" {
 		data.ErrMsg = appendErr(errMsg, data.ErrMsg)
@@ -381,10 +390,11 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 // write endpoint - it's a pure local reset from a fresh read.
 func (sc *SchedulingController) RevertSet(c *fiber.Ctx) error {
 	ctx := middleware.RequestContext(c)
+	orgID := middleware.CurrentOrganizationID(c)
 	serviceTypeID := c.Params("service_type_id")
 	planID := c.Params("plan_id")
 
-	set, err := sc.store.GetOrCreateSet(ctx, serviceTypeID, planID)
+	set, err := sc.store.GetOrCreateSet(ctx, orgID, serviceTypeID, planID)
 	errMsg := ""
 	publishMsg := ""
 	if err != nil {
@@ -408,7 +418,7 @@ func (sc *SchedulingController) RevertSet(c *fiber.Ctx) error {
 		}
 	}
 
-	data := sc.buildSetBuilderData(ctx, serviceTypeID, planID)
+	data := sc.buildSetBuilderData(ctx, orgID, serviceTypeID, planID)
 	data.PublishMsg = publishMsg
 	if errMsg != "" {
 		data.ErrMsg = appendErr(errMsg, data.ErrMsg)
@@ -420,6 +430,7 @@ func (sc *SchedulingController) RevertSet(c *fiber.Ctx) error {
 // ReplaceSetSong swaps the set song identified in the URL for the posted
 // song_id, in place - see scheduling.Store.ReplaceSongInSet.
 func (sc *SchedulingController) ReplaceSetSong(c *fiber.Ctx) error {
+	orgID := middleware.CurrentOrganizationID(c)
 	serviceTypeID := c.Params("service_type_id")
 	planID := c.Params("plan_id")
 
@@ -434,13 +445,13 @@ func (sc *SchedulingController) ReplaceSetSong(c *fiber.Ctx) error {
 		errMsg = err.Error()
 	} else if body.SongID == "" {
 		errMsg = "song_id is required"
-	} else if set, err := sc.store.GetOrCreateSet(c.Context(), serviceTypeID, planID); err != nil {
+	} else if set, err := sc.store.GetOrCreateSet(c.Context(), orgID, serviceTypeID, planID); err != nil {
 		errMsg = err.Error()
 	} else if _, err := sc.store.ReplaceSongInSet(c.Context(), set.ID, int64(rowID), body.SongID); err != nil {
 		errMsg = err.Error()
 	}
 
-	return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(middleware.RequestContext(c), serviceTypeID, planID, errMsg)))
+	return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(middleware.RequestContext(c), orgID, serviceTypeID, planID, errMsg)))
 }
 
 // RepositionSetSong is what the order-of-service drag-and-drop calls: the
@@ -448,6 +459,7 @@ func (sc *SchedulingController) ReplaceSetSong(c *fiber.Ctx) error {
 // (?after=, either "item:<pco_item_id>" for a foreign row or "row:<id>" for
 // another set song - see parseAfterToken and RepositionSongInSet).
 func (sc *SchedulingController) RepositionSetSong(c *fiber.Ctx) error {
+	orgID := middleware.CurrentOrganizationID(c)
 	serviceTypeID := c.Params("service_type_id")
 	planID := c.Params("plan_id")
 
@@ -464,14 +476,14 @@ func (sc *SchedulingController) RepositionSetSong(c *fiber.Ctx) error {
 		anchorItemID, afterRowID, parseErr := parseAfterToken(body.After)
 		if parseErr != nil {
 			errMsg = parseErr.Error()
-		} else if set, err := sc.store.GetOrCreateSet(c.Context(), serviceTypeID, planID); err != nil {
+		} else if set, err := sc.store.GetOrCreateSet(c.Context(), orgID, serviceTypeID, planID); err != nil {
 			errMsg = err.Error()
 		} else if err := sc.store.RepositionSongInSet(c.Context(), set.ID, int64(rowID), anchorItemID, afterRowID); err != nil {
 			errMsg = err.Error()
 		}
 	}
 
-	return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(middleware.RequestContext(c), serviceTypeID, planID, errMsg)))
+	return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(middleware.RequestContext(c), orgID, serviceTypeID, planID, errMsg)))
 }
 
 // parseAfterToken decodes the drag-and-drop "after" token: "" (top of
@@ -492,8 +504,8 @@ func parseAfterToken(token string) (anchorItemID string, afterRowID int64, err e
 	return "", 0, nil
 }
 
-func (sc *SchedulingController) buildSetBuilderDataWithErr(ctx context.Context, serviceTypeID, planID, errMsg string) views.SetBuilderData {
-	data := sc.buildSetBuilderData(ctx, serviceTypeID, planID)
+func (sc *SchedulingController) buildSetBuilderDataWithErr(ctx context.Context, organizationID, serviceTypeID, planID, errMsg string) views.SetBuilderData {
+	data := sc.buildSetBuilderData(ctx, organizationID, serviceTypeID, planID)
 	if errMsg != "" {
 		data.ErrMsg = appendErr(errMsg, data.ErrMsg)
 	}
@@ -506,7 +518,7 @@ func (sc *SchedulingController) buildSetBuilderDataWithErr(ctx context.Context, 
 // based on the last song added, avoid_pairing conflicts, and the full
 // not-yet-added song pool annotated with opener/response tags and any
 // conflicts, for the search/browse list.
-func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, serviceTypeID, planID string) views.SetBuilderData {
+func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organizationID, serviceTypeID, planID string) views.SetBuilderData {
 	data := views.SetBuilderData{ServiceTypeID: serviceTypeID, PlanID: planID}
 
 	if plan, err := pco.GetPlan(ctx, serviceTypeID, planID); err == nil {
@@ -516,7 +528,7 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, service
 		data.ErrMsg = "loading plan from Planning Center: " + err.Error()
 	}
 
-	set, err := sc.store.GetOrCreateSet(ctx, serviceTypeID, planID)
+	set, err := sc.store.GetOrCreateSet(ctx, organizationID, serviceTypeID, planID)
 	if err != nil {
 		data.ErrMsg = appendErr(data.ErrMsg, err.Error())
 		return data
@@ -534,15 +546,15 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, service
 	}
 	titles := songTitleMap(songs)
 
-	openerRoles, _ := sc.store.ListSongRoles(ctx, "", scheduling.RoleOpener)
-	responseRoles, _ := sc.store.ListSongRoles(ctx, "", scheduling.RoleResponse)
+	openerRoles, _ := sc.store.ListSongRoles(ctx, organizationID, "", scheduling.RoleOpener)
+	responseRoles, _ := sc.store.ListSongRoles(ctx, organizationID, "", scheduling.RoleResponse)
 	openers := songIDSet(openerRoles)
 	responses := songIDSet(responseRoles)
 
 	// Best-effort, same as titles/roles above: tags are a search/display
 	// nicety on the candidate list, so a lookup failure just means no tag
 	// badges/search text rather than failing the whole page.
-	allTags, _ := sc.store.ListSongTags(ctx, "", "")
+	allTags, _ := sc.store.ListSongTags(ctx, organizationID, "", "")
 	tagCategories, _ := sc.store.ListSongTagCategories(ctx)
 	tagsBySong := songTagsBySong(allTags)
 	tagCategoryLabels := songTagCategoryLabelMap(tagCategories)
@@ -622,7 +634,7 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, service
 		}
 	}
 
-	suggestions, err := sc.store.Recommendations(ctx, set.ID)
+	suggestions, err := sc.store.Recommendations(ctx, organizationID, set.ID)
 	if err != nil {
 		data.ErrMsg = appendErr(data.ErrMsg, err.Error())
 	}
@@ -634,7 +646,7 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, service
 		})
 	}
 
-	candidateConflicts, existing, err := sc.store.AvoidPairings(ctx, set.ID)
+	candidateConflicts, existing, err := sc.store.AvoidPairings(ctx, organizationID, set.ID)
 	if err != nil {
 		data.ErrMsg = appendErr(data.ErrMsg, err.Error())
 	}

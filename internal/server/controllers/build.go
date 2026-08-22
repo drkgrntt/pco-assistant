@@ -29,6 +29,7 @@ const (
 func (sc *SchedulingController) BuildPage(c *fiber.Ctx) error {
 	_, personName := middleware.CurrentPerson(c)
 	orgName := middleware.CurrentOrganization(c)
+	orgID := middleware.CurrentOrganizationID(c)
 
 	ctx := middleware.RequestContext(c)
 	serviceTypes, err := pco.GetServiceTypes(ctx, nil)
@@ -38,7 +39,7 @@ func (sc *SchedulingController) BuildPage(c *fiber.Ctx) error {
 
 	if len(serviceTypes.Data) == 1 {
 		serviceTypeID := serviceTypes.Data[0].ID
-		rows, page, totalPages, errMsg := sc.combinedPlansForServiceType(ctx, serviceTypeID, "", 1)
+		rows, page, totalPages, errMsg := sc.combinedPlansForServiceType(ctx, orgID, serviceTypeID, "", 1)
 		return render(c, views.Build(personName, orgName, serviceTypes.Data, serviceTypeID, rows, page, totalPages, errMsg))
 	}
 
@@ -56,7 +57,7 @@ func (sc *SchedulingController) BuildPlans(c *fiber.Ctx) error {
 		return render(c, views.BuildPlansList(nil, "", "", 1, 1, ""))
 	}
 
-	rows, page, totalPages, errMsg := sc.combinedPlansForServiceType(middleware.RequestContext(c), serviceTypeID, "", 1)
+	rows, page, totalPages, errMsg := sc.combinedPlansForServiceType(middleware.RequestContext(c), middleware.CurrentOrganizationID(c), serviceTypeID, "", 1)
 	return render(c, views.BuildPlansList(rows, serviceTypeID, "", page, totalPages, errMsg))
 }
 
@@ -81,7 +82,7 @@ func (sc *SchedulingController) BuildPlansSearch(c *fiber.Ctx) error {
 		return render(c, views.BuildPlansResults(nil, "", "", 1, 1, ""))
 	}
 
-	rows, page, totalPages, errMsg := sc.combinedPlansForServiceType(middleware.RequestContext(c), serviceTypeID, search, page)
+	rows, page, totalPages, errMsg := sc.combinedPlansForServiceType(middleware.RequestContext(c), middleware.CurrentOrganizationID(c), serviceTypeID, search, page)
 	return render(c, views.BuildPlansResults(rows, serviceTypeID, search, page, totalPages, errMsg))
 }
 
@@ -178,7 +179,7 @@ func paginateUpcomingPlans(filtered []pco.PlanData, page int) (pageOfPlans []pco
 // did) is the whole point of paginating server-side rather than just
 // hiding rows client-side. Returns the clamped page actually shown
 // alongside the total page count.
-func (sc *SchedulingController) combinedPlansForServiceType(ctx context.Context, serviceTypeID, search string, page int) (rows []views.PlanRow, currentPage int, totalPages int, errMsg string) {
+func (sc *SchedulingController) combinedPlansForServiceType(ctx context.Context, organizationID, serviceTypeID, search string, page int) (rows []views.PlanRow, currentPage int, totalPages int, errMsg string) {
 	plans, err := fetchUpcomingPlans(ctx, serviceTypeID)
 	if err != nil {
 		return nil, 1, 1, err.Error()
@@ -193,8 +194,8 @@ func (sc *SchedulingController) combinedPlansForServiceType(ctx context.Context,
 			ID:           plan.ID,
 			Title:        plan.Attributes.Title,
 			Dates:        plan.Attributes.Dates,
-			SetStatus:    sc.planStatus(ctx, serviceTypeID, plan.ID),
-			RosterStatus: sc.rosterStatus(ctx, serviceTypeID, plan.ID),
+			SetStatus:    sc.planStatus(ctx, organizationID, serviceTypeID, plan.ID),
+			RosterStatus: sc.rosterStatus(ctx, organizationID, serviceTypeID, plan.ID),
 		}
 	}
 	return rows, page, totalPages, ""
@@ -210,13 +211,14 @@ func (sc *SchedulingController) combinedPlansForServiceType(ctx context.Context,
 func (sc *SchedulingController) BuildPlanPage(c *fiber.Ctx) error {
 	_, personName := middleware.CurrentPerson(c)
 	orgName := middleware.CurrentOrganization(c)
+	orgID := middleware.CurrentOrganizationID(c)
 
 	ctx := middleware.RequestContext(c)
 	serviceTypeID := c.Params("service_type_id")
 	planID := c.Params("plan_id")
 
-	setData := sc.buildSetBuilderData(ctx, serviceTypeID, planID)
-	rosterData := sc.buildRosterBuilderData(ctx, serviceTypeID, planID)
+	setData := sc.buildSetBuilderData(ctx, orgID, serviceTypeID, planID)
+	rosterData := sc.buildRosterBuilderData(ctx, orgID, serviceTypeID, planID)
 
 	return render(c, views.BuildPlan(personName, orgName, setData, rosterData))
 }

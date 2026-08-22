@@ -32,7 +32,8 @@ type SongTagCategory struct {
 
 // ListSongTagCategories returns every selectable category, ordered for
 // display in the picker - add a row to song_tag_categories to make a new
-// one available, no code change needed.
+// one available, no code change needed. Not organization-scoped: shared
+// vocabulary, not any one org's data.
 func (s *Store) ListSongTagCategories(ctx context.Context) ([]SongTagCategory, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT code, label, sort_order
@@ -57,21 +58,23 @@ func (s *Store) ListSongTagCategories(ctx context.Context) ([]SongTagCategory, e
 }
 
 type SongTag struct {
-	ID        int64     `json:"id"`
-	SongID    string    `json:"song_id"`
-	Category  string    `json:"category"`
-	Value     string    `json:"value"`
-	CreatedAt time.Time `json:"created_at"`
+	ID             int64     `json:"id"`
+	OrganizationID string    `json:"organization_id"`
+	SongID         string    `json:"song_id"`
+	Category       string    `json:"category"`
+	Value          string    `json:"value"`
+	CreatedAt      time.Time `json:"created_at"`
 }
 
-// See CreateSongRelationshipParams for why both json and form tags are here.
+// See CreateSongRelationshipParams for why there's no OrganizationID field
+// here.
 type CreateSongTagParams struct {
 	SongID   string `json:"song_id" form:"song_id"`
 	Category string `json:"category" form:"category"`
 	Value    string `json:"value" form:"value"`
 }
 
-func (s *Store) CreateSongTag(ctx context.Context, params CreateSongTagParams) (SongTag, error) {
+func (s *Store) CreateSongTag(ctx context.Context, organizationID string, params CreateSongTagParams) (SongTag, error) {
 	value := strings.TrimSpace(params.Value)
 	if params.SongID == "" || value == "" {
 		return SongTag{}, errors.New("song_id and value are required")
@@ -79,11 +82,11 @@ func (s *Store) CreateSongTag(ctx context.Context, params CreateSongTagParams) (
 
 	var tag SongTag
 	err := s.db.QueryRowContext(ctx, `
-		INSERT INTO song_tags (song_id, category, value)
-		VALUES ($1, $2, $3)
-		ON CONFLICT (song_id, category, value) DO UPDATE SET value = EXCLUDED.value
-		RETURNING id, song_id, category, value, created_at
-	`, params.SongID, params.Category, value).Scan(&tag.ID, &tag.SongID, &tag.Category, &tag.Value, &tag.CreatedAt)
+		INSERT INTO song_tags (organization_id, song_id, category, value)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (organization_id, song_id, category, value) DO UPDATE SET value = EXCLUDED.value
+		RETURNING id, organization_id, song_id, category, value, created_at
+	`, organizationID, params.SongID, params.Category, value).Scan(&tag.ID, &tag.OrganizationID, &tag.SongID, &tag.Category, &tag.Value, &tag.CreatedAt)
 	// category references song_tag_categories (see migration 00016) - a code
 	// that isn't a row there fails as a foreign key violation.
 	var pgErr *pgconn.PgError
@@ -98,11 +101,13 @@ func (s *Store) CreateSongTag(ctx context.Context, params CreateSongTagParams) (
 }
 
 // UpdateSongTag overwrites an existing tag's song/category/value in place,
-// keyed by id - CreateSongTag's ON CONFLICT DO UPDATE upserts by (song_id,
-// category, value), which only coincidentally acts like an edit when none of
-// those change; moving a tag to a different song, category, or value needs
-// an id-keyed update so it doesn't leave the original row behind.
-func (s *Store) UpdateSongTag(ctx context.Context, id int64, params CreateSongTagParams) (SongTag, error) {
+// keyed by id and organizationID (see UpdateSongRelationship's doc comment
+// for why both) - CreateSongTag's ON CONFLICT DO UPDATE upserts by
+// (organization_id, song_id, category, value), which only coincidentally
+// acts like an edit when none of those change; moving a tag to a different
+// song, category, or value needs an id-keyed update so it doesn't leave
+// the original row behind.
+func (s *Store) UpdateSongTag(ctx context.Context, organizationID string, id int64, params CreateSongTagParams) (SongTag, error) {
 	value := strings.TrimSpace(params.Value)
 	if params.SongID == "" || value == "" {
 		return SongTag{}, errors.New("song_id and value are required")
@@ -112,9 +117,9 @@ func (s *Store) UpdateSongTag(ctx context.Context, id int64, params CreateSongTa
 	err := s.db.QueryRowContext(ctx, `
 		UPDATE song_tags
 		SET song_id = $1, category = $2, value = $3
-		WHERE id = $4
-		RETURNING id, song_id, category, value, created_at
-	`, params.SongID, params.Category, value, id).Scan(&tag.ID, &tag.SongID, &tag.Category, &tag.Value, &tag.CreatedAt)
+		WHERE id = $4 AND organization_id = $5
+		RETURNING id, organization_id, song_id, category, value, created_at
+	`, params.SongID, params.Category, value, id, organizationID).Scan(&tag.ID, &tag.OrganizationID, &tag.SongID, &tag.Category, &tag.Value, &tag.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return SongTag{}, fmt.Errorf("that tag no longer exists - it may have been deleted")
 	}
@@ -132,19 +137,19 @@ func (s *Store) UpdateSongTag(ctx context.Context, id int64, params CreateSongTa
 	return tag, nil
 }
 
-// ListSongTags filters by songID and/or category; pass "" for either to
-// leave it unfiltered. Used both to show a song's tags and, from the set
-// builder, to annotate the whole candidate pool at once (see
-// buildSetBuilderData) so searching/filtering by tag there is a client-side
-// text match against already-rendered data, the same way role filtering
-// already works - not a separate round trip per keystroke.
-func (s *Store) ListSongTags(ctx context.Context, songID, category string) ([]SongTag, error) {
+// ListSongTags filters to organizationID, and by songID and/or category;
+// pass "" for either to leave it unfiltered. Used both to show a song's
+// tags and, from the set builder, to annotate the whole candidate pool at
+// once (see buildSetBuilderData) so searching/filtering by tag there is a
+// client-side text match against already-rendered data, the same way role
+// filtering already works - not a separate round trip per keystroke.
+func (s *Store) ListSongTags(ctx context.Context, organizationID, songID, category string) ([]SongTag, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, song_id, category, value, created_at
+		SELECT id, organization_id, song_id, category, value, created_at
 		FROM song_tags
-		WHERE ($1 = '' OR song_id = $1) AND ($2 = '' OR category = $2)
+		WHERE organization_id = $1 AND ($2 = '' OR song_id = $2) AND ($3 = '' OR category = $3)
 		ORDER BY created_at DESC
-	`, songID, category)
+	`, organizationID, songID, category)
 	if err != nil {
 		return nil, err
 	}
@@ -153,7 +158,7 @@ func (s *Store) ListSongTags(ctx context.Context, songID, category string) ([]So
 	tags := []SongTag{}
 	for rows.Next() {
 		var tag SongTag
-		if err := rows.Scan(&tag.ID, &tag.SongID, &tag.Category, &tag.Value, &tag.CreatedAt); err != nil {
+		if err := rows.Scan(&tag.ID, &tag.OrganizationID, &tag.SongID, &tag.Category, &tag.Value, &tag.CreatedAt); err != nil {
 			return nil, err
 		}
 		tags = append(tags, tag)
@@ -162,8 +167,8 @@ func (s *Store) ListSongTags(ctx context.Context, songID, category string) ([]So
 	return tags, rows.Err()
 }
 
-func (s *Store) DeleteSongTag(ctx context.Context, id int64) error {
-	result, err := s.db.ExecContext(ctx, `DELETE FROM song_tags WHERE id = $1`, id)
+func (s *Store) DeleteSongTag(ctx context.Context, organizationID string, id int64) error {
+	result, err := s.db.ExecContext(ctx, `DELETE FROM song_tags WHERE id = $1 AND organization_id = $2`, id, organizationID)
 	if err != nil {
 		return err
 	}

@@ -25,8 +25,8 @@ import (
 // controller's planStatus, which this mirrors exactly (substituting
 // team_members for items as the "does Planning Center already have content
 // here" check).
-func (sc *SchedulingController) rosterStatus(ctx context.Context, serviceTypeID, planID string) string {
-	if roster, found, err := sc.store.FindRoster(ctx, serviceTypeID, planID); err == nil && found {
+func (sc *SchedulingController) rosterStatus(ctx context.Context, organizationID, serviceTypeID, planID string) string {
+	if roster, found, err := sc.store.FindRoster(ctx, organizationID, serviceTypeID, planID); err == nil && found {
 		assignments, assignErr := sc.store.ListRosterAssignments(ctx, roster.ID)
 		pending, pendingErr := sc.store.ListPendingRosterDeletions(ctx, roster.ID)
 		if assignErr == nil && pendingErr == nil && len(assignments) > 0 {
@@ -55,6 +55,7 @@ func (sc *SchedulingController) rosterStatus(ctx context.Context, serviceTypeID,
 // --- Roster builder page ------------------------------------------------------
 
 func (sc *SchedulingController) AddRosterAssignment(c *fiber.Ctx) error {
+	orgID := middleware.CurrentOrganizationID(c)
 	serviceTypeID := c.Params("service_type_id")
 	planID := c.Params("plan_id")
 
@@ -66,29 +67,30 @@ func (sc *SchedulingController) AddRosterAssignment(c *fiber.Ctx) error {
 	errMsg := ""
 	if err := c.BodyParser(&body); err != nil {
 		errMsg = err.Error()
-	} else if roster, err := sc.store.GetOrCreateRoster(c.Context(), serviceTypeID, planID); err != nil {
+	} else if roster, err := sc.store.GetOrCreateRoster(c.Context(), orgID, serviceTypeID, planID); err != nil {
 		errMsg = err.Error()
 	} else if _, err := sc.store.AddPersonToPosition(c.Context(), roster.ID, body.PersonID, body.TeamID, body.TeamPositionName); err != nil {
 		errMsg = err.Error()
 	}
 
-	return render(c, views.RosterBuilderBody(sc.buildRosterBuilderDataWithErr(middleware.RequestContext(c), serviceTypeID, planID, errMsg)))
+	return render(c, views.RosterBuilderBody(sc.buildRosterBuilderDataWithErr(middleware.RequestContext(c), orgID, serviceTypeID, planID, errMsg)))
 }
 
 func (sc *SchedulingController) RemoveRosterAssignment(c *fiber.Ctx) error {
+	orgID := middleware.CurrentOrganizationID(c)
 	serviceTypeID := c.Params("service_type_id")
 	planID := c.Params("plan_id")
 
 	errMsg := ""
 	if rowID, err := c.ParamsInt("assignment_id"); err != nil {
 		errMsg = "assignment_id must be an integer"
-	} else if roster, err := sc.store.GetOrCreateRoster(c.Context(), serviceTypeID, planID); err != nil {
+	} else if roster, err := sc.store.GetOrCreateRoster(c.Context(), orgID, serviceTypeID, planID); err != nil {
 		errMsg = err.Error()
 	} else if err := sc.store.RemovePersonFromPosition(c.Context(), roster.ID, int64(rowID)); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		errMsg = err.Error()
 	}
 
-	return render(c, views.RosterBuilderBody(sc.buildRosterBuilderDataWithErr(middleware.RequestContext(c), serviceTypeID, planID, errMsg)))
+	return render(c, views.RosterBuilderBody(sc.buildRosterBuilderDataWithErr(middleware.RequestContext(c), orgID, serviceTypeID, planID, errMsg)))
 }
 
 // PublishRoster fully syncs the draft roster to the real Planning Center
@@ -96,22 +98,23 @@ func (sc *SchedulingController) RemoveRosterAssignment(c *fiber.Ctx) error {
 // reorder step at all, since position assignments have no sequence.
 func (sc *SchedulingController) PublishRoster(c *fiber.Ctx) error {
 	ctx := middleware.RequestContext(c)
+	orgID := middleware.CurrentOrganizationID(c)
 	serviceTypeID := c.Params("service_type_id")
 	planID := c.Params("plan_id")
 
-	roster, err := sc.store.GetOrCreateRoster(ctx, serviceTypeID, planID)
+	roster, err := sc.store.GetOrCreateRoster(ctx, orgID, serviceTypeID, planID)
 	if err != nil {
-		return render(c, views.RosterBuilderBody(sc.buildRosterBuilderDataWithErr(ctx, serviceTypeID, planID, err.Error())))
+		return render(c, views.RosterBuilderBody(sc.buildRosterBuilderDataWithErr(ctx, orgID, serviceTypeID, planID, err.Error())))
 	}
 
 	assignments, err := sc.store.ListRosterAssignments(ctx, roster.ID)
 	if err != nil {
-		return render(c, views.RosterBuilderBody(sc.buildRosterBuilderDataWithErr(ctx, serviceTypeID, planID, err.Error())))
+		return render(c, views.RosterBuilderBody(sc.buildRosterBuilderDataWithErr(ctx, orgID, serviceTypeID, planID, err.Error())))
 	}
 
 	pendingDeletions, err := sc.store.ListPendingRosterDeletions(ctx, roster.ID)
 	if err != nil {
-		return render(c, views.RosterBuilderBody(sc.buildRosterBuilderDataWithErr(ctx, serviceTypeID, planID, err.Error())))
+		return render(c, views.RosterBuilderBody(sc.buildRosterBuilderDataWithErr(ctx, orgID, serviceTypeID, planID, err.Error())))
 	}
 
 	var failures []string
@@ -175,7 +178,7 @@ func (sc *SchedulingController) PublishRoster(c *fiber.Ctx) error {
 		errMsg = "Failed to sync: " + strings.Join(failures, "; ")
 	}
 
-	data := sc.buildRosterBuilderData(ctx, serviceTypeID, planID)
+	data := sc.buildRosterBuilderData(ctx, orgID, serviceTypeID, planID)
 	data.PublishMsg = publishMsg
 	if errMsg != "" {
 		data.ErrMsg = appendErr(errMsg, data.ErrMsg)
@@ -189,10 +192,11 @@ func (sc *SchedulingController) PublishRoster(c *fiber.Ctx) error {
 // mirrors.
 func (sc *SchedulingController) RevertRoster(c *fiber.Ctx) error {
 	ctx := middleware.RequestContext(c)
+	orgID := middleware.CurrentOrganizationID(c)
 	serviceTypeID := c.Params("service_type_id")
 	planID := c.Params("plan_id")
 
-	roster, err := sc.store.GetOrCreateRoster(ctx, serviceTypeID, planID)
+	roster, err := sc.store.GetOrCreateRoster(ctx, orgID, serviceTypeID, planID)
 	errMsg := ""
 	publishMsg := ""
 	if err != nil {
@@ -229,7 +233,7 @@ func (sc *SchedulingController) RevertRoster(c *fiber.Ctx) error {
 		}
 	}
 
-	data := sc.buildRosterBuilderData(ctx, serviceTypeID, planID)
+	data := sc.buildRosterBuilderData(ctx, orgID, serviceTypeID, planID)
 	data.PublishMsg = publishMsg
 	if errMsg != "" {
 		data.ErrMsg = appendErr(errMsg, data.ErrMsg)
@@ -238,8 +242,8 @@ func (sc *SchedulingController) RevertRoster(c *fiber.Ctx) error {
 	return render(c, views.RosterBuilderBody(data))
 }
 
-func (sc *SchedulingController) buildRosterBuilderDataWithErr(ctx context.Context, serviceTypeID, planID, errMsg string) views.RosterBuilderData {
-	data := sc.buildRosterBuilderData(ctx, serviceTypeID, planID)
+func (sc *SchedulingController) buildRosterBuilderDataWithErr(ctx context.Context, organizationID, serviceTypeID, planID, errMsg string) views.RosterBuilderData {
+	data := sc.buildRosterBuilderData(ctx, organizationID, serviceTypeID, planID)
 	if errMsg != "" {
 		data.ErrMsg = appendErr(errMsg, data.ErrMsg)
 	}
@@ -505,7 +509,7 @@ func otherAssignmentDates(ctx context.Context, personID, teamID, teamPositionNam
 // (GetPersonTeamPositionAssignments), which is naturally small and bounded,
 // so it gets the same pre-add warning visibility Build a Set's song
 // candidates get without needing to fetch or filter the whole directory.
-func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, serviceTypeID, planID string) views.RosterBuilderData {
+func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, organizationID, serviceTypeID, planID string) views.RosterBuilderData {
 	data := views.RosterBuilderData{ServiceTypeID: serviceTypeID, PlanID: planID}
 
 	var planDate time.Time
@@ -517,7 +521,7 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, serv
 		data.ErrMsg = "loading plan from Planning Center: " + err.Error()
 	}
 
-	roster, err := sc.store.GetOrCreateRoster(ctx, serviceTypeID, planID)
+	roster, err := sc.store.GetOrCreateRoster(ctx, organizationID, serviceTypeID, planID)
 	if err != nil {
 		data.ErrMsg = appendErr(data.ErrMsg, err.Error())
 		return data
@@ -690,7 +694,7 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, serv
 		data.Positions = append(data.Positions, pg)
 	}
 
-	if conflicts, existing, err := sc.store.AvoidPairingConflicts(ctx, roster.ID); err != nil {
+	if conflicts, existing, err := sc.store.AvoidPairingConflicts(ctx, organizationID, roster.ID); err != nil {
 		data.ErrMsg = appendErr(data.ErrMsg, err.Error())
 	} else {
 		_ = conflicts // candidates aren't pre-rendered as a flat pool for people, so only the existing-pair banner applies here
@@ -702,7 +706,7 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, serv
 		}
 	}
 
-	if suggestions, err := sc.store.RelationshipSuggestions(ctx, roster.ID); err != nil {
+	if suggestions, err := sc.store.RelationshipSuggestions(ctx, organizationID, roster.ID); err != nil {
 		data.ErrMsg = appendErr(data.ErrMsg, err.Error())
 	} else {
 		data.Suggestions = suggestionsForOpenPositions(suggestions, groups, candidatesByGroup, teamNames, names)

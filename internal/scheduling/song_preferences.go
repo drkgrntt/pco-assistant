@@ -30,7 +30,8 @@ type SongPreferenceType struct {
 
 // ListSongPreferenceTypes returns every selectable preference, ordered for
 // display in the picker - add a row to song_preference_types to make a new
-// one available, no code change needed.
+// one available, no code change needed. Not organization-scoped: shared
+// vocabulary, not any one org's data.
 func (s *Store) ListSongPreferenceTypes(ctx context.Context) ([]SongPreferenceType, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT code, label, sort_order
@@ -55,16 +56,18 @@ func (s *Store) ListSongPreferenceTypes(ctx context.Context) ([]SongPreferenceTy
 }
 
 type SongPersonPreference struct {
-	ID         int64     `json:"id"`
-	SongID     string    `json:"song_id"`
-	PersonID   string    `json:"person_id"`
-	Preference string    `json:"preference"`
-	Notes      string    `json:"notes"`
-	CreatedAt  time.Time `json:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at"`
+	ID             int64     `json:"id"`
+	OrganizationID string    `json:"organization_id"`
+	SongID         string    `json:"song_id"`
+	PersonID       string    `json:"person_id"`
+	Preference     string    `json:"preference"`
+	Notes          string    `json:"notes"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }
 
-// See CreateSongRelationshipParams for why both json and form tags are here.
+// See CreateSongRelationshipParams for why both json and form tags are
+// here, and why there's no OrganizationID field.
 type SetSongPersonPreferenceParams struct {
 	SongID     string `json:"song_id" form:"song_id"`
 	PersonID   string `json:"person_id" form:"person_id"`
@@ -73,23 +76,24 @@ type SetSongPersonPreferenceParams struct {
 }
 
 // SetSongPersonPreference creates or replaces the preference for a
-// song/person pair - there's only ever one current preference per pair.
-func (s *Store) SetSongPersonPreference(ctx context.Context, params SetSongPersonPreferenceParams) (SongPersonPreference, error) {
+// song/person pair within organizationID - there's only ever one current
+// preference per pair per organization.
+func (s *Store) SetSongPersonPreference(ctx context.Context, organizationID string, params SetSongPersonPreferenceParams) (SongPersonPreference, error) {
 	if params.SongID == "" || params.PersonID == "" {
 		return SongPersonPreference{}, errors.New("song_id and person_id are required")
 	}
 
 	var pref SongPersonPreference
 	err := s.db.QueryRowContext(ctx, `
-		INSERT INTO song_person_preferences (song_id, person_id, preference, notes)
-		VALUES ($1, $2, $3, $4)
-		ON CONFLICT (song_id, person_id) DO UPDATE
+		INSERT INTO song_person_preferences (organization_id, song_id, person_id, preference, notes)
+		VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (organization_id, song_id, person_id) DO UPDATE
 			SET preference = EXCLUDED.preference,
 				notes = EXCLUDED.notes,
 				updated_at = now()
-		RETURNING id, song_id, person_id, preference, notes, created_at, updated_at
-	`, params.SongID, params.PersonID, params.Preference, params.Notes).Scan(
-		&pref.ID, &pref.SongID, &pref.PersonID, &pref.Preference, &pref.Notes, &pref.CreatedAt, &pref.UpdatedAt,
+		RETURNING id, organization_id, song_id, person_id, preference, notes, created_at, updated_at
+	`, organizationID, params.SongID, params.PersonID, params.Preference, params.Notes).Scan(
+		&pref.ID, &pref.OrganizationID, &pref.SongID, &pref.PersonID, &pref.Preference, &pref.Notes, &pref.CreatedAt, &pref.UpdatedAt,
 	)
 	// preference references song_preference_types (see migration 00015) - a
 	// code that isn't a row there fails as a foreign key violation.
@@ -105,11 +109,13 @@ func (s *Store) SetSongPersonPreference(ctx context.Context, params SetSongPerso
 }
 
 // UpdateSongPersonPreference overwrites an existing preference's fields in
-// place, keyed by id - unlike SetSongPersonPreference's upsert-by-pair
-// (song_id, person_id), this is a true edit: changing which song or person
-// a row is about updates that same row rather than upserting a different
-// one and leaving the original behind.
-func (s *Store) UpdateSongPersonPreference(ctx context.Context, id int64, params SetSongPersonPreferenceParams) (SongPersonPreference, error) {
+// place, keyed by id (and organizationID - see
+// UpdateSongRelationship's doc comment for why) - unlike
+// SetSongPersonPreference's upsert-by-pair (song_id, person_id), this is a
+// true edit: changing which song or person a row is about updates that
+// same row rather than upserting a different one and leaving the original
+// behind.
+func (s *Store) UpdateSongPersonPreference(ctx context.Context, organizationID string, id int64, params SetSongPersonPreferenceParams) (SongPersonPreference, error) {
 	if params.SongID == "" || params.PersonID == "" {
 		return SongPersonPreference{}, errors.New("song_id and person_id are required")
 	}
@@ -118,10 +124,10 @@ func (s *Store) UpdateSongPersonPreference(ctx context.Context, id int64, params
 	err := s.db.QueryRowContext(ctx, `
 		UPDATE song_person_preferences
 		SET song_id = $1, person_id = $2, preference = $3, notes = $4, updated_at = now()
-		WHERE id = $5
-		RETURNING id, song_id, person_id, preference, notes, created_at, updated_at
-	`, params.SongID, params.PersonID, params.Preference, params.Notes, id).Scan(
-		&pref.ID, &pref.SongID, &pref.PersonID, &pref.Preference, &pref.Notes, &pref.CreatedAt, &pref.UpdatedAt,
+		WHERE id = $5 AND organization_id = $6
+		RETURNING id, organization_id, song_id, person_id, preference, notes, created_at, updated_at
+	`, params.SongID, params.PersonID, params.Preference, params.Notes, id, organizationID).Scan(
+		&pref.ID, &pref.OrganizationID, &pref.SongID, &pref.PersonID, &pref.Preference, &pref.Notes, &pref.CreatedAt, &pref.UpdatedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return SongPersonPreference{}, fmt.Errorf("that preference no longer exists - it may have been deleted")
@@ -140,15 +146,15 @@ func (s *Store) UpdateSongPersonPreference(ctx context.Context, id int64, params
 	return pref, nil
 }
 
-// ListSongPersonPreferences filters by songID and/or personID; pass "" for
-// either to leave it unfiltered.
-func (s *Store) ListSongPersonPreferences(ctx context.Context, songID, personID string) ([]SongPersonPreference, error) {
+// ListSongPersonPreferences filters to organizationID, and by songID and/or
+// personID; pass "" for either to leave it unfiltered.
+func (s *Store) ListSongPersonPreferences(ctx context.Context, organizationID, songID, personID string) ([]SongPersonPreference, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, song_id, person_id, preference, notes, created_at, updated_at
+		SELECT id, organization_id, song_id, person_id, preference, notes, created_at, updated_at
 		FROM song_person_preferences
-		WHERE ($1 = '' OR song_id = $1) AND ($2 = '' OR person_id = $2)
+		WHERE organization_id = $1 AND ($2 = '' OR song_id = $2) AND ($3 = '' OR person_id = $3)
 		ORDER BY created_at DESC
-	`, songID, personID)
+	`, organizationID, songID, personID)
 	if err != nil {
 		return nil, err
 	}
@@ -157,7 +163,7 @@ func (s *Store) ListSongPersonPreferences(ctx context.Context, songID, personID 
 	preferences := []SongPersonPreference{}
 	for rows.Next() {
 		var pref SongPersonPreference
-		if err := rows.Scan(&pref.ID, &pref.SongID, &pref.PersonID, &pref.Preference, &pref.Notes, &pref.CreatedAt, &pref.UpdatedAt); err != nil {
+		if err := rows.Scan(&pref.ID, &pref.OrganizationID, &pref.SongID, &pref.PersonID, &pref.Preference, &pref.Notes, &pref.CreatedAt, &pref.UpdatedAt); err != nil {
 			return nil, err
 		}
 		preferences = append(preferences, pref)
@@ -166,8 +172,8 @@ func (s *Store) ListSongPersonPreferences(ctx context.Context, songID, personID 
 	return preferences, rows.Err()
 }
 
-func (s *Store) DeleteSongPersonPreference(ctx context.Context, id int64) error {
-	result, err := s.db.ExecContext(ctx, `DELETE FROM song_person_preferences WHERE id = $1`, id)
+func (s *Store) DeleteSongPersonPreference(ctx context.Context, organizationID string, id int64) error {
+	result, err := s.db.ExecContext(ctx, `DELETE FROM song_person_preferences WHERE id = $1 AND organization_id = $2`, id, organizationID)
 	if err != nil {
 		return err
 	}

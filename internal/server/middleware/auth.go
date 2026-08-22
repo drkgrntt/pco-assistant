@@ -27,12 +27,12 @@ var publicPrefixes = []string{"/health", "/login", "/auth/", "/static/", "/sw.js
 
 // RequireAuth gates every route not covered by publicPrefixes behind a
 // valid, unexpired session. On success it stashes the signed-in person's id
-// and name in fiber locals for handlers/views to use, and - the reason this
-// runs on every request rather than just once at login - builds the
-// context every downstream PCO API call for this request needs to
-// authenticate as that person (see RequestContext) instead of a fixed
-// Personal Access Token, refreshing their PCO access token first if it's
-// close to expiring.
+// and name, and their organization's id and name, in fiber locals for
+// handlers/views to use, and - the reason this runs on every request rather
+// than just once at login - builds the context every downstream PCO API
+// call for this request needs to authenticate as that person (see
+// RequestContext) instead of a fixed Personal Access Token, refreshing
+// their PCO access token first if it's close to expiring.
 func RequireAuth(store *auth.Store) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		for _, prefix := range publicPrefixes {
@@ -45,6 +45,19 @@ func RequireAuth(store *auth.Store) fiber.Handler {
 		// through to the redirect below.
 		if token := c.Cookies(SessionCookieName); token != "" {
 			if session, err := store.GetSession(c.Context(), token); err == nil {
+				// OrganizationID is what every scheduling.Store call this
+				// request makes gets scoped to (see CurrentOrganizationID) -
+				// a session without one predates that scoping (or hit a
+				// sign-in bug) and letting it through would mean either an
+				// unscoped query or, worse, every such session sharing the
+				// same "" bucket. Treat it exactly like a failed token
+				// refresh: sign out and make them sign in again properly.
+				if session.OrganizationID == "" {
+					log.Println("session has no organization id, signing out:", session.PersonID)
+					_ = store.DeleteSession(c.Context(), token)
+					return redirectToLogin(c)
+				}
+
 				accessToken := session.AccessToken
 
 				if time.Now().Add(refreshBuffer).After(session.TokenExpiresAt) {
@@ -67,6 +80,7 @@ func RequireAuth(store *auth.Store) fiber.Handler {
 
 				c.Locals("person_id", session.PersonID)
 				c.Locals("person_name", session.PersonName)
+				c.Locals("organization_id", session.OrganizationID)
 				c.Locals("organization_name", session.OrganizationName)
 				c.Locals("pco_ctx", pco.WithAccessToken(c.Context(), accessToken))
 				return c.Next()
@@ -95,11 +109,25 @@ func CurrentPerson(c *fiber.Ctx) (id, name string) {
 }
 
 // CurrentOrganization reads the signed-in person's PCO organization (church)
-// name that RequireAuth stashed in locals - see Session.OrganizationName for
-// why this can be "". Only meaningful on routes RequireAuth let through.
+// name that RequireAuth stashed in locals - display only, see
+// Session.OrganizationName. Only meaningful on routes RequireAuth let
+// through.
 func CurrentOrganization(c *fiber.Ctx) string {
 	name, _ := c.Locals("organization_name").(string)
 	return name
+}
+
+// CurrentOrganizationID reads the signed-in person's PCO organization id -
+// unlike CurrentOrganization's name, this is load-bearing: pass it to every
+// scheduling.Store call a handler makes, so this session's requests only
+// ever read or write its own organization's data. RequireAuth already
+// refuses to let a session through at all without one (see its own
+// comment), so an empty return here should only ever happen on a route
+// RequireAuth didn't run on - callers shouldn't treat "" as a real,
+// queryable organization.
+func CurrentOrganizationID(c *fiber.Ctx) string {
+	id, _ := c.Locals("organization_id").(string)
+	return id
 }
 
 // RequestContext returns the context RequireAuth built for this request -

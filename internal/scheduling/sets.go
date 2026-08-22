@@ -12,11 +12,12 @@ import (
 // nothing here is written back to Planning Center (see the package doc).
 // There's at most one per (service_type_id, plan_id) pair.
 type Set struct {
-	ID            int64     `json:"id"`
-	ServiceTypeID string    `json:"service_type_id"`
-	PlanID        string    `json:"plan_id"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	ID             int64     `json:"id"`
+	OrganizationID string    `json:"organization_id"`
+	ServiceTypeID  string    `json:"service_type_id"`
+	PlanID         string    `json:"plan_id"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 type SetSong struct {
@@ -54,12 +55,17 @@ type SetSong struct {
 // GetOrCreateSet, it reports found=false rather than materializing a new
 // empty row when there's no draft yet for this plan. Used for status
 // checks (e.g. the plans list) that shouldn't create clutter just by
-// looking.
-func (s *Store) FindSet(ctx context.Context, serviceTypeID, planID string) (set Set, found bool, err error) {
+// looking. Scoped to organizationID: every other set_songs/sets method in
+// this file takes only a bare setID/rowID, trusting it's already
+// org-scoped, because callers always re-derive it fresh from this (or
+// GetOrCreateSet) on every request rather than trusting a client-supplied
+// set id directly - see the scheduling controller's route handlers, which
+// only ever take service_type_id/plan_id from the URL, never a set id.
+func (s *Store) FindSet(ctx context.Context, organizationID, serviceTypeID, planID string) (set Set, found bool, err error) {
 	err = s.db.QueryRowContext(ctx, `
-		SELECT id, service_type_id, plan_id, created_at, updated_at
-		FROM sets WHERE service_type_id = $1 AND plan_id = $2
-	`, serviceTypeID, planID).Scan(&set.ID, &set.ServiceTypeID, &set.PlanID, &set.CreatedAt, &set.UpdatedAt)
+		SELECT id, organization_id, service_type_id, plan_id, created_at, updated_at
+		FROM sets WHERE organization_id = $1 AND service_type_id = $2 AND plan_id = $3
+	`, organizationID, serviceTypeID, planID).Scan(&set.ID, &set.OrganizationID, &set.ServiceTypeID, &set.PlanID, &set.CreatedAt, &set.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Set{}, false, nil
 	}
@@ -69,21 +75,23 @@ func (s *Store) FindSet(ctx context.Context, serviceTypeID, planID string) (set 
 	return set, true, nil
 }
 
-// GetOrCreateSet returns the draft set for a plan, creating an empty one on
-// first use. Building a set always starts from picking a plan, so callers
-// don't need to distinguish "new" from "already had one going".
-func (s *Store) GetOrCreateSet(ctx context.Context, serviceTypeID, planID string) (Set, error) {
+// GetOrCreateSet returns organizationID's draft set for a plan, creating an
+// empty one on first use. Building a set always starts from picking a plan,
+// so callers don't need to distinguish "new" from "already had one going" -
+// see FindSet's doc comment for why every other method in this file trusts
+// a bare setID without also taking organizationID.
+func (s *Store) GetOrCreateSet(ctx context.Context, organizationID, serviceTypeID, planID string) (Set, error) {
 	if serviceTypeID == "" || planID == "" {
 		return Set{}, errors.New("service_type_id and plan_id are required")
 	}
 
 	var set Set
 	err := s.db.QueryRowContext(ctx, `
-		INSERT INTO sets (service_type_id, plan_id)
-		VALUES ($1, $2)
-		ON CONFLICT (service_type_id, plan_id) DO UPDATE SET updated_at = sets.updated_at
-		RETURNING id, service_type_id, plan_id, created_at, updated_at
-	`, serviceTypeID, planID).Scan(&set.ID, &set.ServiceTypeID, &set.PlanID, &set.CreatedAt, &set.UpdatedAt)
+		INSERT INTO sets (organization_id, service_type_id, plan_id)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (organization_id, service_type_id, plan_id) DO UPDATE SET updated_at = sets.updated_at
+		RETURNING id, organization_id, service_type_id, plan_id, created_at, updated_at
+	`, organizationID, serviceTypeID, planID).Scan(&set.ID, &set.OrganizationID, &set.ServiceTypeID, &set.PlanID, &set.CreatedAt, &set.UpdatedAt)
 	if err != nil {
 		return Set{}, err
 	}
@@ -616,7 +624,7 @@ type SetSuggestion struct {
 // same_theme relationships with the most recently added song in the set.
 // Songs already in the set are excluded. Returns nil (not an error) for an
 // empty set - there's nothing yet to base a suggestion on.
-func (s *Store) Recommendations(ctx context.Context, setID int64) ([]SetSuggestion, error) {
+func (s *Store) Recommendations(ctx context.Context, organizationID string, setID int64) ([]SetSuggestion, error) {
 	setSongs, err := s.ListSetSongs(ctx, setID)
 	if err != nil {
 		return nil, err
@@ -632,7 +640,7 @@ func (s *Store) Recommendations(ctx context.Context, setID int64) ([]SetSuggesti
 		inSet[ss.SongID] = true
 	}
 
-	rels, err := s.ListSongRelationships(ctx, lastSongID)
+	rels, err := s.ListSongRelationships(ctx, organizationID, lastSongID)
 	if err != nil {
 		return nil, err
 	}
@@ -683,7 +691,7 @@ type SetConflict struct {
 // it. existing lists pairs where both songs are already in the set (each
 // pair reported once), for a heads-up on the set itself. Returns zero
 // values (not an error) for an empty set.
-func (s *Store) AvoidPairings(ctx context.Context, setID int64) (candidates map[string][]string, existing []SetConflict, err error) {
+func (s *Store) AvoidPairings(ctx context.Context, organizationID string, setID int64) (candidates map[string][]string, existing []SetConflict, err error) {
 	setSongs, err := s.ListSetSongs(ctx, setID)
 	if err != nil {
 		return nil, nil, err
@@ -701,7 +709,7 @@ func (s *Store) AvoidPairings(ctx context.Context, setID int64) (candidates map[
 	seenExisting := map[string]bool{}
 
 	for _, ss := range setSongs {
-		rels, err := s.ListSongRelationships(ctx, ss.SongID)
+		rels, err := s.ListSongRelationships(ctx, organizationID, ss.SongID)
 		if err != nil {
 			return nil, nil, err
 		}
