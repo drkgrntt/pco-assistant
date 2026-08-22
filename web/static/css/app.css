@@ -215,6 +215,14 @@ header.site strong {
   display: flex;
 }
 
+/* Flipped by scheduling.js's positionNavDropdown when the default left: 0
+   anchoring would grow the menu off the right edge of the viewport (the
+   toggle sits near the right side of the header on mobile widths). */
+.nav-dropdown.align-right .nav-dropdown-menu {
+  left: auto;
+  right: 0;
+}
+
 .nav-dropdown-menu a {
   padding: var(--space-2) calc(var(--space-2) + 0.1rem);
   border-radius: var(--radius-md);
