@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"pco-assistant/internal/scheduling"
+	"pco-assistant/internal/server/middleware"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -35,7 +36,7 @@ func (sc *SchedulingAPIController) CreateSongRelationship(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	rel, err := sc.store.CreateSongRelationship(c.Context(), body)
+	rel, err := sc.store.CreateSongRelationship(c.Context(), middleware.CurrentOrganizationID(c), body)
 	if err != nil {
 		return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -43,10 +44,11 @@ func (sc *SchedulingAPIController) CreateSongRelationship(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(rel)
 }
 
-// ListSongRelationships lists relationships. ?song_id= filters to
-// relationships involving that song on either side; omitted, it lists all.
+// ListSongRelationships lists the signed-in organization's relationships.
+// ?song_id= filters to relationships involving that song on either side;
+// omitted, it lists all of that organization's relationships.
 func (sc *SchedulingAPIController) ListSongRelationships(c *fiber.Ctx) error {
-	relationships, err := sc.store.ListSongRelationships(c.Context(), c.Query("song_id"))
+	relationships, err := sc.store.ListSongRelationships(c.Context(), middleware.CurrentOrganizationID(c), c.Query("song_id"))
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -60,7 +62,7 @@ func (sc *SchedulingAPIController) DeleteSongRelationship(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "id must be an integer"})
 	}
 
-	if err := sc.store.DeleteSongRelationship(c.Context(), int64(id)); err != nil {
+	if err := sc.store.DeleteSongRelationship(c.Context(), middleware.CurrentOrganizationID(c), int64(id)); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return c.SendStatus(fiber.StatusNotFound)
 		}
@@ -78,7 +80,7 @@ func (sc *SchedulingAPIController) SetSongPersonPreference(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	pref, err := sc.store.SetSongPersonPreference(c.Context(), body)
+	pref, err := sc.store.SetSongPersonPreference(c.Context(), middleware.CurrentOrganizationID(c), body)
 	if err != nil {
 		return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -86,10 +88,10 @@ func (sc *SchedulingAPIController) SetSongPersonPreference(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(pref)
 }
 
-// ListSongPersonPreferences lists preferences, optionally filtered by
-// ?song_id= and/or ?person_id=.
+// ListSongPersonPreferences lists the signed-in organization's preferences,
+// optionally filtered by ?song_id= and/or ?person_id=.
 func (sc *SchedulingAPIController) ListSongPersonPreferences(c *fiber.Ctx) error {
-	preferences, err := sc.store.ListSongPersonPreferences(c.Context(), c.Query("song_id"), c.Query("person_id"))
+	preferences, err := sc.store.ListSongPersonPreferences(c.Context(), middleware.CurrentOrganizationID(c), c.Query("song_id"), c.Query("person_id"))
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -103,7 +105,7 @@ func (sc *SchedulingAPIController) DeleteSongPersonPreference(c *fiber.Ctx) erro
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "id must be an integer"})
 	}
 
-	if err := sc.store.DeleteSongPersonPreference(c.Context(), int64(id)); err != nil {
+	if err := sc.store.DeleteSongPersonPreference(c.Context(), middleware.CurrentOrganizationID(c), int64(id)); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return c.SendStatus(fiber.StatusNotFound)
 		}

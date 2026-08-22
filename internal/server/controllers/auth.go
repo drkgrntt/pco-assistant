@@ -77,15 +77,21 @@ func (ac *AuthController) Callback(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadGateway).SendString(err.Error())
 	}
 
-	// Best-effort: the org name is a header nicety (see layout.templ), not
-	// something sign-in should fail over - a lookup failure here just means
-	// it shows nothing next to the person's name instead of blocking login.
-	organizationName := ""
-	if org, err := pco.GetOrganization(pco.WithAccessToken(c.Context(), tokenResult.AccessToken)); err == nil {
-		organizationName = org.Data.Attributes.Name
+	// Unlike the org name (a header nicety), the org id is load-bearing:
+	// every scheduling.Store call this session makes is scoped to it (see
+	// middleware.CurrentOrganizationID), so a second Planning Center
+	// organization signed into this same instance never sees this one's
+	// data. A lookup failure here can't just fall back to "" the way the
+	// name used to - every session that ever failed this lookup would
+	// collapse into the same "" bucket and start seeing each other's data,
+	// which is exactly the bug this is trying to prevent. Fail sign-in
+	// instead and let them retry.
+	org, err := pco.GetOrganization(pco.WithAccessToken(c.Context(), tokenResult.AccessToken))
+	if err != nil {
+		return c.Status(fiber.StatusBadGateway).SendString("looking up your Planning Center organization: " + err.Error())
 	}
 
-	token, err := ac.store.CreateSession(c.Context(), personID, personName, organizationName, tokenResult.AccessToken, tokenResult.RefreshToken, tokenResult.ExpiresAt)
+	token, err := ac.store.CreateSession(c.Context(), personID, personName, org.Data.ID, org.Data.Attributes.Name, tokenResult.AccessToken, tokenResult.RefreshToken, tokenResult.ExpiresAt)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
 	}

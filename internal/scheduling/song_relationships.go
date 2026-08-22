@@ -32,7 +32,9 @@ type SongRelationshipType struct {
 
 // ListSongRelationshipTypes returns every selectable relationship type,
 // ordered for display in the picker - add a row to song_relationship_types
-// to make a new one available, no code change needed.
+// to make a new one available, no code change needed. Not organization-
+// scoped: these are shared vocabulary (codes/labels), not any one org's
+// data - see migration 00015.
 func (s *Store) ListSongRelationshipTypes(ctx context.Context) ([]SongRelationshipType, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT code, label, sort_order
@@ -58,6 +60,7 @@ func (s *Store) ListSongRelationshipTypes(ctx context.Context) ([]SongRelationsh
 
 type SongRelationship struct {
 	ID               int64     `json:"id"`
+	OrganizationID   string    `json:"organization_id"`
 	SongIDA          string    `json:"song_id_a"`
 	SongIDB          string    `json:"song_id_b"`
 	RelationshipType string    `json:"relationship_type"`
@@ -69,7 +72,11 @@ type SongRelationship struct {
 // Struct tags cover both JSON bodies (SchedulingAPIController, /api/scheduling)
 // and form-encoded bodies (SchedulingController, /scheduling) - Fiber's
 // BodyParser keys off `json` for JSON requests and `form` for
-// application/x-www-form-urlencoded/multipart ones.
+// application/x-www-form-urlencoded/multipart ones. There's deliberately no
+// OrganizationID field here - it must never come from request input (a
+// caller could just claim any org), only from the signed-in session (see
+// middleware.CurrentOrganizationID), so every method below takes it as its
+// own explicit parameter instead.
 type CreateSongRelationshipParams struct {
 	SongIDA          string `json:"song_id_a" form:"song_id_a"`
 	SongIDB          string `json:"song_id_b" form:"song_id_b"`
@@ -77,7 +84,7 @@ type CreateSongRelationshipParams struct {
 	Notes            string `json:"notes" form:"notes"`
 }
 
-func (s *Store) CreateSongRelationship(ctx context.Context, params CreateSongRelationshipParams) (SongRelationship, error) {
+func (s *Store) CreateSongRelationship(ctx context.Context, organizationID string, params CreateSongRelationshipParams) (SongRelationship, error) {
 	if params.SongIDA == "" || params.SongIDB == "" {
 		return SongRelationship{}, errors.New("song_id_a and song_id_b are required")
 	}
@@ -98,12 +105,12 @@ func (s *Store) CreateSongRelationship(ctx context.Context, params CreateSongRel
 
 	var rel SongRelationship
 	err := s.db.QueryRowContext(ctx, `
-		INSERT INTO song_relationships (song_id_a, song_id_b, relationship_type, notes)
-		VALUES ($1, $2, $3, $4)
-		ON CONFLICT (song_id_a, song_id_b, relationship_type) DO NOTHING
-		RETURNING id, song_id_a, song_id_b, relationship_type, notes, created_at, updated_at
-	`, songIDA, songIDB, params.RelationshipType, params.Notes).Scan(
-		&rel.ID, &rel.SongIDA, &rel.SongIDB, &rel.RelationshipType, &rel.Notes, &rel.CreatedAt, &rel.UpdatedAt,
+		INSERT INTO song_relationships (organization_id, song_id_a, song_id_b, relationship_type, notes)
+		VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (organization_id, song_id_a, song_id_b, relationship_type) DO NOTHING
+		RETURNING id, organization_id, song_id_a, song_id_b, relationship_type, notes, created_at, updated_at
+	`, organizationID, songIDA, songIDB, params.RelationshipType, params.Notes).Scan(
+		&rel.ID, &rel.OrganizationID, &rel.SongIDA, &rel.SongIDB, &rel.RelationshipType, &rel.Notes, &rel.CreatedAt, &rel.UpdatedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return SongRelationship{}, fmt.Errorf("that relationship already exists")
@@ -127,8 +134,10 @@ func (s *Store) CreateSongRelationship(ctx context.Context, params CreateSongRel
 // CreateSongRelationship, but keyed by id rather than by the song
 // pair/type, so changing which songs or type a row represents (an actual
 // edit, not "add a new pair") doesn't leave the original row behind as an
-// orphaned duplicate.
-func (s *Store) UpdateSongRelationship(ctx context.Context, id int64, params CreateSongRelationshipParams) (SongRelationship, error) {
+// orphaned duplicate. Scoped by organizationID as well as id, so a
+// forged/guessed id belonging to a different organization's row is a no-op
+// (sql.ErrNoRows), not an edit.
+func (s *Store) UpdateSongRelationship(ctx context.Context, organizationID string, id int64, params CreateSongRelationshipParams) (SongRelationship, error) {
 	if params.SongIDA == "" || params.SongIDB == "" {
 		return SongRelationship{}, errors.New("song_id_a and song_id_b are required")
 	}
@@ -145,10 +154,10 @@ func (s *Store) UpdateSongRelationship(ctx context.Context, id int64, params Cre
 	err := s.db.QueryRowContext(ctx, `
 		UPDATE song_relationships
 		SET song_id_a = $1, song_id_b = $2, relationship_type = $3, notes = $4, updated_at = now()
-		WHERE id = $5
-		RETURNING id, song_id_a, song_id_b, relationship_type, notes, created_at, updated_at
-	`, songIDA, songIDB, params.RelationshipType, params.Notes, id).Scan(
-		&rel.ID, &rel.SongIDA, &rel.SongIDB, &rel.RelationshipType, &rel.Notes, &rel.CreatedAt, &rel.UpdatedAt,
+		WHERE id = $5 AND organization_id = $6
+		RETURNING id, organization_id, song_id_a, song_id_b, relationship_type, notes, created_at, updated_at
+	`, songIDA, songIDB, params.RelationshipType, params.Notes, id, organizationID).Scan(
+		&rel.ID, &rel.OrganizationID, &rel.SongIDA, &rel.SongIDB, &rel.RelationshipType, &rel.Notes, &rel.CreatedAt, &rel.UpdatedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return SongRelationship{}, fmt.Errorf("that relationship no longer exists - it may have been deleted")
@@ -167,15 +176,16 @@ func (s *Store) UpdateSongRelationship(ctx context.Context, id int64, params Cre
 	return rel, nil
 }
 
-// ListSongRelationships returns relationships involving songID on either
-// side. Pass "" to list every relationship.
-func (s *Store) ListSongRelationships(ctx context.Context, songID string) ([]SongRelationship, error) {
+// ListSongRelationships returns organizationID's relationships involving
+// songID on either side. Pass "" for songID to list every relationship
+// belonging to that organization.
+func (s *Store) ListSongRelationships(ctx context.Context, organizationID, songID string) ([]SongRelationship, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, song_id_a, song_id_b, relationship_type, notes, created_at, updated_at
+		SELECT id, organization_id, song_id_a, song_id_b, relationship_type, notes, created_at, updated_at
 		FROM song_relationships
-		WHERE $1 = '' OR song_id_a = $1 OR song_id_b = $1
+		WHERE organization_id = $1 AND ($2 = '' OR song_id_a = $2 OR song_id_b = $2)
 		ORDER BY created_at DESC
-	`, songID)
+	`, organizationID, songID)
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +194,7 @@ func (s *Store) ListSongRelationships(ctx context.Context, songID string) ([]Son
 	relationships := []SongRelationship{}
 	for rows.Next() {
 		var rel SongRelationship
-		if err := rows.Scan(&rel.ID, &rel.SongIDA, &rel.SongIDB, &rel.RelationshipType, &rel.Notes, &rel.CreatedAt, &rel.UpdatedAt); err != nil {
+		if err := rows.Scan(&rel.ID, &rel.OrganizationID, &rel.SongIDA, &rel.SongIDB, &rel.RelationshipType, &rel.Notes, &rel.CreatedAt, &rel.UpdatedAt); err != nil {
 			return nil, err
 		}
 		relationships = append(relationships, rel)
@@ -193,8 +203,8 @@ func (s *Store) ListSongRelationships(ctx context.Context, songID string) ([]Son
 	return relationships, rows.Err()
 }
 
-func (s *Store) DeleteSongRelationship(ctx context.Context, id int64) error {
-	result, err := s.db.ExecContext(ctx, `DELETE FROM song_relationships WHERE id = $1`, id)
+func (s *Store) DeleteSongRelationship(ctx context.Context, organizationID string, id int64) error {
+	result, err := s.db.ExecContext(ctx, `DELETE FROM song_relationships WHERE id = $1 AND organization_id = $2`, id, organizationID)
 	if err != nil {
 		return err
 	}

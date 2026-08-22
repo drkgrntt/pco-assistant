@@ -13,11 +13,12 @@ import (
 // written back to Planning Center except via the controller's Publish flow.
 // There's at most one per (service_type_id, plan_id) pair.
 type Roster struct {
-	ID            int64     `json:"id"`
-	ServiceTypeID string    `json:"service_type_id"`
-	PlanID        string    `json:"plan_id"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	ID             int64     `json:"id"`
+	OrganizationID string    `json:"organization_id"`
+	ServiceTypeID  string    `json:"service_type_id"`
+	PlanID         string    `json:"plan_id"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 // RosterAssignment is one person filling one named position slot. Unlike
@@ -48,12 +49,16 @@ type RosterAssignment struct {
 const StatusUnconfirmed = "Unconfirmed"
 
 // FindRoster looks up an existing roster without creating one - see
-// sets.FindSet for why this exists alongside GetOrCreateRoster.
-func (s *Store) FindRoster(ctx context.Context, serviceTypeID, planID string) (roster Roster, found bool, err error) {
+// sets.FindSet for why this exists alongside GetOrCreateRoster, and for why
+// (like every set_songs method) every other roster_assignments method in
+// this file trusts a bare rosterID/rowID without also taking
+// organizationID - callers always re-derive rosterID fresh from this (or
+// GetOrCreateRoster) rather than trusting a client-supplied roster id.
+func (s *Store) FindRoster(ctx context.Context, organizationID, serviceTypeID, planID string) (roster Roster, found bool, err error) {
 	err = s.db.QueryRowContext(ctx, `
-		SELECT id, service_type_id, plan_id, created_at, updated_at
-		FROM rosters WHERE service_type_id = $1 AND plan_id = $2
-	`, serviceTypeID, planID).Scan(&roster.ID, &roster.ServiceTypeID, &roster.PlanID, &roster.CreatedAt, &roster.UpdatedAt)
+		SELECT id, organization_id, service_type_id, plan_id, created_at, updated_at
+		FROM rosters WHERE organization_id = $1 AND service_type_id = $2 AND plan_id = $3
+	`, organizationID, serviceTypeID, planID).Scan(&roster.ID, &roster.OrganizationID, &roster.ServiceTypeID, &roster.PlanID, &roster.CreatedAt, &roster.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Roster{}, false, nil
 	}
@@ -63,20 +68,20 @@ func (s *Store) FindRoster(ctx context.Context, serviceTypeID, planID string) (r
 	return roster, true, nil
 }
 
-// GetOrCreateRoster returns the draft roster for a plan, creating an empty
-// one on first use - see sets.GetOrCreateSet.
-func (s *Store) GetOrCreateRoster(ctx context.Context, serviceTypeID, planID string) (Roster, error) {
+// GetOrCreateRoster returns organizationID's draft roster for a plan,
+// creating an empty one on first use - see sets.GetOrCreateSet.
+func (s *Store) GetOrCreateRoster(ctx context.Context, organizationID, serviceTypeID, planID string) (Roster, error) {
 	if serviceTypeID == "" || planID == "" {
 		return Roster{}, errors.New("service_type_id and plan_id are required")
 	}
 
 	var roster Roster
 	err := s.db.QueryRowContext(ctx, `
-		INSERT INTO rosters (service_type_id, plan_id)
-		VALUES ($1, $2)
-		ON CONFLICT (service_type_id, plan_id) DO UPDATE SET updated_at = rosters.updated_at
-		RETURNING id, service_type_id, plan_id, created_at, updated_at
-	`, serviceTypeID, planID).Scan(&roster.ID, &roster.ServiceTypeID, &roster.PlanID, &roster.CreatedAt, &roster.UpdatedAt)
+		INSERT INTO rosters (organization_id, service_type_id, plan_id)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (organization_id, service_type_id, plan_id) DO UPDATE SET updated_at = rosters.updated_at
+		RETURNING id, organization_id, service_type_id, plan_id, created_at, updated_at
+	`, organizationID, serviceTypeID, planID).Scan(&roster.ID, &roster.OrganizationID, &roster.ServiceTypeID, &roster.PlanID, &roster.CreatedAt, &roster.UpdatedAt)
 	if err != nil {
 		return Roster{}, err
 	}
@@ -267,7 +272,7 @@ type RosterConflict struct {
 // roster member id(s) they're flagged against; existing lists pairs where
 // both people are already assigned (each pair reported once). Returns zero
 // values (not an error) for an empty roster.
-func (s *Store) AvoidPairingConflicts(ctx context.Context, rosterID int64) (candidates map[string][]string, existing []RosterConflict, err error) {
+func (s *Store) AvoidPairingConflicts(ctx context.Context, organizationID string, rosterID int64) (candidates map[string][]string, existing []RosterConflict, err error) {
 	assignments, err := s.ListRosterAssignments(ctx, rosterID)
 	if err != nil {
 		return nil, nil, err
@@ -285,7 +290,7 @@ func (s *Store) AvoidPairingConflicts(ctx context.Context, rosterID int64) (cand
 	seenExisting := map[string]bool{}
 
 	for _, ra := range assignments {
-		rels, err := s.ListPersonRelationships(ctx, ra.PersonID)
+		rels, err := s.ListPersonRelationships(ctx, organizationID, ra.PersonID)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -335,7 +340,7 @@ type PersonSuggestion struct {
 // position assignments have no order, so this aggregates across *every*
 // current roster member instead, excluding people already assigned. Returns
 // nil (not an error) for an empty roster.
-func (s *Store) RelationshipSuggestions(ctx context.Context, rosterID int64) ([]PersonSuggestion, error) {
+func (s *Store) RelationshipSuggestions(ctx context.Context, organizationID string, rosterID int64) ([]PersonSuggestion, error) {
 	assignments, err := s.ListRosterAssignments(ctx, rosterID)
 	if err != nil {
 		return nil, err
@@ -353,7 +358,7 @@ func (s *Store) RelationshipSuggestions(ctx context.Context, rosterID int64) ([]
 	var order []string
 
 	for _, ra := range assignments {
-		rels, err := s.ListPersonRelationships(ctx, ra.PersonID)
+		rels, err := s.ListPersonRelationships(ctx, organizationID, ra.PersonID)
 		if err != nil {
 			return nil, err
 		}

@@ -210,6 +210,7 @@ func (sc *SchedulingController) RegisterRoutes(router fiber.Router) {
 func (sc *SchedulingController) RelationshipsPage(c *fiber.Ctx) error {
 	_, personName := middleware.CurrentPerson(c)
 	orgName := middleware.CurrentOrganization(c)
+	orgID := middleware.CurrentOrganizationID(c)
 
 	songs, songsErr := fetchAllSongs(middleware.RequestContext(c))
 
@@ -218,7 +219,7 @@ func (sc *SchedulingController) RelationshipsPage(c *fiber.Ctx) error {
 		return render(c, views.Relationships(personName, orgName, songs, nil, nil, songTitleMap(songs), nil, err.Error()))
 	}
 
-	relationships, err := sc.store.ListSongRelationships(c.Context(), "")
+	relationships, err := sc.store.ListSongRelationships(c.Context(), orgID, "")
 	if err != nil {
 		return render(c, views.Relationships(personName, orgName, songs, nil, relationshipTypes, songTitleMap(songs), songRelationshipTypeLabelMap(relationshipTypes), err.Error()))
 	}
@@ -232,6 +233,8 @@ func (sc *SchedulingController) RelationshipsPage(c *fiber.Ctx) error {
 }
 
 func (sc *SchedulingController) CreateRelationship(c *fiber.Ctx) error {
+	orgID := middleware.CurrentOrganizationID(c)
+
 	var body scheduling.CreateSongRelationshipParams
 	errMsg := ""
 	if err := c.BodyParser(&body); err != nil {
@@ -239,14 +242,14 @@ func (sc *SchedulingController) CreateRelationship(c *fiber.Ctx) error {
 	} else if id, editing, idErr := parseFormID(c); idErr != nil {
 		errMsg = "id must be an integer"
 	} else if editing {
-		if _, err := sc.store.UpdateSongRelationship(c.Context(), id, body); err != nil {
+		if _, err := sc.store.UpdateSongRelationship(c.Context(), orgID, id, body); err != nil {
 			errMsg = err.Error()
 		}
-	} else if _, err := sc.store.CreateSongRelationship(c.Context(), body); err != nil {
+	} else if _, err := sc.store.CreateSongRelationship(c.Context(), orgID, body); err != nil {
 		errMsg = err.Error()
 	}
 
-	relationships, err := sc.store.ListSongRelationships(c.Context(), "")
+	relationships, err := sc.store.ListSongRelationships(c.Context(), orgID, "")
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
 	}
@@ -261,15 +264,17 @@ func (sc *SchedulingController) CreateRelationship(c *fiber.Ctx) error {
 }
 
 func (sc *SchedulingController) DeleteRelationship(c *fiber.Ctx) error {
+	orgID := middleware.CurrentOrganizationID(c)
+
 	id, err := c.ParamsInt("id")
 	errMsg := ""
 	if err != nil {
 		errMsg = "id must be an integer"
-	} else if delErr := sc.store.DeleteSongRelationship(c.Context(), int64(id)); delErr != nil && !errors.Is(delErr, sql.ErrNoRows) {
+	} else if delErr := sc.store.DeleteSongRelationship(c.Context(), orgID, int64(id)); delErr != nil && !errors.Is(delErr, sql.ErrNoRows) {
 		errMsg = delErr.Error()
 	}
 
-	relationships, err := sc.store.ListSongRelationships(c.Context(), "")
+	relationships, err := sc.store.ListSongRelationships(c.Context(), orgID, "")
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
 	}
@@ -283,6 +288,7 @@ func (sc *SchedulingController) DeleteRelationship(c *fiber.Ctx) error {
 func (sc *SchedulingController) PreferencesPage(c *fiber.Ctx) error {
 	_, personName := middleware.CurrentPerson(c)
 	orgName := middleware.CurrentOrganization(c)
+	orgID := middleware.CurrentOrganizationID(c)
 
 	ctx := middleware.RequestContext(c)
 	songs, songsErr := fetchAllSongs(ctx)
@@ -292,7 +298,7 @@ func (sc *SchedulingController) PreferencesPage(c *fiber.Ctx) error {
 		return render(c, views.Preferences(personName, orgName, songs, nil, nil, songTitleMap(songs), nil, nil, err.Error()))
 	}
 
-	preferences, err := sc.store.ListSongPersonPreferences(c.Context(), "", "")
+	preferences, err := sc.store.ListSongPersonPreferences(c.Context(), orgID, "", "")
 	if err != nil {
 		return render(c, views.Preferences(personName, orgName, songs, nil, preferenceTypes, songTitleMap(songs), nil, songPreferenceTypeLabelMap(preferenceTypes), err.Error()))
 	}
@@ -306,6 +312,8 @@ func (sc *SchedulingController) PreferencesPage(c *fiber.Ctx) error {
 }
 
 func (sc *SchedulingController) SetPreference(c *fiber.Ctx) error {
+	orgID := middleware.CurrentOrganizationID(c)
+
 	var body scheduling.SetSongPersonPreferenceParams
 	errMsg := ""
 	if err := c.BodyParser(&body); err != nil {
@@ -313,14 +321,14 @@ func (sc *SchedulingController) SetPreference(c *fiber.Ctx) error {
 	} else if id, editing, idErr := parseFormID(c); idErr != nil {
 		errMsg = "id must be an integer"
 	} else if editing {
-		if _, err := sc.store.UpdateSongPersonPreference(c.Context(), id, body); err != nil {
+		if _, err := sc.store.UpdateSongPersonPreference(c.Context(), orgID, id, body); err != nil {
 			errMsg = err.Error()
 		}
-	} else if _, err := sc.store.SetSongPersonPreference(c.Context(), body); err != nil {
+	} else if _, err := sc.store.SetSongPersonPreference(c.Context(), orgID, body); err != nil {
 		errMsg = err.Error()
 	}
 
-	preferences, err := sc.store.ListSongPersonPreferences(c.Context(), "", "")
+	preferences, err := sc.store.ListSongPersonPreferences(c.Context(), orgID, "", "")
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
 	}
@@ -336,15 +344,17 @@ func (sc *SchedulingController) SetPreference(c *fiber.Ctx) error {
 }
 
 func (sc *SchedulingController) DeletePreference(c *fiber.Ctx) error {
+	orgID := middleware.CurrentOrganizationID(c)
+
 	id, err := c.ParamsInt("id")
 	errMsg := ""
 	if err != nil {
 		errMsg = "id must be an integer"
-	} else if delErr := sc.store.DeleteSongPersonPreference(c.Context(), int64(id)); delErr != nil && !errors.Is(delErr, sql.ErrNoRows) {
+	} else if delErr := sc.store.DeleteSongPersonPreference(c.Context(), orgID, int64(id)); delErr != nil && !errors.Is(delErr, sql.ErrNoRows) {
 		errMsg = delErr.Error()
 	}
 
-	preferences, err := sc.store.ListSongPersonPreferences(c.Context(), "", "")
+	preferences, err := sc.store.ListSongPersonPreferences(c.Context(), orgID, "", "")
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
 	}

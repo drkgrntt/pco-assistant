@@ -37,7 +37,8 @@ type PersonRelationshipType struct {
 // ListPersonRelationshipTypes returns every selectable relationship type,
 // ordered for display in the picker - add a row to
 // person_relationship_types to make a new one available, no code change
-// needed.
+// needed. Not organization-scoped: shared vocabulary, not any one org's
+// data.
 func (s *Store) ListPersonRelationshipTypes(ctx context.Context) ([]PersonRelationshipType, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT code, label, directional, sort_order
@@ -77,6 +78,7 @@ func (s *Store) personRelationshipTypeDirectional(ctx context.Context, relations
 
 type PersonRelationship struct {
 	ID               int64     `json:"id"`
+	OrganizationID   string    `json:"organization_id"`
 	PersonIDA        string    `json:"person_id_a"`
 	PersonIDB        string    `json:"person_id_b"`
 	RelationshipType string    `json:"relationship_type"`
@@ -85,7 +87,8 @@ type PersonRelationship struct {
 	UpdatedAt        time.Time `json:"updated_at"`
 }
 
-// See CreateSongRelationshipParams for why both json and form tags are here.
+// See CreateSongRelationshipParams for why there's no OrganizationID field
+// here.
 type CreatePersonRelationshipParams struct {
 	PersonIDA        string `json:"person_id_a" form:"person_id_a"`
 	PersonIDB        string `json:"person_id_b" form:"person_id_b"`
@@ -101,7 +104,7 @@ type CreatePersonRelationshipParams struct {
 // symmetric - "A mentors B" is a different fact from "B mentors A" - so it's
 // stored exactly as entered (person_id_a is always the mentor) and never
 // reordered.
-func (s *Store) CreatePersonRelationship(ctx context.Context, params CreatePersonRelationshipParams) (PersonRelationship, error) {
+func (s *Store) CreatePersonRelationship(ctx context.Context, organizationID string, params CreatePersonRelationshipParams) (PersonRelationship, error) {
 	if params.PersonIDA == "" || params.PersonIDB == "" {
 		return PersonRelationship{}, errors.New("person_id_a and person_id_b are required")
 	}
@@ -123,12 +126,12 @@ func (s *Store) CreatePersonRelationship(ctx context.Context, params CreatePerso
 
 	var rel PersonRelationship
 	err = s.db.QueryRowContext(ctx, `
-		INSERT INTO person_relationships (person_id_a, person_id_b, relationship_type, notes)
-		VALUES ($1, $2, $3, $4)
-		ON CONFLICT (person_id_a, person_id_b, relationship_type) DO NOTHING
-		RETURNING id, person_id_a, person_id_b, relationship_type, notes, created_at, updated_at
-	`, personIDA, personIDB, params.RelationshipType, params.Notes).Scan(
-		&rel.ID, &rel.PersonIDA, &rel.PersonIDB, &rel.RelationshipType, &rel.Notes, &rel.CreatedAt, &rel.UpdatedAt,
+		INSERT INTO person_relationships (organization_id, person_id_a, person_id_b, relationship_type, notes)
+		VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (organization_id, person_id_a, person_id_b, relationship_type) DO NOTHING
+		RETURNING id, organization_id, person_id_a, person_id_b, relationship_type, notes, created_at, updated_at
+	`, organizationID, personIDA, personIDB, params.RelationshipType, params.Notes).Scan(
+		&rel.ID, &rel.OrganizationID, &rel.PersonIDA, &rel.PersonIDB, &rel.RelationshipType, &rel.Notes, &rel.CreatedAt, &rel.UpdatedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return PersonRelationship{}, fmt.Errorf("that relationship already exists")
@@ -141,11 +144,12 @@ func (s *Store) CreatePersonRelationship(ctx context.Context, params CreatePerso
 }
 
 // UpdatePersonRelationship overwrites an existing relationship's fields in
-// place, keyed by id - same validation and canonical/mentorship-direction
-// handling as CreatePersonRelationship (see its doc comment), but an
-// actual edit of that row rather than an insert-or-conflict on the natural
-// key.
-func (s *Store) UpdatePersonRelationship(ctx context.Context, id int64, params CreatePersonRelationshipParams) (PersonRelationship, error) {
+// place, keyed by id and organizationID (see UpdateSongRelationship's doc
+// comment for why both) - same validation and canonical/mentorship-
+// direction handling as CreatePersonRelationship (see its doc comment), but
+// an actual edit of that row rather than an insert-or-conflict on the
+// natural key.
+func (s *Store) UpdatePersonRelationship(ctx context.Context, organizationID string, id int64, params CreatePersonRelationshipParams) (PersonRelationship, error) {
 	if params.PersonIDA == "" || params.PersonIDB == "" {
 		return PersonRelationship{}, errors.New("person_id_a and person_id_b are required")
 	}
@@ -169,10 +173,10 @@ func (s *Store) UpdatePersonRelationship(ctx context.Context, id int64, params C
 	err = s.db.QueryRowContext(ctx, `
 		UPDATE person_relationships
 		SET person_id_a = $1, person_id_b = $2, relationship_type = $3, notes = $4, updated_at = now()
-		WHERE id = $5
-		RETURNING id, person_id_a, person_id_b, relationship_type, notes, created_at, updated_at
-	`, personIDA, personIDB, params.RelationshipType, params.Notes, id).Scan(
-		&rel.ID, &rel.PersonIDA, &rel.PersonIDB, &rel.RelationshipType, &rel.Notes, &rel.CreatedAt, &rel.UpdatedAt,
+		WHERE id = $5 AND organization_id = $6
+		RETURNING id, organization_id, person_id_a, person_id_b, relationship_type, notes, created_at, updated_at
+	`, personIDA, personIDB, params.RelationshipType, params.Notes, id, organizationID).Scan(
+		&rel.ID, &rel.OrganizationID, &rel.PersonIDA, &rel.PersonIDB, &rel.RelationshipType, &rel.Notes, &rel.CreatedAt, &rel.UpdatedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return PersonRelationship{}, fmt.Errorf("that relationship no longer exists - it may have been deleted")
@@ -188,15 +192,16 @@ func (s *Store) UpdatePersonRelationship(ctx context.Context, id int64, params C
 	return rel, nil
 }
 
-// ListPersonRelationships returns relationships involving personID on either
-// side. Pass "" to list every relationship.
-func (s *Store) ListPersonRelationships(ctx context.Context, personID string) ([]PersonRelationship, error) {
+// ListPersonRelationships returns organizationID's relationships involving
+// personID on either side. Pass "" for personID to list every relationship
+// belonging to that organization.
+func (s *Store) ListPersonRelationships(ctx context.Context, organizationID, personID string) ([]PersonRelationship, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, person_id_a, person_id_b, relationship_type, notes, created_at, updated_at
+		SELECT id, organization_id, person_id_a, person_id_b, relationship_type, notes, created_at, updated_at
 		FROM person_relationships
-		WHERE $1 = '' OR person_id_a = $1 OR person_id_b = $1
+		WHERE organization_id = $1 AND ($2 = '' OR person_id_a = $2 OR person_id_b = $2)
 		ORDER BY created_at DESC
-	`, personID)
+	`, organizationID, personID)
 	if err != nil {
 		return nil, err
 	}
@@ -205,7 +210,7 @@ func (s *Store) ListPersonRelationships(ctx context.Context, personID string) ([
 	relationships := []PersonRelationship{}
 	for rows.Next() {
 		var rel PersonRelationship
-		if err := rows.Scan(&rel.ID, &rel.PersonIDA, &rel.PersonIDB, &rel.RelationshipType, &rel.Notes, &rel.CreatedAt, &rel.UpdatedAt); err != nil {
+		if err := rows.Scan(&rel.ID, &rel.OrganizationID, &rel.PersonIDA, &rel.PersonIDB, &rel.RelationshipType, &rel.Notes, &rel.CreatedAt, &rel.UpdatedAt); err != nil {
 			return nil, err
 		}
 		relationships = append(relationships, rel)
@@ -214,8 +219,8 @@ func (s *Store) ListPersonRelationships(ctx context.Context, personID string) ([
 	return relationships, rows.Err()
 }
 
-func (s *Store) DeletePersonRelationship(ctx context.Context, id int64) error {
-	result, err := s.db.ExecContext(ctx, `DELETE FROM person_relationships WHERE id = $1`, id)
+func (s *Store) DeletePersonRelationship(ctx context.Context, organizationID string, id int64) error {
+	result, err := s.db.ExecContext(ctx, `DELETE FROM person_relationships WHERE id = $1 AND organization_id = $2`, id, organizationID)
 	if err != nil {
 		return err
 	}

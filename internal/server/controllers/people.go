@@ -30,13 +30,14 @@ func personRelationshipTypeLabelMap(types []scheduling.PersonRelationshipType) m
 func (sc *SchedulingController) PersonRelationshipsPage(c *fiber.Ctx) error {
 	_, personName := middleware.CurrentPerson(c)
 	orgName := middleware.CurrentOrganization(c)
+	orgID := middleware.CurrentOrganizationID(c)
 
 	relationshipTypes, err := sc.store.ListPersonRelationshipTypes(c.Context())
 	if err != nil {
 		return render(c, views.PersonRelationships(personName, orgName, nil, nil, nil, nil, err.Error()))
 	}
 
-	relationships, err := sc.store.ListPersonRelationships(c.Context(), "")
+	relationships, err := sc.store.ListPersonRelationships(c.Context(), orgID, "")
 	if err != nil {
 		return render(c, views.PersonRelationships(personName, orgName, nil, relationshipTypes, nil, personRelationshipTypeLabelMap(relationshipTypes), err.Error()))
 	}
@@ -47,6 +48,8 @@ func (sc *SchedulingController) PersonRelationshipsPage(c *fiber.Ctx) error {
 }
 
 func (sc *SchedulingController) CreatePersonRelationship(c *fiber.Ctx) error {
+	orgID := middleware.CurrentOrganizationID(c)
+
 	var body scheduling.CreatePersonRelationshipParams
 	errMsg := ""
 	if err := c.BodyParser(&body); err != nil {
@@ -54,14 +57,14 @@ func (sc *SchedulingController) CreatePersonRelationship(c *fiber.Ctx) error {
 	} else if id, editing, idErr := parseFormID(c); idErr != nil {
 		errMsg = "id must be an integer"
 	} else if editing {
-		if _, err := sc.store.UpdatePersonRelationship(c.Context(), id, body); err != nil {
+		if _, err := sc.store.UpdatePersonRelationship(c.Context(), orgID, id, body); err != nil {
 			errMsg = err.Error()
 		}
-	} else if _, err := sc.store.CreatePersonRelationship(c.Context(), body); err != nil {
+	} else if _, err := sc.store.CreatePersonRelationship(c.Context(), orgID, body); err != nil {
 		errMsg = err.Error()
 	}
 
-	relationships, err := sc.store.ListPersonRelationships(c.Context(), "")
+	relationships, err := sc.store.ListPersonRelationships(c.Context(), orgID, "")
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
 	}
@@ -73,15 +76,17 @@ func (sc *SchedulingController) CreatePersonRelationship(c *fiber.Ctx) error {
 }
 
 func (sc *SchedulingController) DeletePersonRelationship(c *fiber.Ctx) error {
+	orgID := middleware.CurrentOrganizationID(c)
+
 	id, err := c.ParamsInt("id")
 	errMsg := ""
 	if err != nil {
 		errMsg = "id must be an integer"
-	} else if delErr := sc.store.DeletePersonRelationship(c.Context(), int64(id)); delErr != nil && !errors.Is(delErr, sql.ErrNoRows) {
+	} else if delErr := sc.store.DeletePersonRelationship(c.Context(), orgID, int64(id)); delErr != nil && !errors.Is(delErr, sql.ErrNoRows) {
 		errMsg = delErr.Error()
 	}
 
-	relationships, err := sc.store.ListPersonRelationships(c.Context(), "")
+	relationships, err := sc.store.ListPersonRelationships(c.Context(), orgID, "")
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
 	}

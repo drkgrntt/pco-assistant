@@ -22,6 +22,7 @@ import (
 func (sc *SchedulingController) SongTagsPage(c *fiber.Ctx) error {
 	_, personName := middleware.CurrentPerson(c)
 	orgName := middleware.CurrentOrganization(c)
+	orgID := middleware.CurrentOrganizationID(c)
 
 	songs, songsErr := fetchAllSongs(middleware.RequestContext(c))
 
@@ -30,7 +31,7 @@ func (sc *SchedulingController) SongTagsPage(c *fiber.Ctx) error {
 		return render(c, views.SongTags(personName, orgName, songs, nil, nil, songTitleMap(songs), nil, err.Error()))
 	}
 
-	tags, err := sc.store.ListSongTags(c.Context(), "", "")
+	tags, err := sc.store.ListSongTags(c.Context(), orgID, "", "")
 	if err != nil {
 		return render(c, views.SongTags(personName, orgName, songs, nil, categories, songTitleMap(songs), songTagCategoryLabelMap(categories), err.Error()))
 	}
@@ -44,6 +45,8 @@ func (sc *SchedulingController) SongTagsPage(c *fiber.Ctx) error {
 }
 
 func (sc *SchedulingController) CreateSongTag(c *fiber.Ctx) error {
+	orgID := middleware.CurrentOrganizationID(c)
+
 	var body scheduling.CreateSongTagParams
 	errMsg := ""
 	if err := c.BodyParser(&body); err != nil {
@@ -51,14 +54,14 @@ func (sc *SchedulingController) CreateSongTag(c *fiber.Ctx) error {
 	} else if id, editing, idErr := parseFormID(c); idErr != nil {
 		errMsg = "id must be an integer"
 	} else if editing {
-		if _, err := sc.store.UpdateSongTag(c.Context(), id, body); err != nil {
+		if _, err := sc.store.UpdateSongTag(c.Context(), orgID, id, body); err != nil {
 			errMsg = err.Error()
 		}
-	} else if _, err := sc.store.CreateSongTag(c.Context(), body); err != nil {
+	} else if _, err := sc.store.CreateSongTag(c.Context(), orgID, body); err != nil {
 		errMsg = err.Error()
 	}
 
-	tags, err := sc.store.ListSongTags(c.Context(), "", "")
+	tags, err := sc.store.ListSongTags(c.Context(), orgID, "", "")
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
 	}
@@ -70,15 +73,17 @@ func (sc *SchedulingController) CreateSongTag(c *fiber.Ctx) error {
 }
 
 func (sc *SchedulingController) DeleteSongTag(c *fiber.Ctx) error {
+	orgID := middleware.CurrentOrganizationID(c)
+
 	id, err := c.ParamsInt("id")
 	errMsg := ""
 	if err != nil {
 		errMsg = "id must be an integer"
-	} else if delErr := sc.store.DeleteSongTag(c.Context(), int64(id)); delErr != nil && !errors.Is(delErr, sql.ErrNoRows) {
+	} else if delErr := sc.store.DeleteSongTag(c.Context(), orgID, int64(id)); delErr != nil && !errors.Is(delErr, sql.ErrNoRows) {
 		errMsg = delErr.Error()
 	}
 
-	tags, err := sc.store.ListSongTags(c.Context(), "", "")
+	tags, err := sc.store.ListSongTags(c.Context(), orgID, "", "")
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
 	}

@@ -68,7 +68,7 @@ func main() {
 	}
 
 	ctx := context.Background()
-	songs, people, live := seedSubjects(ctx, db)
+	orgID, songs, people, live := seedSubjects(ctx, db)
 	if live {
 		fmt.Printf("Signed-in PCO session found - seeding against %d real song(s) and %d real person/people.\n", len(songs), len(people))
 	} else {
@@ -78,28 +78,38 @@ func main() {
 	fmt.Println()
 
 	store := scheduling.NewStore(db)
-	seedSongTags(ctx, store, songs)
-	seedSongRoles(ctx, store, songs)
-	seedSongRelationships(ctx, store, songs)
-	seedSongPreferences(ctx, store, songs, people)
-	seedPersonRelationships(ctx, store, people)
+	seedSongTags(ctx, store, orgID, songs)
+	seedSongRoles(ctx, store, orgID, songs)
+	seedSongRelationships(ctx, store, orgID, songs)
+	seedSongPreferences(ctx, store, orgID, songs, people)
+	seedPersonRelationships(ctx, store, orgID, people)
 
 	fmt.Println("\nSeeding complete.")
 }
+
+// placeholderOrgID stands in for a real PCO organization id when there's no
+// usable signed-in session to borrow one from (see seedSubjects) - every
+// scheduling.Store method now requires an organization id (see migration
+// 00019), so seeded rows need *some* value even in the placeholder case.
+const placeholderOrgID = "seed-org"
 
 // seedSubjects tries to gather seedSongCount songs and seedPersonCount
 // people from the signed-in PCO org (see MostRecentSession's doc comment
 // for why it never refreshes that session's token), falling back to
 // synthetic placeholder IDs if there's no usable session, the API calls
-// fail, or the org just doesn't have enough songs/people yet.
-func seedSubjects(ctx context.Context, db *sql.DB) (songs []seedSong, people []seedPerson, live bool) {
+// fail, or the org just doesn't have enough songs/people yet. The returned
+// organization id is that session's real PCO org id in the live case, or
+// placeholderOrgID otherwise.
+func seedSubjects(ctx context.Context, db *sql.DB) (organizationID string, songs []seedSong, people []seedPerson, live bool) {
 	reqCtx := ctx
+	organizationID = placeholderOrgID
 	if session, err := auth.NewStore(db).MostRecentSession(ctx); err == nil {
 		// A near-expired token is left alone rather than refreshed here -
 		// see MostRecentSession - so a stale one just falls through to the
 		// plain ctx below (and, from there, to the placeholder fallback).
 		if time.Now().Add(5 * time.Minute).Before(session.TokenExpiresAt) {
 			reqCtx = pco.WithAccessToken(ctx, session.AccessToken)
+			organizationID = session.OrganizationID
 		}
 	}
 
@@ -113,10 +123,10 @@ func seedSubjects(ctx context.Context, db *sql.DB) (songs []seedSong, people []s
 		for _, p := range peopleResp.Data[:seedPersonCount] {
 			people = append(people, seedPerson{ID: p.ID, Name: p.Attributes.Name})
 		}
-		return songs, people, true
+		return organizationID, songs, people, true
 	}
 
-	return placeholderSongs(), placeholderPeople(), false
+	return placeholderOrgID, placeholderSongs(), placeholderPeople(), false
 }
 
 func placeholderSongs() []seedSong {
@@ -139,7 +149,7 @@ func placeholderPeople() []seedPerson {
 
 // seedSongTags adds a couple of theme/scripture/idea tags (see
 // internal/scheduling/song_tags.go) across the first three seed songs.
-func seedSongTags(ctx context.Context, store *scheduling.Store, songs []seedSong) {
+func seedSongTags(ctx context.Context, store *scheduling.Store, organizationID string, songs []seedSong) {
 	fmt.Println("Song tags:")
 	for _, t := range []scheduling.CreateSongTagParams{
 		{SongID: songs[0].ID, Category: scheduling.TagCategoryTheme, Value: "Grace"},
@@ -147,7 +157,7 @@ func seedSongTags(ctx context.Context, store *scheduling.Store, songs []seedSong
 		{SongID: songs[1].ID, Category: scheduling.TagCategoryTheme, Value: "New beginnings"},
 		{SongID: songs[2].ID, Category: scheduling.TagCategoryIdea, Value: "Good for baptisms"},
 	} {
-		_, err := store.CreateSongTag(ctx, t)
+		_, err := store.CreateSongTag(ctx, organizationID, t)
 		report(fmt.Sprintf("%s: %q on %s", t.Category, t.Value, songs[songIndex(songs, t.SongID)].Title), err)
 	}
 }
@@ -155,13 +165,13 @@ func seedSongTags(ctx context.Context, store *scheduling.Store, songs []seedSong
 // seedSongRoles tags the first song as an opener and the second as a
 // response song (see internal/scheduling/song_roles.go) - the two roles the
 // set builder's candidate filtering actually looks for.
-func seedSongRoles(ctx context.Context, store *scheduling.Store, songs []seedSong) {
+func seedSongRoles(ctx context.Context, store *scheduling.Store, organizationID string, songs []seedSong) {
 	fmt.Println("Song roles:")
 	for _, r := range []scheduling.CreateSongRoleParams{
 		{SongID: songs[0].ID, Role: scheduling.RoleOpener},
 		{SongID: songs[1].ID, Role: scheduling.RoleResponse},
 	} {
-		_, err := store.CreateSongRole(ctx, r)
+		_, err := store.CreateSongRole(ctx, organizationID, r)
 		report(fmt.Sprintf("%s: %s", r.Role, songs[songIndex(songs, r.SongID)].Title), err)
 	}
 }
@@ -169,27 +179,27 @@ func seedSongRoles(ctx context.Context, store *scheduling.Store, songs []seedSon
 // seedSongRelationships adds one relationship of each type the set
 // builder's suggestion/conflict logic recognizes (see
 // internal/scheduling/song_relationships.go).
-func seedSongRelationships(ctx context.Context, store *scheduling.Store, songs []seedSong) {
+func seedSongRelationships(ctx context.Context, store *scheduling.Store, organizationID string, songs []seedSong) {
 	fmt.Println("Song relationships:")
 	for _, r := range []scheduling.CreateSongRelationshipParams{
 		{SongIDA: songs[0].ID, SongIDB: songs[1].ID, RelationshipType: scheduling.RelationshipFlowsWell},
 		{SongIDA: songs[2].ID, SongIDB: songs[3].ID, RelationshipType: scheduling.RelationshipSameTheme},
 		{SongIDA: songs[0].ID, SongIDB: songs[2].ID, RelationshipType: scheduling.RelationshipAvoidPairing},
 	} {
-		_, err := store.CreateSongRelationship(ctx, r)
+		_, err := store.CreateSongRelationship(ctx, organizationID, r)
 		report(fmt.Sprintf("%s: %s <-> %s", r.RelationshipType, songs[songIndex(songs, r.SongIDA)].Title, songs[songIndex(songs, r.SongIDB)].Title), err)
 	}
 }
 
 // seedSongPreferences adds one preferred and one discouraged song/person
 // pairing (see internal/scheduling/song_preferences.go).
-func seedSongPreferences(ctx context.Context, store *scheduling.Store, songs []seedSong, people []seedPerson) {
+func seedSongPreferences(ctx context.Context, store *scheduling.Store, organizationID string, songs []seedSong, people []seedPerson) {
 	fmt.Println("Song/person preferences:")
 	for _, p := range []scheduling.SetSongPersonPreferenceParams{
 		{SongID: songs[0].ID, PersonID: people[0].ID, Preference: scheduling.PreferencePreferred, Notes: "Great vocal fit."},
 		{SongID: songs[3].ID, PersonID: people[1].ID, Preference: scheduling.PreferenceDiscouraged, Notes: "Key doesn't suit their range."},
 	} {
-		_, err := store.SetSongPersonPreference(ctx, p)
+		_, err := store.SetSongPersonPreference(ctx, organizationID, p)
 		report(fmt.Sprintf("%s: %s / %s", p.Preference, songs[songIndex(songs, p.SongID)].Title, people[personIndex(people, p.PersonID)].Name), err)
 	}
 }
@@ -197,14 +207,14 @@ func seedSongPreferences(ctx context.Context, store *scheduling.Store, songs []s
 // seedPersonRelationships adds one relationship of each type the roster
 // builder's suggestion/conflict logic recognizes (see
 // internal/scheduling/person_relationships.go).
-func seedPersonRelationships(ctx context.Context, store *scheduling.Store, people []seedPerson) {
+func seedPersonRelationships(ctx context.Context, store *scheduling.Store, organizationID string, people []seedPerson) {
 	fmt.Println("Person relationships:")
 	for _, r := range []scheduling.CreatePersonRelationshipParams{
 		{PersonIDA: people[0].ID, PersonIDB: people[1].ID, RelationshipType: scheduling.PersonRelationshipWorksWell},
 		{PersonIDA: people[0].ID, PersonIDB: people[2].ID, RelationshipType: scheduling.PersonRelationshipMentorship},
 		{PersonIDA: people[1].ID, PersonIDB: people[2].ID, RelationshipType: scheduling.PersonRelationshipAvoidPairing},
 	} {
-		_, err := store.CreatePersonRelationship(ctx, r)
+		_, err := store.CreatePersonRelationship(ctx, organizationID, r)
 		report(fmt.Sprintf("%s: %s <-> %s", r.RelationshipType, people[personIndex(people, r.PersonIDA)].Name, people[personIndex(people, r.PersonIDB)].Name), err)
 	}
 }
