@@ -94,6 +94,9 @@ templ SetBuilderBody(data SetBuilderData) {
 									if row.Song.Published {
 										<span class="badge published">Published</span>
 									}
+									if row.Song.Moved {
+										<span class="badge status-pending" title="Moved since it was last published">Moved</span>
+									}
 								</td>
 								<td class="set-song-actions">
 									<button
@@ -169,6 +172,14 @@ templ SetBuilderBody(data SetBuilderData) {
 						{ fmt.Sprintf("%d song(s) removed/replaced here are still live in Planning Center - publishing will delete them there too.", data.PendingDeleteCount) }
 					</div>
 				}
+				if len(data.PendingChanges) > 0 {
+					<p><strong>Pending changes</strong> - not yet reflected in Planning Center:</p>
+					<ul class="pending-changes">
+						for _, change := range data.PendingChanges {
+							<li>{ change }</li>
+						}
+					</ul>
+				}
 				<div class="publish-actions">
 					<form
 						hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/publish", data.ServiceTypeID, data.PlanID) }
@@ -178,7 +189,7 @@ templ SetBuilderBody(data SetBuilderData) {
 					>
 						<button type="submit" class="primary">Publish to Planning Center</button>
 					</form>
-					if data.UnpublishedCount > 0 || data.PendingDeleteCount > 0 {
+					if data.UnpublishedCount > 0 || data.PendingDeleteCount > 0 || data.ReorderPending {
 						<form
 							hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/revert", data.ServiceTypeID, data.PlanID) }
 							hx-target="#set-builder-body"

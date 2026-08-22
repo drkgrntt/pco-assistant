@@ -42,6 +42,19 @@ type SetBuilderData struct {
 	// its confirmation text.
 	UnpublishedCount   int
 	PendingDeleteCount int
+	// ReorderPending is true when a song already published to Planning
+	// Center has been moved locally (drag-and-drop) since the last
+	// publish - see scheduling.Set.ReorderPending. Neither
+	// UnpublishedCount nor PendingDeleteCount catches this case (the moved
+	// song is still published, and nothing was removed), so without this
+	// the "Discard changes" button never appeared for a pure reorder even
+	// though there was a real local change to discard or publish.
+	ReorderPending bool
+	// PendingChanges spells out exactly what's changed since this set was
+	// last published, one line per change (e.g. "Added: Amazing Grace",
+	// "Song order changed") - see buildSetBuilderData. Empty means fully
+	// in sync with Planning Center.
+	PendingChanges []string
 
 	// ImportableSongCount is how many of this plan's Planning Center songs
 	// aren't reflected here yet - always 0 once this set has anything of its
@@ -73,6 +86,11 @@ type SetSongView struct {
 	// the order-of-service drag-and-drop can compute new positions without
 	// a round trip (see web/static/js/scheduling.js).
 	AnchorItemID string
+	// Moved is true when this song has been dragged to a new position
+	// since it was last published - see scheduling.SetSong.Moved. Shown as
+	// a badge right on the row, since "the order changed" without saying
+	// which songs moved is easy to lose track of.
+	Moved bool
 }
 
 // ServiceOrderRow is one row of the full order of service shown on the set

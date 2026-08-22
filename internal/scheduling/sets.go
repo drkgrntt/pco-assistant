@@ -39,6 +39,15 @@ type SetSong struct {
 	// buildServiceOrder for how anchor groups merge with the plan's other
 	// items into one displayed/published order.
 	AnchorItemID string `json:"anchor_item_id"`
+	// Moved is true once RepositionSongInSet has placed this row somewhere
+	// new without that move being published yet - unlike PCOItemID/
+	// PendingDelete (which track creation/deletion), a drag-and-drop move
+	// leaves both of those untouched, so without this a reordered-but-
+	// already-published song looked identical to one that was never
+	// touched at all. Cleared by ClearMovedFlags after a successful
+	// publish; never set on rows RevertSet rebuilds fresh from Planning
+	// Center, since those start in sync by definition.
+	Moved bool `json:"moved"`
 }
 
 // FindSet looks up an existing set without creating one - unlike
@@ -87,7 +96,7 @@ func (s *Store) GetOrCreateSet(ctx context.Context, serviceTypeID, planID string
 // see ListPendingDeletions for songs awaiting removal from Planning Center.
 func (s *Store) ListSetSongs(ctx context.Context, setID int64) ([]SetSong, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, set_id, song_id, position, created_at, pco_item_id, anchor_item_id
+		SELECT id, set_id, song_id, position, created_at, pco_item_id, anchor_item_id, moved
 		FROM set_songs
 		WHERE set_id = $1 AND pending_delete = false
 		ORDER BY position ASC
@@ -101,7 +110,7 @@ func (s *Store) ListSetSongs(ctx context.Context, setID int64) ([]SetSong, error
 	for rows.Next() {
 		var ss SetSong
 		var pcoItemID sql.NullString
-		if err := rows.Scan(&ss.ID, &ss.SetID, &ss.SongID, &ss.Position, &ss.CreatedAt, &pcoItemID, &ss.AnchorItemID); err != nil {
+		if err := rows.Scan(&ss.ID, &ss.SetID, &ss.SongID, &ss.Position, &ss.CreatedAt, &pcoItemID, &ss.AnchorItemID, &ss.Moved); err != nil {
 			return nil, err
 		}
 		ss.PCOItemID = pcoItemID.String
@@ -570,7 +579,28 @@ func (s *Store) RepositionSongInSet(ctx context.Context, setID, rowID int64, anc
 		return err
 	}
 
+	// Only the moved row itself is flagged - the renumbering above touches
+	// every row's position (keeping 0..n-1 contiguous), but that's just
+	// bookkeeping; everyone else's order *relative to each other* is
+	// unchanged, so they're not what a publish would need to push. This
+	// needs to be pushed on the next publish whether or not the moved row
+	// itself is published yet - see SetSong.Moved's doc comment for why
+	// the existing Unpublished/PendingDelete signals miss exactly this
+	// case.
+	if _, err := tx.ExecContext(ctx, `UPDATE set_songs SET moved = true WHERE id = $1`, rowID); err != nil {
+		return err
+	}
+
 	return tx.Commit()
+}
+
+// ClearMovedFlags resets every SetSong.Moved in this set once a reorder has
+// actually been pushed to Planning Center - see PublishSet, which calls
+// this after a successful pco.ReorderItems, not before, so a failed
+// publish attempt correctly leaves the pending flags set for the next try.
+func (s *Store) ClearMovedFlags(ctx context.Context, setID int64) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE set_songs SET moved = false WHERE set_id = $1`, setID)
+	return err
 }
 
 // SetSuggestion is one recommended song, with every reason it's being

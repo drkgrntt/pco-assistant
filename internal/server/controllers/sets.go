@@ -259,11 +259,18 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 	// 2. Creates, then a single reorder call covering the whole plan - see
 	// mergeServiceOrder for how each song's anchor places it relative to
 	// the plan's other (foreign) items, the same merge the builder page
-	// displays.
+	// displays. reorderSucceeded tracks whether it's now safe to clear
+	// every SetSong.Moved flag in this set (see ClearMovedFlags) -
+	// anything short of an actual, confirmed pco.ReorderItems success (or
+	// nothing needing reordering at all) leaves them set, so a failed
+	// attempt still shows "Discard changes" for the next try instead of
+	// quietly claiming to be in sync.
+	reorderSucceeded := true
 	if len(setSongs) > 0 {
 		existingItems, err := pco.GetItems(ctx, serviceTypeID, planID, nil)
 		if err != nil {
 			failures = append(failures, "loading existing plan items from Planning Center: "+err.Error())
+			reorderSucceeded = false
 		} else {
 			sort.Slice(existingItems.Data, func(i, j int) bool {
 				return existingItems.Data[i].Attributes.Sequence < existingItems.Data[j].Attributes.Sequence
@@ -321,9 +328,16 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 				if err := pco.ReorderItems(ctx, serviceTypeID, planID, finalOrder); err != nil {
 					failures = append(failures, "reordering plan items: "+err.Error())
 					updated = 0 // the reorder that would have applied this failed
+					reorderSucceeded = false
 				}
 			}
 		}
+	}
+	if reorderSucceeded {
+		// Best-effort - this is a local UI hint (whether "Discard changes"
+		// needs to show), not data that was actually sent to Planning
+		// Center, so a failure here doesn't belong in failures/errMsg.
+		_ = sc.store.ClearMovedFlags(ctx, set.ID)
 	}
 
 	var summary []string
@@ -539,6 +553,9 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, service
 		if ss.PCOItemID == "" {
 			data.UnpublishedCount++
 		}
+		if ss.Moved {
+			data.ReorderPending = true
+		}
 		data.SetSongs = append(data.SetSongs, views.SetSongView{
 			ID:           ss.ID,
 			SongID:       ss.SongID,
@@ -548,6 +565,7 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, service
 			IsResponse:   responses[ss.SongID],
 			Published:    ss.PCOItemID != "",
 			AnchorItemID: ss.AnchorItemID,
+			Moved:        ss.Moved,
 		})
 	}
 
@@ -556,6 +574,24 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, service
 		data.ErrMsg = appendErr(data.ErrMsg, err.Error())
 	}
 	data.PendingDeleteCount = len(pendingDeletions)
+
+	// PendingChanges spells out exactly what's different from Planning
+	// Center right now, one line per change - UnpublishedCount/
+	// PendingDeleteCount/ReorderPending (used for the Publish/Discard
+	// buttons themselves) only ever say *how many* things changed, not
+	// *what*, which is easy to lose track of days after actually making
+	// the edit. Moved songs are named individually (not just "the order
+	// changed") since SetSong.Moved is now tracked per row.
+	for _, ss := range data.SetSongs {
+		if !ss.Published {
+			data.PendingChanges = append(data.PendingChanges, fmt.Sprintf("Added: %s", ss.Title))
+		} else if ss.Moved {
+			data.PendingChanges = append(data.PendingChanges, fmt.Sprintf("Moved: %s", ss.Title))
+		}
+	}
+	for _, ss := range pendingDeletions {
+		data.PendingChanges = append(data.PendingChanges, fmt.Sprintf("Removed: %s", titleOrID(titles, ss.SongID)))
+	}
 
 	// ServiceOrder: the plan's full order, with this set's own songs
 	// interleaved at their anchored position (see mergeServiceOrder) -
@@ -859,6 +895,7 @@ func renderServiceOrder(rows []mergedRow, titles map[string]string, openers, res
 				IsResponse:   responses[ss.SongID],
 				Published:    ss.PCOItemID != "",
 				AnchorItemID: ss.AnchorItemID,
+				Moved:        ss.Moved,
 			},
 		})
 	}
