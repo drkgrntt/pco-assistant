@@ -71,7 +71,7 @@ type SetSongView struct {
 	// AnchorItemID is which item (by PCO item id, "" for top of service)
 	// this song is currently placed after - carried as a data attribute so
 	// the order-of-service drag-and-drop can compute new positions without
-	// a round trip (see web/static/scheduling.js).
+	// a round trip (see web/static/js/scheduling.js).
 	AnchorItemID string
 }
 
@@ -114,7 +114,7 @@ type PlanRow struct {
 // it has an avoid_pairing relationship with (empty when there's no
 // conflict); RolesAttr is a space-separated role list ("opener response")
 // for the candidate list's client-side filtering - see filterCandidates in
-// web/static/scheduling.js.
+// web/static/js/scheduling.js.
 type CandidateSongView struct {
 	SongID         string
 	Title          string
@@ -130,7 +130,7 @@ type CandidateSongView struct {
 	// Tags is this song's theme/scripture/idea tags (see song_tags.go), for
 	// display as badges. TagsAttr is the same tags' values, space-joined and
 	// lowercased, as a data attribute for the candidate list's client-side
-	// search - see filterCandidates in web/static/scheduling.js, which
+	// search - see filterCandidates in web/static/js/scheduling.js, which
 	// matches typed text against title or tags the same way RolesAttr
 	// already backs the opener/response filter buttons.
 	Tags     []SongTagView

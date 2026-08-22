@@ -1,7 +1,7 @@
 // Applies the saved theme preference (light/dark) as early as possible -
 // this file loads in <head>, before <body> parses, so this runs before the
 // page paints and avoids a flash of the wrong theme. "system" (the
-// default, nothing saved) needs no attribute at all: app.css's plain
+// default, nothing saved) needs no attribute at all: tokens.css's plain
 // :root/@media rules already handle it.
 (function () {
   var saved = localStorage.getItem("theme");
@@ -293,7 +293,7 @@ function toggleRoleFilter(el) {
 // builder's order-of-service table, where row order is the actual data,
 // not just a display convenience. Click a header to sort by that column's
 // text, click again to reverse; sort-asc/sort-desc classes on the <th>
-// drive the ▲/▼ indicator via CSS (app.css).
+// drive the ▲/▼ indicator via CSS (components.css).
 function makeSortable(table) {
   table.querySelectorAll("thead th").forEach(function (th, index) {
     if (!th.textContent.trim()) {

@@ -1,0 +1,501 @@
+/* Reusable UI components, built from tokens.css - the pieces you'd reach
+   for on any page, independent of which page it is. Contrast app.css,
+   which is the header/nav shell plus one-off, page-specific rules (the
+   set builder's drag-and-drop, the login page, etc.) that don't belong in
+   a general-purpose system. See /style-guide for a live rendering of
+   everything in this file. */
+
+/* === Forms & inputs ======================================================= */
+
+/* Strip native OS chrome (the "weird border" look) so our own
+   border/background fully replace it instead of fighting with it. select's
+   native dropdown arrow is left alone - restyling that needs a custom icon
+   and isn't worth it here. */
+input,
+select,
+button {
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+/* Sized for comfortable tapping (~44px) on top of being readable - a win on
+   desktop too, so this isn't gated behind a breakpoint. Controls sit on
+   --surface, not --bg - they're interactive elements floating above the
+   page, and now that tables/cards/list rows are --surface too, a --bg
+   control inside one of them would look like a mismatched cutout rather
+   than a field (most visible in dark mode, where the two diverge most). */
+input,
+select,
+button {
+  font: inherit;
+  /* Was 0.4rem 0.7rem - nudged onto the scale's nearest steps (+1.6px/
+     +0.8px), imperceptible on a control this size. */
+  padding: var(--space-2) var(--space-3);
+  min-height: var(--control-height);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+
+input:focus-visible,
+select:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Mobile-first: form fields stack full-width (easier to tap and read on a
+   phone). From 640px up they flow into an inline row, wrapping as needed. */
+form.inline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-block: var(--space-4);
+}
+
+form.inline label {
+  display: flex;
+  flex-direction: column;
+  font-size: var(--text-md);
+  gap: var(--space-1);
+}
+
+form.inline input,
+form.inline select {
+  width: 100%;
+}
+
+@media (min-width: 640px) {
+  form.inline {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: end;
+  }
+
+  form.inline label {
+    flex: 1 1 auto;
+    min-width: 10rem;
+  }
+
+  form.inline input,
+  form.inline select {
+    width: auto;
+  }
+
+  form.inline button {
+    flex: 0 0 auto;
+  }
+}
+
+/* === Buttons =============================================================== */
+
+button {
+  cursor: pointer;
+  font-weight: var(--font-medium);
+  background: color-mix(in srgb, var(--text) 4%, var(--surface));
+  transition: background-color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
+}
+
+button:hover {
+  background: var(--surface-hover);
+  border-color: color-mix(in srgb, var(--text) 8%, var(--border));
+}
+
+button:active {
+  background: color-mix(in srgb, var(--text) 4%, var(--surface));
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* A <button>-shaped <a> - link-driven actions (the sign-in link, the
+   homepage's workflow shortcuts) that should look identical to a real
+   button rather than plain text, since the input/select/button base rule
+   above only reaches actual form controls. */
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font: inherit;
+  font-weight: var(--font-medium);
+  padding: var(--space-2) var(--space-3);
+  min-height: var(--control-height);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
+}
+
+.button:hover {
+  background: var(--surface-hover);
+  border-color: color-mix(in srgb, var(--text) 8%, var(--border));
+}
+
+/* The one or two clearest calls to action per page (Publish, the top-of-
+   form Add/Save, "sign in") - everything else stays the neutral outline
+   style above so these actually stand out. */
+.primary {
+  /* border-width/style too, not just border-color - the base rule that
+     normally supplies those only targets input/select/button, and .primary
+     is also used on a plain <a> (the sign-in link). */
+  border: 1px solid var(--accent-solid);
+  background: var(--accent-solid);
+  color: white;
+}
+
+.primary:hover {
+  background: color-mix(in srgb, var(--accent-solid) 85%, black);
+  border-color: color-mix(in srgb, var(--accent-solid) 85%, black);
+}
+
+button.danger {
+  background: var(--surface);
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+  color: var(--danger);
+}
+
+button.danger:hover {
+  background: color-mix(in srgb, var(--danger) 12%, var(--surface));
+  border-color: var(--danger);
+}
+
+/* Icon-only buttons - square, just enough padding to keep the icon from
+   touching the edges. aria-label/title on each one carries the label that
+   would otherwise be visible text. Ghost style - transparent until
+   hovered - since these are dense, frequently-repeated row actions
+   (remove/duplicate/replace/add); a full outline on every one of them
+   would be a lot of visual noise. */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* Was 0.35rem all around - the scale's nearest step is 0.25rem. */
+  padding: var(--space-1);
+  min-width: var(--control-height);
+  background: transparent;
+  border-color: transparent;
+}
+
+.icon-btn:hover {
+  background: var(--surface-hover);
+  border-color: transparent;
+}
+
+.icon-btn.danger {
+  background: transparent;
+  border-color: transparent;
+}
+
+.icon-btn.danger:hover {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  border-color: transparent;
+}
+
+/* === Icons ================================================================= */
+
+/* Icons follow the surrounding button/text color (currentColor) rather
+   than carrying their own, so they never need theme-specific handling. */
+.icon {
+  vertical-align: -0.15em;
+  flex-shrink: 0;
+}
+
+.icon-drag {
+  cursor: grab;
+  color: var(--muted);
+}
+
+.icon-inline {
+  display: inline-flex;
+  vertical-align: -0.2em;
+}
+
+/* === Badges ================================================================= */
+
+.badge {
+  display: inline-block;
+  background: var(--accent-subtle);
+  color: var(--accent);
+  border-radius: var(--radius-full);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
+  margin-right: var(--space-1);
+}
+
+.badge.published {
+  background: var(--success-subtle);
+  color: var(--success);
+}
+
+.badge.status-pending {
+  background: var(--pending-subtle);
+  color: var(--pending);
+}
+
+.badge.status-todo {
+  background: var(--accent-subtle);
+  color: var(--accent);
+}
+
+/* Theme/scripture/idea tags (see song_tags.go) on the set builder's
+   candidate list - deliberately muted rather than accent-colored like the
+   opener/response role badges beside them, since a song can carry several
+   of these and they're descriptive, not a set-builder signal. */
+.tag-badge {
+  background: color-mix(in srgb, var(--text) 8%, var(--surface));
+  color: var(--muted);
+}
+
+.conflict-badge {
+  display: inline-block;
+  background: var(--danger-subtle);
+  color: var(--danger);
+  border-radius: var(--radius-full);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
+}
+
+/* The Build page's plan list tags each row with two independent statuses
+   (songs, team) - this labels which badge is which, small and muted so it
+   doesn't compete with the badges themselves. */
+.badge-label {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  margin-left: var(--space-2);
+}
+
+.badge-label:first-of-type {
+  margin-left: var(--space-3);
+}
+
+/* === Alerts & banners ======================================================= */
+
+/* Tinted banners rather than bare colored text/borders - the *-subtle
+   tokens exist for exactly this (a wash you can put body text on, not just
+   a badge pill), so a page-level message reads as a real alert instead of
+   a stray sentence in an alarming color. */
+.warning {
+  background: var(--danger-subtle);
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--border));
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  margin-block: var(--space-3);
+}
+
+/* The "this plan's already built in Planning Center - import it?" prompt
+   (see SetBuilderBody/RosterBuilderBody) - same tinted-banner treatment as
+   .warning, but on the accent tokens rather than danger: this is an
+   invitation, not an alert. */
+.import-banner {
+  background: var(--accent-subtle);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  margin-block: var(--space-3);
+}
+
+.import-banner p {
+  margin-top: 0;
+}
+
+.import-banner form {
+  margin: 0;
+}
+
+.error,
+.success {
+  display: inline-block;
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  margin-block: var(--space-2);
+}
+
+.error {
+  background: var(--danger-subtle);
+  color: var(--danger);
+}
+
+.success {
+  background: var(--success-subtle);
+  color: var(--success);
+}
+
+/* === Tables ================================================================= */
+
+/* Tables scroll horizontally within their own box instead of overflowing
+   the page - narrow phones can't fit 5 columns without it. Also doubles as
+   the table's card: elevated off the page on --surface, rather than a bare
+   table floating directly on --bg. */
+.table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-block: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 32rem;
+  margin-block: 0;
+}
+
+th,
+td {
+  text-align: left;
+  vertical-align: middle;
+  /* Was 0.5rem 0.6rem - both round to the same 0.5rem step. */
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--border);
+}
+
+/* A little branding on table headers, not just page headings - bolder,
+   spaced-out label text under an accent-colored rule, on its own subtly
+   raised bar so the header row reads as a fixture, not just another row. */
+thead {
+  background: var(--surface-hover);
+}
+
+thead th {
+  border-bottom: 2px solid var(--accent);
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* Row-level hover only where rows are actually distinct records browsed
+   one at a time - not the set builder's order-of-service table, where
+   .dragging/.drag-over already carry their own, differently-purposed
+   highlight states this would visually compete with. */
+table.sortable tbody tr:hover,
+#position-assignments tbody tr:hover {
+  background: var(--surface-hover);
+}
+
+/* Sortable admin tables (see makeSortable in scheduling.js) - never used
+   on the set builder's order-of-service table, where row order is real
+   data, not just a display convenience. */
+.sortable-col {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.sortable-col::after {
+  content: "\21C5"; /* ⇅, both-directions - neutral until sorted */
+  display: inline-block;
+  margin-left: 0.35rem;
+  opacity: 0.4;
+  font-size: 0.85em;
+}
+
+.sortable-col.sort-asc::after {
+  content: "\2191"; /* ↑ */
+  opacity: 1;
+}
+
+.sortable-col.sort-desc::after {
+  content: "\2193"; /* ↓ */
+  opacity: 1;
+}
+
+/* === List rows =============================================================== */
+
+/* One shared row style for every "browse a list of records, each with an
+   inline action" list across the app - plans, suggestions, candidates
+   (songs or people), assignments. */
+.plan-list,
+.suggestion-list,
+.candidate-list,
+.assignment-list {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-2) 0 var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.plan-list li,
+.suggestion-list li,
+.candidate-row,
+.assignment-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  /* Was 0.5rem 0.6rem - both round to the same 0.5rem step. */
+  padding: var(--space-2);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.plan-list li:hover,
+.suggestion-list li:hover,
+.candidate-row:hover,
+.assignment-list li:hover {
+  background: var(--surface-hover);
+}
+
+.suggestion-list li > span:first-child,
+.candidate-row > span:first-child,
+.assignment-list li > span:first-child {
+  flex: 1 1 auto;
+  font-weight: var(--font-semibold);
+}
+
+.suggestion-list form,
+.candidate-row form {
+  margin: 0;
+}
+
+/* === Cards =================================================================== */
+
+/* The set/roster builders' publish/discard controls, boxed off as its own
+   card rather than floating loose beneath the table above it. */
+.publish-panel {
+  margin-block: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.publish-panel form {
+  margin: 0 0 var(--space-2);
+}
+
+.publish-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* Each position on the roster builder gets its own card - previously an
+   unstyled div, so positions ran together with nothing but an <h3> to tell
+   them apart. */
+.position-group {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-5);
+  margin-block: var(--space-4);
+}
+
+.position-group h3 {
+  margin-top: 0;
+}

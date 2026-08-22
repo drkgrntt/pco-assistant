@@ -6,7 +6,7 @@ import (
 
 // PersonPickerField renders a labeled search-as-you-type person picker -
 // text box + hidden id input + live results container (see
-// PersonSearchResults, selectPerson in web/static/scheduling.js). suffix
+// PersonSearchResults, selectPerson in web/static/js/scheduling.js). suffix
 // disambiguates multiple pickers on one form (e.g. person relationships'
 // "Person A"/"Person B" both need their own search box/hidden input/results
 // container) - "" reproduces the single-picker ids the Song/Person
@@ -45,7 +45,7 @@ func idSuffix(suffix string) string {
 // swaps into that picker's "person-search-results[-suffix]" div's
 // innerHTML, so it renders just the option rows, not another wrapping
 // element with that same id. Clicking a result calls selectPerson
-// (web/static/scheduling.js), which reads data-suffix off the clicked row
+// (web/static/js/scheduling.js), which reads data-suffix off the clicked row
 // to find that same picker's hidden id input and visible search box.
 templ PersonSearchResults(people []pco.PersonData, suffix string) {
 	for _, person := range people {

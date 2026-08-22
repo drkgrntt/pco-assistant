@@ -132,7 +132,7 @@ func personNameMap(ctx context.Context, preferences []scheduling.SongPersonPrefe
 }
 
 // parseFormID reads the "id" field a setup page's create/edit form carries
-// when editing an existing row (see editRow in web/static/scheduling.js,
+// when editing an existing row (see editRow in web/static/js/scheduling.js,
 // populated from a table row's Edit button) - present=false means "no id",
 // i.e. this submit is a create, not an edit. A non-nil err means the field
 // was there but wasn't a valid integer, which the caller should treat as

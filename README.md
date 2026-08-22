@@ -54,6 +54,11 @@ Mobile-first, installable as a PWA, with light/dark theming.
   (embedded migrations, run automatically on startup)
 - [`go-pco`](https://github.com/drkgrntt/go-pco) - a Planning Center API SDK,
   its own separate repo/module, pulled in as a normal tagged dependency
+- A small in-house CSS design system - `web/static/css/tokens.css` (colors,
+  spacing, type scale, radius, shadow, motion), `base.css` (element
+  defaults), `components.css` (buttons, badges, alerts, forms, tables,
+  cards, list rows), and `app.css` for everything page-specific. See it
+  rendered live at `/style-guide` (only responds when `APP_ENV=local`).
 
 ## Setup
 

@@ -24,9 +24,10 @@ func (s *FiberServer) RegisterFiberRoutes() {
 
 	// Served from the root, not /static/, so the service worker's default
 	// scope covers the whole app rather than just /static/* - see
-	// register-sw.js.
+	// register-sw.js. The URL is still root-level /sw.js regardless of
+	// where the file itself lives on disk.
 	s.App.Get("/sw.js", func(c *fiber.Ctx) error {
-		return c.SendFile("./web/static/sw.js")
+		return c.SendFile("./web/static/js/sw.js")
 	})
 	s.App.Get("/manifest.json", func(c *fiber.Ctx) error {
 		return c.SendFile("./web/static/manifest.json")
@@ -40,6 +41,7 @@ func (s *FiberServer) RegisterFiberRoutes() {
 	controllers.NewAuthController(s.authStore).RegisterRoutes(s.App)
 	controllers.NewHomeController().RegisterRoutes(s.App)
 	controllers.NewPCOController().RegisterRoutes(s.App)
+	controllers.NewStyleGuideController().RegisterRoutes(s.App)
 	controllers.NewSchedulingAPIController(s.schedulingStore).RegisterRoutes(s.App)
 	controllers.NewSchedulingController(s.schedulingStore).RegisterRoutes(s.App)
 

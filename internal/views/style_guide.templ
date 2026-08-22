@@ -1,0 +1,266 @@
+package views
+
+import "fmt"
+
+// StyleGuide is a living reference for the CSS design system - tokens.css
+// (colors/spacing/typography/radius/shadow/motion), base.css (element
+// defaults), and components.css (buttons/badges/alerts/forms/tables/cards/
+// list rows). Every example below is the actual class/token, not a mockup,
+// so this page can't quietly drift out of sync with what the app really
+// looks like - if a component's appearance changes, this page changes with
+// it for free. See StyleGuideController for why this isn't linked in the
+// nav (APP_ENV=local only, like the /pco/* debug routes).
+templ StyleGuide(personName, organizationName string) {
+	@Layout("Style Guide", personName, organizationName) {
+		<h1>Style Guide</h1>
+		<p class="muted">
+			The design system this app is built from - see
+			<code>web/static/css/tokens.css</code>, <code>base.css</code>, and
+			<code>components.css</code>. Everything on this page renders with the
+			real classes and custom properties, in whichever theme you currently
+			have selected (try the theme toggle in the header).
+		</p>
+
+		<section class="sg-section">
+			<h2>Color</h2>
+			<p class="muted">Canvas &amp; elevation - the neutral surfaces everything else sits on.</p>
+			<div class="sg-grid">
+				@sgColorSwatch("--bg")
+				@sgColorSwatch("--surface")
+				@sgColorSwatch("--surface-hover")
+				@sgColorSwatch("--border")
+				@sgColorSwatch("--text")
+				@sgColorSwatch("--muted")
+			</div>
+
+			<p class="muted">Brand &amp; accent - links, primary actions, selection states.</p>
+			<div class="sg-grid">
+				@sgColorSwatch("--accent")
+				@sgColorSwatch("--accent-solid")
+				@sgColorSwatch("--accent-subtle")
+			</div>
+
+			<p class="muted">Status - danger/success/pending, each with a solid and a tinted-banner "subtle" variant.</p>
+			<div class="sg-grid">
+				@sgColorSwatch("--danger")
+				@sgColorSwatch("--danger-subtle")
+				@sgColorSwatch("--success")
+				@sgColorSwatch("--success-subtle")
+				@sgColorSwatch("--pending")
+				@sgColorSwatch("--pending-subtle")
+			</div>
+		</section>
+
+		<section class="sg-section">
+			<h2>Typography</h2>
+			<p class="muted">Every size in the scale, each matching a real size already in use somewhere in the app.</p>
+			@sgTypeRow("--text-xs", "0.75rem")
+			@sgTypeRow("--text-sm", "0.8rem")
+			@sgTypeRow("--text-md", "0.9rem")
+			@sgTypeRow("--text-base", "1rem")
+			@sgTypeRow("--text-lg", "1.05rem")
+			@sgTypeRow("--text-xl", "1.15rem")
+			@sgTypeRow("--text-2xl", "1.5rem")
+			@sgTypeRow("--text-3xl", "2rem")
+
+			<p class="muted" style="margin-top: 1.5rem;">Weights - Figtree loads normal/medium/semibold; bold is defined for completeness.</p>
+			<div class="sg-demo-row">
+				<span style="font-weight: var(--font-normal);">Normal 400</span>
+				<span style="font-weight: var(--font-medium);">Medium 500</span>
+				<span style="font-weight: var(--font-semibold);">Semibold 600</span>
+				<span style="font-weight: var(--font-bold);">Bold 700</span>
+			</div>
+
+			<p class="muted" style="margin-top: 1.5rem;">Headings and the muted secondary-text style, as actually rendered (h1/h2, .muted).</p>
+			<h1>Heading one</h1>
+			<h2>Heading two</h2>
+			<p class="muted">Muted text - page subtitles, empty states, inline hints.</p>
+		</section>
+
+		<section class="sg-section">
+			<h2>Spacing</h2>
+			<p class="muted">A quarter-rem grid - every gap/padding/margin in components.css is one of these.</p>
+			@sgSpacingRow("--space-1", "0.25rem")
+			@sgSpacingRow("--space-2", "0.5rem")
+			@sgSpacingRow("--space-3", "0.75rem")
+			@sgSpacingRow("--space-4", "1rem")
+			@sgSpacingRow("--space-5", "1.25rem")
+			@sgSpacingRow("--space-6", "1.5rem")
+			@sgSpacingRow("--space-8", "2rem")
+			@sgSpacingRow("--space-12", "3rem")
+			@sgSpacingRow("--space-16", "4rem")
+		</section>
+
+		<section class="sg-section">
+			<h2>Radius &amp; shadow</h2>
+			<div class="sg-demo-row">
+				@sgRadiusBox("--radius-sm", "sm")
+				@sgRadiusBox("--radius-md", "md")
+				@sgRadiusBox("--radius-lg", "lg")
+				@sgRadiusBox("--radius-full", "full")
+			</div>
+			<div class="sg-demo-row" style="margin-top: 1rem;">
+				@sgShadowBox("--shadow-sm", "sm")
+				@sgShadowBox("--shadow-md", "md")
+				@sgShadowBox("--shadow-lg", "lg")
+			</div>
+		</section>
+
+		<section class="sg-section">
+			<h2>Buttons</h2>
+			<div class="sg-demo-row">
+				<button type="button">Default</button>
+				<button type="button" class="primary">Primary</button>
+				<button type="button" class="danger">Danger</button>
+				<button type="button" disabled>Disabled</button>
+				<a class="button" href="#buttons">Link button</a>
+				<a class="button primary" href="#buttons">Link primary</a>
+			</div>
+
+			<p class="muted">Icon buttons - ghost until hovered, used for dense, repeated row actions.</p>
+			<div class="sg-demo-row">
+				<button type="button" class="icon-btn" aria-label="Add" title="Add">
+					@IconAdd()
+				</button>
+				<button type="button" class="icon-btn" aria-label="Edit" title="Edit">
+					@IconEdit()
+				</button>
+				<button type="button" class="icon-btn" aria-label="Copy" title="Copy">
+					@IconCopy()
+				</button>
+				<button type="button" class="icon-btn danger" aria-label="Remove" title="Remove">
+					@IconRemove()
+				</button>
+			</div>
+		</section>
+
+		<section class="sg-section">
+			<h2>Badges</h2>
+			<div class="sg-demo-row">
+				<span class="badge">Default</span>
+				<span class="badge published">Published</span>
+				<span class="badge status-pending">Pending</span>
+				<span class="badge status-todo">Todo</span>
+				<span class="badge tag-badge">Tag</span>
+				<span class="conflict-badge">⚠ Conflict</span>
+			</div>
+		</section>
+
+		<section class="sg-section">
+			<h2>Alerts &amp; banners</h2>
+			<div class="warning">This is a warning banner - conflicts, repeat-song alerts, pending-deletion notices.</div>
+			<div class="import-banner">
+				<p>This is an import banner - an invitation, not an alert (see the "already planned in Planning Center" prompts).</p>
+			</div>
+			<p class="error">This is an inline error message.</p>
+			<p class="success">This is an inline success message.</p>
+		</section>
+
+		<section class="sg-section">
+			<h2>Forms</h2>
+			<form class="inline" onsubmit="return false">
+				<label>
+					Song
+					<select>
+						<option>Choose a song</option>
+					</select>
+				</label>
+				<label>
+					Value
+					<input type="text" placeholder="e.g. Grace, Romans 8:1"/>
+				</label>
+				<button type="submit" class="primary">Add</button>
+			</form>
+		</section>
+
+		<section class="sg-section">
+			<h2>Tables</h2>
+			<div class="table-wrap">
+				<table class="sortable">
+					<thead>
+						<tr>
+							<th class="sortable-col sort-asc">Song</th>
+							<th class="sortable-col">Category</th>
+							<th class="sortable-col">Value</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Amazing Grace</td>
+							<td>Theme</td>
+							<td>Grace</td>
+						</tr>
+						<tr>
+							<td>Build My Life</td>
+							<td>Scripture</td>
+							<td>Romans 8:1</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+		</section>
+
+		<section class="sg-section">
+			<h2>List rows</h2>
+			<ul class="candidate-list">
+				<li class="candidate-row">
+					<span>Great Are You Lord</span>
+					<span class="badge">Opener</span>
+					<span class="muted">flows_well, same_theme</span>
+				</li>
+				<li class="candidate-row">
+					<span>Build My Life</span>
+					<span class="conflict-badge">⚠ avoid pairing with Amazing Grace</span>
+				</li>
+			</ul>
+		</section>
+
+		<section class="sg-section">
+			<h2>Cards</h2>
+			<div class="position-group">
+				<h3>Worship Team / Vocals</h3>
+				<p class="muted">1 of 2 filled - the roster builder's per-position card.</p>
+			</div>
+			<div class="publish-panel">
+				<div class="publish-actions">
+					<button type="button" class="primary">Publish to Planning Center</button>
+					<button type="button" class="danger">Discard changes</button>
+				</div>
+				<p class="muted" style="margin-top: 0.5rem;">The set/roster builders' publish panel.</p>
+			</div>
+		</section>
+	}
+}
+
+// sgColorSwatch renders one color token as a filled box plus its variable
+// name - the box's own background is the live, theme-correct value (this
+// page never prints a specific hex/hsl, since the "right" value depends on
+// which theme is active when it renders).
+templ sgColorSwatch(varName string) {
+	<div class="sg-swatch">
+		<div class="sg-swatch-color" style={ fmt.Sprintf("background: var(%s);", varName) }></div>
+		<div class="sg-swatch-label">{ varName }</div>
+	</div>
+}
+
+templ sgTypeRow(varName, remValue string) {
+	<div class="sg-type-row">
+		<span class="sg-type-label">{ varName }<br/>{ remValue }</span>
+		<span style={ fmt.Sprintf("font-size: var(%s);", varName) }>The quick brown fox jumps over the lazy dog</span>
+	</div>
+}
+
+templ sgSpacingRow(varName, remValue string) {
+	<div class="sg-spacing-row">
+		<span class="sg-spacing-label">{ varName } ({ remValue })</span>
+		<div class="sg-spacing-bar" style={ fmt.Sprintf("width: var(%s);", varName) }></div>
+	</div>
+}
+
+templ sgRadiusBox(varName, label string) {
+	<div class="sg-box" style={ fmt.Sprintf("border-radius: var(%s);", varName) }>{ label }</div>
+}
+
+templ sgShadowBox(varName, label string) {
+	<div class="sg-box" style={ fmt.Sprintf("box-shadow: var(%s);", varName) }>{ label }</div>
+}

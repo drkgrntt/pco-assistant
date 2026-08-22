@@ -1,0 +1,170 @@
+/* Design tokens - every value the rest of the system (base.css,
+   components.css, app.css) is built from. Nothing in here targets an
+   element or class directly; this file only ever defines custom
+   properties, so it's safe to load first and never conflicts with
+   anything. See /style-guide (DesignSystemController, gated to
+   APP_ENV=local) for a live, rendered reference of all of this.
+
+   Color tokens were the original design system before this file existed
+   and are unchanged here - light values on bare :root, dark overrides
+   under prefers-color-scheme and the explicit [data-theme] toggle (see
+   scheduling.js's toggleTheme). Spacing/typography/radius/shadow/motion
+   are new: chosen to exactly match the values already in use across the
+   app wherever a match existed, so introducing them is a pure rename, not
+   a redesign - swapping a literal 0.75rem for var(--space-3) computes to
+   the exact same pixel value. */
+:root {
+  color-scheme: light dark;
+
+  /* --- Color: Canvas & Elevation --- */
+  --bg: hsl(40deg 38% 96%);
+  --surface: hsl(0deg 0% 100%);
+  --surface-hover: hsl(36deg 71% 99%);
+  --text: hsl(34deg 8% 18%);
+  --border: hsl(39deg 45% 90%);
+  --muted: hsl(31deg 11% 38%);
+
+  /* --- Color: Brand & Accents --- */
+  --accent: hsl(174deg 47% 32%);
+  --accent-solid: hsl(174deg 47% 32%);
+  --accent-subtle: hsl(174deg 25% 92%);
+
+  /* --- Color: Status (softened, contextual) --- */
+  --danger: hsl(10deg 52% 45%);
+  --danger-subtle: hsl(11deg 59% 94%);
+
+  --success: hsl(120deg 25% 33%);
+  --success-subtle: hsl(120deg 21% 94%);
+
+  --pending: hsl(40deg 69% 32%);
+  --pending-subtle: hsl(42deg 56% 93%);
+
+  /* --- Spacing ---
+     A quarter-rem grid. Named by their rem value (space-3 = 0.75rem), not
+     an abstract t-shirt size, so reaching for "the gap I already used
+     between form fields" doesn't require memorizing a lookup table. */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+
+  /* --- Typography ---
+     Sizes: text-base is the body copy every page already renders at
+     (1rem/16px); every other step matches a size already in use somewhere
+     (badge labels up through the header brand mark and the two heading
+     sizes) - the scale was built by sorting what already existed, not the
+     other way around. The one exception: .quick-links-secondary's lone
+     0.95rem got folded into text-md (0.9rem), an 0.8px difference nobody
+     will notice, rather than keeping a ninth step for one usage.
+     text-2xl/text-xl back h1/h2 explicitly now (see base.css) - the same
+     sizes the browser's own default h1/h2 rules already produced at a
+     1rem base, just no longer implicit.
+     Weights: normal/medium/semibold match Figtree's three loaded weights
+     (400/500/600) - see layout.templ's Google Fonts link; bold (700) is
+     defined for completeness even though nothing here uses it yet. */
+  --text-xs: 0.75rem;
+  --text-sm: 0.8rem;
+  --text-md: 0.9rem;
+  --text-base: 1rem;
+  --text-lg: 1.05rem;
+  --text-xl: 1.15rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 2rem;
+
+  --font-normal: 400;
+  --font-medium: 500;
+  --font-semibold: 600;
+  --font-bold: 700;
+
+  --leading-tight: 1.2;
+  --leading-normal: 1.4;
+
+  /* --- Radius --- */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-full: 999px;
+
+  /* The comfortable-tap-target height/width shared by every form control,
+     button, and icon button - not part of the spacing scale (it's a fixed
+     control size, not a gap), but reused identically often enough to name
+     once rather than repeat as a literal 2.25rem everywhere. */
+  --control-height: 2.25rem;
+
+  /* --- Shadow ---
+     Flat rgba, not color-mix off a token - elevation shadows read as "a
+     shadow" in both themes at roughly the same darkness in most real UI,
+     so this deliberately doesn't try to tint them per-theme the way
+     surface/border colors do. */
+  --shadow-sm: 0 2px 6px -2px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 8px 20px rgba(0, 0, 0, 0.18);
+  --shadow-lg: 0 6px 14px -6px rgba(0, 0, 0, 0.35);
+
+  /* --- Motion --- */
+  --duration-fast: 0.15s;
+  --duration-base: 0.2s;
+  --ease-standard: ease;
+  /* Material's standard easing - already what the htmx progress bar's
+     sweep animation used before this token existed (see app.css). */
+  --ease-emphasized: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: hsl(30deg 8% 10%); /* Slightly deeper dark for better contrast */
+    --surface: hsl(30deg 8% 14%); /* Elevated card surface */
+    --surface-hover: hsl(30deg 9% 18%);
+    --text: hsl(33deg 20% 89%);
+    --border: hsl(33deg 10% 22%);
+    --muted: hsl(32deg 10% 62%);
+
+    --accent: hsl(173deg 43% 60%);
+    --accent-subtle: hsl(172deg 29% 15%);
+
+    --danger: hsl(12deg 63% 67%);
+    --danger-subtle: hsl(12deg 35% 17%);
+
+    --success: hsl(120deg 27% 65%);
+    --success-subtle: hsl(120deg 18% 14%);
+
+    --pending: hsl(40deg 61% 62%);
+    --pending-subtle: hsl(40deg 36% 15%);
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: hsl(30deg 8% 10%);
+  --surface: hsl(30deg 8% 14%);
+  --surface-hover: hsl(30deg 9% 18%);
+  --text: hsl(33deg 20% 89%);
+  --border: hsl(33deg 10% 22%);
+  --muted: hsl(32deg 10% 62%);
+
+  --accent: hsl(173deg 43% 60%);
+  --accent-subtle: hsl(172deg 29% 15%);
+
+  --danger: hsl(12deg 63% 67%);
+  --danger-subtle: hsl(12deg 35% 17%);
+
+  --success: hsl(120deg 27% 65%);
+  --success-subtle: hsl(120deg 18% 14%);
+
+  --pending: hsl(40deg 61% 62%);
+  --pending-subtle: hsl(40deg 36% 15%);
+}
+
+/* color-scheme itself (native form control/scrollbar theming) follows the
+   same override - without this, an explicit choice would recolor the page
+   but leave checkboxes, selects, etc. following the OS setting instead. */
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}

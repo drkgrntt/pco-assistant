@@ -1,0 +1,55 @@
+/* Base element styles - the handful of bare-tag rules every page inherits
+   before any component or page-specific class comes into play. Loaded
+   after tokens.css, before components.css. */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  margin: 0;
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  background: var(--bg);
+  color: var(--text);
+}
+
+main {
+  max-width: 60rem;
+  margin: 0 auto;
+  padding: var(--space-4);
+}
+
+@media (min-width: 640px) {
+  main {
+    padding: var(--space-6);
+  }
+}
+
+/* A little brand color on headings, not just links/buttons/badges - each
+   page's title gets an accent underline, section headings pick up the
+   accent color itself. font-size is now explicit (text-3xl/text-2xl)
+   rather than left to the browser's default h1/h2 sizing - at this page's
+   1rem base they compute to the exact same 2rem/1.5rem the UA defaults
+   already produced, so this only makes the size a named, reusable value
+   instead of changing it. */
+h1 {
+  font-size: var(--text-3xl);
+  border-bottom: 3px solid var(--accent);
+  padding-bottom: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+h2 {
+  font-size: var(--text-2xl);
+  color: var(--accent);
+}
+
+/* The muted secondary-text treatment used for page subtitles, table empty
+   states, and inline hints throughout - one place to change "what does
+   de-emphasized text look like" for the whole app. */
+.muted {
+  color: var(--muted);
+  font-size: var(--text-md);
+}
