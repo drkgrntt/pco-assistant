@@ -213,16 +213,22 @@ func (s *Store) RevertSet(ctx context.Context, setID int64, importRows []SetSong
 // chains them together at wherever you're currently working, rather than
 // always resetting to the top of service. With nothing to chain from (an
 // empty set, or the last-touched row no longer active), it falls back to
-// top of service, appended after everything else there. Refuses to add a
-// song that's already active in the set - see DuplicateSongInSet for the
+// fallbackAnchorItemID instead - the build page resolves this from
+// PreferredFirstSongAnchorTitle (see AddSetSong's firstSongFallbackAnchor
+// in the controllers package) so a brand-new set's first song lands
+// wherever this service type's first song usually goes, not always the
+// literal top of service; pass "" to get that literal top-of-service
+// behavior, same as before this parameter existed. Refuses to add a song
+// that's already active in the set - see DuplicateSongInSet for the
 // deliberate way to get a second copy (e.g. reprised as a response song).
 //
 // The second return value is the song id it chained after ("" when there
-// was nothing to chain from) - the build page uses this to offer an
-// inline "remember that these two go together?" relationship prompt right
-// after the add, without making the caller re-derive the same adjacency
-// this method already had to compute for positioning.
-func (s *Store) AddSongToSet(ctx context.Context, setID int64, songID string) (SetSong, string, error) {
+// was nothing to chain from, including whenever fallbackAnchorItemID was
+// used instead) - the build page uses this to offer an inline "remember
+// that these two go together?" relationship prompt right after the add,
+// without making the caller re-derive the same adjacency this method
+// already had to compute for positioning.
+func (s *Store) AddSongToSet(ctx context.Context, setID int64, songID, fallbackAnchorItemID string) (SetSong, string, error) {
 	if songID == "" {
 		return SetSong{}, "", errors.New("song_id is required")
 	}
@@ -243,7 +249,7 @@ func (s *Store) AddSongToSet(ctx context.Context, setID int64, songID string) (S
 		return SetSong{}, "", fmt.Errorf("that song is already in this set")
 	}
 
-	anchor := ""
+	anchor := fallbackAnchorItemID
 	var afterPosition int
 	var chainedAfterSongID string
 	chaining := false

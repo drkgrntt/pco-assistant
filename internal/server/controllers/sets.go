@@ -160,7 +160,7 @@ func (sc *SchedulingController) AddSetSong(c *fiber.Ctx) error {
 		errMsg = "song_id is required"
 	} else if set, err := sc.store.GetOrCreateSet(c.Context(), orgID, serviceTypeID, planID); err != nil {
 		errMsg = err.Error()
-	} else if _, chained, err := sc.store.AddSongToSet(c.Context(), set.ID, body.SongID); err != nil {
+	} else if _, chained, err := sc.store.AddSongToSet(c.Context(), set.ID, body.SongID, sc.firstSongFallbackAnchor(c.Context(), orgID, serviceTypeID, planID, set.ID)); err != nil {
 		errMsg = err.Error()
 	} else {
 		chainedAfterSongID = chained
@@ -192,6 +192,47 @@ func (sc *SchedulingController) AddSetSong(c *fiber.Ctx) error {
 	}
 
 	return render(c, views.SetBuilderBody(data))
+}
+
+// firstSongFallbackAnchor resolves this service type's remembered "where
+// the first song usually goes" (see PreferredFirstSongAnchorTitle,
+// written by buildSetBuilderData on every render - see its own comment)
+// against planID's actual current items, for AddSongToSet's
+// fallbackAnchorItemID parameter - used only when there's nothing else to
+// chain from (an empty set). Deliberately conservative: only ever applies
+// when the set has literally no active songs yet, not merely no valid
+// chaining pointer (e.g. right after Revert/Import, which nulls
+// last_touched_set_song_id even though the set isn't empty - that case
+// should keep AddSongToSet's own existing top-of-service fallback, not
+// this one). Costs nothing beyond today's behavior unless the set really
+// is empty and something's actually been remembered: the ListSetSongs
+// call is cheap and was effectively free, and the PCO items fetch only
+// happens when there's a real title to look for.
+func (sc *SchedulingController) firstSongFallbackAnchor(ctx context.Context, organizationID, serviceTypeID, planID string, setID int64) string {
+	existing, err := sc.store.ListSetSongs(ctx, setID)
+	if err != nil || len(existing) > 0 {
+		return ""
+	}
+
+	title, ok := sc.store.PreferredFirstSongAnchorTitle(ctx, organizationID, serviceTypeID)
+	if !ok || title == "" {
+		return ""
+	}
+
+	items, err := pco.GetItems(ctx, serviceTypeID, planID, nil)
+	if err != nil {
+		return ""
+	}
+	for _, item := range items.Data {
+		label := item.Attributes.Title
+		if label == "" {
+			label = item.Attributes.ItemType
+		}
+		if label == title {
+			return item.ID
+		}
+	}
+	return ""
 }
 
 func (sc *SchedulingController) RemoveSetSong(c *fiber.Ctx) error {
@@ -713,6 +754,32 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 		})
 		merged := mergeServiceOrder(pcoItems.Data, setSongs)
 		data.ServiceOrder = renderServiceOrder(merged, titles, rolesBySong, roleTypeLabels)
+
+		// Keep this service type's "where does the first song usually go"
+		// memory (see PreferredFirstSongAnchorTitle, and firstSongFallbackAnchor
+		// which reads it back for a fresh empty set) in sync with whatever's
+		// actually true right now - every add or move of the first song
+		// updates it immediately here, not just on a confirmed publish, since
+		// this runs after every mutation (and on plain page views, which is
+		// harmless - the upsert is idempotent). setSongs is already sorted by
+		// position (see ListSetSongs), so setSongs[0] is always the current
+		// first song. Best-effort: a local memory hint, not data sent to
+		// Planning Center, so a failure here doesn't belong in data.ErrMsg.
+		if len(setSongs) > 0 {
+			anchorTitle := ""
+			if anchor := setSongs[0].AnchorItemID; anchor != "" {
+				for _, item := range pcoItems.Data {
+					if item.ID == anchor {
+						anchorTitle = item.Attributes.Title
+						if anchorTitle == "" {
+							anchorTitle = item.Attributes.ItemType
+						}
+						break
+					}
+				}
+			}
+			_ = sc.store.RememberFirstSongAnchor(ctx, organizationID, serviceTypeID, anchorTitle)
+		}
 
 		// ImportableSongCount only matters the first time this set is opened:
 		// once it has anything of its own (active or tombstoned - see
