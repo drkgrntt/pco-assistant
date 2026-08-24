@@ -160,7 +160,7 @@ func (sc *SchedulingController) AddSetSong(c *fiber.Ctx) error {
 		errMsg = "song_id is required"
 	} else if set, err := sc.store.GetOrCreateSet(c.Context(), orgID, serviceTypeID, planID); err != nil {
 		errMsg = err.Error()
-	} else if _, chained, err := sc.store.AddSongToSet(c.Context(), set.ID, body.SongID, sc.firstSongFallbackAnchor(c.Context(), orgID, serviceTypeID, planID, set.ID)); err != nil {
+	} else if _, chained, err := sc.store.AddSongToSet(c.Context(), set.ID, body.SongID, sc.firstSongFallbackAnchor(middleware.RequestContext(c), orgID, serviceTypeID, planID, set.ID)); err != nil {
 		errMsg = err.Error()
 	} else {
 		chainedAfterSongID = chained
