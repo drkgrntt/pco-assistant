@@ -486,6 +486,64 @@ func (sc *SchedulingController) RepositionSetSong(c *fiber.Ctx) error {
 	return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(middleware.RequestContext(c), orgID, serviceTypeID, planID, errMsg)))
 }
 
+// QuickAddSongTag/QuickAddSongRelationship/QuickAddSongRole back the set
+// builder's "Quick add" panel (set_builder.templ) - the same setup-level
+// entities as SongTagsPage/RelationshipsPage/SongRolesPage's own create
+// forms (same Store methods, same params structs), just posted from the
+// build page and re-rendering SetBuilderBody instead of a setup-page
+// table, so e.g. a newly-tagged song's badge shows up immediately on its
+// candidate row without leaving this page. Deliberately create-only - see
+// the build-page redesign plan for why editing these stays the dedicated
+// setup pages' job.
+
+func (sc *SchedulingController) QuickAddSongTag(c *fiber.Ctx) error {
+	orgID := middleware.CurrentOrganizationID(c)
+	serviceTypeID := c.Params("service_type_id")
+	planID := c.Params("plan_id")
+
+	var body scheduling.CreateSongTagParams
+	errMsg := ""
+	if err := c.BodyParser(&body); err != nil {
+		errMsg = err.Error()
+	} else if _, err := sc.store.CreateSongTag(c.Context(), orgID, body); err != nil {
+		errMsg = err.Error()
+	}
+
+	return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(middleware.RequestContext(c), orgID, serviceTypeID, planID, errMsg)))
+}
+
+func (sc *SchedulingController) QuickAddSongRelationship(c *fiber.Ctx) error {
+	orgID := middleware.CurrentOrganizationID(c)
+	serviceTypeID := c.Params("service_type_id")
+	planID := c.Params("plan_id")
+
+	var body scheduling.CreateSongRelationshipParams
+	errMsg := ""
+	if err := c.BodyParser(&body); err != nil {
+		errMsg = err.Error()
+	} else if _, err := sc.store.CreateSongRelationship(c.Context(), orgID, body); err != nil {
+		errMsg = err.Error()
+	}
+
+	return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(middleware.RequestContext(c), orgID, serviceTypeID, planID, errMsg)))
+}
+
+func (sc *SchedulingController) QuickAddSongRole(c *fiber.Ctx) error {
+	orgID := middleware.CurrentOrganizationID(c)
+	serviceTypeID := c.Params("service_type_id")
+	planID := c.Params("plan_id")
+
+	var body scheduling.CreateSongRoleParams
+	errMsg := ""
+	if err := c.BodyParser(&body); err != nil {
+		errMsg = err.Error()
+	} else if _, err := sc.store.CreateSongRole(c.Context(), orgID, body); err != nil {
+		errMsg = err.Error()
+	}
+
+	return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(middleware.RequestContext(c), orgID, serviceTypeID, planID, errMsg)))
+}
+
 // parseAfterToken decodes the drag-and-drop "after" token: "" (top of
 // service), "item:<id>" (right after a foreign item - the start of its
 // group), or "row:<id>" (right after another set song's row, inheriting

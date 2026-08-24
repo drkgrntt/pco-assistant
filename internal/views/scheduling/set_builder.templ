@@ -64,8 +64,9 @@ templ SetBuilderBody(data SetBuilderData) {
 			Everything Planning Center already has for this plan, with your songs
 			placed where you've put them. Non-song items are shown for context
 			only - this tool doesn't manage them. Drag a song's
-			<span class="icon-inline">@views.IconDrag()
-</span>
+			<span class="icon-inline">
+				@views.IconDrag()
+			</span>
 			handle to move it anywhere in the order, including onto or past a
 			section header.
 		</p>
@@ -294,6 +295,105 @@ templ SetBuilderBody(data SetBuilderData) {
 					<li class="muted">No more songs to add.</li>
 				}
 			</ul>
+		}
+		<!--
+			Ad hoc creation of the setup-level entities this page's
+			recommendations/badges/warnings are built from (song tags,
+			relationships, opener/response roles) - see QuickAddSongTag/
+			QuickAddSongRelationship/QuickAddSongRole in sets.go. Same fields,
+			same Store methods as the dedicated setup pages
+			(song_tags.templ/relationships.templ/song_roles.templ), just
+			reachable without leaving this page and posted to a build-scoped
+			route so the response re-renders this builder instead of a
+			setup-page table. Create-only, same as those setup pages' forms
+			minus the edit affordance - see the build-page redesign plan for
+			why editing stays their job.
+		-->
+		@collapsibleSection("quick-add-songs", "Quick add") {
+			<div class="quick-add-panel">
+				<div>
+					<h4>Tag a song</h4>
+					<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/song-tags", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
+						<label>
+							Song
+							<select name="song_id" required>
+								<option value="" selected disabled>Choose a song</option>
+								for _, song := range data.AllSongs {
+									<option value={ song.ID }>{ song.Attributes.Title }</option>
+								}
+							</select>
+						</label>
+						<label>
+							Category
+							<select name="category">
+								for _, cat := range data.TagCategories {
+									<option value={ cat.Code }>{ cat.Label }</option>
+								}
+							</select>
+						</label>
+						<label>
+							Value
+							<input type="text" name="value" placeholder="e.g. Grace, Romans 8:1, New beginnings" required/>
+						</label>
+						<button type="submit" class="primary">Add tag</button>
+					</form>
+				</div>
+				<div>
+					<h4>Relate two songs</h4>
+					<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/song-relationships", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
+						<label>
+							Song A
+							<select name="song_id_a" required>
+								<option value="" selected disabled>Choose a song</option>
+								for _, song := range data.AllSongs {
+									<option value={ song.ID }>{ song.Attributes.Title }</option>
+								}
+							</select>
+						</label>
+						<label>
+							Song B
+							<select name="song_id_b" required>
+								<option value="" selected disabled>Choose a song</option>
+								for _, song := range data.AllSongs {
+									<option value={ song.ID }>{ song.Attributes.Title }</option>
+								}
+							</select>
+						</label>
+						<label>
+							Relationship
+							<select name="relationship_type">
+								for _, t := range data.RelationshipTypes {
+									<option value={ t.Code }>{ t.Label }</option>
+								}
+							</select>
+						</label>
+						<button type="submit" class="primary">Relate songs</button>
+					</form>
+				</div>
+				<div>
+					<h4>Mark opener / response</h4>
+					<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/song-roles", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
+						<label>
+							Song
+							<select name="song_id" required>
+								<option value="" selected disabled>Choose a song</option>
+								for _, song := range data.AllSongs {
+									<option value={ song.ID }>{ song.Attributes.Title }</option>
+								}
+							</select>
+						</label>
+						<label>
+							Role
+							<select name="role">
+								for _, t := range data.RoleTypes {
+									<option value={ t.Code }>{ t.Label }</option>
+								}
+							</select>
+						</label>
+						<button type="submit" class="primary">Mark role</button>
+					</form>
+				</div>
+			</div>
 		}
 	</div>
 }

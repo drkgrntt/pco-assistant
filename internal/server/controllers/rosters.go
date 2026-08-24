@@ -242,6 +242,54 @@ func (sc *SchedulingController) RevertRoster(c *fiber.Ctx) error {
 	return render(c, views.RosterBuilderBody(data))
 }
 
+// QuickAddPersonRelationship/QuickAddPositionPreference back the roster
+// builder's quick-add panels (roster_builder.templ) - the same
+// setup-level entities as PersonRelationshipsPage/PositionPreferencesPage's
+// own create forms (same underlying operations - CreatePersonRelationship,
+// setPersonTeamPositionPreference from people.go), just posted from the
+// build page and re-rendering RosterBuilderBody instead of a setup-page
+// table/fragment. Deliberately create-only, same as the set builder's
+// three quick-add handlers in sets.go.
+
+func (sc *SchedulingController) QuickAddPersonRelationship(c *fiber.Ctx) error {
+	orgID := middleware.CurrentOrganizationID(c)
+	serviceTypeID := c.Params("service_type_id")
+	planID := c.Params("plan_id")
+
+	var body scheduling.CreatePersonRelationshipParams
+	errMsg := ""
+	if err := c.BodyParser(&body); err != nil {
+		errMsg = err.Error()
+	} else if _, err := sc.store.CreatePersonRelationship(c.Context(), orgID, body); err != nil {
+		errMsg = err.Error()
+	}
+
+	return render(c, views.RosterBuilderBody(sc.buildRosterBuilderDataWithErr(middleware.RequestContext(c), orgID, serviceTypeID, planID, errMsg)))
+}
+
+func (sc *SchedulingController) QuickAddPositionPreference(c *fiber.Ctx) error {
+	orgID := middleware.CurrentOrganizationID(c)
+	serviceTypeID := c.Params("service_type_id")
+	planID := c.Params("plan_id")
+
+	var body struct {
+		TeamID             string `form:"team_id"`
+		TeamPositionID     string `form:"team_position_id"`
+		PersonID           string `form:"person_id"`
+		SchedulePreference string `form:"schedule_preference"`
+	}
+	errMsg := ""
+	if err := c.BodyParser(&body); err != nil {
+		errMsg = err.Error()
+	} else if body.TeamID == "" || body.TeamPositionID == "" || body.PersonID == "" {
+		errMsg = "team, position, and person are required"
+	} else if err := setPersonTeamPositionPreference(middleware.RequestContext(c), body.TeamID, body.TeamPositionID, body.PersonID, body.SchedulePreference); err != nil {
+		errMsg = err.Error()
+	}
+
+	return render(c, views.RosterBuilderBody(sc.buildRosterBuilderDataWithErr(middleware.RequestContext(c), orgID, serviceTypeID, planID, errMsg)))
+}
+
 func (sc *SchedulingController) buildRosterBuilderDataWithErr(ctx context.Context, organizationID, serviceTypeID, planID, errMsg string) views.RosterBuilderData {
 	data := sc.buildRosterBuilderData(ctx, organizationID, serviceTypeID, planID)
 	if errMsg != "" {
