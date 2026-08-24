@@ -318,6 +318,62 @@ function cancelSetupEdit(button) {
   resetSetupForm(button.closest("form"));
 }
 
+// Generic collapsible sections used across the build page (see
+// collapsibleSection in the scheduling views package, and the position-
+// group cards in roster_builder.templ, which build the same .collapsible/
+// .collapsible-toggle/.collapsible-body structure by hand) - same class-
+// toggle-plus-aria-expanded idiom as toggleNavDropdown above, just without
+// the floating-menu positioning since these sit inline in the page rather
+// than popping over it.
+function toggleCollapse(button) {
+  var section = button.closest(".collapsible");
+  var open = section.classList.toggle("open");
+  button.setAttribute("aria-expanded", open ? "true" : "false");
+}
+
+// Every mutation on the set/roster builders re-renders the whole
+// #set-builder-body/#roster-builder-body (see the htmx attributes
+// throughout set_builder.templ/roster_builder.templ), which would
+// otherwise snap every .collapsible back to its default open/closed state
+// on every single add/remove/publish click. Recorded right before whichever
+// body is about to swap, and reapplied right after - scoped by id so a
+// roster action never touches state remembered for the set builder and
+// vice versa (they never swap at the same time anyway, but this keeps the
+// two independent regardless).
+var openCollapsibleIDs = null;
+
+document.addEventListener("htmx:beforeSwap", function (event) {
+  var target = event.detail.target;
+  if (!target || (target.id !== "set-builder-body" && target.id !== "roster-builder-body")) {
+    return;
+  }
+
+  openCollapsibleIDs = [];
+  target.querySelectorAll(".collapsible.open[id]").forEach(function (el) {
+    openCollapsibleIDs.push(el.id);
+  });
+});
+
+document.addEventListener("htmx:afterSwap", function () {
+  if (!openCollapsibleIDs) {
+    return;
+  }
+
+  var ids = openCollapsibleIDs;
+  openCollapsibleIDs = null;
+  ids.forEach(function (id) {
+    var section = document.getElementById(id);
+    if (!section) {
+      return;
+    }
+    section.classList.add("open");
+    var toggle = section.querySelector(".collapsible-toggle");
+    if (toggle) {
+      toggle.setAttribute("aria-expanded", "true");
+    }
+  });
+});
+
 // Client-side filtering for the set builder's "find songs to add" list (see
 // set_builder.templ) - the whole candidate pool is already rendered on the
 // page (song libraries are small enough to fetch in full, unlike people),
@@ -330,6 +386,21 @@ function filterCandidates() {
   var search = (document.getElementById("candidate-search").value || "").toLowerCase();
   var activeFilter = document.querySelector(".role-filter.active");
   var role = activeFilter ? activeFilter.dataset.role : "";
+
+  // The list itself is collapsed by default (see set_builder.templ) - but
+  // actually searching or filtering it is the whole point of typing/
+  // clicking here, so open it the moment either one is used instead of
+  // making that a separate click.
+  if (search || role) {
+    var candidates = document.getElementById("find-songs-candidates");
+    if (candidates && !candidates.classList.contains("open")) {
+      candidates.classList.add("open");
+      var toggle = candidates.querySelector(".collapsible-toggle");
+      if (toggle) {
+        toggle.setAttribute("aria-expanded", "true");
+      }
+    }
+  }
 
   document.querySelectorAll("#set-candidates .candidate-row").forEach(function (row) {
     var haystack = row.dataset.title.toLowerCase() + " " + (row.dataset.tags || "").toLowerCase();

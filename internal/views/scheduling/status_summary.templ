@@ -1,0 +1,17 @@
+package scheduling
+
+// statusChip is one pill in a builder's status-summary row - the first
+// thing shown in both SetBuilderBody and RosterBuilderBody, so a viewer
+// knows whether this plan actually needs their attention before scrolling
+// through everything below. Shared between the two tabs so both use the
+// exact same pill treatment. warn reuses the same --pending/--pending-
+// subtle tinting .badge.status-pending already uses elsewhere on this
+// page, so "something here needs attention" reads consistently rather
+// than introducing a new color.
+templ statusChip(label string, warn bool) {
+	if warn {
+		<span class="status-chip warn">{ label }</span>
+	} else {
+		<span class="status-chip">{ label }</span>
+	}
+}
