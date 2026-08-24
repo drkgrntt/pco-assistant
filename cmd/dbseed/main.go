@@ -50,14 +50,16 @@ import (
 )
 
 // seedSongCount/seedPersonCount are how many songs/people dbseed wants to
-// work with - enough that every song role (six as of migration 00020) and
-// every relationship type can get its own distinct example. Not a hard
-// requirement: seedSubjects uses as many real ones as your PCO org
-// actually has and pads the rest with placeholders, so a smaller org still
-// gets a partially-real seed instead of an all-placeholder one.
+// work with - enough that every seed function below can give each lookup
+// type more than one example (see each function's own multiplier) without
+// constantly reusing the same one or two songs/people, so the result reads
+// like an actual planned-out setup rather than a bare minimum smoke test.
+// Not a hard requirement: seedSubjects uses as many real ones as your PCO
+// org actually has and pads the rest with placeholders, so a smaller org
+// still gets a partially-real seed instead of an all-placeholder one.
 const (
-	seedSongCount   = 6
-	seedPersonCount = 4
+	seedSongCount   = 8
+	seedPersonCount = 6
 )
 
 type seedSong struct{ ID, Title string }
@@ -230,12 +232,15 @@ func (s *seedStats) summarize() {
 	}
 }
 
-// seedSongTags tags a song with an example value for every category
+// seedSongTags tags songs with example values for every category
 // song_tag_categories actually has (see ListSongTagCategories) - a
-// category added to that table later gets seeded here automatically. Songs
-// are picked by cycling through the available set, so seedSongCount only
-// needs to be as large as you want the variety to be, not exactly equal to
-// the category count.
+// category added to that table later gets seeded here automatically, with
+// one generic example (see the fallback below); the categories this seeder
+// has real canned examples for get several each instead of just one, so
+// the result reads like an actual tagged library rather than a bare
+// minimum smoke test. Songs are picked by cycling through the available
+// set, advancing across category boundaries so different songs pick up
+// different tags rather than the same handful repeating.
 func seedSongTags(ctx context.Context, store *scheduling.Store, stats *seedStats, organizationID string, songs []seedSong) {
 	fmt.Println("Song tags:")
 	categories, err := store.ListSongTagCategories(ctx)
@@ -244,31 +249,44 @@ func seedSongTags(ctx context.Context, store *scheduling.Store, stats *seedStats
 		return
 	}
 
-	// Nicer example values for the categories this seeder knows about
-	// today - a category it doesn't recognize still gets a serviceable
-	// generic example instead of being skipped.
-	sampleValues := map[string]string{
-		scheduling.TagCategoryTheme:     "Grace",
-		scheduling.TagCategoryScripture: "Romans 8:1",
-		scheduling.TagCategoryIdea:      "Good for baptisms",
+	// Several example values per category this seeder knows about today -
+	// a category it doesn't recognize still gets one serviceable generic
+	// example instead of being skipped.
+	sampleValues := map[string][]string{
+		scheduling.TagCategoryTheme:     {"Grace", "Redemption", "Hope", "Surrender"},
+		scheduling.TagCategoryScripture: {"Romans 8:1", "Psalm 23", "John 3:16", "Isaiah 40:31"},
+		scheduling.TagCategoryIdea:      {"Good for communion", "Good for baptisms", "High energy opener", "Reflective closer"},
 	}
 
-	for i, cat := range categories {
-		song := songs[i%len(songs)]
-		value := sampleValues[cat.Code]
-		if value == "" {
-			value = cat.Label + " example"
+	songIndex := 0
+	for _, cat := range categories {
+		values := sampleValues[cat.Code]
+		if len(values) == 0 {
+			values = []string{cat.Label + " example"}
 		}
 
-		_, err := store.CreateSongTag(ctx, organizationID, scheduling.CreateSongTagParams{SongID: song.ID, Category: cat.Code, Value: value})
-		stats.report(fmt.Sprintf("%s: %q on %s", cat.Code, value, song.Title), err)
+		for _, value := range values {
+			song := songs[songIndex%len(songs)]
+			songIndex++
+
+			_, err := store.CreateSongTag(ctx, organizationID, scheduling.CreateSongTagParams{SongID: song.ID, Category: cat.Code, Value: value})
+			stats.report(fmt.Sprintf("%s: %q on %s", cat.Code, value, song.Title), err)
+		}
 	}
 }
 
+// seedRolesPerType is how many songs get each role - more than one so the
+// set builder's role-filter buttons and "Find songs to add" list actually
+// have more than a single candidate to choose from per role, the way a
+// real library would.
+const seedRolesPerType = 2
+
 // seedSongRoles assigns every role song_role_types actually has (see
 // ListSongRoleTypes - opener/response plus, as of migration 00020,
-// communion/prayer/reflection/baptism) to a song, one each, cycling
-// through the available songs the same way seedSongTags does.
+// communion/prayer/reflection/baptism) to seedRolesPerType songs each,
+// cycling through the available songs the same way seedSongTags does - a
+// song can and often will end up with more than one role, same as a real
+// song might be both an opener and a communion song.
 func seedSongRoles(ctx context.Context, store *scheduling.Store, stats *seedStats, organizationID string, songs []seedSong) {
 	fmt.Println("Song roles:")
 	types, err := store.ListSongRoleTypes(ctx)
@@ -277,18 +295,31 @@ func seedSongRoles(ctx context.Context, store *scheduling.Store, stats *seedStat
 		return
 	}
 
-	for i, t := range types {
-		song := songs[i%len(songs)]
-		_, err := store.CreateSongRole(ctx, organizationID, scheduling.CreateSongRoleParams{SongID: song.ID, Role: t.Code})
-		stats.report(fmt.Sprintf("%s: %s", t.Code, song.Title), err)
+	songIndex := 0
+	for _, t := range types {
+		for range seedRolesPerType {
+			song := songs[songIndex%len(songs)]
+			songIndex++
+
+			_, err := store.CreateSongRole(ctx, organizationID, scheduling.CreateSongRoleParams{SongID: song.ID, Role: t.Code})
+			stats.report(fmt.Sprintf("%s: %s", t.Code, song.Title), err)
+		}
 	}
 }
 
-// seedSongRelationships relates a pair of songs for every relationship
-// type song_relationship_types actually has (see ListSongRelationshipTypes)
-// - pairs cycle through the available songs two at a time, so a small
-// library reuses the same pair for every type (still valid - relationship
-// rows are unique per type, not per pair) rather than failing outright.
+// seedSongRelationshipsPerType is how many relationship pairs get seeded
+// per type - see seedSongRelationships for how these chain across the song
+// list rather than just repeating one pair.
+const seedSongRelationshipsPerType = 2
+
+// seedSongRelationships relates songs for every relationship type
+// song_relationship_types actually has (see ListSongRelationshipTypes),
+// seedSongRelationshipsPerType pairs each. Pairs advance by one song per
+// relationship rather than jumping by two, so consecutive relationships
+// share a song and the whole thing reads as one connected web (song 1
+// relates to song 2, song 2 to song 3, and so on) instead of a few
+// disjoint, unrelated pairs - much closer to what an actual planned-out
+// song library's relationships look like.
 func seedSongRelationships(ctx context.Context, store *scheduling.Store, stats *seedStats, organizationID string, songs []seedSong) {
 	fmt.Println("Song relationships:")
 	if len(songs) < 2 {
@@ -302,18 +333,27 @@ func seedSongRelationships(ctx context.Context, store *scheduling.Store, stats *
 		return
 	}
 
-	for i, t := range types {
-		a := songs[(i*2)%len(songs)]
-		b := songs[(i*2+1)%len(songs)]
-		_, err := store.CreateSongRelationship(ctx, organizationID, scheduling.CreateSongRelationshipParams{SongIDA: a.ID, SongIDB: b.ID, RelationshipType: t.Code})
-		stats.report(fmt.Sprintf("%s: %s <-> %s", t.Code, a.Title, b.Title), err)
+	pairIndex := 0
+	for _, t := range types {
+		for range seedSongRelationshipsPerType {
+			a := songs[pairIndex%len(songs)]
+			b := songs[(pairIndex+1)%len(songs)]
+			pairIndex++
+
+			_, err := store.CreateSongRelationship(ctx, organizationID, scheduling.CreateSongRelationshipParams{SongIDA: a.ID, SongIDB: b.ID, RelationshipType: t.Code})
+			stats.report(fmt.Sprintf("%s: %s <-> %s", t.Code, a.Title, b.Title), err)
+		}
 	}
 }
 
+// seedPreferencesPerType is how many song/person pairings get seeded per
+// preference type.
+const seedPreferencesPerType = 3
+
 // seedSongPreferences sets a song/person preference for every preference
 // type song_preference_types actually has (see ListSongPreferenceTypes),
-// cycling through the available songs and people the same way the other
-// seed functions do.
+// seedPreferencesPerType pairings each, cycling through the available
+// songs and people the same way the other seed functions do.
 func seedSongPreferences(ctx context.Context, store *scheduling.Store, stats *seedStats, organizationID string, songs []seedSong, people []seedPerson) {
 	fmt.Println("Song/person preferences:")
 	types, err := store.ListSongPreferenceTypes(ctx)
@@ -327,27 +367,38 @@ func seedSongPreferences(ctx context.Context, store *scheduling.Store, stats *se
 		scheduling.PreferenceDiscouraged: "Key doesn't suit their range.",
 	}
 
-	for i, t := range types {
-		song := songs[i%len(songs)]
-		person := people[i%len(people)]
+	i := 0
+	for _, t := range types {
 		note := notes[t.Code]
 		if note == "" {
 			note = t.Label + " example"
 		}
 
-		_, err := store.SetSongPersonPreference(ctx, organizationID, scheduling.SetSongPersonPreferenceParams{
-			SongID: song.ID, PersonID: person.ID, Preference: t.Code, Notes: note,
-		})
-		stats.report(fmt.Sprintf("%s: %s / %s", t.Code, song.Title, person.Name), err)
+		for range seedPreferencesPerType {
+			song := songs[i%len(songs)]
+			person := people[i%len(people)]
+			i++
+
+			_, err := store.SetSongPersonPreference(ctx, organizationID, scheduling.SetSongPersonPreferenceParams{
+				SongID: song.ID, PersonID: person.ID, Preference: t.Code, Notes: note,
+			})
+			stats.report(fmt.Sprintf("%s: %s / %s", t.Code, song.Title, person.Name), err)
+		}
 	}
 }
 
-// seedPersonRelationships relates a pair of people for every relationship
-// type person_relationship_types actually has (see
-// ListPersonRelationshipTypes) - see seedSongRelationships for the pairing/
-// small-library reasoning this mirrors. A directional type's pair order
-// (e.g. mentorship's "A mentors B") is preserved for whatever the cycled
-// pair happens to be.
+// seedPersonRelationshipsPerType is how many relationship pairs get seeded
+// per type - see seedSongRelationships for the chaining pattern this
+// mirrors.
+const seedPersonRelationshipsPerType = 2
+
+// seedPersonRelationships relates people for every relationship type
+// person_relationship_types actually has (see ListPersonRelationshipTypes),
+// seedPersonRelationshipsPerType pairs each, chained the same way
+// seedSongRelationships is so the result reads as one connected web of
+// relationships rather than a few disjoint pairs. A directional type's
+// pair order (e.g. mentorship's "A mentors B") is preserved for whatever
+// the chained pair happens to be.
 func seedPersonRelationships(ctx context.Context, store *scheduling.Store, stats *seedStats, organizationID string, people []seedPerson) {
 	fmt.Println("Person relationships:")
 	if len(people) < 2 {
@@ -361,10 +412,15 @@ func seedPersonRelationships(ctx context.Context, store *scheduling.Store, stats
 		return
 	}
 
-	for i, t := range types {
-		a := people[(i*2)%len(people)]
-		b := people[(i*2+1)%len(people)]
-		_, err := store.CreatePersonRelationship(ctx, organizationID, scheduling.CreatePersonRelationshipParams{PersonIDA: a.ID, PersonIDB: b.ID, RelationshipType: t.Code})
-		stats.report(fmt.Sprintf("%s: %s <-> %s", t.Code, a.Name, b.Name), err)
+	pairIndex := 0
+	for _, t := range types {
+		for range seedPersonRelationshipsPerType {
+			a := people[pairIndex%len(people)]
+			b := people[(pairIndex+1)%len(people)]
+			pairIndex++
+
+			_, err := store.CreatePersonRelationship(ctx, organizationID, scheduling.CreatePersonRelationshipParams{PersonIDA: a.ID, PersonIDB: b.ID, RelationshipType: t.Code})
+			stats.report(fmt.Sprintf("%s: %s <-> %s", t.Code, a.Name, b.Name), err)
+		}
 	}
 }
