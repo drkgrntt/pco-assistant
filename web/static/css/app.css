@@ -314,12 +314,42 @@ header.site form {
   }
 }
 
-/* Separates the two independently-interactive sections of the combined
-   Build a Service page (order of service, then team) - enough visual
-   weight to read as "new section," not just another <h2>. */
-.builder-section-divider {
-  border-top: 1px solid var(--border);
-  margin-block: var(--space-8);
+/* The combined Build a Service page's Songs/Team split (see BuildPlan,
+   toggleBuildTab in scheduling.js) - styled like a segmented control rather
+   than the header nav's link-style .nav-dropdown-toggle, since these are
+   the two primary views of this page, not secondary navigation. */
+.build-tabs {
+  display: flex;
+  gap: var(--space-1);
+  margin-block: var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.build-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  min-height: 0;
+  padding: var(--space-2) var(--space-1);
+  font: inherit;
+  font-weight: var(--font-medium);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.build-tab:hover {
+  background: none;
+  color: var(--text);
+}
+
+.build-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.build-tab-panel[hidden] {
+  display: none;
 }
 
 .quick-links {

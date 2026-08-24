@@ -110,6 +110,24 @@ document.addEventListener("keydown", function (event) {
   }
 });
 
+// The combined Build a Service page's Songs/Team tabs (see BuildPlan,
+// build.templ) - a plain client-side visibility toggle between the two
+// panels, each of which is already its own fully self-contained builder
+// (SetBuilderBody/RosterBuilderBody, with their own htmx swap targets).
+// Switching tabs never touches either builder's markup or triggers a
+// request - it just moves the "hidden" attribute and syncs aria-selected,
+// same class-toggle-plus-aria idiom as toggleNavDropdown above.
+function toggleBuildTab(tabName) {
+  document.querySelectorAll(".build-tab").forEach(function (tab) {
+    var active = tab.getAttribute("aria-controls") === "build-tab-" + tabName;
+    tab.classList.toggle("active", active);
+    tab.setAttribute("aria-selected", active ? "true" : "false");
+  });
+  document.querySelectorAll(".build-tab-panel").forEach(function (panel) {
+    panel.hidden = panel.id !== "build-tab-" + tabName;
+  });
+}
+
 // App-wide "your click registered" feedback for every htmx-driven action.
 // Several of this app's own endpoints are themselves several sequential PCO
 // API calls deep (Publish/Revert/Import walk every song or assignment one

@@ -185,8 +185,25 @@ templ BuildPlan(personName, organizationName string, setData SetBuilderData, ros
 			<span class="muted">·</span>
 			<a href={ templ.URL(pcoPlanURL(setData.PlanID)) } target="_blank" rel="noopener">Open in Planning Center ↗</a>
 		</p>
-		@SetBuilderBody(setData)
-		<div class="builder-section-divider"></div>
-		@RosterBuilderBody(rosterData)
+		<!--
+			Songs and Team are two independently-interactive builders (each
+			with its own htmx swap target, see SetBuilderBody/RosterBuilderBody)
+			that used to just stack on one long page. Splitting them into tabs
+			cuts what's on screen at once roughly in half without changing
+			either builder's markup or behavior at all - switching is a plain
+			client-side hidden toggle (toggleBuildTab, scheduling.js), so both
+			panels still fully server-render on every page load exactly as
+			before.
+		-->
+		<div class="build-tabs" role="tablist">
+			<button type="button" class="build-tab active" role="tab" aria-selected="true" aria-controls="build-tab-songs" onclick="toggleBuildTab('songs')">Songs</button>
+			<button type="button" class="build-tab" role="tab" aria-selected="false" aria-controls="build-tab-team" onclick="toggleBuildTab('team')">Team</button>
+		</div>
+		<div class="build-tab-panel" id="build-tab-songs" role="tabpanel">
+			@SetBuilderBody(setData)
+		</div>
+		<div class="build-tab-panel" id="build-tab-team" role="tabpanel" hidden>
+			@RosterBuilderBody(rosterData)
+		</div>
 	}
 }
