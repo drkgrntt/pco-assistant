@@ -1,5 +1,7 @@
 package scheduling
 
+import "pco-assistant/internal/scheduling"
+
 // RosterBuilderData gathers everything the Team Builder page (and every
 // htmx fragment it swaps after an add/remove action) needs to render - the
 // people equivalent of SetBuilderData.
@@ -28,11 +30,28 @@ type RosterBuilderData struct {
 	UnpublishedCount   int
 	PendingDeleteCount int
 
+	// OpenPositionCount is how many of Positions still have room left (len
+	// (Assigned) < Quantity) - the "N still open" half of the team tab's
+	// status summary (RosterBuilderBody), computed once in
+	// buildRosterBuilderData rather than re-counting in the template.
+	OpenPositionCount int
+
 	// ImportableAssignmentCount is how many people Planning Center already
 	// has assigned to this plan's positions that aren't reflected here yet -
 	// see SetBuilderData.ImportableSongCount, which this mirrors, and
 	// buildRosterBuilderData for why it can't just be read off Positions.
 	ImportableAssignmentCount int
+
+	// PersonRelationshipTypes/SchedulePreferenceOptions back the "Quick add
+	// a relationship" and per-position "+ Add eligible person" panels
+	// (RosterBuilderBody) - letting someone relate two people or set a
+	// position preference right from the build page instead of a dedicated
+	// setup page. Neither is otherwise needed by this page (suggestions/
+	// conflicts read relationship data directly, and eligibility candidates
+	// already carry their own SchedulePreference string), so both are
+	// fetched only for these panels.
+	PersonRelationshipTypes   []scheduling.PersonRelationshipType
+	SchedulePreferenceOptions []SchedulePreferenceOption
 }
 
 // PositionGroupView is one open slot - a team + position name, how many are
@@ -43,9 +62,17 @@ type PositionGroupView struct {
 	TeamID           string
 	TeamName         string
 	TeamPositionName string
-	Quantity         int
-	Assigned         []AssignmentView
-	Candidates       []CandidatePersonView
+	// TeamPositionID is the PCO team_position id, resolved by
+	// buildRosterBuilderData's name->id lookup (Assigned/Candidates only
+	// carry the position's name, not its id) - needed to post a "+ Add
+	// eligible person" quick-add straight at this position without asking
+	// the user to pick it again. Empty when that lookup failed for this
+	// position (best-effort, same as the rest of this page); the quick-add
+	// trigger is omitted in that case rather than posting to a blank id.
+	TeamPositionID string
+	Quantity       int
+	Assigned       []AssignmentView
+	Candidates     []CandidatePersonView
 }
 
 // AssignmentView is one person currently filling a position.

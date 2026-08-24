@@ -594,14 +594,19 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 
 	// Each group's candidate pool (PCO's own eligibility list for that
 	// position) is fetched once and reused for both "who's assigned"
-	// warnings and "who could be added" candidates below.
+	// warnings and "who could be added" candidates below. positionIDs is
+	// kept alongside it - PositionGroupView.TeamPositionID needs this same
+	// resolved id so the roster tab's "+ Add eligible person" quick-add can
+	// post straight at a position without asking the user to pick it again.
 	candidatesByGroup := make([][]pco.PersonTeamPositionAssignmentData, len(groups))
+	positionIDs := make([]string, len(groups))
 	relevantPersonIDs := map[string]bool{}
 	for _, ra := range assignments {
 		relevantPersonIDs[ra.PersonID] = true
 	}
 	for i, g := range groups {
 		posID := positionID(g.TeamID, g.TeamPositionName)
+		positionIDs[i] = posID
 		if posID == "" {
 			continue
 		}
@@ -644,6 +649,7 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 			TeamID:           g.TeamID,
 			TeamName:         titleOrID(teamNames, g.TeamID),
 			TeamPositionName: g.TeamPositionName,
+			TeamPositionID:   positionIDs[i],
 			Quantity:         g.Quantity,
 		}
 
@@ -691,8 +697,18 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 			})
 		}
 
+		if len(pg.Assigned) < pg.Quantity {
+			data.OpenPositionCount++
+		}
 		data.Positions = append(data.Positions, pg)
 	}
+
+	// PersonRelationshipTypes/SchedulePreferenceOptions back the "Quick add
+	// a relationship" and per-position "+ Add eligible person" panels (see
+	// views.RosterBuilderData) - best-effort like the lookups above, since a
+	// failure here only costs those panels' dropdowns, not the page.
+	data.PersonRelationshipTypes, _ = sc.store.ListPersonRelationshipTypes(ctx)
+	data.SchedulePreferenceOptions = schedulePreferenceOptions()
 
 	if conflicts, existing, err := sc.store.AvoidPairingConflicts(ctx, organizationID, roster.ID); err != nil {
 		data.ErrMsg = appendErr(data.ErrMsg, err.Error())

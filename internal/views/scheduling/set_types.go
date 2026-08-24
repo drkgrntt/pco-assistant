@@ -1,5 +1,11 @@
 package scheduling
 
+import (
+	"pco-assistant/internal/scheduling"
+
+	pco "github.com/drkgrntt/go-pco"
+)
+
 // The set builder page pulls together data from several sources (the DB
 // store, live PCO plan/song data, and role/relationship lookups) that the
 // controller has to resolve before rendering - these plain view-model types
@@ -64,6 +70,22 @@ type SetBuilderData struct {
 	// SetBuilderBody, so someone can start editing an already-planned
 	// service instead of just seeing it read-only.
 	ImportableSongCount int
+
+	// AllSongs/TagCategories/RelationshipTypes/RoleTypes back the "Quick
+	// add" panel's <select> pickers (SetBuilderBody) - letting someone tag a
+	// song, relate two songs, or mark an opener/response right from the
+	// build page instead of a dedicated setup page. AllSongs is the same
+	// slice buildSetBuilderData already fetches via fetchAllSongs for the
+	// candidate list, just also exposed here so the quick-add forms don't
+	// need a song picker of their own; TagCategories is likewise the same
+	// slice already fetched for candidate tag badges. RelationshipTypes and
+	// RoleTypes aren't otherwise needed by this page (recommendations read
+	// relationship/role data directly, not through these lookup tables), so
+	// they're fetched only for this panel.
+	AllSongs          []pco.SongData
+	TagCategories     []scheduling.SongTagCategory
+	RelationshipTypes []scheduling.SongRelationshipType
+	RoleTypes         []scheduling.SongRoleType
 }
 
 type SetSongView struct {

@@ -559,6 +559,15 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 	tagsBySong := songTagsBySong(allTags)
 	tagCategoryLabels := songTagCategoryLabelMap(tagCategories)
 
+	// AllSongs/TagCategories/RelationshipTypes/RoleTypes back the "Quick
+	// add" panel's <select> pickers (see views.SetBuilderData) - best-effort
+	// like the lookups above, since a failure here only costs that one
+	// panel's dropdowns, not the page.
+	data.AllSongs = songs
+	data.TagCategories = tagCategories
+	data.RelationshipTypes, _ = sc.store.ListSongRelationshipTypes(ctx)
+	data.RoleTypes, _ = sc.store.ListSongRoleTypes(ctx)
+
 	inSet := make(map[string]bool, len(setSongs))
 	for _, ss := range setSongs {
 		inSet[ss.SongID] = true
