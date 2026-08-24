@@ -12,10 +12,11 @@ import (
 )
 
 // TagCategoryTheme/TagCategoryScripture/TagCategoryIdea aren't given any
-// special algorithmic meaning (contrast song_roles.go's RoleOpener/
-// RoleResponse, which the set builder filters candidates by) - tags are
-// purely descriptive, so a song can be found later by sermon theme, related
-// scripture, or a loose idea. They're seeded into song_tag_categories by
+// special algorithmic meaning - same as song_roles.go's RoleOpener/
+// RoleResponse, roles are now just as purely descriptive/filterable as
+// tags are, with no Go-side special-casing either way. Tags in particular
+// let a song be found later by sermon theme, related scripture, or a loose
+// idea. They're seeded into song_tag_categories by
 // migration 00016, which is the source of truth for which categories
 // actually exist - add a row there for another one, no code change needed.
 const (

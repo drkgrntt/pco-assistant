@@ -10,13 +10,15 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-// RoleOpener/RoleResponse are the role codes the set builder (see sets.go's
-// controller) filters candidate songs by. They're seeded into
-// song_role_types by migration 00015, but that table is the source of
-// truth for which codes actually exist - an admin can add more straight
-// into the DB and they'll show up as a selectable, displayable tag with no
-// special set-builder filtering, same as any code these constants don't
-// name.
+// RoleOpener/RoleResponse are just the two role codes seeded by migration
+// 00015 - song_role_types is the source of truth for which codes actually
+// exist, and every one of them (these two, migration 00020's
+// communion/prayer/reflection/baptism, or anything added later) gets
+// identical treatment: selectable, displayable, and filterable in the set
+// builder with no further code change. Neither of these constants gets any
+// special algorithmic treatment in Go - see songRoleViews in the
+// controller, which resolves any role generically - they're kept purely
+// for readability, the same way song_tags.go's TagCategory* constants are.
 const (
 	RoleOpener   = "opener"
 	RoleResponse = "response"

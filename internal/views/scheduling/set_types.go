@@ -93,12 +93,15 @@ type SetSongView struct {
 	// set now (see DuplicateSongInSet), so this row id, not SongID, is
 	// what identifies which occurrence an action (remove/replace/
 	// reposition/duplicate) targets.
-	ID         int64
-	SongID     string
-	Title      string
-	Position   int
-	IsOpener   bool
-	IsResponse bool
+	ID       int64
+	SongID   string
+	Title    string
+	Position int
+	// Roles is this song's assigned roles (opener, response, communion,
+	// etc. - see SongRoleView), shown as badges next to its order-of-service
+	// row. Purely descriptive/display - see song_roles.go for why no role
+	// code gets special Go-side treatment anymore.
+	Roles []SongRoleView
 	// Published is true once this song has been pushed to Planning Center
 	// as a real plan item (see the scheduling.SetSong.PCOItemID it comes
 	// from).
@@ -158,21 +161,25 @@ type PlanRow struct {
 type CandidateSongView struct {
 	SongID         string
 	Title          string
-	IsOpener       bool
-	IsResponse     bool
 	ConflictTitles []string
 	// RecentlyRepeated is true when this song was sung in each of the last
 	// two past plans for this service type (see the controller's
 	// recentlyRepeatedSongs) - a nudge to think twice before adding it a
 	// third time in a row.
 	RecentlyRepeated bool
-	RolesAttr        string
+	// Roles is this song's assigned roles, for display as badges - see
+	// SetSongView.Roles, which this mirrors. RolesAttr is the same roles'
+	// codes, space-joined, as a data attribute for the candidate list's
+	// client-side role-filter buttons and search - see filterCandidates in
+	// web/static/js/scheduling.js.
+	Roles     []SongRoleView
+	RolesAttr string
 	// Tags is this song's theme/scripture/idea tags (see song_tags.go), for
 	// display as badges. TagsAttr is the same tags' values, space-joined and
 	// lowercased, as a data attribute for the candidate list's client-side
 	// search - see filterCandidates in web/static/js/scheduling.js, which
 	// matches typed text against title or tags the same way RolesAttr
-	// already backs the opener/response filter buttons.
+	// already backs the role-filter buttons.
 	Tags     []SongTagView
 	TagsAttr string
 }
@@ -183,6 +190,18 @@ type CandidateSongView struct {
 type SongTagView struct {
 	Category string
 	Value    string
+}
+
+// SongRoleView is one role assigned to a song (opener, response, communion,
+// etc. - see song_role_types), already resolved to its display label (see
+// songRoleTypeLabelMap in the controller) rather than the raw code - the
+// role equivalent of SongTagView. No role code gets special treatment
+// here; the set builder's role-filter buttons are generated straight from
+// SetBuilderData.RoleTypes, so a role added to song_role_types (no code
+// change needed) is filterable and visible immediately, not just storable.
+type SongRoleView struct {
+	Code  string
+	Label string
 }
 
 type SuggestionView struct {

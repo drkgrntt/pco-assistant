@@ -604,10 +604,10 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 	}
 	titles := songTitleMap(songs)
 
-	openerRoles, _ := sc.store.ListSongRoles(ctx, organizationID, "", scheduling.RoleOpener)
-	responseRoles, _ := sc.store.ListSongRoles(ctx, organizationID, "", scheduling.RoleResponse)
-	openers := songIDSet(openerRoles)
-	responses := songIDSet(responseRoles)
+	roleTypes, _ := sc.store.ListSongRoleTypes(ctx)
+	roleTypeLabels := songRoleTypeLabelMap(roleTypes)
+	allRoles, _ := sc.store.ListSongRoles(ctx, organizationID, "", "")
+	rolesBySong := songRolesBySong(allRoles)
 
 	// Best-effort, same as titles/roles above: tags are a search/display
 	// nicety on the candidate list, so a lookup failure just means no tag
@@ -624,7 +624,7 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 	data.AllSongs = songs
 	data.TagCategories = tagCategories
 	data.RelationshipTypes, _ = sc.store.ListSongRelationshipTypes(ctx)
-	data.RoleTypes, _ = sc.store.ListSongRoleTypes(ctx)
+	data.RoleTypes = roleTypes
 
 	inSet := make(map[string]bool, len(setSongs))
 	for _, ss := range setSongs {
@@ -635,13 +635,13 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 		if ss.Moved {
 			data.ReorderPending = true
 		}
+		roleViews, _ := songRoleViews(rolesBySong, roleTypeLabels, ss.SongID)
 		data.SetSongs = append(data.SetSongs, views.SetSongView{
 			ID:           ss.ID,
 			SongID:       ss.SongID,
 			Title:        titleOrID(titles, ss.SongID),
 			Position:     ss.Position,
-			IsOpener:     openers[ss.SongID],
-			IsResponse:   responses[ss.SongID],
+			Roles:        roleViews,
 			Published:    ss.PCOItemID != "",
 			AnchorItemID: ss.AnchorItemID,
 			Moved:        ss.Moved,
@@ -684,7 +684,7 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 			return pcoItems.Data[i].Attributes.Sequence < pcoItems.Data[j].Attributes.Sequence
 		})
 		merged := mergeServiceOrder(pcoItems.Data, setSongs)
-		data.ServiceOrder = renderServiceOrder(merged, titles, openers, responses)
+		data.ServiceOrder = renderServiceOrder(merged, titles, rolesBySong, roleTypeLabels)
 
 		// ImportableSongCount only matters the first time this set is opened:
 		// once it has anything of its own (active or tombstoned - see
@@ -745,13 +745,7 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 			continue
 		}
 
-		var roles []string
-		if openers[song.ID] {
-			roles = append(roles, scheduling.RoleOpener)
-		}
-		if responses[song.ID] {
-			roles = append(roles, scheduling.RoleResponse)
-		}
+		roleViews, rolesAttr := songRoleViews(rolesBySong, roleTypeLabels, song.ID)
 
 		var conflictTitles []string
 		for _, conflictSongID := range candidateConflicts[song.ID] {
@@ -771,11 +765,10 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 		data.Candidates = append(data.Candidates, views.CandidateSongView{
 			SongID:           song.ID,
 			Title:            song.Attributes.Title,
-			IsOpener:         openers[song.ID],
-			IsResponse:       responses[song.ID],
 			ConflictTitles:   conflictTitles,
 			RecentlyRepeated: repeated[song.ID],
-			RolesAttr:        strings.Join(roles, " "),
+			Roles:            roleViews,
+			RolesAttr:        rolesAttr,
 			Tags:             tagViews,
 			TagsAttr:         strings.Join(tagValues, " "),
 		})
@@ -944,7 +937,7 @@ func mergeServiceOrder(items []pco.ItemData, setSongs []scheduling.SetSong) []me
 // renderServiceOrder turns a merge into display rows plus the anchor
 // picker's option list (every foreign item, in order, prefixed by "Top of
 // service").
-func renderServiceOrder(rows []mergedRow, titles map[string]string, openers, responses map[string]bool) []views.ServiceOrderRow {
+func renderServiceOrder(rows []mergedRow, titles map[string]string, rolesBySong map[string][]scheduling.SongRole, roleTypeLabels map[string]string) []views.ServiceOrderRow {
 	out := make([]views.ServiceOrderRow, 0, len(rows))
 
 	for _, row := range rows {
@@ -963,6 +956,7 @@ func renderServiceOrder(rows []mergedRow, titles map[string]string, openers, res
 		}
 
 		ss := row.Song
+		roleViews, _ := songRoleViews(rolesBySong, roleTypeLabels, ss.SongID)
 		out = append(out, views.ServiceOrderRow{
 			IsSong: true,
 			Song: views.SetSongView{
@@ -970,8 +964,7 @@ func renderServiceOrder(rows []mergedRow, titles map[string]string, openers, res
 				SongID:       ss.SongID,
 				Title:        titleOrID(titles, ss.SongID),
 				Position:     ss.Position,
-				IsOpener:     openers[ss.SongID],
-				IsResponse:   responses[ss.SongID],
+				Roles:        roleViews,
 				Published:    ss.PCOItemID != "",
 				AnchorItemID: ss.AnchorItemID,
 				Moved:        ss.Moved,
@@ -982,12 +975,35 @@ func renderServiceOrder(rows []mergedRow, titles map[string]string, openers, res
 	return out
 }
 
-func songIDSet(roles []scheduling.SongRole) map[string]bool {
-	set := make(map[string]bool, len(roles))
+// songRolesBySong buckets every one of an org's song roles by song id - the
+// role equivalent of songTagsBySong (scheduling.go).
+func songRolesBySong(roles []scheduling.SongRole) map[string][]scheduling.SongRole {
+	bySong := make(map[string][]scheduling.SongRole, len(roles))
 	for _, r := range roles {
-		set[r.SongID] = true
+		bySong[r.SongID] = append(bySong[r.SongID], r)
 	}
-	return set
+	return bySong
+}
+
+// songRoleViews resolves songID's roles (via rolesBySong, see
+// songRolesBySong) to display view models (see views.SongRoleView) plus
+// their space-joined codes for the candidate list's client-side
+// role-filter/search (RolesAttr - see filterCandidates in scheduling.js).
+// Shared by every place a song's roles need to go on screen: set songs,
+// order-of-service rows, and not-yet-added candidates.
+func songRoleViews(rolesBySong map[string][]scheduling.SongRole, roleTypeLabels map[string]string, songID string) ([]views.SongRoleView, string) {
+	roles := rolesBySong[songID]
+	if len(roles) == 0 {
+		return nil, ""
+	}
+
+	roleViews := make([]views.SongRoleView, 0, len(roles))
+	codes := make([]string, 0, len(roles))
+	for _, r := range roles {
+		roleViews = append(roleViews, views.SongRoleView{Code: r.Role, Label: titleOrID(roleTypeLabels, r.Role)})
+		codes = append(codes, r.Role)
+	}
+	return roleViews, strings.Join(codes, " ")
 }
 
 // titleOrID looks up id in a string->string map, falling back to id itself

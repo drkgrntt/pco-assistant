@@ -99,11 +99,8 @@ templ SetBuilderBody(data SetBuilderData) {
 								</td>
 								<td>{ row.Song.Title }</td>
 								<td>
-									if row.Song.IsOpener {
-										<span class="badge">Opener</span>
-									}
-									if row.Song.IsResponse {
-										<span class="badge">Response</span>
+									for _, role := range row.Song.Roles {
+										<span class="badge">{ role.Label }</span>
 									}
 									if row.Song.Published {
 										<span class="badge published">Published</span>
@@ -244,9 +241,19 @@ templ SetBuilderBody(data SetBuilderData) {
 			}
 		}
 		<h2>Find songs to add</h2>
+		<!--
+			Generated straight from data.RoleTypes (song_role_types) rather
+			than two hardcoded opener/response buttons - a role added to that
+			table (Song Roles setup page or the quick-add panel below, no code
+			change needed) is filterable immediately, same "no code change
+			needed" philosophy the table already has for storage. filterCandidates
+			(scheduling.js) already matches generically against whichever
+			data-role was clicked - see CandidateSongView.RolesAttr.
+		-->
 		<div class="role-filters">
-			<button type="button" class="role-filter" data-role="opener" onclick="toggleRoleFilter(this)">Openers</button>
-			<button type="button" class="role-filter" data-role="response" onclick="toggleRoleFilter(this)">Response songs</button>
+			for _, rt := range data.RoleTypes {
+				<button type="button" class="role-filter" data-role={ rt.Code } onclick="toggleRoleFilter(this)">{ rt.Label }</button>
+			}
 		</div>
 		<input
 			type="text"
@@ -268,11 +275,8 @@ templ SetBuilderBody(data SetBuilderData) {
 				for _, cand := range data.Candidates {
 					<li class="candidate-row" data-title={ cand.Title } data-roles={ cand.RolesAttr } data-tags={ cand.TagsAttr }>
 						<span>{ cand.Title }</span>
-						if cand.IsOpener {
-							<span class="badge">Opener</span>
-						}
-						if cand.IsResponse {
-							<span class="badge">Response</span>
+						for _, role := range cand.Roles {
+							<span class="badge">{ role.Label }</span>
 						}
 						for _, tag := range cand.Tags {
 							<span class="badge tag-badge" title={ tag.Category }>{ tag.Value }</span>
@@ -371,7 +375,7 @@ templ SetBuilderBody(data SetBuilderData) {
 					</form>
 				</div>
 				<div>
-					<h4>Mark opener / response</h4>
+					<h4>Add a role</h4>
 					<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/song-roles", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
 						<label>
 							Song
