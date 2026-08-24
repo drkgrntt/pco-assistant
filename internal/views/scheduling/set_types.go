@@ -71,6 +71,12 @@ type SetBuilderData struct {
 	// service instead of just seeing it read-only.
 	ImportableSongCount int
 
+	// SongPairPrompt, when set, offers a one-shot inline "remember that
+	// these two go together?" relationship capture right after adding a
+	// song that landed right after another one - see SongPairPromptView
+	// and AddSetSong (sets.go), the only handler that ever sets this.
+	SongPairPrompt *SongPairPromptView
+
 	// AllSongs/TagCategories/RelationshipTypes/RoleTypes back the "Quick
 	// add" panel's <select> pickers (SetBuilderBody) - letting someone tag a
 	// song, relate two songs, or mark an opener/response right from the
@@ -212,4 +218,14 @@ type SuggestionView struct {
 	// to the anchor song by more than one relationship type is one
 	// suggestion with both reasons, not a separate suggestion per type.
 	RelationshipLabel string
+}
+
+// SongPairPromptView is SetBuilderData.SongPairPrompt's payload - the two
+// songs a "remember that these go together?" prompt is offering to relate,
+// already resolved to their titles for display.
+type SongPairPromptView struct {
+	PreviousSongID    string
+	PreviousSongTitle string
+	NewSongID         string
+	NewSongTitle      string
 }

@@ -153,17 +153,45 @@ func (sc *SchedulingController) AddSetSong(c *fiber.Ctx) error {
 		SongID string `form:"song_id"`
 	}
 	errMsg := ""
+	chainedAfterSongID := ""
 	if err := c.BodyParser(&body); err != nil {
 		errMsg = err.Error()
 	} else if body.SongID == "" {
 		errMsg = "song_id is required"
 	} else if set, err := sc.store.GetOrCreateSet(c.Context(), orgID, serviceTypeID, planID); err != nil {
 		errMsg = err.Error()
-	} else if _, err := sc.store.AddSongToSet(c.Context(), set.ID, body.SongID); err != nil {
+	} else if _, chained, err := sc.store.AddSongToSet(c.Context(), set.ID, body.SongID); err != nil {
 		errMsg = err.Error()
+	} else {
+		chainedAfterSongID = chained
 	}
 
-	return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(middleware.RequestContext(c), orgID, serviceTypeID, planID, errMsg)))
+	data := sc.buildSetBuilderDataWithErr(middleware.RequestContext(c), orgID, serviceTypeID, planID, errMsg)
+
+	// SongPairPrompt: only ever set here, right after a successful add that
+	// actually chained after another song - see AddSongToSet's doc comment
+	// and views.SongPairPromptView. Every other mutation (remove/duplicate/
+	// replace/reposition/publish/revert) leaves it nil, so the prompt
+	// naturally disappears again the moment you do anything else, without
+	// needing an explicit dismiss/expiry mechanism. Titles are read off the
+	// set data just built rather than re-resolved - both songs are
+	// necessarily still in data.SetSongs at this point.
+	if chainedAfterSongID != "" {
+		prompt := &views.SongPairPromptView{PreviousSongID: chainedAfterSongID, NewSongID: body.SongID}
+		for _, ss := range data.SetSongs {
+			if ss.SongID == chainedAfterSongID {
+				prompt.PreviousSongTitle = ss.Title
+			}
+			if ss.SongID == body.SongID {
+				prompt.NewSongTitle = ss.Title
+			}
+		}
+		if prompt.PreviousSongTitle != "" && prompt.NewSongTitle != "" {
+			data.SongPairPrompt = prompt
+		}
+	}
+
+	return render(c, views.SetBuilderBody(data))
 }
 
 func (sc *SchedulingController) RemoveSetSong(c *fiber.Ctx) error {
