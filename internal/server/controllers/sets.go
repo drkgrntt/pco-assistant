@@ -761,22 +761,34 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 		// actually true right now - every add or move of the first song
 		// updates it immediately here, not just on a confirmed publish, since
 		// this runs after every mutation (and on plain page views, which is
-		// harmless - the upsert is idempotent). setSongs is already sorted by
-		// position (see ListSetSongs), so setSongs[0] is always the current
-		// first song. Best-effort: a local memory hint, not data sent to
-		// Planning Center, so a failure here doesn't belong in data.ErrMsg.
+		// harmless - the upsert is idempotent). Deliberately walks merged
+		// (the real interleaved order ServiceOrder is built from) for the
+		// first row that's a song, rather than assuming setSongs[0] (lowest
+		// SetSong.Position): Position is only a total order among set songs
+		// themselves, established by whatever order they were spliced in -
+		// it says nothing about where their anchor items actually fall
+		// relative to each other, so a song anchored to a *later* header can
+		// still end up with the lowest Position. Best-effort: a local memory
+		// hint, not data sent to Planning Center, so a failure here doesn't
+		// belong in data.ErrMsg.
 		if len(setSongs) > 0 {
 			anchorTitle := ""
-			if anchor := setSongs[0].AnchorItemID; anchor != "" {
-				for _, item := range pcoItems.Data {
-					if item.ID == anchor {
-						anchorTitle = item.Attributes.Title
-						if anchorTitle == "" {
-							anchorTitle = item.Attributes.ItemType
+			for _, row := range merged {
+				if row.Song == nil {
+					continue
+				}
+				if anchor := row.Song.AnchorItemID; anchor != "" {
+					for _, item := range pcoItems.Data {
+						if item.ID == anchor {
+							anchorTitle = item.Attributes.Title
+							if anchorTitle == "" {
+								anchorTitle = item.Attributes.ItemType
+							}
+							break
 						}
-						break
 					}
 				}
+				break
 			}
 			_ = sc.store.RememberFirstSongAnchor(ctx, organizationID, serviceTypeID, anchorTitle)
 		}
