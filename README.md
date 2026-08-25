@@ -17,17 +17,33 @@ sets/rosters) and syncs it back to real PCO records when you publish.
 **Songs**
 - **Song Relationships** - tag songs as `flows_well`, `same_theme`, or
   `avoid_pairing` with each other, with notes
-- **Song Roles** - mark songs as good openers or response songs
+- **Song Roles** - mark songs with a role (opener, response, communion,
+  prayer, reflection, baptism, or any other role you add to the lookup
+  table - no code change needed) - shown as badges on the song and
+  filterable while building a set
+- **Song Tag Suggestions** - a non-AI suggestion tool that groups songs
+  sharing a significant word in their titles (e.g. "King of Kings,"
+  "Christ the King," and "All Hail King Jesus" all sharing "king"), so you
+  can review a group and tag them all at once instead of tagging every
+  song by hand
 - **Song / Person Preferences** - note who's preferred or discouraged for a
   given song
-- **Build a Set** - pick an upcoming plan and build its song lineup against
-  the plan's *full* order of service (including template headers and
-  non-song items already in Planning Center, not just a blank slate).
-  Drag-and-drop reordering, recommendations based on song relationships,
-  avoid-pairing warnings, duplicate-song support (e.g. a song reprised as
-  the response), and a repeated-song warning if a song was sung in each of
-  the last two plans. Publish pushes everything to real PCO plan items in
-  one sync; Discard reverts your local draft back to whatever's live in PCO.
+- **Build a Service (Songs tab)** - pick an upcoming plan and build its
+  song lineup against the plan's *full* order of service (including
+  template headers and non-song items already in Planning Center, not just
+  a blank slate). Drag-and-drop reordering, recommendations based on song
+  relationships, avoid-pairing warnings, duplicate-song support (e.g. a
+  song reprised as the response), and a repeated-song warning if a song was
+  sung in each of the last two plans. A new plan's first song lands
+  wherever the first song usually goes for that service type once you've
+  placed it there once (tracked separately per service type, so e.g.
+  Sunday and Wednesday can differ). Add a song right after another one and
+  you're offered a one-click prompt to record how they relate (flows well,
+  same theme, etc.) without leaving the page - ad hoc song tags/
+  relationships/roles can also be created from a "Quick add" panel right on
+  the build page, not just the dedicated setup pages. Publish pushes
+  everything to real PCO plan items in one sync; Discard reverts your local
+  draft back to whatever's live in PCO.
 
 **People**
 - **Person Relationships** - tag people as `works_well`, `mentorship`
@@ -37,11 +53,16 @@ sets/rosters) and syncs it back to real PCO records when you publish.
   `PersonTeamPositionAssignment.schedule_preference` field ("Every other
   week," "Once a month," etc.) - this writes back to real PCO data, so it's
   respected by Planning Center's own scheduling tools too, not just here
-- **Build a Team** - fill an upcoming plan's open positions from each
-  position's real PCO eligibility list, with avoid-pairing conflict
-  warnings, works-well/mentorship suggestions, serving-frequency warnings
-  (checked against real history), and blockout-date warnings (read live
-  from Planning Center). Publish/Discard mirror Build a Set's sync model.
+- **Build a Service (Team tab)** - the same page as the Songs tab above,
+  filling an upcoming plan's open positions from each position's real PCO
+  eligibility list, with avoid-pairing conflict warnings, works-well/
+  mentorship suggestions, serving-frequency warnings (checked against real
+  history), and blockout-date warnings (read live from Planning Center).
+  Add someone right after someone else already on the roster and you're
+  offered the same one-click "remember how they relate" prompt as the
+  Songs tab; ad hoc person relationships and position eligibility can also
+  be set from a "Quick add" panel here. Publish/Discard mirror the Songs
+  tab's sync model.
 
 Mobile-first, installable as a PWA, with light/dark theming.
 
@@ -131,9 +152,13 @@ confirmation - pass `ARGS=-yes` to skip it):
 make db-reset
 ```
 
-Populate the local database with a small set of example scheduling data
-(song relationships, roles, tags, preferences, person relationships) - safe
-to run more than once, it won't create duplicates:
+Populate the local database with example scheduling data - every lookup
+table (song tag categories, song/person relationship types, song roles,
+song preference types) is read live and seeded with several examples each,
+so a type added to one of those tables later needs no dbseed change to get
+picked up. Safe to run more than once: tags/roles/preferences upsert in
+place every run (harmless, not duplicates), and relationships correctly
+report "already seeded" instead of creating a second row:
 ```bash
 make db-seed
 ```
@@ -142,7 +167,6 @@ Both refuse to run unless `APP_ENV=local`, and can also be run directly with
 `go run ./cmd/dbreset` / `go run ./cmd/dbseed` (each accepts `-h` for its
 flags). Seeded rows reference songs/people by ID, and songs/people
 themselves live in Planning Center, not this database - if you've signed
-into the app in your browser at least once, `db-seed` borrows that
-session's PCO token to seed against a few of your org's real songs and
-people; otherwise it falls back to placeholder IDs that still exercise every
-page, just without a resolvable title/name.
+into the app in your browser at least once, `db-seed` uses as many of your
+org's real songs/people as it can find and pads the rest with placeholder
+IDs that still exercise every page, just without a resolvable title/name.

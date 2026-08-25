@@ -122,11 +122,13 @@ leverage vs. build effort, not commitment order:
    this only after the lighter-weight items above are in and adoption data
    says it's worth it.
 
-**Framing to carry into onboarding copy, not just features:** PCO is the
-live broadcast; this app is the private rehearsal studio - a safe place to
-test lineups and resolve conflicts before pushing the final version live.
-That framing turns "why is this a separate tool" into a feature instead of
-an apology.
+**Framing that's now live in onboarding copy, not just an idea:** PCO is
+the live broadcast; this app is the private rehearsal studio - a safe place
+to test lineups and resolve conflicts before pushing the final version
+live. That framing turns "why is this a separate tool" into a feature
+instead of an apology. It's the centerpiece of the public landing page at
+`/` (`internal/views/landing.templ`) - the rehearsal-studio comparison is
+one of its sections verbatim, not just referenced.
 
 ## Expansion strategy
 
