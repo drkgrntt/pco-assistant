@@ -10,8 +10,16 @@
 /* Strip native OS chrome (the "weird border" look) so our own
    border/background fully replace it instead of fighting with it. select's
    native dropdown arrow is left alone - restyling that needs a custom icon
-   and isn't worth it here. */
-input,
+   and isn't worth it here. checkbox/radio inputs are excluded from both
+   this rule and the one below - appearance: none on a checkbox strips its
+   native box *and* checkmark with nothing here to replace either, so
+   without this exclusion every checkbox in the app renders as an
+   invisible/blank control (only surfaced once something actually used one
+   - see the Song Tag Suggestions apply form, the first checkbox anywhere
+   in this codebase). Native checkbox/radio rendering is left alone
+   entirely, same "not worth custom-styling" call already made for select's
+   arrow. */
+input:not([type="checkbox"]):not([type="radio"]),
 select,
 button {
   appearance: none;
@@ -24,7 +32,7 @@ button {
    page, and now that tables/cards/list rows are --surface too, a --bg
    control inside one of them would look like a mismatched cutout rather
    than a field (most visible in dark mode, where the two diverge most). */
-input,
+input:not([type="checkbox"]):not([type="radio"]),
 select,
 button {
   font: inherit;
