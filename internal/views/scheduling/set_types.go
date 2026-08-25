@@ -1,5 +1,11 @@
 package scheduling
 
+import (
+	"pco-assistant/internal/scheduling"
+
+	pco "github.com/drkgrntt/go-pco"
+)
+
 // The set builder page pulls together data from several sources (the DB
 // store, live PCO plan/song data, and role/relationship lookups) that the
 // controller has to resolve before rendering - these plain view-model types
@@ -64,6 +70,28 @@ type SetBuilderData struct {
 	// SetBuilderBody, so someone can start editing an already-planned
 	// service instead of just seeing it read-only.
 	ImportableSongCount int
+
+	// SongPairPrompt, when set, offers a one-shot inline "remember that
+	// these two go together?" relationship capture right after adding a
+	// song that landed right after another one - see SongPairPromptView
+	// and AddSetSong (sets.go), the only handler that ever sets this.
+	SongPairPrompt *SongPairPromptView
+
+	// AllSongs/TagCategories/RelationshipTypes/RoleTypes back the "Quick
+	// add" panel's <select> pickers (SetBuilderBody) - letting someone tag a
+	// song, relate two songs, or mark an opener/response right from the
+	// build page instead of a dedicated setup page. AllSongs is the same
+	// slice buildSetBuilderData already fetches via fetchAllSongs for the
+	// candidate list, just also exposed here so the quick-add forms don't
+	// need a song picker of their own; TagCategories is likewise the same
+	// slice already fetched for candidate tag badges. RelationshipTypes and
+	// RoleTypes aren't otherwise needed by this page (recommendations read
+	// relationship/role data directly, not through these lookup tables), so
+	// they're fetched only for this panel.
+	AllSongs          []pco.SongData
+	TagCategories     []scheduling.SongTagCategory
+	RelationshipTypes []scheduling.SongRelationshipType
+	RoleTypes         []scheduling.SongRoleType
 }
 
 type SetSongView struct {
@@ -71,12 +99,15 @@ type SetSongView struct {
 	// set now (see DuplicateSongInSet), so this row id, not SongID, is
 	// what identifies which occurrence an action (remove/replace/
 	// reposition/duplicate) targets.
-	ID         int64
-	SongID     string
-	Title      string
-	Position   int
-	IsOpener   bool
-	IsResponse bool
+	ID       int64
+	SongID   string
+	Title    string
+	Position int
+	// Roles is this song's assigned roles (opener, response, communion,
+	// etc. - see SongRoleView), shown as badges next to its order-of-service
+	// row. Purely descriptive/display - see song_roles.go for why no role
+	// code gets special Go-side treatment anymore.
+	Roles []SongRoleView
 	// Published is true once this song has been pushed to Planning Center
 	// as a real plan item (see the scheduling.SetSong.PCOItemID it comes
 	// from).
@@ -136,21 +167,25 @@ type PlanRow struct {
 type CandidateSongView struct {
 	SongID         string
 	Title          string
-	IsOpener       bool
-	IsResponse     bool
 	ConflictTitles []string
 	// RecentlyRepeated is true when this song was sung in each of the last
 	// two past plans for this service type (see the controller's
 	// recentlyRepeatedSongs) - a nudge to think twice before adding it a
 	// third time in a row.
 	RecentlyRepeated bool
-	RolesAttr        string
+	// Roles is this song's assigned roles, for display as badges - see
+	// SetSongView.Roles, which this mirrors. RolesAttr is the same roles'
+	// codes, space-joined, as a data attribute for the candidate list's
+	// client-side role-filter buttons and search - see filterCandidates in
+	// web/static/js/scheduling.js.
+	Roles     []SongRoleView
+	RolesAttr string
 	// Tags is this song's theme/scripture/idea tags (see song_tags.go), for
 	// display as badges. TagsAttr is the same tags' values, space-joined and
 	// lowercased, as a data attribute for the candidate list's client-side
 	// search - see filterCandidates in web/static/js/scheduling.js, which
 	// matches typed text against title or tags the same way RolesAttr
-	// already backs the opener/response filter buttons.
+	// already backs the role-filter buttons.
 	Tags     []SongTagView
 	TagsAttr string
 }
@@ -163,6 +198,18 @@ type SongTagView struct {
 	Value    string
 }
 
+// SongRoleView is one role assigned to a song (opener, response, communion,
+// etc. - see song_role_types), already resolved to its display label (see
+// songRoleTypeLabelMap in the controller) rather than the raw code - the
+// role equivalent of SongTagView. No role code gets special treatment
+// here; the set builder's role-filter buttons are generated straight from
+// SetBuilderData.RoleTypes, so a role added to song_role_types (no code
+// change needed) is filterable and visible immediately, not just storable.
+type SongRoleView struct {
+	Code  string
+	Label string
+}
+
 type SuggestionView struct {
 	SongID string
 	Title  string
@@ -171,4 +218,14 @@ type SuggestionView struct {
 	// to the anchor song by more than one relationship type is one
 	// suggestion with both reasons, not a separate suggestion per type.
 	RelationshipLabel string
+}
+
+// SongPairPromptView is SetBuilderData.SongPairPrompt's payload - the two
+// songs a "remember that these go together?" prompt is offering to relate,
+// already resolved to their titles for display.
+type SongPairPromptView struct {
+	PreviousSongID    string
+	PreviousSongTitle string
+	NewSongID         string
+	NewSongTitle      string
 }

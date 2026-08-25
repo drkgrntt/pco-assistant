@@ -179,6 +179,10 @@ func (sc *SchedulingController) RegisterRoutes(router fiber.Router) {
 	group.Post("/song-tags", sc.CreateSongTag)
 	group.Delete("/song-tags/:id", sc.DeleteSongTag)
 
+	group.Get("/song-tag-suggestions", sc.SongTagSuggestionsPage)
+	group.Post("/song-tag-suggestions/apply", sc.ApplySongTagSuggestion)
+	group.Post("/song-tag-suggestions/ignore", sc.IgnoreSongTagSuggestion)
+
 	group.Get("/person-relationships", sc.PersonRelationshipsPage)
 	group.Post("/person-relationships", sc.CreatePersonRelationship)
 	group.Delete("/person-relationships/:id", sc.DeletePersonRelationship)
@@ -192,6 +196,17 @@ func (sc *SchedulingController) RegisterRoutes(router fiber.Router) {
 	group.Get("/build/plans", sc.BuildPlans)
 	group.Get("/build/plans/search", sc.BuildPlansSearch)
 	group.Get("/build/:service_type_id/:plan_id", sc.BuildPlanPage)
+
+	// Quick-add: the same setup-level entities as the dedicated setup pages
+	// above (song tags/relationships/roles, person relationships, position
+	// preferences), posted from within the build workflow instead - see
+	// QuickAdd* in sets.go/rosters.go for why these are separate handlers
+	// rather than reusing the setup-page POSTs above.
+	group.Post("/build/:service_type_id/:plan_id/song-tags", sc.QuickAddSongTag)
+	group.Post("/build/:service_type_id/:plan_id/song-relationships", sc.QuickAddSongRelationship)
+	group.Post("/build/:service_type_id/:plan_id/song-roles", sc.QuickAddSongRole)
+	group.Post("/build/:service_type_id/:plan_id/person-relationships", sc.QuickAddPersonRelationship)
+	group.Post("/build/:service_type_id/:plan_id/position-preferences", sc.QuickAddPositionPreference)
 
 	group.Post("/rosters/:service_type_id/:plan_id/assignments", sc.AddRosterAssignment)
 	group.Delete("/rosters/:service_type_id/:plan_id/assignments/:assignment_id", sc.RemoveRosterAssignment)

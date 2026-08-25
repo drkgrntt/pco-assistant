@@ -10,8 +10,16 @@
 /* Strip native OS chrome (the "weird border" look) so our own
    border/background fully replace it instead of fighting with it. select's
    native dropdown arrow is left alone - restyling that needs a custom icon
-   and isn't worth it here. */
-input,
+   and isn't worth it here. checkbox/radio inputs are excluded from both
+   this rule and the one below - appearance: none on a checkbox strips its
+   native box *and* checkmark with nothing here to replace either, so
+   without this exclusion every checkbox in the app renders as an
+   invisible/blank control (only surfaced once something actually used one
+   - see the Song Tag Suggestions apply form, the first checkbox anywhere
+   in this codebase). Native checkbox/radio rendering is left alone
+   entirely, same "not worth custom-styling" call already made for select's
+   arrow. */
+input:not([type="checkbox"]):not([type="radio"]),
 select,
 button {
   appearance: none;
@@ -24,7 +32,7 @@ button {
    page, and now that tables/cards/list rows are --surface too, a --bg
    control inside one of them would look like a mismatched cutout rather
    than a field (most visible in dark mode, where the two diverge most). */
-input,
+input:not([type="checkbox"]):not([type="radio"]),
 select,
 button {
   font: inherit;
@@ -59,6 +67,16 @@ form.inline label {
   flex-direction: column;
   font-size: var(--text-md);
   gap: var(--space-1);
+}
+
+/* A checkbox paired with its own text (song selection, Song Tag
+   Suggestions' apply form) wants the opposite of the stacked "label text
+   above its field" layout above - checkbox and text side by side, like
+   any normal checkbox row. */
+form.inline label.checkbox-label {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 form.inline input,
@@ -514,4 +532,95 @@ table.sortable tbody tr:hover,
 
 .position-group h3 {
   margin-top: 0;
+}
+
+/* === Status summary ========================================================= */
+
+/* The first thing in the set/roster builders' bodies (see
+   SetBuilderBody/RosterBuilderBody) - a few pills so a viewer knows
+   whether this plan actually needs attention before scrolling through
+   everything below it. */
+.status-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-block: var(--space-3);
+}
+
+.status-chip {
+  display: inline-block;
+  background: var(--surface-hover);
+  border-radius: var(--radius-full);
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--text);
+}
+
+/* Reuses the same status-token vocabulary .badge.status-pending already
+   uses elsewhere on this page, so "something here needs attention" reads
+   consistently rather than introducing a new color. */
+.status-chip.warn {
+  background: var(--pending-subtle);
+  color: var(--pending);
+}
+
+/* === Collapsible sections =================================================== */
+
+/* Generic show/hide wrapper (see toggleCollapse in scheduling.js) for
+   secondary build-page content that doesn't need to be visible by
+   default - Recommended next, the full song candidate list, quick-add
+   panels, and (built by hand rather than through collapsibleSection,
+   since it needs an <h3>-wraps-<button> heading and per-position default
+   state) a fully-staffed position-group card. */
+.collapsible-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 0;
+  background: none;
+  border: none;
+  padding: var(--space-2) 0;
+  font: inherit;
+  font-weight: var(--font-medium);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.collapsible-toggle:hover {
+  background: none;
+  color: var(--accent);
+}
+
+.collapsible-toggle .icon {
+  transition: transform var(--duration-base) var(--ease-standard);
+}
+
+.collapsible.open .collapsible-toggle .icon {
+  transform: rotate(180deg);
+}
+
+.collapsible-body {
+  display: none;
+}
+
+.collapsible.open .collapsible-body {
+  display: block;
+}
+
+/* The "Quick add" panels (song tags/relationships/roles, person
+   relationships, position eligibility - see set_builder.templ/
+   roster_builder.templ) - a handful of stacked mini-forms, each an
+   abbreviated clone of the matching setup page's create form. */
+.quick-add-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.quick-add-panel h4 {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-md);
+  color: var(--muted);
 }

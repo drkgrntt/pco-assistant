@@ -1,0 +1,123 @@
+package scheduling
+
+import (
+	"fmt"
+	"strings"
+
+	"pco-assistant/internal/scheduling"
+	"pco-assistant/internal/views"
+)
+
+templ SongTagSuggestions(personName, organizationName string, data SongTagSuggestionsData) {
+	@views.Layout("Song Tag Suggestions", personName, organizationName) {
+		<h1>Song Tag Suggestions</h1>
+		<p class="muted">
+			Songs whose titles share a word, grouped up so you can tag them all
+			at once - e.g. "King of Kings," "Christ the King," and "All Hail King
+			Jesus" would show up sharing "king." Discovery is automatic; nothing
+			gets tagged until you review a group, adjust the value if you want
+			(rename "king" to "Kingship," say), and apply it. Not every shared
+			word is a real theme - ignore a group and it won't come back.
+		</p>
+		@SongTagSuggestionsList(data)
+	}
+}
+
+// SongTagSuggestionsList is both the initial-render fragment and the htmx
+// swap target (id="song-tag-suggestions-list") for Apply/Ignore - the
+// whole list re-renders each time since applying or ignoring one group can
+// change what else still needs review (a song tagged here no longer shows
+// as untagged in any other group it happens to share a word with).
+templ SongTagSuggestionsList(data SongTagSuggestionsData) {
+	<div id="song-tag-suggestions-list">
+		if data.ErrMsg != "" {
+			<p class="error">{ data.ErrMsg }</p>
+		}
+		if data.SuccessMsg != "" {
+			<p class="success">{ data.SuccessMsg }</p>
+		}
+		for _, group := range data.Suggestions {
+			<!--
+				.position-group is the roster builder's per-position card
+				class (bordered, padded) - reused here rather than a new
+				class for the same "one bordered card per item" treatment,
+				same reuse-over-new-CSS approach as the rest of this app.
+			-->
+			<div class="position-group">
+				<h3>{ fmt.Sprintf("%q appears in %d song titles", group.Word, len(group.Songs)) }</h3>
+				<ul class="candidate-list">
+					for _, song := range group.Songs {
+						<li>
+							<span>{ song.Title }</span>
+							if song.AlreadyTagged {
+								<span class="badge published">Already tagged</span>
+							}
+						</li>
+					}
+				</ul>
+				<form
+					class="inline"
+					hx-post="/scheduling/song-tag-suggestions/apply"
+					hx-target="#song-tag-suggestions-list"
+					hx-swap="outerHTML"
+				>
+					<div class="quick-add-panel">
+						for _, song := range group.Songs {
+							if !song.AlreadyTagged {
+								<label class="checkbox-label">
+									<input type="checkbox" name="song_ids" value={ song.SongID } checked/>
+									{ song.Title }
+								</label>
+							}
+						}
+					</div>
+					<label>
+						Category
+						<select name="category">
+							for _, cat := range data.TagCategories {
+								if cat.Code == scheduling.TagCategoryTheme {
+									<option value={ cat.Code } selected>{ cat.Label }</option>
+								} else {
+									<option value={ cat.Code }>{ cat.Label }</option>
+								}
+							}
+						</select>
+					</label>
+					<label>
+						Value
+						<input type="text" name="value" value={ capitalize(group.Word) } required/>
+					</label>
+					<button type="submit" class="primary">Apply to selected</button>
+				</form>
+				<form
+					hx-post="/scheduling/song-tag-suggestions/ignore"
+					hx-target="#song-tag-suggestions-list"
+					hx-swap="outerHTML"
+					hx-confirm={ fmt.Sprintf("Stop suggesting %q? This can't be undone from here.", group.Word) }
+				>
+					<input type="hidden" name="word" value={ group.Word }/>
+					<button type="submit" class="danger">Not a theme - ignore</button>
+				</form>
+			</div>
+		}
+		if len(data.Suggestions) == 0 {
+			<p class="muted">
+				No suggestions right now - either your songs don't share much
+				title vocabulary yet, or you've already tagged or ignored
+				everything worth flagging.
+			</p>
+		}
+	</div>
+}
+
+// capitalize turns a suggestion's lowercase word (see songTagSuggestions in
+// the controller) into a reasonable starting point for the tag value's
+// text input - "king" -> "King". Purely a starting point: the input is
+// fully editable, so renaming it to "Kingship" or anything else is just
+// typing over this default.
+func capitalize(word string) string {
+	if word == "" {
+		return word
+	}
+	return strings.ToUpper(word[:1]) + word[1:]
+}

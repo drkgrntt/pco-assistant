@@ -18,11 +18,21 @@ templ RosterBuilderBody(data RosterBuilderData) {
 		if data.PublishMsg != "" {
 			<p class="success">{ data.PublishMsg }</p>
 		}
-
+		<div class="status-summary">
+			@statusChip(fmt.Sprintf("Filled: %d/%d", len(data.Positions)-data.OpenPositionCount, len(data.Positions)), data.OpenPositionCount > 0)
+			if data.UnpublishedCount > 0 {
+				@statusChip(fmt.Sprintf("Unpublished: %d", data.UnpublishedCount), true)
+			}
+			if data.PendingDeleteCount > 0 {
+				@statusChip(fmt.Sprintf("Pending removal: %d", data.PendingDeleteCount), true)
+			}
+			if len(data.ExistingConflicts) > 0 {
+				@statusChip(fmt.Sprintf("Warnings: %d", len(data.ExistingConflicts)), true)
+			}
+		</div>
 		for _, msg := range data.ExistingConflicts {
 			<div class="warning">{ msg }</div>
 		}
-
 		if data.ImportableAssignmentCount > 0 {
 			<div class="import-banner">
 				<p>
@@ -39,6 +49,29 @@ templ RosterBuilderBody(data RosterBuilderData) {
 			</div>
 		}
 
+		<!--
+			Ad hoc creation of the setup-level entity this page's "Recommended
+			next" suggestions are built from (works-well-with/mentorship
+			relationships) - see QuickAddPersonRelationship in rosters.go. Same
+			fields, same Store method as person_relationships.templ's own
+			create form, just reachable without leaving this page.
+		-->
+		@collapsibleSection("quick-add-relationship-team", "+ Quick add a relationship") {
+			<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/person-relationships", data.ServiceTypeID, data.PlanID) } hx-target="#roster-builder-body" hx-swap="outerHTML">
+				@PersonPickerField("Person A", "person_id_a", "qa-a")
+				@PersonPickerField("Person B", "person_id_b", "qa-b")
+				<label>
+					Relationship
+					<select name="relationship_type">
+						for _, t := range data.PersonRelationshipTypes {
+							<option value={ t.Code }>{ t.Label }</option>
+						}
+					</select>
+				</label>
+				<button type="submit" class="primary">Relate people</button>
+			</form>
+		}
+
 		<h2>Positions</h2>
 		if len(data.Positions) == 0 {
 			if data.ImportableAssignmentCount > 0 {
@@ -47,74 +80,127 @@ templ RosterBuilderBody(data RosterBuilderData) {
 				<p class="muted">Nothing needed yet - Planning Center has no open positions configured for this plan.</p>
 			}
 		}
-		for _, pos := range data.Positions {
-			<div class="position-group">
+		for i, pos := range data.Positions {
+			<!--
+				Fully-staffed positions are the low-signal case - collapsed by
+				default so an almost-done roster doesn't look as busy as a
+				mostly-empty one; still-open positions (the ones actually
+				needing a decision) stay expanded. The <h3>-wraps-<button>
+				structure is the standard accessible disclosure pattern -
+				see toggleCollapse in scheduling.js - built by hand here rather
+				than through collapsibleSection since the heading's own text is
+				per-position and its default open/closed state depends on
+				pos.Assigned/pos.Quantity.
+			-->
+			<div
+				if len(pos.Assigned) < pos.Quantity {
+					class="position-group collapsible open"
+				} else {
+					class="position-group collapsible"
+				}
+				id={ fmt.Sprintf("position-group-%d", i) }
+			>
 				<h3>
-					{ pos.TeamName } / { pos.TeamPositionName }
-					<span class="muted">({ strconv.Itoa(len(pos.Assigned)) } of { strconv.Itoa(pos.Quantity) } filled)</span>
+					<button type="button" class="collapsible-toggle" onclick="toggleCollapse(this)" aria-expanded={ fmt.Sprintf("%t", len(pos.Assigned) < pos.Quantity) }>
+						<span>
+							{ pos.TeamName } / { pos.TeamPositionName }
+							<span class="muted">({ strconv.Itoa(len(pos.Assigned)) } of { strconv.Itoa(pos.Quantity) } filled)</span>
+						</span>
+						@views.IconChevronDown()
+					</button>
 				</h3>
-
-				if len(pos.Assigned) > 0 {
-					<ul class="assignment-list">
-						for _, a := range pos.Assigned {
-							<li>
-								<span>{ a.Name }</span>
-								<span class="badge">{ a.Status }</span>
-								if a.Published {
-									<span class="badge published">Published</span>
-								}
-								if a.FrequencyWarning != "" {
-									<span class="conflict-badge">⚠ { a.FrequencyWarning }</span>
-								}
-								if a.BlockoutWarning != "" {
-									<span class="conflict-badge">⚠ { a.BlockoutWarning }</span>
-								}
-								<button
-									type="button"
-									class="danger icon-btn"
-									aria-label="Remove from position"
-									title="Remove from position"
-									hx-delete={ fmt.Sprintf("/scheduling/rosters/%s/%s/assignments/%d", data.ServiceTypeID, data.PlanID, a.ID) }
-									hx-target="#roster-builder-body"
-									hx-swap="outerHTML"
-									hx-confirm="Remove this person from this position?"
-								>
-									@views.IconRemove()
-								</button>
-							</li>
-						}
-					</ul>
-				}
-
-				if len(pos.Candidates) > 0 {
-					<ul class="candidate-list">
-						for _, cand := range pos.Candidates {
-							<li class="candidate-row">
-								<span>{ cand.Name }</span>
-								<span class="muted">{ cand.SchedulePreference }</span>
-								if cand.FrequencyWarning != "" {
-									<span class="conflict-badge">⚠ { cand.FrequencyWarning }</span>
-								}
-								if cand.BlockoutWarning != "" {
-									<span class="conflict-badge">⚠ { cand.BlockoutWarning }</span>
-								}
-								<form hx-post={ fmt.Sprintf("/scheduling/rosters/%s/%s/assignments", data.ServiceTypeID, data.PlanID) } hx-target="#roster-builder-body" hx-swap="outerHTML">
-									<input type="hidden" name="person_id" value={ cand.PersonID }/>
-									<input type="hidden" name="team_id" value={ pos.TeamID }/>
-									<input type="hidden" name="team_position_name" value={ pos.TeamPositionName }/>
-									<button type="submit" class="icon-btn" aria-label="Add to position" title="Add to position">
-										@views.IconAdd()
+				<div class="collapsible-body">
+					if len(pos.Assigned) > 0 {
+						<ul class="assignment-list">
+							for _, a := range pos.Assigned {
+								<li>
+									<span>{ a.Name }</span>
+									<span class="badge">{ a.Status }</span>
+									if a.Published {
+										<span class="badge published">Published</span>
+									}
+									if a.FrequencyWarning != "" {
+										<span class="conflict-badge">⚠ { a.FrequencyWarning }</span>
+									}
+									if a.BlockoutWarning != "" {
+										<span class="conflict-badge">⚠ { a.BlockoutWarning }</span>
+									}
+									<button
+										type="button"
+										class="danger icon-btn"
+										aria-label="Remove from position"
+										title="Remove from position"
+										hx-delete={ fmt.Sprintf("/scheduling/rosters/%s/%s/assignments/%d", data.ServiceTypeID, data.PlanID, a.ID) }
+										hx-target="#roster-builder-body"
+										hx-swap="outerHTML"
+										hx-confirm="Remove this person from this position?"
+									>
+										@views.IconRemove()
 									</button>
-								</form>
-							</li>
+								</li>
+							}
+						</ul>
+					}
+					if len(pos.Candidates) > 0 {
+						<ul class="candidate-list">
+							for _, cand := range pos.Candidates {
+								<li class="candidate-row">
+									<span>{ cand.Name }</span>
+									<span class="muted">{ cand.SchedulePreference }</span>
+									if cand.FrequencyWarning != "" {
+										<span class="conflict-badge">⚠ { cand.FrequencyWarning }</span>
+									}
+									if cand.BlockoutWarning != "" {
+										<span class="conflict-badge">⚠ { cand.BlockoutWarning }</span>
+									}
+									<form hx-post={ fmt.Sprintf("/scheduling/rosters/%s/%s/assignments", data.ServiceTypeID, data.PlanID) } hx-target="#roster-builder-body" hx-swap="outerHTML">
+										<input type="hidden" name="person_id" value={ cand.PersonID }/>
+										<input type="hidden" name="team_id" value={ pos.TeamID }/>
+										<input type="hidden" name="team_position_name" value={ pos.TeamPositionName }/>
+										<button type="submit" class="icon-btn" aria-label="Add to position" title="Add to position">
+											@views.IconAdd()
+										</button>
+									</form>
+								</li>
+							}
+						</ul>
+					} else if len(pos.Assigned) == 0 {
+						<p class="muted">No one eligible for this position yet.</p>
+					}
+
+					<!--
+						Ad hoc eligibility - the most directly-motivated quick-add on
+						this page (this text used to just dead-end to "add eligibility
+						under Position Preferences" and send the user away). Posts
+						straight at this position (team/position id already known from
+						the card), same underlying operation as
+						PositionPreferencesPage's own form - see
+						QuickAddPositionPreference in rosters.go. Omitted when the
+						position's id lookup failed (best-effort, same as the rest of
+						this page - see PositionGroupView.TeamPositionID) rather than
+						posting to a blank id.
+					-->
+					if pos.TeamPositionID != "" {
+						@collapsibleSection(fmt.Sprintf("quick-add-position-%d", i), "+ Add eligible person") {
+							<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/position-preferences", data.ServiceTypeID, data.PlanID) } hx-target="#roster-builder-body" hx-swap="outerHTML">
+								<input type="hidden" name="team_id" value={ pos.TeamID }/>
+								<input type="hidden" name="team_position_id" value={ pos.TeamPositionID }/>
+								@PersonPickerField("Person", "person_id", fmt.Sprintf("qapos%d", i))
+								<label>
+									Schedule preference
+									<select name="schedule_preference">
+										for _, opt := range data.SchedulePreferenceOptions {
+											<option value={ opt.Value }>{ opt.Label }</option>
+										}
+									</select>
+								</label>
+								<button type="submit" class="primary">Add eligibility</button>
+							</form>
 						}
-					</ul>
-				} else if len(pos.Assigned) == 0 {
-					<p class="muted">No one eligible for this position yet - add eligibility under Position Preferences.</p>
-				}
+					}
+				</div>
 			</div>
 		}
-
 		if data.UnpublishedCount > 0 || data.PendingDeleteCount > 0 || len(data.Positions) > 0 {
 			<div class="publish-panel">
 				if data.PendingDeleteCount > 0 {
@@ -150,26 +236,26 @@ templ RosterBuilderBody(data RosterBuilderData) {
 				</p>
 			</div>
 		}
-
 		if len(data.Suggestions) > 0 {
-			<h2>Recommended next</h2>
-			<p class="muted">Based on works-well-with and mentorship relationships with people already on this roster.</p>
-			<ul class="suggestion-list">
-				for _, sug := range data.Suggestions {
-					<li>
-						<span>{ sug.Name }</span>
-						<span class="muted">{ sug.TeamPositionName } &middot; { sug.RelationshipLabel }</span>
-						<form hx-post={ fmt.Sprintf("/scheduling/rosters/%s/%s/assignments", data.ServiceTypeID, data.PlanID) } hx-target="#roster-builder-body" hx-swap="outerHTML">
-							<input type="hidden" name="person_id" value={ sug.PersonID }/>
-							<input type="hidden" name="team_id" value={ sug.TeamID }/>
-							<input type="hidden" name="team_position_name" value={ sug.TeamPositionName }/>
-							<button type="submit" class="icon-btn" aria-label="Add to position" title="Add to position">
-								@views.IconAdd()
-							</button>
-						</form>
-					</li>
-				}
-			</ul>
+			@collapsibleSection("recommended-next-team", "Recommended next") {
+				<p class="muted">Based on works-well-with and mentorship relationships with people already on this roster.</p>
+				<ul class="suggestion-list">
+					for _, sug := range data.Suggestions {
+						<li>
+							<span>{ sug.Name }</span>
+							<span class="muted">{ sug.TeamPositionName } &middot; { sug.RelationshipLabel }</span>
+							<form hx-post={ fmt.Sprintf("/scheduling/rosters/%s/%s/assignments", data.ServiceTypeID, data.PlanID) } hx-target="#roster-builder-body" hx-swap="outerHTML">
+								<input type="hidden" name="person_id" value={ sug.PersonID }/>
+								<input type="hidden" name="team_id" value={ sug.TeamID }/>
+								<input type="hidden" name="team_position_name" value={ sug.TeamPositionName }/>
+								<button type="submit" class="icon-btn" aria-label="Add to position" title="Add to position">
+									@views.IconAdd()
+								</button>
+							</form>
+						</li>
+					}
+				</ul>
+			}
 		}
 	</div>
 }

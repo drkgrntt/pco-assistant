@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"pco-assistant/internal/scheduling"
 	"pco-assistant/internal/views"
 
 	pco "github.com/drkgrntt/go-pco"
@@ -23,14 +24,27 @@ templ SetBuilderBody(data SetBuilderData) {
 		if data.PublishMsg != "" {
 			<p class="success">{ data.PublishMsg }</p>
 		}
-
+		<div class="status-summary">
+			@statusChip(fmt.Sprintf("Songs: %d", len(data.SetSongs)), false)
+			if data.UnpublishedCount > 0 {
+				@statusChip(fmt.Sprintf("Unpublished: %d", data.UnpublishedCount), true)
+			}
+			if data.PendingDeleteCount > 0 {
+				@statusChip(fmt.Sprintf("Pending removal: %d", data.PendingDeleteCount), true)
+			}
+			if data.ReorderPending {
+				@statusChip("Order changed", true)
+			}
+			if warnCount := len(data.ExistingConflicts) + len(data.RepeatWarnings); warnCount > 0 {
+				@statusChip(fmt.Sprintf("Warnings: %d", warnCount), true)
+			}
+		</div>
 		for _, msg := range data.ExistingConflicts {
 			<div class="warning">{ msg }</div>
 		}
 		for _, msg := range data.RepeatWarnings {
 			<div class="warning">{ msg }</div>
 		}
-
 		if data.ImportableSongCount > 0 {
 			<div class="import-banner">
 				<p>
@@ -46,13 +60,49 @@ templ SetBuilderBody(data SetBuilderData) {
 				</form>
 			</div>
 		}
-
+		<!--
+			A one-shot nudge, not a permanent fixture - only ever appears
+			right after AddSetSong chains a song after another one (see
+			views.SongPairPromptView, AddSetSong in sets.go), and disappears
+			again the moment you do anything else, since no other mutation
+			sets it. Lets "song A, then I add song B, and by the way these go
+			together" get captured right where it happens, instead of
+			re-picking both songs from scratch in the Quick add panel below -
+			which stays around for relating songs that *aren't* adjacent, or
+			after the fact.
+		-->
+		if data.SongPairPrompt != nil {
+			<div class="import-banner">
+				<p>
+					{ fmt.Sprintf("Added %q right after %q - ", data.SongPairPrompt.NewSongTitle, data.SongPairPrompt.PreviousSongTitle) }
+					want to remember how these two relate?
+					<button type="button" class="icon-btn" aria-label="Dismiss" title="Dismiss" onclick="this.closest('.import-banner').remove()">
+						@views.IconX()
+					</button>
+				</p>
+				<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/song-relationships", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
+					<input type="hidden" name="song_id_a" value={ data.SongPairPrompt.PreviousSongID }/>
+					<input type="hidden" name="song_id_b" value={ data.SongPairPrompt.NewSongID }/>
+					<label>
+						Relationship
+						<select name="relationship_type">
+							for _, t := range data.RelationshipTypes {
+								<option value={ t.Code } selected?={ t.Code == scheduling.RelationshipFlowsWell }>{ t.Label }</option>
+							}
+						</select>
+					</label>
+					<button type="submit" class="primary">Remember this</button>
+				</form>
+			</div>
+		}
 		<h2>Order of service</h2>
 		<p class="muted">
 			Everything Planning Center already has for this plan, with your songs
 			placed where you've put them. Non-song items are shown for context
 			only - this tool doesn't manage them. Drag a song's
-			<span class="icon-inline">@views.IconDrag()</span>
+			<span class="icon-inline">
+				@views.IconDrag()
+			</span>
 			handle to move it anywhere in the order, including onto or past a
 			section header.
 		</p>
@@ -85,11 +135,8 @@ templ SetBuilderBody(data SetBuilderData) {
 								</td>
 								<td>{ row.Song.Title }</td>
 								<td>
-									if row.Song.IsOpener {
-										<span class="badge">Opener</span>
-									}
-									if row.Song.IsResponse {
-										<span class="badge">Response</span>
+									for _, role := range row.Song.Roles {
+										<span class="badge">{ role.Label }</span>
 									}
 									if row.Song.Published {
 										<span class="badge published">Published</span>
@@ -164,7 +211,6 @@ templ SetBuilderBody(data SetBuilderData) {
 				</tbody>
 			</table>
 		</div>
-
 		if len(data.SetSongs) > 0 || data.PendingDeleteCount > 0 {
 			<div class="publish-panel">
 				if data.PendingDeleteCount > 0 {
@@ -211,30 +257,39 @@ templ SetBuilderBody(data SetBuilderData) {
 				</p>
 			</div>
 		}
-
 		if len(data.Suggestions) > 0 {
-			<h2>Recommended next</h2>
-			<p class="muted">Based on the last song in the set.</p>
-			<ul class="suggestion-list">
-				for _, sug := range data.Suggestions {
-					<li>
-						<span>{ sug.Title }</span>
-						<span class="muted">{ sug.RelationshipLabel }</span>
-						<form hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/songs", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
-							<input type="hidden" name="song_id" value={ sug.SongID }/>
-							<button type="submit" class="icon-btn" aria-label="Add to set" title="Add to set">
-								@views.IconAdd()
-							</button>
-						</form>
-					</li>
-				}
-			</ul>
+			@collapsibleSection("recommended-next-songs", "Recommended next") {
+				<p class="muted">Based on the last song in the set.</p>
+				<ul class="suggestion-list">
+					for _, sug := range data.Suggestions {
+						<li>
+							<span>{ sug.Title }</span>
+							<span class="muted">{ sug.RelationshipLabel }</span>
+							<form hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/songs", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
+								<input type="hidden" name="song_id" value={ sug.SongID }/>
+								<button type="submit" class="icon-btn" aria-label="Add to set" title="Add to set">
+									@views.IconAdd()
+								</button>
+							</form>
+						</li>
+					}
+				</ul>
+			}
 		}
-
 		<h2>Find songs to add</h2>
+		<!--
+			Generated straight from data.RoleTypes (song_role_types) rather
+			than two hardcoded opener/response buttons - a role added to that
+			table (Song Roles setup page or the quick-add panel below, no code
+			change needed) is filterable immediately, same "no code change
+			needed" philosophy the table already has for storage. filterCandidates
+			(scheduling.js) already matches generically against whichever
+			data-role was clicked - see CandidateSongView.RolesAttr.
+		-->
 		<div class="role-filters">
-			<button type="button" class="role-filter" data-role="opener" onclick="toggleRoleFilter(this)">Openers</button>
-			<button type="button" class="role-filter" data-role="response" onclick="toggleRoleFilter(this)">Response songs</button>
+			for _, rt := range data.RoleTypes {
+				<button type="button" class="role-filter" data-role={ rt.Code } onclick="toggleRoleFilter(this)">{ rt.Label }</button>
+			}
 		</div>
 		<input
 			type="text"
@@ -243,36 +298,142 @@ templ SetBuilderBody(data SetBuilderData) {
 			autocomplete="off"
 			oninput="filterCandidates()"
 		/>
-		<ul id="set-candidates" class="candidate-list">
-			for _, cand := range data.Candidates {
-				<li class="candidate-row" data-title={ cand.Title } data-roles={ cand.RolesAttr } data-tags={ cand.TagsAttr }>
-					<span>{ cand.Title }</span>
-					if cand.IsOpener {
-						<span class="badge">Opener</span>
-					}
-					if cand.IsResponse {
-						<span class="badge">Response</span>
-					}
-					for _, tag := range cand.Tags {
-						<span class="badge tag-badge" title={ tag.Category }>{ tag.Value }</span>
-					}
-					if len(cand.ConflictTitles) > 0 {
-						<span class="conflict-badge">⚠ avoid pairing with { strings.Join(cand.ConflictTitles, ", ") }</span>
-					}
-					if cand.RecentlyRepeated {
-						<span class="conflict-badge">⚠ sung in each of the last two plans</span>
-					}
-					<form hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/songs", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
-						<input type="hidden" name="song_id" value={ cand.SongID }/>
-						<button type="submit" class="icon-btn" aria-label="Add to set" title="Add to set">
-							@views.IconAdd()
-						</button>
+		<!--
+			Collapsed by default - every unused song in the library is the
+			single busiest thing on this page otherwise. filterCandidates()/
+			toggleRoleFilter() (scheduling.js) each open this the moment a
+			search term or role filter is actually used, so searching still
+			costs zero extra clicks - only browsing the full list needs an
+			explicit expand.
+		-->
+		@collapsibleSection("find-songs-candidates", "Browse all songs") {
+			<ul id="set-candidates" class="candidate-list">
+				for _, cand := range data.Candidates {
+					<li class="candidate-row" data-title={ cand.Title } data-roles={ cand.RolesAttr } data-tags={ cand.TagsAttr }>
+						<span>{ cand.Title }</span>
+						for _, role := range cand.Roles {
+							<span class="badge">{ role.Label }</span>
+						}
+						for _, tag := range cand.Tags {
+							<span class="badge tag-badge" title={ tag.Category }>{ tag.Value }</span>
+						}
+						if len(cand.ConflictTitles) > 0 {
+							<span class="conflict-badge">⚠ avoid pairing with { strings.Join(cand.ConflictTitles, ", ") }</span>
+						}
+						if cand.RecentlyRepeated {
+							<span class="conflict-badge">⚠ sung in each of the last two plans</span>
+						}
+						<form hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/songs", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
+							<input type="hidden" name="song_id" value={ cand.SongID }/>
+							<button type="submit" class="icon-btn" aria-label="Add to set" title="Add to set">
+								@views.IconAdd()
+							</button>
+						</form>
+					</li>
+				}
+				if len(data.Candidates) == 0 {
+					<li class="muted">No more songs to add.</li>
+				}
+			</ul>
+		}
+		<!--
+			Ad hoc creation of the setup-level entities this page's
+			recommendations/badges/warnings are built from (song tags,
+			relationships, opener/response roles) - see QuickAddSongTag/
+			QuickAddSongRelationship/QuickAddSongRole in sets.go. Same fields,
+			same Store methods as the dedicated setup pages
+			(song_tags.templ/relationships.templ/song_roles.templ), just
+			reachable without leaving this page and posted to a build-scoped
+			route so the response re-renders this builder instead of a
+			setup-page table. Create-only, same as those setup pages' forms
+			minus the edit affordance - see the build-page redesign plan for
+			why editing stays their job.
+		-->
+		@collapsibleSection("quick-add-songs", "Quick add") {
+			<div class="quick-add-panel">
+				<div>
+					<h4>Tag a song</h4>
+					<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/song-tags", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
+						<label>
+							Song
+							<select name="song_id" required>
+								<option value="" selected disabled>Choose a song</option>
+								for _, song := range data.AllSongs {
+									<option value={ song.ID }>{ song.Attributes.Title }</option>
+								}
+							</select>
+						</label>
+						<label>
+							Category
+							<select name="category">
+								for _, cat := range data.TagCategories {
+									<option value={ cat.Code }>{ cat.Label }</option>
+								}
+							</select>
+						</label>
+						<label>
+							Value
+							<input type="text" name="value" placeholder="e.g. Grace, Romans 8:1, New beginnings" required/>
+						</label>
+						<button type="submit" class="primary">Add tag</button>
 					</form>
-				</li>
-			}
-			if len(data.Candidates) == 0 {
-				<li class="muted">No more songs to add.</li>
-			}
-		</ul>
+				</div>
+				<div>
+					<h4>Relate two songs</h4>
+					<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/song-relationships", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
+						<label>
+							Song A
+							<select name="song_id_a" required>
+								<option value="" selected disabled>Choose a song</option>
+								for _, song := range data.AllSongs {
+									<option value={ song.ID }>{ song.Attributes.Title }</option>
+								}
+							</select>
+						</label>
+						<label>
+							Song B
+							<select name="song_id_b" required>
+								<option value="" selected disabled>Choose a song</option>
+								for _, song := range data.AllSongs {
+									<option value={ song.ID }>{ song.Attributes.Title }</option>
+								}
+							</select>
+						</label>
+						<label>
+							Relationship
+							<select name="relationship_type">
+								for _, t := range data.RelationshipTypes {
+									<option value={ t.Code }>{ t.Label }</option>
+								}
+							</select>
+						</label>
+						<button type="submit" class="primary">Relate songs</button>
+					</form>
+				</div>
+				<div>
+					<h4>Add a role</h4>
+					<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/song-roles", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
+						<label>
+							Song
+							<select name="song_id" required>
+								<option value="" selected disabled>Choose a song</option>
+								for _, song := range data.AllSongs {
+									<option value={ song.ID }>{ song.Attributes.Title }</option>
+								}
+							</select>
+						</label>
+						<label>
+							Role
+							<select name="role">
+								for _, t := range data.RoleTypes {
+									<option value={ t.Code }>{ t.Label }</option>
+								}
+							</select>
+						</label>
+						<button type="submit" class="primary">Mark role</button>
+					</form>
+				</div>
+			</div>
+		}
 	</div>
 }

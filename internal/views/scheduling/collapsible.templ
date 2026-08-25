@@ -1,0 +1,26 @@
+package scheduling
+
+import "pco-assistant/internal/views"
+
+// collapsibleSection wraps a chunk of the build page that's useful but
+// secondary enough to start out of the way - collapsed by default,
+// expandable via toggleCollapse (scheduling.js), which also restores
+// whichever sections were open across the whole-body htmx swaps every
+// mutation on this page causes (see rememberCollapsedState/
+// restoreCollapsedState). Shared between the set and roster builders for
+// "Recommended next", the set builder's candidate list, and both builders'
+// "Quick add" panels - anything with its own <h3>-wraps-<button> heading
+// (like a still-filling position group, which needs per-position default
+// open/closed state) builds the same collapsible/collapsible-toggle/
+// collapsible-body structure by hand instead of through this component.
+templ collapsibleSection(id, label string) {
+	<div class="collapsible" id={ id }>
+		<button type="button" class="collapsible-toggle" onclick="toggleCollapse(this)" aria-expanded="false">
+			<span>{ label }</span>
+			@views.IconChevronDown()
+		</button>
+		<div class="collapsible-body">
+			{ children... }
+		</div>
+	</div>
+}

@@ -213,17 +213,29 @@ func (s *Store) RevertSet(ctx context.Context, setID int64, importRows []SetSong
 // chains them together at wherever you're currently working, rather than
 // always resetting to the top of service. With nothing to chain from (an
 // empty set, or the last-touched row no longer active), it falls back to
-// top of service, appended after everything else there. Refuses to add a
-// song that's already active in the set - see DuplicateSongInSet for the
+// fallbackAnchorItemID instead - the build page resolves this from
+// PreferredFirstSongAnchorTitle (see AddSetSong's firstSongFallbackAnchor
+// in the controllers package) so a brand-new set's first song lands
+// wherever this service type's first song usually goes, not always the
+// literal top of service; pass "" to get that literal top-of-service
+// behavior, same as before this parameter existed. Refuses to add a song
+// that's already active in the set - see DuplicateSongInSet for the
 // deliberate way to get a second copy (e.g. reprised as a response song).
-func (s *Store) AddSongToSet(ctx context.Context, setID int64, songID string) (SetSong, error) {
+//
+// The second return value is the song id it chained after ("" when there
+// was nothing to chain from, including whenever fallbackAnchorItemID was
+// used instead) - the build page uses this to offer an inline "remember
+// that these two go together?" relationship prompt right after the add,
+// without making the caller re-derive the same adjacency this method
+// already had to compute for positioning.
+func (s *Store) AddSongToSet(ctx context.Context, setID int64, songID, fallbackAnchorItemID string) (SetSong, string, error) {
 	if songID == "" {
-		return SetSong{}, errors.New("song_id is required")
+		return SetSong{}, "", errors.New("song_id is required")
 	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return SetSong{}, err
+		return SetSong{}, "", err
 	}
 	defer tx.Rollback()
 
@@ -231,29 +243,30 @@ func (s *Store) AddSongToSet(ctx context.Context, setID int64, songID string) (S
 	if err := tx.QueryRowContext(ctx, `
 		SELECT EXISTS(SELECT 1 FROM set_songs WHERE set_id = $1 AND song_id = $2 AND pending_delete = false)
 	`, setID, songID).Scan(&alreadyPresent); err != nil {
-		return SetSong{}, err
+		return SetSong{}, "", err
 	}
 	if alreadyPresent {
-		return SetSong{}, fmt.Errorf("that song is already in this set")
+		return SetSong{}, "", fmt.Errorf("that song is already in this set")
 	}
 
-	anchor := ""
+	anchor := fallbackAnchorItemID
 	var afterPosition int
+	var chainedAfterSongID string
 	chaining := false
 
 	var lastTouched sql.NullInt64
 	if err := tx.QueryRowContext(ctx, `SELECT last_touched_set_song_id FROM sets WHERE id = $1`, setID).Scan(&lastTouched); err != nil {
-		return SetSong{}, err
+		return SetSong{}, "", err
 	}
 	if lastTouched.Valid {
 		err := tx.QueryRowContext(ctx, `
-			SELECT position, anchor_item_id FROM set_songs
+			SELECT position, anchor_item_id, song_id FROM set_songs
 			WHERE id = $1 AND set_id = $2 AND pending_delete = false
-		`, lastTouched.Int64, setID).Scan(&afterPosition, &anchor)
+		`, lastTouched.Int64, setID).Scan(&afterPosition, &anchor, &chainedAfterSongID)
 		if err == nil {
 			chaining = true
 		} else if !errors.Is(err, sql.ErrNoRows) {
-			return SetSong{}, err
+			return SetSong{}, "", err
 		}
 	}
 
@@ -266,7 +279,7 @@ func (s *Store) AddSongToSet(ctx context.Context, setID int64, songID string) (S
 		RETURNING id, set_id, song_id, position, created_at, pco_item_id, anchor_item_id
 	`, setID, songID, anchor).Scan(&ss.ID, &ss.SetID, &ss.SongID, &ss.Position, &ss.CreatedAt, &pcoItemID, &ss.AnchorItemID)
 	if err != nil {
-		return SetSong{}, err
+		return SetSong{}, "", err
 	}
 	ss.PCOItemID = pcoItemID.String
 
@@ -288,25 +301,25 @@ func (s *Store) AddSongToSet(ctx context.Context, setID int64, songID string) (S
 			UPDATE set_songs SET position = ranked.new_position
 			FROM ranked WHERE set_songs.id = ranked.id
 		`, setID, ss.ID, afterPosition); err != nil {
-			return SetSong{}, err
+			return SetSong{}, "", err
 		}
 
 		if err := tx.QueryRowContext(ctx, `
 			SELECT position FROM set_songs WHERE id = $1
 		`, ss.ID).Scan(&ss.Position); err != nil {
-			return SetSong{}, err
+			return SetSong{}, "", err
 		}
 	}
 
 	if _, err := tx.ExecContext(ctx, `UPDATE sets SET last_touched_set_song_id = $1 WHERE id = $2`, ss.ID, setID); err != nil {
-		return SetSong{}, err
+		return SetSong{}, "", err
 	}
 
 	if err := tx.Commit(); err != nil {
-		return SetSong{}, err
+		return SetSong{}, "", err
 	}
 
-	return ss, nil
+	return ss, chainedAfterSongID, nil
 }
 
 // DuplicateSongInSet creates a second occurrence of sourceRowID's song
