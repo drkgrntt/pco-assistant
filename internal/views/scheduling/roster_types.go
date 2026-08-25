@@ -52,6 +52,25 @@ type RosterBuilderData struct {
 	// fetched only for these panels.
 	PersonRelationshipTypes   []scheduling.PersonRelationshipType
 	SchedulePreferenceOptions []SchedulePreferenceOption
+
+	// PersonPairPrompt, when set, offers a one-shot inline "remember that
+	// these two work together?" relationship capture right after adding
+	// someone to the roster - the people equivalent of
+	// SetBuilderData.SongPairPrompt. Rosters have no song-order-style
+	// "chained after" concept, so "previous" here means whoever was most
+	// recently added to this roster (by creation order) before this add -
+	// see AddRosterAssignment (rosters.go), the only handler that ever
+	// sets this.
+	PersonPairPrompt *PersonPairPromptView
+}
+
+// PersonPairPromptView is RosterBuilderData.PersonPairPrompt's payload -
+// mirrors SongPairPromptView (set_types.go) for people.
+type PersonPairPromptView struct {
+	PreviousPersonID   string
+	PreviousPersonName string
+	NewPersonID        string
+	NewPersonName      string
 }
 
 // PositionGroupView is one open slot - a team + position name, how many are
