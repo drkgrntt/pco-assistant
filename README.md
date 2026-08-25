@@ -167,9 +167,18 @@ Both refuse to run unless `APP_ENV=local`, and can also be run directly with
 `go run ./cmd/dbreset` / `go run ./cmd/dbseed` (each accepts `-h` for its
 flags). Seeded rows reference songs/people by ID, and songs/people
 themselves live in Planning Center, not this database - if you've signed
-into the app in your browser at least once, `db-seed` uses as many of your
-org's real songs/people as it can find and pads the rest with placeholder
-IDs that still exercise every page, just without a resolvable title/name.
+into the app in your browser at least once, `db-seed` actually creates a
+fixed set of example songs in Planning Center (skipping any that already
+exist by title, so a repeat run doesn't duplicate the library), each with
+its arrangement set to a real key/tempo the same way Planning Center's own
+"add song" flow leads you through by hand. People are read (not created)
+from whichever real people your org already has, padded with placeholder
+IDs if there aren't enough for full variety. With no usable session, both
+songs and people fall back to placeholder IDs entirely - still enough to
+exercise every page, just without a resolvable title/name. Note `db-reset`
+wipes the `sessions` table along with everything else, so sign in again at
+http://localhost:8080/login before re-running `db-seed` if you want it to
+seed against real Planning Center data rather than placeholders.
 
 Permanently delete every Song and Plan in the signed-in Planning Center
 organization (asks for confirmation - pass `ARGS=-yes` to skip it). Unlike
