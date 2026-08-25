@@ -316,6 +316,9 @@ templ SetBuilderBody(data SetBuilderData) {
 				for _, cand := range data.Candidates {
 					<li class="candidate-row" data-title={ cand.Title } data-roles={ cand.RolesAttr } data-tags={ cand.TagsAttr }>
 						<span>{ cand.Title }</span>
+						if cand.ArrangementInfo != "" {
+							<span class="muted">{ cand.ArrangementInfo }</span>
+						}
 						for _, role := range cand.Roles {
 							<span class="badge">{ role.Label }</span>
 						}

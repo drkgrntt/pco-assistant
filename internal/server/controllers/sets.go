@@ -686,6 +686,13 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 	tagsBySong := songTagsBySong(allTags)
 	tagCategoryLabels := songTagCategoryLabelMap(tagCategories)
 
+	// arrangementCache backs both the order-of-service's ArrangementInfo
+	// (resolveArrangementInfo falls back to a live PCO fetch + backfill on
+	// a miss - see its own doc comment) and the candidate list's, which is
+	// cache-only (no live fetch - see the Candidates loop below). One bulk
+	// read regardless of how many songs actually need it.
+	arrangementCache, _ := sc.store.SongArrangementInfo(ctx, organizationID)
+
 	// AllSongs/TagCategories/RelationshipTypes/RoleTypes back the "Quick
 	// add" panel's <select> pickers (see views.SetBuilderData) - best-effort
 	// like the lookups above, since a failure here only costs that one
@@ -753,7 +760,7 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 			return pcoItems.Data[i].Attributes.Sequence < pcoItems.Data[j].Attributes.Sequence
 		})
 		merged := mergeServiceOrder(pcoItems.Data, setSongs)
-		data.ServiceOrder = renderServiceOrder(ctx, merged, titles, rolesBySong, roleTypeLabels)
+		data.ServiceOrder = renderServiceOrder(ctx, sc.store, organizationID, arrangementCache, merged, titles, rolesBySong, roleTypeLabels)
 
 		// Keep this service type's "where does the first song usually go"
 		// memory (see PreferredFirstSongAnchorTitle, and firstSongFallbackAnchor
@@ -869,11 +876,24 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 			tagValues = append(tagValues, strings.ToLower(tag.Value))
 		}
 
+		// Cache-only, deliberately no live-fetch fallback here (unlike
+		// resolveArrangementInfo for ServiceOrder above) - Planning Center
+		// has no bulk "arrangements for every song" call, so doing this for
+		// the whole candidate library would cost one request per song on
+		// every render. An uncached candidate just shows nothing until it's
+		// either added to a set once (which does the live fetch/backfill)
+		// or covered by a Song Info sync.
+		var arrangementInfo string
+		if info, ok := arrangementCache[song.ID]; ok {
+			arrangementInfo = formatArrangementInfo(info)
+		}
+
 		data.Candidates = append(data.Candidates, views.CandidateSongView{
 			SongID:           song.ID,
 			Title:            song.Attributes.Title,
 			ConflictTitles:   conflictTitles,
 			RecentlyRepeated: repeated[song.ID],
+			ArrangementInfo:  arrangementInfo,
 			Roles:            roleViews,
 			RolesAttr:        rolesAttr,
 			Tags:             tagViews,
@@ -1044,7 +1064,7 @@ func mergeServiceOrder(items []pco.ItemData, setSongs []scheduling.SetSong) []me
 // renderServiceOrder turns a merge into display rows plus the anchor
 // picker's option list (every foreign item, in order, prefixed by "Top of
 // service").
-func renderServiceOrder(ctx context.Context, rows []mergedRow, titles map[string]string, rolesBySong map[string][]scheduling.SongRole, roleTypeLabels map[string]string) []views.ServiceOrderRow {
+func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizationID string, arrangementCache map[string]scheduling.SongArrangementInfo, rows []mergedRow, titles map[string]string, rolesBySong map[string][]scheduling.SongRole, roleTypeLabels map[string]string) []views.ServiceOrderRow {
 	out := make([]views.ServiceOrderRow, 0, len(rows))
 
 	for _, row := range rows {
@@ -1075,7 +1095,7 @@ func renderServiceOrder(ctx context.Context, rows []mergedRow, titles map[string
 				Published:       ss.PCOItemID != "",
 				AnchorItemID:    ss.AnchorItemID,
 				Moved:           ss.Moved,
-				ArrangementInfo: songArrangementInfo(ctx, ss.SongID),
+				ArrangementInfo: resolveArrangementInfo(ctx, store, organizationID, arrangementCache, ss.SongID),
 			},
 		})
 	}

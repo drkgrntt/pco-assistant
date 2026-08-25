@@ -58,40 +58,80 @@ func fetchAllSongs(ctx context.Context) ([]pco.SongData, error) {
 	return songs, nil
 }
 
-// songArrangementInfo fetches songID's first (default, for most songs the
-// only) Planning Center arrangement and formats whatever it has set - key,
-// tempo, meter, length - as a single "G · 72 BPM · 4/4 · 3:45" display
-// string for SetSongView.ArrangementInfo. Returns "" on any lookup error,
-// no arrangement at all, or an arrangement with every field still blank
-// (PCO's own auto-created "Default Arrangement" starts that way - see
-// UpdateArrangement in go-pco) - the caller just omits the line rather than
-// showing something empty. Deliberately called per set song, not for the
-// whole candidate library: Planning Center has no bulk "arrangements for
-// every song" call, so this is one extra request per song, cheap for the
-// handful of songs an order of service actually has but not for a whole
-// library.
-func songArrangementInfo(ctx context.Context, songID string) string {
-	resp, err := pco.GetArrangements(ctx, songID, &pco.ArrangementsParams{PerPage: 1})
-	if err != nil || len(resp.Data) == 0 {
-		return ""
-	}
-	attrs := resp.Data[0].Attributes
-
+// formatArrangementInfo renders a cached (or freshly-fetched) arrangement
+// summary as a single "G · 72 BPM · 4/4 · 3:45" display string, skipping
+// whichever fields are blank/zero - "" when every field is, so the caller
+// just omits the line rather than showing something empty.
+func formatArrangementInfo(info scheduling.SongArrangementInfo) string {
 	var parts []string
-	if attrs.ChordChartKey != "" {
-		parts = append(parts, attrs.ChordChartKey)
+	if info.Key != "" {
+		parts = append(parts, info.Key)
 	}
-	if attrs.BPM != 0 {
-		parts = append(parts, fmt.Sprintf("%g BPM", attrs.BPM))
+	if info.BPM != 0 {
+		parts = append(parts, fmt.Sprintf("%g BPM", info.BPM))
 	}
-	if attrs.Meter != "" {
-		parts = append(parts, attrs.Meter)
+	if info.Meter != "" {
+		parts = append(parts, info.Meter)
 	}
-	if attrs.Length != 0 {
-		parts = append(parts, fmt.Sprintf("%d:%02d", attrs.Length/60, attrs.Length%60))
+	if info.LengthSeconds != 0 {
+		parts = append(parts, fmt.Sprintf("%d:%02d", info.LengthSeconds/60, info.LengthSeconds%60))
 	}
 
 	return strings.Join(parts, " · ")
+}
+
+// fetchAndCacheArrangementInfo live-fetches songID's arrangement from
+// Planning Center and upserts it into song_arrangement_cache, returning
+// the resolved info - or an error, and no write, if the fetch failed or
+// the song genuinely has no arrangement at all (PCO auto-creates one for
+// every song via the API, so this should be rare in practice). Shared by
+// resolveArrangementInfo's cache-miss path and SyncSongInfo's bulk
+// backfill (song_arrangement_cache.go), so there's exactly one place that
+// knows how to turn a PCO arrangement into a cache row.
+func fetchAndCacheArrangementInfo(ctx context.Context, store *scheduling.Store, organizationID, songID string) (scheduling.SongArrangementInfo, error) {
+	resp, err := pco.GetArrangements(ctx, songID, &pco.ArrangementsParams{PerPage: 1})
+	if err != nil {
+		return scheduling.SongArrangementInfo{}, err
+	}
+	if len(resp.Data) == 0 {
+		return scheduling.SongArrangementInfo{}, fmt.Errorf("song %s has no arrangement", songID)
+	}
+
+	attrs := resp.Data[0].Attributes
+	info := scheduling.SongArrangementInfo{
+		Key:           attrs.ChordChartKey,
+		BPM:           attrs.BPM,
+		Meter:         attrs.Meter,
+		LengthSeconds: attrs.Length,
+	}
+
+	if err := store.UpsertSongArrangementInfo(ctx, organizationID, songID, info); err != nil {
+		return info, err
+	}
+
+	return info, nil
+}
+
+// resolveArrangementInfo returns songID's display-ready arrangement info,
+// preferring the already-loaded cache (zero Planning Center calls) and
+// falling back to fetchAndCacheArrangementInfo on a miss. This is the
+// "song-by-song" catch-up the cache relies on: a song added to a library
+// after the last sync (or never synced at all) still shows correct info
+// the first time it's actually rendered, same as before this cache
+// existed, and every render after that is a cache hit. Best-effort: a
+// failed fetch/backfill just means "" for this render and another live
+// attempt next time, not a broken page.
+func resolveArrangementInfo(ctx context.Context, store *scheduling.Store, organizationID string, cache map[string]scheduling.SongArrangementInfo, songID string) string {
+	if info, ok := cache[songID]; ok {
+		return formatArrangementInfo(info)
+	}
+
+	info, err := fetchAndCacheArrangementInfo(ctx, store, organizationID, songID)
+	if err != nil {
+		return ""
+	}
+
+	return formatArrangementInfo(info)
 }
 
 // songTitleMap builds a song ID -> title lookup from a picker's song list,
@@ -219,6 +259,9 @@ func (sc *SchedulingController) RegisterRoutes(router fiber.Router) {
 	group.Get("/song-tag-suggestions", sc.SongTagSuggestionsPage)
 	group.Post("/song-tag-suggestions/apply", sc.ApplySongTagSuggestion)
 	group.Post("/song-tag-suggestions/ignore", sc.IgnoreSongTagSuggestion)
+
+	group.Get("/song-info", sc.SongInfoPage)
+	group.Post("/song-info/sync", sc.SyncSongInfo)
 
 	group.Get("/person-relationships", sc.PersonRelationshipsPage)
 	group.Post("/person-relationships", sc.CreatePersonRelationship)

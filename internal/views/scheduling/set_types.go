@@ -124,13 +124,14 @@ type SetSongView struct {
 	Moved bool
 	// ArrangementInfo is a pre-formatted "G · 72 BPM · 4/4 · 3:45" summary
 	// of this song's Planning Center arrangement (whatever PCO's own "add
-	// song" flow set up, or what dbseed/UpdateArrangement set - see
-	// songArrangementInfo), empty when there's no arrangement or every
-	// field on it is blank. Only fetched for songs actually in the set,
-	// not the full candidate library - Planning Center has no bulk
-	// "arrangements for every song" call, so this costs one extra API call
-	// per set song, cheap for the handful of songs an order of service
-	// actually has.
+	// song" flow set up, dbseed/UpdateArrangement set, or a manual Song
+	// Info sync backfilled - see resolveArrangementInfo), empty when
+	// there's no arrangement or every field on it is blank. Read from the
+	// song_arrangement_cache table when cached; a set song not yet cached
+	// still gets a live Planning Center fetch (and is cached from then on)
+	// since a set has at most a handful of songs - see
+	// CandidateSongView.ArrangementInfo for why the full candidate list
+	// doesn't get the same live-fetch fallback.
 	ArrangementInfo string
 }
 
@@ -183,6 +184,12 @@ type CandidateSongView struct {
 	// recentlyRepeatedSongs) - a nudge to think twice before adding it a
 	// third time in a row.
 	RecentlyRepeated bool
+	// ArrangementInfo mirrors SetSongView.ArrangementInfo, but is populated
+	// cache-only (see buildSetBuilderData's Candidates loop) - "" whenever
+	// this song hasn't been cached yet (never added to a set, and not
+	// covered by a Song Info sync), not fetched live for the whole
+	// candidate library the way a set song's is.
+	ArrangementInfo string
 	// Roles is this song's assigned roles, for display as badges - see
 	// SetSongView.Roles, which this mirrors. RolesAttr is the same roles'
 	// codes, space-joined, as a data attribute for the candidate list's

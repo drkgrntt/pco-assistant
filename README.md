@@ -26,6 +26,11 @@ sets/rosters) and syncs it back to real PCO records when you publish.
   "Christ the King," and "All Hail King Jesus" all sharing "king"), so you
   can review a group and tag them all at once instead of tagging every
   song by hand
+- **Song Info** - each song's Planning Center arrangement (key, tempo,
+  meter, length) is cached locally so showing it doesn't mean a live
+  Planning Center request per song on every page load - a song gets
+  cached automatically the first time it's added to a set, or sync your
+  whole library at once from the Song Info page
 - **Song / Person Preferences** - note who's preferred or discouraged for a
   given song
 - **Build a Service (Songs tab)** - pick an upcoming plan and build its
@@ -33,8 +38,9 @@ sets/rosters) and syncs it back to real PCO records when you publish.
   template headers and non-song items already in Planning Center, not just
   a blank slate). Drag-and-drop reordering, recommendations based on song
   relationships, avoid-pairing warnings, duplicate-song support (e.g. a
-  song reprised as the response), and a repeated-song warning if a song was
-  sung in each of the last two plans. A new plan's first song lands
+  song reprised as the response), a repeated-song warning if a song was
+  sung in each of the last two plans, and each song's key/tempo/meter/length
+  shown right on the row (see Song Info above). A new plan's first song lands
   wherever the first song usually goes for that service type once you've
   placed it there once (tracked separately per service type, so e.g.
   Sunday and Wednesday can differ). Add a song right after another one and
