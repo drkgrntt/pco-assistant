@@ -69,6 +69,16 @@ form.inline label {
   gap: var(--space-1);
 }
 
+/* A checkbox paired with its own text (song selection, Song Tag
+   Suggestions' apply form) wants the opposite of the stacked "label text
+   above its field" layout above - checkbox and text side by side, like
+   any normal checkbox row. */
+form.inline label.checkbox-label {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 form.inline input,
 form.inline select {
   width: 100%;

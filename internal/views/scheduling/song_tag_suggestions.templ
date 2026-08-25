@@ -64,7 +64,7 @@ templ SongTagSuggestionsList(data SongTagSuggestionsData) {
 					<div class="quick-add-panel">
 						for _, song := range group.Songs {
 							if !song.AlreadyTagged {
-								<label>
+								<label class="checkbox-label">
 									<input type="checkbox" name="song_ids" value={ song.SongID } checked/>
 									{ song.Title }
 								</label>
