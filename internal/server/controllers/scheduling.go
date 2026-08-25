@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -55,6 +56,42 @@ func fetchAllSongs(ctx context.Context) ([]pco.SongData, error) {
 	}
 
 	return songs, nil
+}
+
+// songArrangementInfo fetches songID's first (default, for most songs the
+// only) Planning Center arrangement and formats whatever it has set - key,
+// tempo, meter, length - as a single "G · 72 BPM · 4/4 · 3:45" display
+// string for SetSongView.ArrangementInfo. Returns "" on any lookup error,
+// no arrangement at all, or an arrangement with every field still blank
+// (PCO's own auto-created "Default Arrangement" starts that way - see
+// UpdateArrangement in go-pco) - the caller just omits the line rather than
+// showing something empty. Deliberately called per set song, not for the
+// whole candidate library: Planning Center has no bulk "arrangements for
+// every song" call, so this is one extra request per song, cheap for the
+// handful of songs an order of service actually has but not for a whole
+// library.
+func songArrangementInfo(ctx context.Context, songID string) string {
+	resp, err := pco.GetArrangements(ctx, songID, &pco.ArrangementsParams{PerPage: 1})
+	if err != nil || len(resp.Data) == 0 {
+		return ""
+	}
+	attrs := resp.Data[0].Attributes
+
+	var parts []string
+	if attrs.ChordChartKey != "" {
+		parts = append(parts, attrs.ChordChartKey)
+	}
+	if attrs.BPM != 0 {
+		parts = append(parts, fmt.Sprintf("%g BPM", attrs.BPM))
+	}
+	if attrs.Meter != "" {
+		parts = append(parts, attrs.Meter)
+	}
+	if attrs.Length != 0 {
+		parts = append(parts, fmt.Sprintf("%d:%02d", attrs.Length/60, attrs.Length%60))
+	}
+
+	return strings.Join(parts, " · ")
 }
 
 // songTitleMap builds a song ID -> title lookup from a picker's song list,

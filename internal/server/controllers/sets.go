@@ -753,7 +753,7 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 			return pcoItems.Data[i].Attributes.Sequence < pcoItems.Data[j].Attributes.Sequence
 		})
 		merged := mergeServiceOrder(pcoItems.Data, setSongs)
-		data.ServiceOrder = renderServiceOrder(merged, titles, rolesBySong, roleTypeLabels)
+		data.ServiceOrder = renderServiceOrder(ctx, merged, titles, rolesBySong, roleTypeLabels)
 
 		// Keep this service type's "where does the first song usually go"
 		// memory (see PreferredFirstSongAnchorTitle, and firstSongFallbackAnchor
@@ -1044,7 +1044,7 @@ func mergeServiceOrder(items []pco.ItemData, setSongs []scheduling.SetSong) []me
 // renderServiceOrder turns a merge into display rows plus the anchor
 // picker's option list (every foreign item, in order, prefixed by "Top of
 // service").
-func renderServiceOrder(rows []mergedRow, titles map[string]string, rolesBySong map[string][]scheduling.SongRole, roleTypeLabels map[string]string) []views.ServiceOrderRow {
+func renderServiceOrder(ctx context.Context, rows []mergedRow, titles map[string]string, rolesBySong map[string][]scheduling.SongRole, roleTypeLabels map[string]string) []views.ServiceOrderRow {
 	out := make([]views.ServiceOrderRow, 0, len(rows))
 
 	for _, row := range rows {
@@ -1067,14 +1067,15 @@ func renderServiceOrder(rows []mergedRow, titles map[string]string, rolesBySong 
 		out = append(out, views.ServiceOrderRow{
 			IsSong: true,
 			Song: views.SetSongView{
-				ID:           ss.ID,
-				SongID:       ss.SongID,
-				Title:        titleOrID(titles, ss.SongID),
-				Position:     ss.Position,
-				Roles:        roleViews,
-				Published:    ss.PCOItemID != "",
-				AnchorItemID: ss.AnchorItemID,
-				Moved:        ss.Moved,
+				ID:              ss.ID,
+				SongID:          ss.SongID,
+				Title:           titleOrID(titles, ss.SongID),
+				Position:        ss.Position,
+				Roles:           roleViews,
+				Published:       ss.PCOItemID != "",
+				AnchorItemID:    ss.AnchorItemID,
+				Moved:           ss.Moved,
+				ArrangementInfo: songArrangementInfo(ctx, ss.SongID),
 			},
 		})
 	}

@@ -122,6 +122,16 @@ type SetSongView struct {
 	// a badge right on the row, since "the order changed" without saying
 	// which songs moved is easy to lose track of.
 	Moved bool
+	// ArrangementInfo is a pre-formatted "G · 72 BPM · 4/4 · 3:45" summary
+	// of this song's Planning Center arrangement (whatever PCO's own "add
+	// song" flow set up, or what dbseed/UpdateArrangement set - see
+	// songArrangementInfo), empty when there's no arrangement or every
+	// field on it is blank. Only fetched for songs actually in the set,
+	// not the full candidate library - Planning Center has no bulk
+	// "arrangements for every song" call, so this costs one extra API call
+	// per set song, cheap for the handful of songs an order of service
+	// actually has.
+	ArrangementInfo string
 }
 
 // ServiceOrderRow is one row of the full order of service shown on the set
