@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"pco-assistant/internal/scheduling"
 	"pco-assistant/internal/views"
 )
 
@@ -48,7 +49,42 @@ templ RosterBuilderBody(data RosterBuilderData) {
 				</form>
 			</div>
 		}
-
+		<!--
+			A one-shot nudge, not a permanent fixture - only ever appears
+			right after AddRosterAssignment finds someone else already on
+			this roster (see views.PersonPairPromptView, and
+			SetBuilderData.SongPairPrompt which this mirrors), and disappears
+			again the moment you do anything else. Lets "just put A and B on
+			the same team, and by the way they work well together" get
+			captured right where it happens, instead of re-picking both
+			people from scratch in the Quick add panel below - which stays
+			around for relating people who aren't both freshly added, or
+			after the fact.
+		-->
+		if data.PersonPairPrompt != nil {
+			<div class="import-banner">
+				<p>
+					{ fmt.Sprintf("Added %q to the team, right after %q - ", data.PersonPairPrompt.NewPersonName, data.PersonPairPrompt.PreviousPersonName) }
+					want to remember how these two work together?
+					<button type="button" class="icon-btn" aria-label="Dismiss" title="Dismiss" onclick="this.closest('.import-banner').remove()">
+						@views.IconX()
+					</button>
+				</p>
+				<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/person-relationships", data.ServiceTypeID, data.PlanID) } hx-target="#roster-builder-body" hx-swap="outerHTML">
+					<input type="hidden" name="person_id_a" value={ data.PersonPairPrompt.PreviousPersonID }/>
+					<input type="hidden" name="person_id_b" value={ data.PersonPairPrompt.NewPersonID }/>
+					<label>
+						Relationship
+						<select name="relationship_type">
+							for _, t := range data.PersonRelationshipTypes {
+								<option value={ t.Code } selected?={ t.Code == scheduling.PersonRelationshipWorksWell }>{ t.Label }</option>
+							}
+						</select>
+					</label>
+					<button type="submit" class="primary">Remember this</button>
+				</form>
+			</div>
+		}
 		<!--
 			Ad hoc creation of the setup-level entity this page's "Recommended
 			next" suggestions are built from (works-well-with/mentorship
@@ -71,7 +107,6 @@ templ RosterBuilderBody(data RosterBuilderData) {
 				<button type="submit" class="primary">Relate people</button>
 			</form>
 		}
-
 		<h2>Positions</h2>
 		if len(data.Positions) == 0 {
 			if data.ImportableAssignmentCount > 0 {
@@ -167,7 +202,6 @@ templ RosterBuilderBody(data RosterBuilderData) {
 					} else if len(pos.Assigned) == 0 {
 						<p class="muted">No one eligible for this position yet.</p>
 					}
-
 					<!--
 						Ad hoc eligibility - the most directly-motivated quick-add on
 						this page (this text used to just dead-end to "add eligibility
