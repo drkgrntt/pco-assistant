@@ -673,6 +673,20 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 	}
 	titles := songTitleMap(songs)
 
+	// New-to-the-church detection: the first time this app ever sees a song
+	// with no Planning Center scheduling history at all, permanently mark it
+	// for reinforcement tracking - see tracked_new_songs/TrackNewSong. Done
+	// for every fetched song, not just Candidates, since a song can be
+	// genuinely new to the church whether or not it's already in this
+	// draft. Best-effort: a missed insert just means one song doesn't get
+	// reinforcement nudges yet, not a broken page - it'll be caught on a
+	// later render.
+	for _, song := range songs {
+		if song.Attributes.LastScheduledAt == nil {
+			_ = sc.store.TrackNewSong(ctx, organizationID, song.ID)
+		}
+	}
+
 	roleTypes, _ := sc.store.ListSongRoleTypes(ctx)
 	roleTypeLabels := songRoleTypeLabelMap(roleTypes)
 	allRoles, _ := sc.store.ListSongRoles(ctx, organizationID, "", "")
@@ -685,6 +699,14 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 	tagCategories, _ := sc.store.ListSongTagCategories(ctx)
 	tagsBySong := songTagsBySong(allTags)
 	tagCategoryLabels := songTagCategoryLabelMap(tagCategories)
+
+	// SongsToReinforce/NewSongLabel below key off these two: which songs are
+	// tracked as genuinely new to the church (see the write-side loop
+	// above), and how many distinct plans each song's actually been
+	// published into so far - see PublishedSongAppearanceCounts. Best-effort
+	// like the lookups above.
+	trackedNew, _ := sc.store.TrackedNewSongs(ctx, organizationID)
+	appearanceCounts, _ := sc.store.PublishedSongAppearanceCounts(ctx, organizationID)
 
 	// AllSongs/TagCategories/RelationshipTypes/RoleTypes back the "Quick
 	// add" panel's <select> pickers (see views.SetBuilderData) - best-effort
@@ -869,19 +891,61 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 			tagValues = append(tagValues, strings.ToLower(tag.Value))
 		}
 
+		newSongLabel := reinforcementLabel(trackedNew, appearanceCounts, song.ID)
+
 		data.Candidates = append(data.Candidates, views.CandidateSongView{
 			SongID:           song.ID,
 			Title:            song.Attributes.Title,
 			ConflictTitles:   conflictTitles,
 			RecentlyRepeated: repeated[song.ID],
+			NewSongLabel:     newSongLabel,
 			Roles:            roleViews,
 			RolesAttr:        rolesAttr,
 			Tags:             tagViews,
 			TagsAttr:         strings.Join(tagValues, " "),
 		})
+
+		// SongsToReinforce is its own list, not merged into data.Suggestions:
+		// Suggestions is anchored to the last song in the set and would stay
+		// empty on an empty set, but a still-new song deserves a nudge
+		// regardless of what's already in the set - see set_types.go.
+		switch newSongLabel {
+		case "Sung once":
+			data.SongsToReinforce = append(data.SongsToReinforce, views.SuggestionView{
+				SongID:            song.ID,
+				Title:             song.Attributes.Title,
+				RelationshipLabel: "Sung once - one more to make it stick",
+			})
+		case "Sung twice":
+			data.SongsToReinforce = append(data.SongsToReinforce, views.SuggestionView{
+				SongID:            song.ID,
+				Title:             song.Attributes.Title,
+				RelationshipLabel: "Sung twice - almost there",
+			})
+		}
 	}
 
 	return data
+}
+
+// reinforcementLabel returns the short badge text for a song that's
+// genuinely new to the church (see tracked_new_songs/TrackNewSong) and
+// hasn't been sung enough times yet to graduate out of reinforcement - ""
+// for anything else (not tracked as new, never actually published yet, or
+// already sung 3+ times). See SetBuilderData.SongsToReinforce and
+// CandidateSongView.NewSongLabel, which this drives.
+func reinforcementLabel(tracked map[string]bool, counts map[string]int, songID string) string {
+	if !tracked[songID] {
+		return ""
+	}
+	switch counts[songID] {
+	case 1:
+		return "Sung once"
+	case 2:
+		return "Sung twice"
+	default:
+		return ""
+	}
 }
 
 // recentTwoPlanLookback is how many of the most recent past plans

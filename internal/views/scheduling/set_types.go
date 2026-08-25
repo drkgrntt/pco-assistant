@@ -35,6 +35,19 @@ type SetBuilderData struct {
 	Candidates        []CandidateSongView
 	ExistingConflicts []string
 
+	// SongsToReinforce lists candidates that are genuinely new to the
+	// church (see tracked_new_songs/TrackNewSong) and have only been sung
+	// once or twice so far (see PublishedSongAppearanceCounts) - the
+	// opposite nudge from RepeatWarnings below: not "this repeated too
+	// soon" but "this hasn't stuck yet." Reuses SuggestionView (its
+	// RelationshipLabel carries the reason, e.g. "Sung once - one more to
+	// make it stick") rather than a new type. Deliberately its own list,
+	// not merged into Suggestions: Suggestions is anchored to the last
+	// song in the set and would stay empty on an empty set, but a
+	// still-new song deserves a nudge regardless of what's already in the
+	// set (or if there's nothing in it yet).
+	SongsToReinforce []SuggestionView
+
 	// RepeatWarnings flags songs already in this set that were also sung in
 	// each of the last two past plans for this service type - see the
 	// controller's recentlyRepeatedSongs. Rendered the same way as
@@ -173,6 +186,13 @@ type CandidateSongView struct {
 	// recentlyRepeatedSongs) - a nudge to think twice before adding it a
 	// third time in a row.
 	RecentlyRepeated bool
+	// NewSongLabel is a short badge ("Sung once"/"Sung twice") for a song
+	// that's genuinely new to the church and hasn't been sung enough times
+	// to stick yet - see SetBuilderData.SongsToReinforce, which this
+	// mirrors for the candidate list specifically. "" means not applicable
+	// (not tracked as new, never sung, or already graduated past
+	// reinforcement).
+	NewSongLabel string
 	// Roles is this song's assigned roles, for display as badges - see
 	// SetSongView.Roles, which this mirrors. RolesAttr is the same roles'
 	// codes, space-joined, as a data attribute for the candidate list's
