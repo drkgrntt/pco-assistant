@@ -4,7 +4,7 @@ go 1.26.5
 
 require (
 	github.com/a-h/templ v0.3.1020
-	github.com/drkgrntt/go-pco v0.4.0
+	github.com/drkgrntt/go-pco v0.5.0
 	github.com/go-co-op/gocron/v2 v2.16.1
 	github.com/gofiber/fiber/v2 v2.52.13
 	github.com/jackc/pgx/v5 v5.10.0

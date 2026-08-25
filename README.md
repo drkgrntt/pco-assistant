@@ -170,3 +170,14 @@ themselves live in Planning Center, not this database - if you've signed
 into the app in your browser at least once, `db-seed` uses as many of your
 org's real songs/people as it can find and pads the rest with placeholder
 IDs that still exercise every page, just without a resolvable title/name.
+
+Permanently delete every Song and Plan in the signed-in Planning Center
+organization (asks for confirmation - pass `ARGS=-yes` to skip it). Unlike
+`db-reset`/`db-seed`, this reaches out to the live PCO account itself, not
+just this app's local database - only ever point it at a disposable
+dev/test PCO org, never a real church's account. Local rows that reference
+what it deletes are left behind (now pointing at IDs that no longer exist),
+so pair it with `db-reset` for a full reseed cycle:
+```bash
+make pco-reset
+```
