@@ -179,6 +179,10 @@ func (sc *SchedulingController) RegisterRoutes(router fiber.Router) {
 	group.Post("/song-tags", sc.CreateSongTag)
 	group.Delete("/song-tags/:id", sc.DeleteSongTag)
 
+	group.Get("/song-tag-suggestions", sc.SongTagSuggestionsPage)
+	group.Post("/song-tag-suggestions/apply", sc.ApplySongTagSuggestion)
+	group.Post("/song-tag-suggestions/ignore", sc.IgnoreSongTagSuggestion)
+
 	group.Get("/person-relationships", sc.PersonRelationshipsPage)
 	group.Post("/person-relationships", sc.CreatePersonRelationship)
 	group.Delete("/person-relationships/:id", sc.DeletePersonRelationship)
