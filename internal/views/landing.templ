@@ -1,0 +1,100 @@
+package views
+
+// Landing is the public marketing page - "/" for anyone not signed in (see
+// RequireAuth's soft-auth case and HomeController.Index). Deliberately its
+// own <html>/<body>, not wrapped in Layout: the app shell's nav
+// (Home/Build a Service/Setup) is all dead ends for a visitor who hasn't
+// signed in yet, and the early-preview warning banner isn't the first
+// thing someone deciding whether to try the product should see. Still
+// shares Layout's <head> (Head, layout.templ) for the same cache-busted
+// assets/favicon/fonts, plus this page's own stylesheet.
+templ Landing() {
+	<!DOCTYPE html>
+	<html lang="en">
+		@Head("Worship scheduling for Planning Center") {
+			<link rel="stylesheet" href={ "/static/css/landing.css?v=" + AssetVersion }/>
+		}
+		<body class="landing">
+			<header class="landing-header">
+				<strong class="landing-brand">Resonance</strong>
+				<div class="landing-header-actions">
+					<button type="button" class="theme-toggle" onclick="toggleTheme()" aria-label="Switch between light and dark theme" title="Switch between light and dark theme">
+						@IconSun()
+						@IconMoon()
+					</button>
+					<a href="/login">Sign in</a>
+				</div>
+			</header>
+			<main>
+				<section class="landing-hero">
+					<p class="landing-eyebrow">A rehearsal studio for Planning Center Services</p>
+					<h1>Work out the kinks before you go live.</h1>
+					<p class="landing-lede">
+						Resonance sits on top of the Planning Center account you already
+						use, catching the song fatigue, team friction, and lineup
+						conflicts Planning Center itself has no way to see - before your
+						team ever sees the published plan.
+					</p>
+					<a class="button primary landing-cta" href="/auth/pco/start">Sign in with Planning Center</a>
+					<p class="landing-reassurance">Uses your existing Planning Center login - no separate account, no credit card.</p>
+				</section>
+				<section class="landing-problem">
+					<h2>Planning Center tracks who's scheduled. Not whether it'll actually work.</h2>
+					<p>
+						It knows who's on the team and when. It doesn't know the same
+						three songs keep coming back, that two team members grind
+						against each other, or that a last-minute swap quietly broke
+						the flow of the set. Those calls still live in a director's
+						memory, a sticky note, or nowhere at all.
+					</p>
+				</section>
+				<section class="landing-features">
+					<h2>What Resonance actually does</h2>
+					<div class="landing-feature-grid">
+						<div class="landing-feature-card">
+							<h3>Song relationships</h3>
+							<p>Mark songs that flow well together, share a theme, or shouldn't be paired - and get suggested next songs while you build a set.</p>
+						</div>
+						<div class="landing-feature-card">
+							<h3>Repeat &amp; burnout warnings</h3>
+							<p>A heads-up if a song was sung in each of the last two plans, before it becomes three in a row.</p>
+						</div>
+						<div class="landing-feature-card">
+							<h3>Team chemistry</h3>
+							<p>Works-well, mentorship, and avoid-pairing relationships between people, surfaced as suggestions and conflict warnings while you build a roster.</p>
+						</div>
+						<div class="landing-feature-card">
+							<h3>Before-you-publish conflicts</h3>
+							<p>Every warning shows up while you're still drafting - not after the plan's already out to the team.</p>
+						</div>
+						<div class="landing-feature-card">
+							<h3>Real Planning Center sync</h3>
+							<p>Nothing lives only here. Publishing writes straight back to real PCO plan items and assignments - respected everywhere else in Planning Center too.</p>
+						</div>
+					</div>
+				</section>
+				<section class="landing-studio">
+					<div class="landing-studio-side">
+						<h3>Planning Center</h3>
+						<p class="landing-studio-tag">The live broadcast</p>
+						<p>Where the final plan goes out to your whole team - names, times, positions, all locked in and public.</p>
+					</div>
+					<div class="landing-studio-side landing-studio-side-accent">
+						<h3>Resonance</h3>
+						<p class="landing-studio-tag">The rehearsal studio</p>
+						<p>A private place to test lineups, catch conflicts, and work out the kinks before anything goes live.</p>
+					</div>
+				</section>
+				<section class="landing-final-cta">
+					<h2>Ready to run through it before it goes live?</h2>
+					<a class="button primary landing-cta" href="/auth/pco/start">Sign in with Planning Center</a>
+					<p class="landing-reassurance">Uses your existing Planning Center login - no separate account, no credit card.</p>
+				</section>
+			</main>
+			<footer class="landing-footer">
+				<span>Resonance · built on Planning Center Services</span>
+				<a href="/login">Sign in</a>
+			</footer>
+		</body>
+	</html>
+}

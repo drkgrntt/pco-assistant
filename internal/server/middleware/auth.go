@@ -41,6 +41,17 @@ func RequireAuth(store *auth.Store) fiber.Handler {
 			}
 		}
 
+		// "/" is neither a hard-auth path nor a no-locals-at-all public one
+		// like publicPrefixes above - it's soft-auth: a real session still
+		// gets full locals and a refreshed token (same as any other route,
+		// so the signed-in dashboard keeps working exactly as before), but
+		// a missing/invalid one proceeds anyway instead of redirecting, so
+		// the handler (HomeController.Index) can render the public landing
+		// page for a signed-out visitor rather than bouncing them to
+		// /login. Every failure path below checks this before falling
+		// through to redirectToLogin.
+		softAuth := c.Path() == "/"
+
 		// Any lookup failure (expired, unknown token, DB error) just falls
 		// through to the redirect below.
 		if token := c.Cookies(SessionCookieName); token != "" {
@@ -55,6 +66,9 @@ func RequireAuth(store *auth.Store) fiber.Handler {
 				if session.OrganizationID == "" {
 					log.Println("session has no organization id, signing out:", session.PersonID)
 					_ = store.DeleteSession(c.Context(), token)
+					if softAuth {
+						return c.Next()
+					}
 					return redirectToLogin(c)
 				}
 
@@ -69,6 +83,9 @@ func RequireAuth(store *auth.Store) fiber.Handler {
 						// to be treated as session-invalid, not ignored.
 						log.Println("refreshing PCO token failed, signing out:", err.Error())
 						_ = store.DeleteSession(c.Context(), token)
+						if softAuth {
+							return c.Next()
+						}
 						return redirectToLogin(c)
 					}
 
@@ -87,6 +104,9 @@ func RequireAuth(store *auth.Store) fiber.Handler {
 			}
 		}
 
+		if softAuth {
+			return c.Next()
+		}
 		return redirectToLogin(c)
 	}
 }
