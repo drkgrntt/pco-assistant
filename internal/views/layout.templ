@@ -1,27 +1,37 @@
 package views
 
+// Head is the <head> every page shares - the authenticated app shell
+// (Layout, below) and the public Landing page alike - so cache-busted
+// asset links, the favicon/manifest, and font preconnects live in exactly
+// one place. Landing adds its own extra stylesheet link after this rather
+// than needing a second near-duplicate <head>.
+templ Head(title string) {
+	<head>
+		<meta charset="UTF-8"/>
+		<meta name="viewport" content="width=device-width, initial-scale=1"/>
+		<title>{ title } - Resonance</title>
+		<link rel="manifest" href="/manifest.json"/>
+		<link rel="icon" href="/static/icon-192.png"/>
+		<link rel="apple-touch-icon" href="/static/icon-192.png"/>
+		<meta name="theme-color" content="#2b7770"/>
+		<link rel="preconnect" href="https://fonts.googleapis.com"/>
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"/>
+		<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+		<link rel="stylesheet" href={ "/static/css/tokens.css?v=" + AssetVersion }/>
+		<link rel="stylesheet" href={ "/static/css/base.css?v=" + AssetVersion }/>
+		<link rel="stylesheet" href={ "/static/css/components.css?v=" + AssetVersion }/>
+		<link rel="stylesheet" href={ "/static/css/app.css?v=" + AssetVersion }/>
+		<script src={ "/static/js/htmx.min.js?v=" + AssetVersion }></script>
+		<script src={ "/static/js/scheduling.js?v=" + AssetVersion }></script>
+		<script src={ "/static/js/register-sw.js?v=" + AssetVersion }></script>
+		{ children... }
+	</head>
+}
+
 templ Layout(title string, personName string, organizationName string) {
 	<!DOCTYPE html>
 	<html lang="en">
-		<head>
-			<meta charset="UTF-8"/>
-			<meta name="viewport" content="width=device-width, initial-scale=1"/>
-			<title>{ title } - Resonance</title>
-			<link rel="manifest" href="/manifest.json"/>
-			<link rel="icon" href="/static/icon-192.png"/>
-			<link rel="apple-touch-icon" href="/static/icon-192.png"/>
-			<meta name="theme-color" content="#2b7770"/>
-			<link rel="preconnect" href="https://fonts.googleapis.com"/>
-			<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"/>
-			<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet"/>
-			<link rel="stylesheet" href={ "/static/css/tokens.css?v=" + AssetVersion }/>
-			<link rel="stylesheet" href={ "/static/css/base.css?v=" + AssetVersion }/>
-			<link rel="stylesheet" href={ "/static/css/components.css?v=" + AssetVersion }/>
-			<link rel="stylesheet" href={ "/static/css/app.css?v=" + AssetVersion }/>
-			<script src={ "/static/js/htmx.min.js?v=" + AssetVersion }></script>
-			<script src={ "/static/js/scheduling.js?v=" + AssetVersion }></script>
-			<script src={ "/static/js/register-sw.js?v=" + AssetVersion }></script>
-		</head>
+		@Head(title)
 		<body>
 			<div id="htmx-progress-bar" aria-hidden="true"></div>
 			<header class="site">

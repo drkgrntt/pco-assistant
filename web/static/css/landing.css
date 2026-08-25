@@ -1,0 +1,189 @@
+/* Public marketing page only (see landing.templ) - loaded nowhere else,
+   so none of this adds weight to the authenticated app's pages. Built
+   entirely from tokens.css's existing vocabulary for visual consistency
+   with the rest of the app, and themes for free the same way everything
+   else already does (see scheduling.js's early theme-preference IIFE,
+   loaded here too via Head). */
+
+.landing-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 60rem;
+  margin: 0 auto;
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.landing-brand {
+  font-size: var(--text-xl);
+  color: var(--accent);
+}
+
+.landing-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* === Hero & final CTA - the two "convert now" moments, same treatment =========== */
+
+.landing-hero,
+.landing-final-cta {
+  text-align: center;
+  padding-block: var(--space-16);
+}
+
+/* Overrides base.css's app-page h1 (accent underline, left-aligned,
+   smaller) - a hero headline wants to read as a statement, not a page
+   title. */
+.landing-hero h1 {
+  border-bottom: none;
+  font-size: var(--text-3xl);
+  max-width: 40rem;
+  margin-inline: auto;
+}
+
+@media (min-width: 640px) {
+  .landing-hero h1 {
+    font-size: 2.75rem;
+  }
+}
+
+.landing-eyebrow {
+  color: var(--accent);
+  font-weight: var(--font-semibold);
+  font-size: var(--text-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: var(--space-2);
+}
+
+.landing-lede {
+  max-width: 36rem;
+  margin: var(--space-4) auto var(--space-6);
+  font-size: var(--text-lg);
+  color: var(--muted);
+}
+
+.landing-cta {
+  font-size: var(--text-lg);
+  padding: var(--space-3) var(--space-6);
+}
+
+.landing-reassurance {
+  margin-top: var(--space-3);
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+/* === Problem & features ========================================================= */
+
+.landing-problem {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding-block: var(--space-8);
+  text-align: center;
+}
+
+.landing-problem h2 {
+  margin-top: 0;
+}
+
+.landing-features {
+  padding-block: var(--space-8);
+}
+
+.landing-features h2 {
+  text-align: center;
+  margin-bottom: var(--space-6);
+}
+
+.landing-feature-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-4);
+}
+
+@media (min-width: 640px) {
+  .landing-feature-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 900px) {
+  .landing-feature-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.landing-feature-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+}
+
+.landing-feature-card h3 {
+  margin-top: 0;
+  font-size: var(--text-lg);
+  color: var(--text);
+}
+
+.landing-feature-card p {
+  color: var(--muted);
+  font-size: var(--text-md);
+  margin-bottom: 0;
+}
+
+/* === "Rehearsal studio" comparison ============================================== */
+
+.landing-studio {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding-block: var(--space-8);
+}
+
+@media (min-width: 640px) {
+  .landing-studio {
+    flex-direction: row;
+  }
+}
+
+.landing-studio-side {
+  flex: 1 1 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+}
+
+.landing-studio-side-accent {
+  background: var(--accent-subtle);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+
+.landing-studio-side h3 {
+  margin: 0 0 var(--space-1);
+}
+
+.landing-studio-tag {
+  color: var(--accent);
+  font-weight: var(--font-semibold);
+  margin-top: 0;
+}
+
+/* === Footer ====================================================================== */
+
+.landing-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 60rem;
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-4);
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
