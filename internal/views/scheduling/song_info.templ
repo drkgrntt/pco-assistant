@@ -1,0 +1,49 @@
+package scheduling
+
+import (
+	"fmt"
+
+	"pco-assistant/internal/views"
+)
+
+templ SongInfo(personName, organizationName string, data SongInfoData) {
+	@views.Layout("Song Info", personName, organizationName) {
+		<h1>Song Info</h1>
+		<p class="muted">
+			Key, tempo, meter, and length come from each song's Planning Center
+			arrangement, and are cached here so building a set doesn't mean a
+			live Planning Center request per song on every page load. A song
+			added to a set gets cached the first time it's added if it isn't
+			already; use Sync to fill in the rest of your library at once
+			instead of waiting for that to happen song by song.
+		</p>
+		@SongInfoBody(data)
+	}
+}
+
+// SongInfoBody is both the initial-render fragment and the htmx swap
+// target (id="song-info-body") for the Sync action.
+templ SongInfoBody(data SongInfoData) {
+	<div id="song-info-body">
+		if data.ErrMsg != "" {
+			<p class="error">{ data.ErrMsg }</p>
+		}
+		if data.SyncMsg != "" {
+			<p class="success">{ data.SyncMsg }</p>
+		}
+		<p>
+			if data.TotalCount == 0 {
+				No songs found in your Planning Center library yet.
+			} else if data.CachedCount >= data.TotalCount {
+				All { fmt.Sprintf("%d", data.TotalCount) } song(s) in your library are cached.
+			} else {
+				{ fmt.Sprintf("%d of %d song(s) in your library are cached.", data.CachedCount, data.TotalCount) }
+			}
+		</p>
+		if data.TotalCount > 0 && data.CachedCount < data.TotalCount {
+			<form hx-post="/scheduling/song-info/sync" hx-target="#song-info-body" hx-swap="outerHTML">
+				<button type="submit" class="primary">Sync now</button>
+			</form>
+		}
+	</div>
+}

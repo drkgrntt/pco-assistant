@@ -11,11 +11,16 @@
 // internal/scheduling's package doc) - they live in Planning Center, so
 // seeded rows have to reference *some* song/person ID. If you've signed
 // into the app in your browser at least once, dbseed borrows that session's
-// PCO access token and seeds against your org's real songs and people,
-// falling back to obviously-fake placeholder IDs ("seed-song-1" etc.) for
-// whatever it couldn't find - a brand new PCO org with only one or two
-// songs catalogued still gets real IDs for those, not an all-or-nothing
-// switch to fully-fake data.
+// PCO access token: songs are actually created in Planning Center (a fixed
+// set of canned example songs - see cannedSongs in songs.go - skipping any
+// that already exist by title, so a repeat run doesn't duplicate the
+// library), each with its auto-created default arrangement updated to
+// carry a real key/tempo, the same "key, capo, arrangement" setup Planning
+// Center's own "add song" flow leads you through by hand (minus capo
+// itself, which has no API field to set at all). People are read, not
+// created, from whichever real people your org already has. With no usable
+// session, both songs and people fall back to obviously-fake placeholder
+// IDs ("seed-song-1" etc.) instead.
 //
 // Every lookup table (song tag categories, song/person relationship types,
 // song roles, song preference types) is read live rather than hardcoded, so
@@ -49,18 +54,18 @@ import (
 	_ "github.com/joho/godotenv/autoload"
 )
 
-// seedSongCount/seedPersonCount are how many songs/people dbseed wants to
-// work with - enough that every seed function below can give each lookup
-// type more than one example (see each function's own multiplier) without
-// constantly reusing the same one or two songs/people, so the result reads
-// like an actual planned-out setup rather than a bare minimum smoke test.
-// Not a hard requirement: seedSubjects uses as many real ones as your PCO
-// org actually has and pads the rest with placeholders, so a smaller org
-// still gets a partially-real seed instead of an all-placeholder one.
-const (
-	seedSongCount   = 8
-	seedPersonCount = 6
-)
+// seedPersonCount is how many people dbseed wants to work with - enough
+// that every seed function below can give each lookup type more than one
+// example (see each function's own multiplier) without constantly reusing
+// the same one or two people, so the result reads like an actual
+// planned-out setup rather than a bare minimum smoke test. Not a hard
+// requirement: seedSubjects uses as many real people as your PCO org
+// actually has and pads the rest with placeholders, so a smaller org still
+// gets a partially-real seed instead of an all-placeholder one. Songs have
+// no equivalent constant - dbseed creates exactly len(cannedSongs) of them
+// (see songs.go), rather than sampling however many the org happens to
+// have.
+const seedPersonCount = 6
 
 type seedSong struct{ ID, Title string }
 type seedPerson struct{ ID, Name string }
@@ -84,11 +89,10 @@ func main() {
 	}
 
 	ctx := context.Background()
-	orgID, songs, people, realSongs, realPeople := seedSubjects(ctx, db)
-	announceSubjects(songs, people, realSongs, realPeople)
+	stats := &seedStats{}
+	orgID, songs, people := seedSubjects(ctx, db, stats)
 
 	store := scheduling.NewStore(db)
-	stats := &seedStats{}
 	seedSongTags(ctx, store, stats, orgID, songs)
 	seedSongRoles(ctx, store, stats, orgID, songs)
 	seedSongRelationships(ctx, store, stats, orgID, songs)
@@ -104,20 +108,19 @@ func main() {
 // 00019), so seeded rows need *some* value even in the placeholder case.
 const placeholderOrgID = "seed-org"
 
-// seedSubjects gathers up to seedSongCount songs and seedPersonCount people
-// from the signed-in PCO org (see MostRecentSession's doc comment for why
-// it never refreshes that session's token) - using every real one it can
-// get and padding whatever's left with synthetic placeholder IDs, rather
-// than discarding real data just because the org doesn't have enough of
-// it. realSongCount/realPersonCount report how many of the returned slices
-// are real (always a prefix of each slice), so callers can explain the mix
-// without re-deriving it. The returned organization id is that session's
-// real PCO org id whenever one was found, even if it didn't have enough
-// songs/people to avoid placeholders entirely - a real org id still keeps
-// every seeded row properly org-scoped.
-func seedSubjects(ctx context.Context, db *sql.DB) (organizationID string, songs []seedSong, people []seedPerson, realSongCount, realPersonCount int) {
+// seedSubjects resolves the signed-in PCO org (see MostRecentSession's doc
+// comment for why it never refreshes that session's token), then either
+// creates/reuses the canned songs and reads up to seedPersonCount real
+// people from it (a usable session), or falls back to placeholder IDs for
+// both (no usable session - printed here so it's the first thing dbseed
+// says, not something to infer from "seed-song-" IDs further down). The
+// returned organization id is that session's real PCO org id whenever a
+// session was found, even in the placeholder-people case - a real org id
+// still keeps every seeded row properly org-scoped.
+func seedSubjects(ctx context.Context, db *sql.DB, stats *seedStats) (organizationID string, songs []seedSong, people []seedPerson) {
 	reqCtx := ctx
 	organizationID = placeholderOrgID
+	sessionValid := false
 	if session, err := auth.NewStore(db).MostRecentSession(ctx); err == nil {
 		// A near-expired token is left alone rather than refreshed here -
 		// see MostRecentSession - so a stale one just falls through to the
@@ -125,30 +128,45 @@ func seedSubjects(ctx context.Context, db *sql.DB) (organizationID string, songs
 		if time.Now().Add(5 * time.Minute).Before(session.TokenExpiresAt) {
 			reqCtx = pco.WithAccessToken(ctx, session.AccessToken)
 			organizationID = session.OrganizationID
+			sessionValid = true
 		}
 	}
 
-	if resp, err := pco.GetSongs(reqCtx, &pco.SongsParams{OrderBy: "title", PerPage: seedSongCount}); err == nil {
-		for _, s := range resp.Data {
-			songs = append(songs, seedSong{ID: s.ID, Title: s.Attributes.Title})
-		}
+	if sessionValid {
+		fmt.Println("Signed-in PCO session found - seeding against real Planning Center data.")
+	} else {
+		fmt.Println("No usable signed-in PCO session found (or its token has expired) - seeding with placeholder song/person IDs instead.")
+		fmt.Println("Sign in once at http://localhost:8080/login, then re-run `go run ./cmd/dbseed` to seed against your real Planning Center songs and people instead.")
 	}
-	realSongCount = len(songs)
-	for i := len(songs); i < seedSongCount; i++ {
+	fmt.Println()
+
+	if sessionValid {
+		songs = ensureSeedSongs(reqCtx, stats)
+		fmt.Println()
+	}
+	for i := len(songs); i < len(cannedSongs); i++ {
 		songs = append(songs, placeholderSong(i))
 	}
 
-	if resp, err := pco.GetPeople(reqCtx, &pco.PeopleParams{OrderBy: "last_name", PerPage: seedPersonCount}); err == nil {
-		for _, p := range resp.Data {
-			people = append(people, seedPerson{ID: p.ID, Name: p.Attributes.Name})
+	if sessionValid {
+		if resp, err := pco.GetPeople(reqCtx, &pco.PeopleParams{OrderBy: "last_name", PerPage: seedPersonCount}); err == nil {
+			for _, p := range resp.Data {
+				people = append(people, seedPerson{ID: p.ID, Name: p.Attributes.Name})
+			}
 		}
 	}
-	realPersonCount = len(people)
+	realPersonCount := len(people)
 	for i := len(people); i < seedPersonCount; i++ {
 		people = append(people, placeholderPerson(i))
 	}
+	if sessionValid && realPersonCount < seedPersonCount {
+		fmt.Printf(
+			"Note: your org only has %d real person/people to work with - padding the rest with placeholders (wanted %d for full variety).\n\n",
+			realPersonCount, seedPersonCount,
+		)
+	}
 
-	return organizationID, songs, people, realSongCount, realPersonCount
+	return organizationID, songs, people
 }
 
 func placeholderSong(i int) seedSong {
@@ -159,28 +177,6 @@ func placeholderSong(i int) seedSong {
 func placeholderPerson(i int) seedPerson {
 	id := fmt.Sprintf("seed-person-%d", i+1)
 	return seedPerson{ID: id, Name: id + " (placeholder)"}
-}
-
-// announceSubjects explains, once, up front, exactly what dbseed is about
-// to seed against - real PCO data, an all-placeholder fallback, or (a
-// smaller org, or a partially-expired session that still resolved an org
-// id) a mix of both - so it's obvious from the first two lines of output
-// which case a given run landed in, rather than having to infer it from
-// scanning for "seed-song-" in the rows below.
-func announceSubjects(songs []seedSong, people []seedPerson, realSongs, realPeople int) {
-	switch {
-	case realSongs == len(songs) && realPeople == len(people):
-		fmt.Printf("Signed-in PCO session found - seeding against %d real song(s) and %d real person/people.\n", realSongs, realPeople)
-	case realSongs == 0 && realPeople == 0:
-		fmt.Println("No usable signed-in PCO session found (or its token has expired) - seeding with placeholder song/person IDs instead.")
-		fmt.Println("Sign in once at http://localhost:8080/login, then re-run `go run ./cmd/dbseed` to seed against your real Planning Center songs and people instead.")
-	default:
-		fmt.Printf(
-			"Signed-in PCO session found, but your org only has %d song(s) and %d person/people to work with - using those and padding the rest with placeholders (wanted %d songs / %d people for full variety).\n",
-			realSongs, realPeople, len(songs), len(people),
-		)
-	}
-	fmt.Println()
 }
 
 // seedStats tallies what happened across every seeded row, printed as one

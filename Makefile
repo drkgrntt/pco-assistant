@@ -32,6 +32,13 @@ db-reset:
 db-seed:
 	@go run ./cmd/dbseed
 
+# Delete every Song and Plan in the signed-in Planning Center org - see
+# cmd/pcoreset. Interactive (asks for confirmation); pass ARGS=-yes to skip
+# that. Only clears Planning Center itself - pair with db-reset for a full
+# reseed cycle.
+pco-reset:
+	@go run ./cmd/pcoreset $(ARGS)
+
 # Live Reload
 watch:
 	@if command -v air > /dev/null; then \
@@ -49,4 +56,4 @@ watch:
             fi; \
         fi
 
-.PHONY: all build run test clean watch db-reset db-seed
+.PHONY: all build run test clean watch db-reset db-seed pco-reset

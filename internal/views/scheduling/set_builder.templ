@@ -133,7 +133,12 @@ templ SetBuilderBody(data SetBuilderData) {
 										{ strconv.Itoa(i + 1) }
 									</span>
 								</td>
-								<td>{ row.Song.Title }</td>
+								<td>
+									{ row.Song.Title }
+									if row.Song.ArrangementInfo != "" {
+										<div class="muted">{ row.Song.ArrangementInfo }</div>
+									}
+								</td>
 								<td>
 									for _, role := range row.Song.Roles {
 										<span class="badge">{ role.Label }</span>
@@ -311,6 +316,9 @@ templ SetBuilderBody(data SetBuilderData) {
 				for _, cand := range data.Candidates {
 					<li class="candidate-row" data-title={ cand.Title } data-roles={ cand.RolesAttr } data-tags={ cand.TagsAttr }>
 						<span>{ cand.Title }</span>
+						if cand.ArrangementInfo != "" {
+							<span class="muted">{ cand.ArrangementInfo }</span>
+						}
 						for _, role := range cand.Roles {
 							<span class="badge">{ role.Label }</span>
 						}
