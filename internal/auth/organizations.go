@@ -68,6 +68,37 @@ func (s *Store) GetOrganization(ctx context.Context, id string) (Organization, e
 	return org, nil
 }
 
+// ListOrganizations returns every organization - used by jobs.BillingJobs
+// to find which ones actually need their Stripe seat quantity
+// reconciled (filtered in the caller, not here, so this package never
+// needs to know about internal/billing's plan codes - avoiding an
+// import cycle, since internal/billing already imports internal/auth).
+func (s *Store) ListOrganizations(ctx context.Context) ([]Organization, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, name, status, plan, stripe_customer_id, stripe_subscription_id, trial_ends_at, created_at, updated_at
+		FROM organizations
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var orgs []Organization
+	for rows.Next() {
+		var org Organization
+		if err := rows.Scan(
+			&org.ID, &org.Name, &org.Status, &org.Plan,
+			&org.StripeCustomerID, &org.StripeSubscriptionID, &org.TrialEndsAt,
+			&org.CreatedAt, &org.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		orgs = append(orgs, org)
+	}
+
+	return orgs, rows.Err()
+}
+
 // UpdateOrganizationSubscription is the billing webhook's write path
 // (see internal/billing) - sets status/plan/Stripe ids together after
 // any subscription lifecycle event (checkout completed, subscription

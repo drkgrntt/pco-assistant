@@ -45,6 +45,15 @@ templ Billing(personName, organizationName string, data BillingData) {
 			<div class="position-group">
 				<h3>{ planLabel(data.Plan) }</h3>
 				<p class="muted">Status: { data.Status }</p>
+				<p class="muted">{ fmt.Sprintf("%d admin seat(s) used in the last 30 days.", data.SeatCount) }</p>
+				if data.StandardOverLimit {
+					<p class="warning">
+						You're using more admin seats than the Standard plan includes
+						(2). Standard never blocks anyone over that - this is just a
+						heads-up that Multi-Campus (5 seats, +$5/mo per extra) might
+						fit better.
+					</p>
+				}
 				<form hx-boost="false" method="post" action="/billing/portal">
 					<button type="submit" class="primary">Manage billing</button>
 				</form>

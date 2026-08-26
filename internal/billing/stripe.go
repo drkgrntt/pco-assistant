@@ -26,6 +26,14 @@ const (
 	PlanMultiCampus = "multi_campus"
 )
 
+// SeatsIncludedStandard is how many admin seats (see auth.SeatCounts)
+// the Standard plan includes before /billing starts nagging toward
+// Multi-Campus - Standard has no paid overage at all (unlike
+// Multi-Campus's graduated Price - see SyncSeatQuantity), so going over
+// this never blocks anyone or bills anything, it's purely a visible
+// upsell nudge.
+const SeatsIncludedStandard = 2
+
 // Client is this app's one Stripe-facing entry point - constructed once
 // at startup (see server.New) from env vars, alongside authStore/
 // schedulingStore.
@@ -106,6 +114,36 @@ func (c *Client) CreateCheckoutSession(ctx context.Context, organizationID, plan
 	}
 
 	return session.URL, nil
+}
+
+// SyncSeatQuantity pushes seatCount as stripeSubscriptionID's (single)
+// line item quantity - Stripe computes the graduated Multi-Campus Price
+// (5 seats bundled into the base fee, $5/seat above that) directly from
+// this quantity, no tier math needed on this side. Only ever called for
+// Multi-Campus subscriptions (see jobs.BillingJobs) - Standard's Price
+// isn't tiered, and Standard never bills for extra seats at all (see
+// SeatsIncludedStandard's doc comment). The subscription is re-fetched
+// live for its current line item id rather than storing one locally -
+// same tradeoff as handleCheckoutCompleted's live Subscription fetch,
+// one extra call for something that only runs once a day, not once a
+// request.
+func (c *Client) SyncSeatQuantity(ctx context.Context, stripeSubscriptionID string, seatCount int) error {
+	sub, err := c.sc.V1Subscriptions.Retrieve(ctx, stripeSubscriptionID, nil)
+	if err != nil {
+		return fmt.Errorf("retrieving subscription %s: %w", stripeSubscriptionID, err)
+	}
+	if sub.Items == nil || len(sub.Items.Data) == 0 {
+		return fmt.Errorf("subscription %s has no line items", stripeSubscriptionID)
+	}
+
+	_, err = c.sc.V1SubscriptionItems.Update(ctx, sub.Items.Data[0].ID, &stripe.SubscriptionItemUpdateParams{
+		Quantity: stripe.Int64(int64(seatCount)),
+	})
+	if err != nil {
+		return fmt.Errorf("updating subscription item quantity: %w", err)
+	}
+
+	return nil
 }
 
 // CreatePortalSession opens Stripe's own hosted Billing Portal for an

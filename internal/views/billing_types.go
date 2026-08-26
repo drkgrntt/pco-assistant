@@ -23,5 +23,16 @@ type BillingData struct {
 	// (?checkout=success/canceled) - a one-time banner, not stored
 	// anywhere.
 	CheckoutResult string
-	ErrMsg         string
+	// SeatCount is how many distinct people have signed in for this org
+	// recently (see auth.SeatCounts) - shown for both plans. Multi-Campus
+	// actually bills for seats beyond its included 5 (a graduated Stripe
+	// Price - see billing.SyncSeatQuantity), so this is just informational
+	// there; for Standard it's what StandardOverLimit is based on.
+	SeatCount int
+	// StandardOverLimit is true when a Standard org has more distinct
+	// seats than billing.SeatsIncludedStandard - Standard has no paid
+	// overage at all, so this only ever drives a visible upsell nudge
+	// toward Multi-Campus, never a block.
+	StandardOverLimit bool
+	ErrMsg            string
 }

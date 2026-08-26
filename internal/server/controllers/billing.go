@@ -70,6 +70,14 @@ func (bc *BillingController) buildBillingData(c *fiber.Ctx) views.BillingData {
 		}
 	}
 
+	// Best-effort, same tolerance as every other lookup on this page - a
+	// failure here just means the seat count/nag doesn't show, not a
+	// broken page.
+	if counts, err := bc.authStore.SeatCounts(c.Context()); err == nil {
+		data.SeatCount = counts[orgID]
+	}
+	data.StandardOverLimit = org.Plan == billing.PlanStandard && data.SeatCount > billing.SeatsIncludedStandard
+
 	return data
 }
 
