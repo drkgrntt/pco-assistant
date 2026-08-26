@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -55,6 +56,97 @@ func fetchAllSongs(ctx context.Context) ([]pco.SongData, error) {
 	}
 
 	return songs, nil
+}
+
+// formatArrangementInfo renders a cached (or freshly-fetched) arrangement
+// summary as a single "G · 72 BPM · 4/4 · 3:45" display string, skipping
+// whichever fields are blank/zero - "" when every field is, so the caller
+// just omits the line rather than showing something empty.
+func formatArrangementInfo(info scheduling.SongArrangementInfo) string {
+	var parts []string
+	if info.Key != "" {
+		parts = append(parts, info.Key)
+	}
+	if info.BPM != 0 {
+		parts = append(parts, fmt.Sprintf("%g BPM", info.BPM))
+	}
+	if info.Meter != "" {
+		parts = append(parts, info.Meter)
+	}
+	if info.LengthSeconds != 0 {
+		parts = append(parts, fmt.Sprintf("%d:%02d", info.LengthSeconds/60, info.LengthSeconds%60))
+	}
+
+	return strings.Join(parts, " · ")
+}
+
+// fetchAndCacheArrangementInfo live-fetches songID's arrangement from
+// Planning Center and upserts it into song_arrangement_cache, returning
+// the resolved info - or an error, and no write, if the fetch failed or
+// the song genuinely has no arrangement at all (PCO auto-creates one for
+// every song via the API, so this should be rare in practice). Shared by
+// resolveArrangementInfo's cache-miss path and SyncSongInfo's bulk
+// backfill (song_arrangement_cache.go), so there's exactly one place that
+// knows how to turn a PCO arrangement into a cache row.
+//
+// Key comes from the arrangement's Key sub-resource (its StartingKey),
+// not the arrangement's own ChordChartKey attribute - confirmed live
+// against real songs: ChordChartKey only ever gets set when there's an
+// actual chord chart document attached (HasChordChart true), which is the
+// unusual case; picking a plain key via Planning Center's simple key
+// picker (the common case) creates a Key row instead and leaves
+// ChordChartKey blank. ChordChartKey is used only as a fallback for the
+// rarer case where a chord chart's own key is set but no Key row exists.
+func fetchAndCacheArrangementInfo(ctx context.Context, store *scheduling.Store, organizationID, songID string) (scheduling.SongArrangementInfo, error) {
+	resp, err := pco.GetArrangements(ctx, songID, &pco.ArrangementsParams{PerPage: 1})
+	if err != nil {
+		return scheduling.SongArrangementInfo{}, err
+	}
+	if len(resp.Data) == 0 {
+		return scheduling.SongArrangementInfo{}, fmt.Errorf("song %s has no arrangement", songID)
+	}
+
+	arrangement := resp.Data[0]
+	attrs := arrangement.Attributes
+	key := attrs.ChordChartKey
+	if keys, err := pco.GetKeys(ctx, songID, arrangement.ID, &pco.KeysParams{PerPage: 1}); err == nil && len(keys.Data) > 0 && keys.Data[0].Attributes.StartingKey != "" {
+		key = keys.Data[0].Attributes.StartingKey
+	}
+
+	info := scheduling.SongArrangementInfo{
+		Key:           key,
+		BPM:           attrs.BPM,
+		Meter:         attrs.Meter,
+		LengthSeconds: attrs.Length,
+	}
+
+	if err := store.UpsertSongArrangementInfo(ctx, organizationID, songID, info); err != nil {
+		return info, err
+	}
+
+	return info, nil
+}
+
+// resolveArrangementInfo returns songID's display-ready arrangement info,
+// preferring the already-loaded cache (zero Planning Center calls) and
+// falling back to fetchAndCacheArrangementInfo on a miss. This is the
+// "song-by-song" catch-up the cache relies on: a song added to a library
+// after the last sync (or never synced at all) still shows correct info
+// the first time it's actually rendered, same as before this cache
+// existed, and every render after that is a cache hit. Best-effort: a
+// failed fetch/backfill just means "" for this render and another live
+// attempt next time, not a broken page.
+func resolveArrangementInfo(ctx context.Context, store *scheduling.Store, organizationID string, cache map[string]scheduling.SongArrangementInfo, songID string) string {
+	if info, ok := cache[songID]; ok {
+		return formatArrangementInfo(info)
+	}
+
+	info, err := fetchAndCacheArrangementInfo(ctx, store, organizationID, songID)
+	if err != nil {
+		return ""
+	}
+
+	return formatArrangementInfo(info)
 }
 
 // songTitleMap builds a song ID -> title lookup from a picker's song list,
@@ -182,6 +274,9 @@ func (sc *SchedulingController) RegisterRoutes(router fiber.Router) {
 	group.Get("/song-tag-suggestions", sc.SongTagSuggestionsPage)
 	group.Post("/song-tag-suggestions/apply", sc.ApplySongTagSuggestion)
 	group.Post("/song-tag-suggestions/ignore", sc.IgnoreSongTagSuggestion)
+
+	group.Get("/song-info", sc.SongInfoPage)
+	group.Post("/song-info/sync", sc.SyncSongInfo)
 
 	group.Get("/person-relationships", sc.PersonRelationshipsPage)
 	group.Post("/person-relationships", sc.CreatePersonRelationship)
