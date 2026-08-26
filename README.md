@@ -11,10 +11,13 @@ system. Everything the app knows about songs, people, plans, teams, and
 positions is read live from your PCO account; this app only stores the
 domain data PCO has no concept of (relationships, roles, draft
 sets/rosters) and syncs it back to real PCO records when you publish.
-Every PCO organization that signs in gets its own row in `organizations`
-(name plus a `status`, `'active'` by default) - the one local place
-account-level state lives, so a future subscription/billing flow has
-somewhere to write to without a schema change.
+Every PCO organization gets a 14-day free trial automatically the first
+time it signs in (a row in `organizations` - name, `status`, `plan`,
+Stripe ids), enforced on every request by `RequireActiveOrganization`.
+Once the trial ends (or any time before that), `/billing` offers the two
+paid plans (see ROADMAP) via Stripe Checkout; an existing subscription is
+managed through Stripe's own Billing Portal - no custom billing UI to
+build or maintain beyond the plan picker itself.
 
 ## Features
 
@@ -109,7 +112,19 @@ Mobile-first, installable as a PWA, with light/dark theming.
      `http://localhost:8080/auth/pco/callback` - used for "Sign in with
      Planning Center"
 
-3. **`.env`**:
+3. **Stripe (optional for local dev).** Every organization gets a free
+   trial automatically at sign-in - Stripe is only needed for the
+   `/billing` page's "choose a plan"/"manage billing" buttons to
+   actually work. Create two Products/Prices (Standard, Multi-Campus -
+   see ROADMAP's pricing section) in a
+   [test-mode Stripe account](https://dashboard.stripe.com/test/apikeys),
+   and a webhook endpoint pointed at `<APP_BASE_URL>/billing/webhook`
+   listening for `checkout.session.completed`,
+   `customer.subscription.updated`, and `customer.subscription.deleted`.
+   Leave the `STRIPE_*` variables below blank to skip this - the
+   trial/paywall gate itself still works, only checkout/portal don't.
+
+4. **`.env`**:
    ```
    PORT=8080
    APP_ENV=local
@@ -127,6 +142,13 @@ Mobile-first, installable as a PWA, with light/dark theming.
    PCO_OAUTH_CLIENT_ID=...
    PCO_OAUTH_CLIENT_SECRET=...
    PCO_OAUTH_REDIRECT_URI=http://localhost:8080/auth/pco/callback
+
+   APP_BASE_URL=http://localhost:8080
+
+   STRIPE_SECRET_KEY=...
+   STRIPE_PRICE_STANDARD=...
+   STRIPE_PRICE_MULTI_CAMPUS=...
+   STRIPE_WEBHOOK_SECRET=...
    ```
 
 ## Makefile

@@ -37,7 +37,7 @@ than for access itself.
 | 1,000 | $179/mo |
 | Unlimited | $239/mo |
 
-## Pricing model (undecided - options under consideration)
+## Pricing model (decided: hybrid seats, Option 3 below)
 
 Golden rule going in: **never charge per volunteer**. Churches run on
 volunteers; if a tech director has to pay extra to give a teenage camera
@@ -47,7 +47,7 @@ schedules never count against it - only admin-side users (worship
 directors, campus pastors, tech directors actually building sets/rosters
 here) would.
 
-### Option 1: Flat "no-brainer" fee
+### Option 1: Flat "no-brainer" fee (not chosen)
 One tier, unlimited users, songs, and plans. $12-15/mo ($120-150/yr).
 Simple, and small enough to be a ministry leader's discretionary spend
 rather than something that needs a finance-committee sign-off. Doesn't
@@ -55,7 +55,7 @@ scale revenue with the churches that can afford more, and doesn't reflect
 that a multi-campus church puts meaningfully more load on the app (more
 people, more relationship tags, more concurrent admins).
 
-### Option 2: Honor-system attendance tiers
+### Option 2: Honor-system attendance tiers (not chosen)
 Self-selected by weekend attendance, not enforced by hard limits:
 - Church plant/small (<100): $9/mo
 - Mid-size (100-500): $19/mo
@@ -66,7 +66,7 @@ is a proxy for ability to pay, but not a great proxy for actual usage of
 *this* app - two 150-person churches can have very different numbers of
 people actually scheduling.
 
-### Option 3: Hybrid - included admin seats + expansion (current leaning)
+### Option 3: Hybrid - included admin seats + expansion (chosen)
 Ties price to the thing that actually scales with complexity here: how
 many distinct people are configuring sets/rosters, not attendance or total
 church size. In a single-campus church this is usually one person, so it
@@ -83,9 +83,19 @@ PCO API sync volume).
 Confirmed cheap to meter: PCO already has an OAuth-based identity for
 every user, and the `sessions` table already records `person_id` +
 `organization_id` per sign-in - "admin seat count" for an org is already
-just `COUNT(DISTINCT person_id)` away, no new tracking needed. The
-`organizations` table (see README) is where the actual plan/seat
-assignment itself would live once billing exists.
+just `COUNT(DISTINCT person_id)` away, no new tracking needed.
+
+**Live**: sign-in starts a 14-day free trial automatically
+(`organizations.status`); `/billing` offers both tiers via Stripe
+Checkout, and an existing subscription is managed through Stripe's own
+Billing Portal - Stripe's own webhooks keep `organizations.status`/`plan`
+in sync going forward.
+
+**Not yet built**: nothing actually enforces the included-seat counts
+above (a Standard org with 5 admins isn't stopped or upsold) - the count
+itself is free per the previous paragraph, but there's no metered
+overage billing wired up for it yet. Revisit once there's a real org
+that would trigger it.
 
 ### Mission commitment (applies regardless of which pricing option wins)
 A quiet "pay what you can" path for church plants (<2 years old) or
@@ -158,12 +168,8 @@ for other volunteer-heavy ministries on the same backend.
 
 ## Open questions
 
-- Which pricing option (flat / attendance-tier / hybrid-seats) actually
-  ships, and at what price points - all three above are still live options.
-- Picking an actual billing provider (Stripe or otherwise) and writing
-  its subscription state into `organizations.status` - the table and the
-  request-time gate that checks it (`RequireActiveOrganization`) already
-  exist, just always passing until something writes a non-`active` value.
+- Metered overage billing for a Multi-Campus org's extra seats beyond
+  the included 5 - not yet built, see the pricing section above.
 - Whether the browser-extension HUD is worth building at all before there's
   real usage data suggesting the lighter integrations aren't enough.
 - When Phase 2 (non-worship ministries) actually starts - deliberately not
