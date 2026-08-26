@@ -4,7 +4,7 @@ import "context"
 
 // TrackNewSong marks songID as having been observed, at some point, with no
 // Planning Center scheduling history at all - see tracked_new_songs
-// (migration 00023). Idempotent: a song already tracked, or one that turns
+// (migration 00024). Idempotent: a song already tracked, or one that turns
 // out to already have scheduling history by the time this is called, is a
 // no-op either way (the caller only calls this for a song it already
 // confirmed has no history - see buildSetBuilderData). Once tracked, a
