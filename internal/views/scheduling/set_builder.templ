@@ -281,6 +281,25 @@ templ SetBuilderBody(data SetBuilderData) {
 				</ul>
 			}
 		}
+		if len(data.SongsToReinforce) > 0 {
+			@collapsibleSection("songs-to-reinforce", "Could use one more sing") {
+				<p class="muted">New to the church - a repeat helps it stick.</p>
+				<ul class="suggestion-list">
+					for _, sug := range data.SongsToReinforce {
+						<li>
+							<span>{ sug.Title }</span>
+							<span class="muted">{ sug.RelationshipLabel }</span>
+							<form hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/songs", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
+								<input type="hidden" name="song_id" value={ sug.SongID }/>
+								<button type="submit" class="icon-btn" aria-label="Add to set" title="Add to set">
+									@views.IconAdd()
+								</button>
+							</form>
+						</li>
+					}
+				</ul>
+			}
+		}
 		<h2>Find songs to add</h2>
 		<!--
 			Generated straight from data.RoleTypes (song_role_types) rather
@@ -316,6 +335,9 @@ templ SetBuilderBody(data SetBuilderData) {
 				for _, cand := range data.Candidates {
 					<li class="candidate-row" data-title={ cand.Title } data-roles={ cand.RolesAttr } data-tags={ cand.TagsAttr }>
 						<span>{ cand.Title }</span>
+						if cand.NewSongLabel != "" {
+							<span class="badge status-pending" title="New to the church - a repeat helps it stick">{ cand.NewSongLabel }</span>
+						}
 						if cand.ArrangementInfo != "" {
 							<span class="muted">{ cand.ArrangementInfo }</span>
 						}

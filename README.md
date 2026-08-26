@@ -40,7 +40,12 @@ sets/rosters) and syncs it back to real PCO records when you publish.
   relationships, avoid-pairing warnings, duplicate-song support (e.g. a
   song reprised as the response), a repeated-song warning if a song was
   sung in each of the last two plans, and each song's key/tempo/meter/length
-  shown right on the row (see Song Info above). A new plan's first song lands
+  shown right on the row (see Song Info above). The opposite nudge also runs
+  automatically: a song genuinely new to the church (Planning Center has no
+  prior scheduling date for it the first time it's seen) gets a "Sung
+  once"/"Sung twice" badge and a spot in a "Could use one more sing" section
+  once it's been published once or twice, so a new song gets the repetition
+  it needs to stick before it's forgotten. A new plan's first song lands
   wherever the first song usually goes for that service type once you've
   placed it there once (tracked separately per service type, so e.g.
   Sunday and Wednesday can differ). Add a song right after another one and
