@@ -89,13 +89,17 @@ just `COUNT(DISTINCT person_id)` away, no new tracking needed.
 (`organizations.status`); `/billing` offers both tiers via Stripe
 Checkout, and an existing subscription is managed through Stripe's own
 Billing Portal - Stripe's own webhooks keep `organizations.status`/`plan`
-in sync going forward.
-
-**Not yet built**: nothing actually enforces the included-seat counts
-above (a Standard org with 5 admins isn't stopped or upsold) - the count
-itself is free per the previous paragraph, but there's no metered
-overage billing wired up for it yet. Revisit once there's a real org
-that would trigger it.
+in sync going forward. "Seat" means distinct people signed in within the
+current ~30-day session window (`sessions.expires_at`/`SessionTTL`
+already purges stale ones daily), so a seat naturally frees up on its
+own with no explicit removal feature. Multi-Campus actually bills the
+overage now: its Stripe Price is graduated (5 seats bundled into the
+$28 base, $5/seat after, confirmed against real invoice previews at
+several quantities), and a daily cron (`jobs.BillingJobs`) pushes each
+active Multi-Campus org's real seat count into Stripe as that
+subscription's line-item quantity. Standard has no paid overage at all -
+going over its included 2 seats just shows a non-blocking upsell nudge
+on `/billing`, never a block or a charge.
 
 ### Mission commitment (applies regardless of which pricing option wins)
 A quiet "pay what you can" path for church plants (<2 years old) or
@@ -168,8 +172,6 @@ for other volunteer-heavy ministries on the same backend.
 
 ## Open questions
 
-- Metered overage billing for a Multi-Campus org's extra seats beyond
-  the included 5 - not yet built, see the pricing section above.
 - Whether the browser-extension HUD is worth building at all before there's
   real usage data suggesting the lighter integrations aren't enough.
 - When Phase 2 (non-worship ministries) actually starts - deliberately not
