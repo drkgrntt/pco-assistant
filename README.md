@@ -11,6 +11,10 @@ system. Everything the app knows about songs, people, plans, teams, and
 positions is read live from your PCO account; this app only stores the
 domain data PCO has no concept of (relationships, roles, draft
 sets/rosters) and syncs it back to real PCO records when you publish.
+Every PCO organization that signs in gets its own row in `organizations`
+(name plus a `status`, `'active'` by default) - the one local place
+account-level state lives, so a future subscription/billing flow has
+somewhere to write to without a schema change.
 
 ## Features
 

@@ -36,6 +36,10 @@ func (s *FiberServer) RegisterFiberRoutes() {
 	// RequireAuth allowlists /health, /login, /auth/*, and /static/*
 	// internally, so it's safe to apply globally ahead of every route.
 	s.App.Use(middleware.RequireAuth(s.authStore))
+	// RequireActiveOrganization runs after RequireAuth - it reads the
+	// organization id RequireAuth just resolved into locals, so it has to
+	// come second.
+	s.App.Use(middleware.RequireActiveOrganization(s.authStore))
 
 	controllers.NewHealthController(s.db).RegisterRoutes(s.App)
 	controllers.NewAuthController(s.authStore).RegisterRoutes(s.App)

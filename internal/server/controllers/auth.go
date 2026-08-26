@@ -3,6 +3,7 @@ package controllers
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"log"
 	"time"
 
 	"pco-assistant/internal/auth"
@@ -89,6 +90,13 @@ func (ac *AuthController) Callback(c *fiber.Ctx) error {
 	org, err := pco.GetOrganization(pco.WithAccessToken(c.Context(), tokenResult.AccessToken))
 	if err != nil {
 		return c.Status(fiber.StatusBadGateway).SendString("looking up your Planning Center organization: " + err.Error())
+	}
+
+	// Best-effort, unlike the org lookup above: this is account-level
+	// bookkeeping (see auth.UpsertOrganization), not something a request
+	// gets scoped by, so a failure here shouldn't block sign-in.
+	if err := ac.store.UpsertOrganization(c.Context(), org.Data.ID, org.Data.Attributes.Name); err != nil {
+		log.Println("upserting organization failed:", err.Error())
 	}
 
 	token, err := ac.store.CreateSession(c.Context(), personID, personName, org.Data.ID, org.Data.Attributes.Name, tokenResult.AccessToken, tokenResult.RefreshToken, tokenResult.ExpiresAt)

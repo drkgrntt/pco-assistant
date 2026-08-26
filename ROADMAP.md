@@ -80,10 +80,12 @@ PCO API sync volume).
 | Standard | $15/mo | 2 | Single campus, small-to-mid church |
 | Multi-Campus | $29/mo | 5 (+$5/mo per extra seat) | Multi-site or large team |
 
-Open question: PCO already has an OAuth-based identity for every user, so
-"admin seat" could just mean "PCO account that's ever signed into this
-app," tracked automatically - worth confirming that's cheap to meter before
-committing to seat-based billing.
+Confirmed cheap to meter: PCO already has an OAuth-based identity for
+every user, and the `sessions` table already records `person_id` +
+`organization_id` per sign-in - "admin seat count" for an org is already
+just `COUNT(DISTINCT person_id)` away, no new tracking needed. The
+`organizations` table (see README) is where the actual plan/seat
+assignment itself would live once billing exists.
 
 ### Mission commitment (applies regardless of which pricing option wins)
 A quiet "pay what you can" path for church plants (<2 years old) or
@@ -158,8 +160,10 @@ for other volunteer-heavy ministries on the same backend.
 
 - Which pricing option (flat / attendance-tier / hybrid-seats) actually
   ships, and at what price points - all three above are still live options.
-- How "admin seat" gets defined and metered technically if the hybrid
-  model is the one that ships.
+- Picking an actual billing provider (Stripe or otherwise) and writing
+  its subscription state into `organizations.status` - the table and the
+  request-time gate that checks it (`RequireActiveOrganization`) already
+  exist, just always passing until something writes a non-`active` value.
 - Whether the browser-extension HUD is worth building at all before there's
   real usage data suggesting the lighter integrations aren't enough.
 - When Phase 2 (non-worship ministries) actually starts - deliberately not
