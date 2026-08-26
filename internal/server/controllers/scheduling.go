@@ -88,6 +88,15 @@ func formatArrangementInfo(info scheduling.SongArrangementInfo) string {
 // resolveArrangementInfo's cache-miss path and SyncSongInfo's bulk
 // backfill (song_arrangement_cache.go), so there's exactly one place that
 // knows how to turn a PCO arrangement into a cache row.
+//
+// Key comes from the arrangement's Key sub-resource (its StartingKey),
+// not the arrangement's own ChordChartKey attribute - confirmed live
+// against real songs: ChordChartKey only ever gets set when there's an
+// actual chord chart document attached (HasChordChart true), which is the
+// unusual case; picking a plain key via Planning Center's simple key
+// picker (the common case) creates a Key row instead and leaves
+// ChordChartKey blank. ChordChartKey is used only as a fallback for the
+// rarer case where a chord chart's own key is set but no Key row exists.
 func fetchAndCacheArrangementInfo(ctx context.Context, store *scheduling.Store, organizationID, songID string) (scheduling.SongArrangementInfo, error) {
 	resp, err := pco.GetArrangements(ctx, songID, &pco.ArrangementsParams{PerPage: 1})
 	if err != nil {
@@ -97,9 +106,15 @@ func fetchAndCacheArrangementInfo(ctx context.Context, store *scheduling.Store, 
 		return scheduling.SongArrangementInfo{}, fmt.Errorf("song %s has no arrangement", songID)
 	}
 
-	attrs := resp.Data[0].Attributes
+	arrangement := resp.Data[0]
+	attrs := arrangement.Attributes
+	key := attrs.ChordChartKey
+	if keys, err := pco.GetKeys(ctx, songID, arrangement.ID, &pco.KeysParams{PerPage: 1}); err == nil && len(keys.Data) > 0 && keys.Data[0].Attributes.StartingKey != "" {
+		key = keys.Data[0].Attributes.StartingKey
+	}
+
 	info := scheduling.SongArrangementInfo{
-		Key:           attrs.ChordChartKey,
+		Key:           key,
 		BPM:           attrs.BPM,
 		Meter:         attrs.Meter,
 		LengthSeconds: attrs.Length,
