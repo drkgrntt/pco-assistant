@@ -27,7 +27,7 @@ templ Billing(personName, organizationName string, data BillingData) {
 			}
 			<div class="position-group">
 				<h3>Standard</h3>
-				<p>$15/mo - 2 admin seats - single campus, small-to-mid church.</p>
+				<p>$14/mo - 2 admin seats - single campus, small-to-mid church.</p>
 				<form hx-boost="false" method="post" action="/billing/checkout">
 					<input type="hidden" name="plan" value={ data.StandardPlan }/>
 					<button type="submit" class="primary">Choose Standard</button>
@@ -35,7 +35,7 @@ templ Billing(personName, organizationName string, data BillingData) {
 			</div>
 			<div class="position-group">
 				<h3>Multi-Campus</h3>
-				<p>$29/mo - 5 admin seats (+$5/mo per extra seat) - multi-site or large team.</p>
+				<p>$28/mo - 5 admin seats (+$5/mo per extra seat) - multi-site or large team.</p>
 				<form hx-boost="false" method="post" action="/billing/checkout">
 					<input type="hidden" name="plan" value={ data.MultiCampusPlan }/>
 					<button type="submit" class="primary">Choose Multi-Campus</button>

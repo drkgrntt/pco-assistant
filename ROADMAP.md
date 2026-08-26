@@ -77,8 +77,8 @@ PCO API sync volume).
 
 | Tier | Price | Included admin seats | Target |
 |---|---|---|---|
-| Standard | $15/mo | 2 | Single campus, small-to-mid church |
-| Multi-Campus | $29/mo | 5 (+$5/mo per extra seat) | Multi-site or large team |
+| Standard | $14/mo | 2 | Single campus, small-to-mid church |
+| Multi-Campus | $28/mo | 5 (+$5/mo per extra seat) | Multi-site or large team |
 
 Confirmed cheap to meter: PCO already has an OAuth-based identity for
 every user, and the `sessions` table already records `person_id` +
