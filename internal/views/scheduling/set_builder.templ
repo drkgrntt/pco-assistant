@@ -263,7 +263,7 @@ templ SetBuilderBody(data SetBuilderData) {
 			</div>
 		}
 		if len(data.Suggestions) > 0 {
-			@collapsibleSection("recommended-next-songs", "Recommended next") {
+			@collapsibleSection("recommended-next-songs", "Recommended next", true) {
 				<p class="muted">Based on the last song in the set.</p>
 				<ul class="suggestion-list">
 					for _, sug := range data.Suggestions {
@@ -282,7 +282,7 @@ templ SetBuilderBody(data SetBuilderData) {
 			}
 		}
 		if len(data.SongsToReinforce) > 0 {
-			@collapsibleSection("songs-to-reinforce", "Could use one more sing") {
+			@collapsibleSection("songs-to-reinforce", "Could use one more sing", false) {
 				<p class="muted">New to the church - a repeat helps it stick.</p>
 				<ul class="suggestion-list">
 					for _, sug := range data.SongsToReinforce {
@@ -323,14 +323,15 @@ templ SetBuilderBody(data SetBuilderData) {
 			oninput="filterCandidates()"
 		/>
 		<!--
-			Collapsed by default - every unused song in the library is the
-			single busiest thing on this page otherwise. filterCandidates()/
-			toggleRoleFilter() (scheduling.js) each open this the moment a
-			search term or role filter is actually used, so searching still
-			costs zero extra clicks - only browsing the full list needs an
-			explicit expand.
+			Open by default (see collapsibleSection's open param) - was
+			collapsed on the reasoning that the full library is "the busiest
+			thing on this page otherwise", but the toggle/swap-memory
+			behavior is unaffected either way: collapsing it still works
+			exactly as before, and filterCandidates()/toggleRoleFilter()
+			(scheduling.js) still force it open the moment a search term or
+			role filter is used, for whoever does collapse it.
 		-->
-		@collapsibleSection("find-songs-candidates", "Browse all songs") {
+		@collapsibleSection("find-songs-candidates", "Browse all songs", true) {
 			<ul id="set-candidates" class="candidate-list">
 				for _, cand := range data.Candidates {
 					<li class="candidate-row" data-title={ cand.Title } data-roles={ cand.RolesAttr } data-tags={ cand.TagsAttr }>
@@ -379,7 +380,7 @@ templ SetBuilderBody(data SetBuilderData) {
 			minus the edit affordance - see the build-page redesign plan for
 			why editing stays their job.
 		-->
-		@collapsibleSection("quick-add-songs", "Quick add") {
+		@collapsibleSection("quick-add-songs", "Quick add", false) {
 			<div class="quick-add-panel">
 				<div>
 					<h4>Tag a song</h4>
