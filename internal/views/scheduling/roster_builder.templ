@@ -92,7 +92,7 @@ templ RosterBuilderBody(data RosterBuilderData) {
 			fields, same Store method as person_relationships.templ's own
 			create form, just reachable without leaving this page.
 		-->
-		@collapsibleSection("quick-add-relationship-team", "+ Quick add a relationship") {
+		@collapsibleSection("quick-add-relationship-team", "+ Quick add a relationship", false) {
 			<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/person-relationships", data.ServiceTypeID, data.PlanID) } hx-target="#roster-builder-body" hx-swap="outerHTML">
 				@PersonPickerField("Person A", "person_id_a", "qa-a")
 				@PersonPickerField("Person B", "person_id_b", "qa-b")
@@ -215,7 +215,7 @@ templ RosterBuilderBody(data RosterBuilderData) {
 						posting to a blank id.
 					-->
 					if pos.TeamPositionID != "" {
-						@collapsibleSection(fmt.Sprintf("quick-add-position-%d", i), "+ Add eligible person") {
+						@collapsibleSection(fmt.Sprintf("quick-add-position-%d", i), "+ Add eligible person", false) {
 							<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/position-preferences", data.ServiceTypeID, data.PlanID) } hx-target="#roster-builder-body" hx-swap="outerHTML">
 								<input type="hidden" name="team_id" value={ pos.TeamID }/>
 								<input type="hidden" name="team_position_id" value={ pos.TeamPositionID }/>
@@ -271,7 +271,7 @@ templ RosterBuilderBody(data RosterBuilderData) {
 			</div>
 		}
 		if len(data.Suggestions) > 0 {
-			@collapsibleSection("recommended-next-team", "Recommended next") {
+			@collapsibleSection("recommended-next-team", "Recommended next", false) {
 				<p class="muted">Based on works-well-with and mentorship relationships with people already on this roster.</p>
 				<ul class="suggestion-list">
 					for _, sug := range data.Suggestions {
