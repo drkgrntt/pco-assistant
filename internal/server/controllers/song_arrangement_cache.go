@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"context"
 	"fmt"
 
 	"pco-assistant/internal/server/middleware"
@@ -19,14 +20,14 @@ import (
 
 // buildSongInfoData resolves the whole page's status line - how many of
 // the org's Planning Center songs already have a cached arrangement.
-// Shared between the GET and the POST's re-render so both always reflect
-// the current cache state.
-func (sc *SchedulingController) buildSongInfoData(c *fiber.Ctx) views.SongInfoData {
-	ctx := middleware.RequestContext(c)
-	orgID := middleware.CurrentOrganizationID(c)
-
+// Shared between the GET and the POST's re-render (and, via HomeController,
+// the signed-in home page's own sync nudge) so all three always reflect
+// the current cache state. Takes ctx/organizationID directly rather than
+// a *fiber.Ctx, so callers outside this handler's own request don't need
+// to fake one.
+func (sc *SchedulingController) buildSongInfoData(ctx context.Context, organizationID string) views.SongInfoData {
 	songs, songsErr := fetchAllSongs(ctx)
-	cache, err := sc.store.SongArrangementInfo(ctx, orgID)
+	cache, err := sc.store.SongArrangementInfo(ctx, organizationID)
 
 	data := views.SongInfoData{TotalCount: len(songs)}
 	if songsErr != nil {
@@ -50,7 +51,8 @@ func (sc *SchedulingController) SongInfoPage(c *fiber.Ctx) error {
 	_, personName := middleware.CurrentPerson(c)
 	orgName := middleware.CurrentOrganization(c)
 
-	return render(c, views.SongInfo(personName, orgName, sc.buildSongInfoData(c)))
+	data := sc.buildSongInfoData(middleware.RequestContext(c), middleware.CurrentOrganizationID(c))
+	return render(c, views.SongInfo(personName, orgName, data))
 }
 
 // SyncSongInfo walks every song in the org's Planning Center library and,
@@ -67,7 +69,7 @@ func (sc *SchedulingController) SyncSongInfo(c *fiber.Ctx) error {
 	songs, songsErr := fetchAllSongs(ctx)
 	cache, err := sc.store.SongArrangementInfo(ctx, orgID)
 	if err != nil {
-		data := sc.buildSongInfoData(c)
+		data := sc.buildSongInfoData(ctx, orgID)
 		data.ErrMsg = appendErr(data.ErrMsg, err.Error())
 		return render(c, views.SongInfoBody(data))
 	}
@@ -85,7 +87,7 @@ func (sc *SchedulingController) SyncSongInfo(c *fiber.Ctx) error {
 		applied++
 	}
 
-	data := sc.buildSongInfoData(c)
+	data := sc.buildSongInfoData(ctx, orgID)
 	if songsErr != nil {
 		data.ErrMsg = appendErr(data.ErrMsg, "loading songs from Planning Center: "+songsErr.Error())
 	}

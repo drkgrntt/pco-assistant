@@ -1,16 +1,35 @@
 package controllers
 
 import (
+	"context"
+	"time"
+
+	"pco-assistant/internal/auth"
 	"pco-assistant/internal/server/middleware"
 	"pco-assistant/internal/views"
 
+	pco "github.com/drkgrntt/go-pco"
 	"github.com/gofiber/fiber/v2"
 )
 
-type HomeController struct{}
+// homeServiceTypesCap bounds how many service types the "needs
+// attention" widget looks at - a defensive limit, not a real one for the
+// single/multi-campus churches this app targets (ROADMAP's pricing
+// section), so it's generous rather than tight.
+const homeServiceTypesCap = 5
 
-func NewHomeController() *HomeController {
-	return &HomeController{}
+type HomeController struct {
+	// schedulingController is shared (constructed once in routes.go, not
+	// duplicated) so Home can reuse its private page-builder methods
+	// (planStatus, rosterStatus, buildSongTagSuggestionsData,
+	// buildSongInfoData) instead of re-implementing any of them - see
+	// buildHomeData.
+	schedulingController *SchedulingController
+	authStore            *auth.Store
+}
+
+func NewHomeController(schedulingController *SchedulingController, authStore *auth.Store) *HomeController {
+	return &HomeController{schedulingController: schedulingController, authStore: authStore}
 }
 
 func (hc *HomeController) RegisterRoutes(router fiber.Router) {
@@ -28,5 +47,72 @@ func (hc *HomeController) Index(c *fiber.Ctx) error {
 	if personID == "" {
 		return render(c, views.Landing())
 	}
-	return render(c, views.Home(personName, middleware.CurrentOrganization(c)))
+
+	orgID := middleware.CurrentOrganizationID(c)
+	data := hc.buildHomeData(middleware.RequestContext(c), orgID)
+
+	return render(c, views.Home(personName, middleware.CurrentOrganization(c), data))
+}
+
+// buildHomeData gathers everything the reworked home page shows - all of
+// it reusing logic other pages already have, not new queries: the next
+// plan per service type (capped, see homeServiceTypesCap) with its real
+// song/team status exactly like the Build page's own plan list computes
+// per-row (combinedPlansForServiceType, build.go); the Song Tag
+// Suggestions count and Song Info cache coverage, straight from those
+// pages' own data-builders; and trial/plan status from organizations,
+// same calculation buildBillingData already does. Every piece is
+// best-effort - a failed lookup just leaves that section empty, never
+// breaks the page.
+func (hc *HomeController) buildHomeData(ctx context.Context, organizationID string) views.HomeData {
+	var data views.HomeData
+
+	if serviceTypes, err := pco.GetServiceTypes(ctx, nil); err == nil {
+		sts := serviceTypes.Data
+		if len(sts) > homeServiceTypesCap {
+			sts = sts[:homeServiceTypesCap]
+		}
+
+		for _, st := range sts {
+			plans, err := pco.GetPlans(ctx, st.ID, &pco.PlansParams{
+				Filter:  "future",
+				OrderBy: "sort_date",
+				PerPage: 1,
+			})
+			if err != nil || len(plans.Data) == 0 {
+				continue
+			}
+
+			plan := plans.Data[0]
+			data.UpcomingPlans = append(data.UpcomingPlans, views.HomePlanRow{
+				ServiceTypeID:   st.ID,
+				PlanID:          plan.ID,
+				ServiceTypeName: st.Attributes.Name,
+				Title:           plan.Attributes.Title,
+				Dates:           plan.Attributes.Dates,
+				SetStatus:       hc.schedulingController.planStatus(ctx, organizationID, st.ID, plan.ID),
+				RosterStatus:    hc.schedulingController.rosterStatus(ctx, organizationID, st.ID, plan.ID),
+			})
+		}
+	}
+
+	suggestions := hc.schedulingController.buildSongTagSuggestionsData(ctx, organizationID)
+	data.SuggestionCount = len(suggestions.Suggestions)
+
+	songInfo := hc.schedulingController.buildSongInfoData(ctx, organizationID)
+	data.SongInfoCached = songInfo.CachedCount
+	data.SongInfoTotal = songInfo.TotalCount
+
+	if org, err := hc.authStore.GetOrganization(ctx, organizationID); err == nil {
+		data.OrgStatus = org.Status
+		data.OrgPlan = org.Plan
+		if org.Status == auth.OrgStatusTrialing {
+			data.TrialDaysLeft = int(time.Until(org.TrialEndsAt).Hours() / 24)
+			if data.TrialDaysLeft < 0 {
+				data.TrialDaysLeft = 0
+			}
+		}
+	}
+
+	return data
 }

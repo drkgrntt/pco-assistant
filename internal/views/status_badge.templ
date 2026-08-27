@@ -1,0 +1,21 @@
+package views
+
+// PlanStatusBadge renders one of the three statuses the scheduling
+// controller's planStatus/rosterStatus compute ("planned"/"pending"/
+// "todo", ""  meaning nothing to show) as the same badge used wherever a
+// plan's song-lineup or team status is shown - the Build page's plan
+// list (views/scheduling/build.templ) and the signed-in home page's
+// "needs attention" list (home.templ). Lives in this root package,
+// not views/scheduling, so both can call it: views/scheduling already
+// imports this package for Layout/icons, and the reverse would be an
+// import cycle.
+templ PlanStatusBadge(status string) {
+	switch status {
+		case "planned":
+			<span class="badge published">Planned</span>
+		case "pending":
+			<span class="badge status-pending">Pending</span>
+		case "todo":
+			<span class="badge status-todo">Todo</span>
+	}
+}
