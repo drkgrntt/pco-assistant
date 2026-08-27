@@ -1,0 +1,78 @@
+package views
+
+import "fmt"
+
+templ Billing(personName, organizationName string, data BillingData) {
+	@Layout("Billing", personName, organizationName) {
+		<h1>Billing</h1>
+		if data.ErrMsg != "" {
+			<p class="error">{ data.ErrMsg }</p>
+		}
+		if data.CheckoutResult == "success" {
+			<p class="success">You're all set - thanks for subscribing!</p>
+		}
+		if data.CheckoutResult == "canceled" {
+			<p class="muted">Checkout was canceled - no charge was made.</p>
+		}
+		if !data.HasPlan {
+			if data.Status == "trialing" {
+				<p class="muted">
+					if data.TrialDaysLeft > 0 {
+						{ fmt.Sprintf("%d day(s) left in your trial.", data.TrialDaysLeft) }
+					} else {
+						Your trial has ended.
+					}
+					Pick a plan below any time to keep going without interruption.
+				</p>
+			}
+			<div class="position-group">
+				<h3>Standard</h3>
+				<p>$14/mo - 2 admin seats - single campus, small-to-mid church.</p>
+				<form hx-boost="false" method="post" action="/billing/checkout">
+					<input type="hidden" name="plan" value={ data.StandardPlan }/>
+					<button type="submit" class="primary">Choose Standard</button>
+				</form>
+			</div>
+			<div class="position-group">
+				<h3>Multi-Campus</h3>
+				<p>$28/mo - 5 admin seats (+$5/mo per extra seat) - multi-site or large team.</p>
+				<form hx-boost="false" method="post" action="/billing/checkout">
+					<input type="hidden" name="plan" value={ data.MultiCampusPlan }/>
+					<button type="submit" class="primary">Choose Multi-Campus</button>
+				</form>
+			</div>
+		} else {
+			<div class="position-group">
+				<h3>{ planLabel(data.Plan) }</h3>
+				<p class="muted">Status: { data.Status }</p>
+				<p class="muted">{ fmt.Sprintf("%d admin seat(s) used in the last 30 days.", data.SeatCount) }</p>
+				if data.StandardOverLimit {
+					<p class="warning">
+						You're using more admin seats than the Standard plan includes
+						(2). Standard never blocks anyone over that - this is just a
+						heads-up that Multi-Campus (5 seats, +$5/mo per extra) might
+						fit better.
+					</p>
+				}
+				<form hx-boost="false" method="post" action="/billing/portal">
+					<button type="submit" class="primary">Manage billing</button>
+				</form>
+			</div>
+		}
+	}
+}
+
+// planLabel turns a plan code (billing.PlanStandard/PlanMultiCampus)
+// into display text - not imported as constants here since this package
+// takes the plan code as a plain string (see BillingData), not a
+// dependency on internal/billing.
+func planLabel(plan string) string {
+	switch plan {
+	case "standard":
+		return "Standard plan"
+	case "multi_campus":
+		return "Multi-Campus plan"
+	default:
+		return "Unknown plan"
+	}
+}

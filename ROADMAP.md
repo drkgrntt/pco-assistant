@@ -37,7 +37,7 @@ than for access itself.
 | 1,000 | $179/mo |
 | Unlimited | $239/mo |
 
-## Pricing model (undecided - options under consideration)
+## Pricing model (decided: hybrid seats, Option 3 below)
 
 Golden rule going in: **never charge per volunteer**. Churches run on
 volunteers; if a tech director has to pay extra to give a teenage camera
@@ -47,7 +47,7 @@ schedules never count against it - only admin-side users (worship
 directors, campus pastors, tech directors actually building sets/rosters
 here) would.
 
-### Option 1: Flat "no-brainer" fee
+### Option 1: Flat "no-brainer" fee (not chosen)
 One tier, unlimited users, songs, and plans. $12-15/mo ($120-150/yr).
 Simple, and small enough to be a ministry leader's discretionary spend
 rather than something that needs a finance-committee sign-off. Doesn't
@@ -55,7 +55,7 @@ scale revenue with the churches that can afford more, and doesn't reflect
 that a multi-campus church puts meaningfully more load on the app (more
 people, more relationship tags, more concurrent admins).
 
-### Option 2: Honor-system attendance tiers
+### Option 2: Honor-system attendance tiers (not chosen)
 Self-selected by weekend attendance, not enforced by hard limits:
 - Church plant/small (<100): $9/mo
 - Mid-size (100-500): $19/mo
@@ -66,7 +66,7 @@ is a proxy for ability to pay, but not a great proxy for actual usage of
 *this* app - two 150-person churches can have very different numbers of
 people actually scheduling.
 
-### Option 3: Hybrid - included admin seats + expansion (current leaning)
+### Option 3: Hybrid - included admin seats + expansion (chosen)
 Ties price to the thing that actually scales with complexity here: how
 many distinct people are configuring sets/rosters, not attendance or total
 church size. In a single-campus church this is usually one person, so it
@@ -77,13 +77,29 @@ PCO API sync volume).
 
 | Tier | Price | Included admin seats | Target |
 |---|---|---|---|
-| Standard | $15/mo | 2 | Single campus, small-to-mid church |
-| Multi-Campus | $29/mo | 5 (+$5/mo per extra seat) | Multi-site or large team |
+| Standard | $14/mo | 2 | Single campus, small-to-mid church |
+| Multi-Campus | $28/mo | 5 (+$5/mo per extra seat) | Multi-site or large team |
 
-Open question: PCO already has an OAuth-based identity for every user, so
-"admin seat" could just mean "PCO account that's ever signed into this
-app," tracked automatically - worth confirming that's cheap to meter before
-committing to seat-based billing.
+Confirmed cheap to meter: PCO already has an OAuth-based identity for
+every user, and the `sessions` table already records `person_id` +
+`organization_id` per sign-in - "admin seat count" for an org is already
+just `COUNT(DISTINCT person_id)` away, no new tracking needed.
+
+**Live**: sign-in starts a 14-day free trial automatically
+(`organizations.status`); `/billing` offers both tiers via Stripe
+Checkout, and an existing subscription is managed through Stripe's own
+Billing Portal - Stripe's own webhooks keep `organizations.status`/`plan`
+in sync going forward. "Seat" means distinct people signed in within the
+current ~30-day session window (`sessions.expires_at`/`SessionTTL`
+already purges stale ones daily), so a seat naturally frees up on its
+own with no explicit removal feature. Multi-Campus actually bills the
+overage now: its Stripe Price is graduated (5 seats bundled into the
+$28 base, $5/seat after, confirmed against real invoice previews at
+several quantities), and a daily cron (`jobs.BillingJobs`) pushes each
+active Multi-Campus org's real seat count into Stripe as that
+subscription's line-item quantity. Standard has no paid overage at all -
+going over its included 2 seats just shows a non-blocking upsell nudge
+on `/billing`, never a block or a charge.
 
 ### Mission commitment (applies regardless of which pricing option wins)
 A quiet "pay what you can" path for church plants (<2 years old) or
@@ -156,10 +172,6 @@ for other volunteer-heavy ministries on the same backend.
 
 ## Open questions
 
-- Which pricing option (flat / attendance-tier / hybrid-seats) actually
-  ships, and at what price points - all three above are still live options.
-- How "admin seat" gets defined and metered technically if the hybrid
-  model is the one that ships.
 - Whether the browser-extension HUD is worth building at all before there's
   real usage data suggesting the lighter integrations aren't enough.
 - When Phase 2 (non-worship ministries) actually starts - deliberately not

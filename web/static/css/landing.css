@@ -136,6 +136,19 @@
   margin-bottom: 0;
 }
 
+/* === Pricing ====================================================================== */
+
+.landing-pricing {
+  padding-block: var(--space-8);
+  text-align: center;
+}
+
+.landing-pricing .landing-feature-grid {
+  max-width: 40rem;
+  margin-inline: auto;
+  text-align: left;
+}
+
 /* === "Rehearsal studio" comparison ============================================== */
 
 .landing-studio {

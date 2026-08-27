@@ -20,10 +20,13 @@ const SessionCookieName = "church_session"
 const refreshBuffer = 5 * time.Minute
 
 // publicPrefixes never require a session: infra health checks, the sign-in
-// flow itself, static assets, and the PWA manifest/service worker (which
+// flow itself, static assets, the PWA manifest/service worker (which
 // must be reachable pre-login for install prompts and are root-served, not
-// under /static/, so they need their own entries here).
-var publicPrefixes = []string{"/health", "/login", "/auth/", "/static/", "/sw.js", "/manifest.json"}
+// under /static/, so they need their own entries here), and Stripe's
+// webhook (which authenticates itself via a signature - see
+// internal/billing.HandleWebhook - not a session cookie, since Stripe's
+// servers have neither).
+var publicPrefixes = []string{"/health", "/login", "/auth/", "/static/", "/sw.js", "/manifest.json", "/billing/webhook"}
 
 // RequireAuth gates every route not covered by publicPrefixes behind a
 // valid, unexpired session. On success it stashes the signed-in person's id
