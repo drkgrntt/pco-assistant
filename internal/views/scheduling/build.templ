@@ -122,9 +122,9 @@ templ BuildPlansResults(plans []PlanRow, serviceTypeID, search string, page, tot
 					<span class="muted">{ plan.Dates }</span>
 				}
 				<span class="badge-label">Songs</span>
-				@planStatusBadge(plan.SetStatus)
+				@views.PlanStatusBadge(plan.SetStatus)
 				<span class="badge-label">Team</span>
-				@planStatusBadge(plan.RosterStatus)
+				@views.PlanStatusBadge(plan.RosterStatus)
 			</li>
 		}
 		if len(plans) == 0 {
@@ -147,17 +147,6 @@ templ BuildPlansResults(plans []PlanRow, serviceTypeID, search string, page, tot
 				disabled?={ page >= totalPages }
 			>Next &rarr;</button>
 		</div>
-	}
-}
-
-templ planStatusBadge(status string) {
-	switch status {
-		case "planned":
-			<span class="badge published">Planned</span>
-		case "pending":
-			<span class="badge status-pending">Pending</span>
-		case "todo":
-			<span class="badge status-todo">Todo</span>
 	}
 }
 

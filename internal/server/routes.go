@@ -41,14 +41,20 @@ func (s *FiberServer) RegisterFiberRoutes() {
 	// come second.
 	s.App.Use(middleware.RequireActiveOrganization(s.authStore))
 
+	// Constructed once and shared with HomeController below (rather than a
+	// second instance) so Home can reuse its private page-builder methods
+	// (planStatus, rosterStatus, buildSongTagSuggestionsData,
+	// buildSongInfoData) - see HomeController.buildHomeData.
+	schedulingController := controllers.NewSchedulingController(s.schedulingStore)
+
 	controllers.NewHealthController(s.db).RegisterRoutes(s.App)
 	controllers.NewAuthController(s.authStore).RegisterRoutes(s.App)
 	controllers.NewBillingController(s.authStore, s.billingClient).RegisterRoutes(s.App)
-	controllers.NewHomeController().RegisterRoutes(s.App)
+	controllers.NewHomeController(schedulingController, s.authStore).RegisterRoutes(s.App)
 	controllers.NewPCOController().RegisterRoutes(s.App)
 	controllers.NewStyleGuideController().RegisterRoutes(s.App)
 	controllers.NewSchedulingAPIController(s.schedulingStore).RegisterRoutes(s.App)
-	controllers.NewSchedulingController(s.schedulingStore).RegisterRoutes(s.App)
+	schedulingController.RegisterRoutes(s.App)
 
 	log.Println("Routes registered")
 }

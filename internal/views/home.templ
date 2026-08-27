@@ -1,8 +1,62 @@
 package views
 
-templ Home(personName, organizationName string) {
+import "fmt"
+
+templ Home(personName, organizationName string, data HomeData) {
 	@Layout("Home", personName, organizationName) {
 		<h1>Welcome, { personName }</h1>
+
+		if data.OrgStatus != "" && data.OrgStatus != "active" {
+			<p class="warning">
+				if data.OrgStatus == "trialing" {
+					if data.TrialDaysLeft > 0 {
+						{ fmt.Sprintf("%d day(s) left in your trial.", data.TrialDaysLeft) }
+					} else {
+						Your trial has ended.
+					}
+				} else {
+					{ fmt.Sprintf("Billing status: %s.", data.OrgStatus) }
+				}
+				<a href="/billing">Choose a plan</a>
+			</p>
+		}
+
+		if len(data.UpcomingPlans) > 0 {
+			<h2>Needs attention</h2>
+			<p class="muted">The next upcoming plan for each service type.</p>
+			<ul class="plan-list">
+				for _, plan := range data.UpcomingPlans {
+					<li>
+						<a href={ templ.URL("/scheduling/build/" + plan.ServiceTypeID + "/" + plan.PlanID) }>
+							if plan.Title != "" {
+								{ plan.Title }
+							} else {
+								{ plan.Dates }
+							}
+						</a>
+						<span class="muted">{ plan.ServiceTypeName }</span>
+						<span class="badge-label">Songs</span>
+						@PlanStatusBadge(plan.SetStatus)
+						<span class="badge-label">Team</span>
+						@PlanStatusBadge(plan.RosterStatus)
+					</li>
+				}
+			</ul>
+		}
+
+		if data.SuggestionCount > 0 {
+			<p>
+				{ fmt.Sprintf("%d song tag suggestion(s) waiting for review.", data.SuggestionCount) }
+				<a href="/scheduling/song-tag-suggestions">Review suggestions</a>
+			</p>
+		}
+
+		if data.SongInfoTotal > 0 && data.SongInfoCached < data.SongInfoTotal {
+			<p>
+				{ fmt.Sprintf("%d of %d song(s) have cached key/tempo info.", data.SongInfoCached, data.SongInfoTotal) }
+				<a href="/scheduling/song-info">Finish syncing</a>
+			</p>
+		}
 
 		<h2>Workflows</h2>
 		<p class="muted">Where you'll spend most of your time week to week.</p>
@@ -15,6 +69,9 @@ templ Home(personName, organizationName string) {
 		<nav class="quick-links quick-links-secondary">
 			<a href="/scheduling/song-relationships">Song relationships</a>
 			<a href="/scheduling/song-roles">Song roles</a>
+			<a href="/scheduling/song-tags">Song tags</a>
+			<a href="/scheduling/song-tag-suggestions">Song tag suggestions</a>
+			<a href="/scheduling/song-info">Song info</a>
 			<a href="/scheduling/song-preferences">Song / person preferences</a>
 			<a href="/scheduling/person-relationships">Person relationships</a>
 			<a href="/scheduling/position-preferences">Position preferences</a>
