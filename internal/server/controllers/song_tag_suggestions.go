@@ -102,12 +102,24 @@ func songTagSuggestions(songs []pco.SongData, existingTags []scheduling.SongTag,
 		})
 
 		views_ := make([]views.SuggestedSongView, 0, len(groupSongs))
+		allTagged := true
 		for _, song := range groupSongs {
+			tagged := taggedWordsBySong[song.ID][word]
+			if !tagged {
+				allTagged = false
+			}
 			views_ = append(views_, views.SuggestedSongView{
 				SongID:        song.ID,
 				Title:         song.Attributes.Title,
-				AlreadyTagged: taggedWordsBySong[song.ID][word],
+				AlreadyTagged: tagged,
 			})
+		}
+		// Nothing left to do once every song in the group already carries
+		// this tag - without this, a fully-applied group would sit in the
+		// list forever (each row showing "Already tagged", but the group
+		// itself never disappearing) since nothing else ever removes it.
+		if allTagged {
+			continue
 		}
 
 		groups = append(groups, views.SongTagSuggestionGroup{Word: word, Songs: views_})

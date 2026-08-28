@@ -122,6 +122,54 @@ func TestSongTagSuggestionsFlagsAlreadyTaggedSongs(t *testing.T) {
 	}
 }
 
+// TestSongTagSuggestionsOmitsFullyAppliedGroups confirms a group
+// disappears entirely once every song in it already carries the
+// suggested tag - AlreadyTagged alone isn't enough (that's per-song
+// display), the group itself has to stop being suggested, or it would
+// sit in the list forever showing "Already tagged" on every row with
+// nothing left to actually do.
+func TestSongTagSuggestionsOmitsFullyAppliedGroups(t *testing.T) {
+	songs := []pco.SongData{
+		song("1", "King of Kings"),
+		song("2", "Christ the King"),
+	}
+	tags := []scheduling.SongTag{
+		songTag("1", scheduling.TagCategoryTheme, "King"),
+		songTag("2", scheduling.TagCategoryTheme, "King"),
+	}
+
+	groups := songTagSuggestions(songs, tags, nil)
+
+	for _, g := range groups {
+		if g.Word == "king" {
+			t.Errorf("fully-applied group %q should have been omitted, got %+v", g.Word, g.Songs)
+		}
+	}
+}
+
+// TestSongTagSuggestionsKeepsPartiallyAppliedGroups is the flip side of
+// the fully-applied case above - a group stays listed as long as at
+// least one song in it still needs the tag.
+func TestSongTagSuggestionsKeepsPartiallyAppliedGroups(t *testing.T) {
+	songs := []pco.SongData{
+		song("1", "King of Kings"),
+		song("2", "Christ the King"),
+	}
+	tags := []scheduling.SongTag{songTag("1", scheduling.TagCategoryTheme, "King")}
+
+	groups := songTagSuggestions(songs, tags, nil)
+
+	found := false
+	for _, g := range groups {
+		if g.Word == "king" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error(`expected the "king" group to still be suggested while song 2 isn't tagged yet`)
+	}
+}
+
 // TestSongTitleWords locks in the tokenization rules songTagSuggestions
 // depends on: lowercase, split on punctuation (not just whitespace),
 // short/stopword/all-digit tokens dropped, and a repeated word in one
