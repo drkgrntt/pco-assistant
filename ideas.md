@@ -7,6 +7,55 @@ against what's actually available where noted; promote an idea to the
 ROADMAP once it's actually being considered for real, and delete it from
 here.
 
+## Planning annotations
+
+What a worship leader might want to attach to a song while actually
+planning, beyond what's there today - split by whether PCO already has
+somewhere to put it.
+
+**Already in PCO's data model, just not surfaced in this app:**
+
+- **Per-service item notes** - `pco.CreateItemParams`/`UpdateItemParams`
+  already have a writable `Description` field, and this app already calls
+  both when publishing - it's just never set. A note tied to *this one
+  occurrence* of the song ("cut the bridge this week," "new keys player,
+  go slow"), not the song forever. The cheapest idea in this whole file:
+  no SDK work, just a text field on the set builder and one more param on
+  publish.
+- **Arrangement notes** - `Arrangement.Notes` is likewise already
+  writable (`CreateArrangementParams`/`UpdateArrangementParams` both have
+  it), and the arrangement is already fetched for key/tempo (see Song
+  Info). A persistent note tied to the arrangement itself ("acoustic
+  version, no drums," "we usually do the bridge twice") - same cheapness
+  as item notes, just read+display+edit instead of write-only.
+- **Song structure** - `Arrangement.Sequence`/`SequenceShort` ("Intro,
+  Verse 1, Chorus..." / "Intro×2, V1, C, V2, C, Bridge, C, Outro") -
+  already fetched alongside key/tempo, currently discarded. Read-only in
+  the SDK today (not in either Create/UpdateArrangementParams), but
+  useful for flow/pacing at a glance without opening PCO.
+- **Whether a chord chart exists** - `Arrangement.HasChordChart` - a
+  simple "has chart" badge linking into PCO, so it's known before
+  rehearsal whether one's even there.
+- **A lightweight reference link** - PCO's Attachment resource supports
+  `linked_url`/`remote_link` (just a URL, no file upload) - "here's the
+  recording to learn this from." Much cheaper than the full file-upload
+  design considered (and declined) for the Song Info feature - this piece
+  alone doesn't need any of that machinery.
+
+**Not in PCO's data model at all - would need local storage, same
+pattern as `song_tags`/`song_relationships`:**
+
+- **Capo notes** - confirmed this session: PCO has zero API field for
+  capo anywhere. A local note ("capo 2, shapes of G") is the only way to
+  capture it at all.
+- **Instrumentation/gear needs** - "needs a cajon," "no electric this
+  week." Already possible with *zero code changes* today -
+  `song_tag_categories` is fully dynamic (see README), so this could just
+  be a new tag category added from the setup page right now, no feature
+  build required.
+- **Who typically leads this song** - distinct from the existing
+  preferred/discouraged binary; more like "this is Sarah's song."
+
 ## Songs
 
 - **Service length warning** - every plan item already carries a `Length`
@@ -20,7 +69,7 @@ here.
   key/tempo family and could use contrast. Same "free, already-fetched"
   shape as the reinforcement feature.
 - **Lead-time warning for new/complex songs** - the flip side of the
-  reinforcement feature just built: if a `tracked_new_songs` song (or one
+  reinforcement feature already built: if a `tracked_new_songs` song (or one
   tagged "hard") gets added to a plan less than N days before the service
   date, warn that the team may not have time to learn it. Reuses the table
   added for reinforcement.
@@ -58,8 +107,11 @@ here.
 
 ## Rough leverage-to-cost read
 
-Service length + key transitions are the cheapest (zero new PCO calls, same
-items already fetched for `ServiceOrder`) and closest cousins to the
-reinforcement feature just shipped. First-time-position pairing is probably
-the most valuable but costs a PCO call per assignment, same tier as today's
-serving-frequency check.
+Item notes and arrangement notes (Planning annotations, above) are the
+cheapest ideas in this whole file - both fields already exist and are
+already writable in the SDK, so this is display/edit UI, not new plumbing.
+Service length + key transitions are next (zero new PCO calls, same items
+already fetched for `ServiceOrder`) and are the closest cousins to the
+reinforcement feature already shipped. First-time-position pairing is
+probably the most valuable of the rest but costs a PCO call per
+assignment, same tier as today's serving-frequency check.
