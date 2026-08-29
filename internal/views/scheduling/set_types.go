@@ -146,6 +146,12 @@ type SetSongView struct {
 	// CandidateSongView.ArrangementInfo for why the full candidate list
 	// doesn't get the same live-fetch fallback.
 	ArrangementInfo string
+	// Notes is the song's Planning Center arrangement notes (see
+	// fetchAndCacheArrangementInfo's Notes field) - shown read-only on the
+	// song detail sidebar card (song_detail_card.templ) when a song row is
+	// clicked. Same cache-or-live-fetch resolution as ArrangementInfo,
+	// empty when there's nothing on the arrangement.
+	Notes string
 }
 
 // ServiceOrderRow is one row of the full order of service shown on the set

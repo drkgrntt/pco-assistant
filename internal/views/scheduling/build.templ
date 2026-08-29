@@ -227,7 +227,9 @@ templ BuildPlan(personName, organizationName string, setData SetBuilderData, ros
 			-->
 			<aside class="build-glance">
 				@SongPublishPanel(setData, activeTab == "team")
+				@SongDetailCards(setData, activeTab == "team")
 				@RosterPublishPanel(rosterData, activeTab != "team")
+				@PersonDetailCards(rosterData, activeTab != "team")
 				<div class="build-glance-card" id="build-glance-team" hidden?={ activeTab == "team" }>
 					<h3>Team, at a glance</h3>
 					@RosterStatusSummary(rosterData)

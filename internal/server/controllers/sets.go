@@ -1271,6 +1271,11 @@ func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizati
 
 		ss := row.Song
 		roleViews, _ := songRoleViews(rolesBySong, roleTypeLabels, ss.SongID)
+		// One lookup covers both ArrangementInfo (the formatted summary
+		// line) and Notes (the sidebar detail card - see songDetailCard,
+		// song_detail_card.templ) - see resolveArrangementCacheInfo's own
+		// doc comment for why this isn't two separate resolves.
+		arrangementInfo := resolveArrangementCacheInfo(ctx, store, organizationID, arrangementCache, ss.SongID)
 		out = append(out, views.ServiceOrderRow{
 			IsSong: true,
 			Song: views.SetSongView{
@@ -1282,7 +1287,8 @@ func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizati
 				Published:       ss.PCOItemID != "",
 				AnchorItemID:    ss.AnchorItemID,
 				Moved:           ss.Moved,
-				ArrangementInfo: resolveArrangementInfo(ctx, store, organizationID, arrangementCache, ss.SongID),
+				ArrangementInfo: formatArrangementInfo(arrangementInfo),
+				Notes:           arrangementInfo.Notes,
 			},
 		})
 	}
