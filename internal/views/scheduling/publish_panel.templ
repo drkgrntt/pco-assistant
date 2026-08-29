@@ -68,6 +68,25 @@ templ songPublishPanelContent(data SetBuilderData) {
 					<button type="submit" class="danger">Discard changes</button>
 				</form>
 			}
+			<!--
+				The low-cost alternative to Discard for when an already-
+				published song's key/length/arrangement was wrong or missing
+				at publish time (e.g. a bug since fixed, or a stale Song Info
+				cache entry) - see RefreshSongInfo. Only shown once there's at
+				least one already-published song to refresh; Discard above
+				still exists for anything this doesn't cover (title, order,
+				which songs are even in the set).
+			-->
+			if data.UnpublishedCount < len(data.SetSongs) {
+				<form
+					hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/refresh-info", data.ServiceTypeID, data.PlanID) }
+					hx-target="#set-builder-body"
+					hx-swap="outerHTML"
+					hx-confirm="Re-push every already-published song's current key, length, and arrangement to Planning Center? This only updates existing items - it doesn't add, remove, or reorder anything, so your local set stays exactly as it is."
+				>
+					<button type="submit">Refresh song info</button>
+				</form>
+			}
 		</div>
 		<!--
 			Trimmed to the gist - the full explanation (what publish/discard

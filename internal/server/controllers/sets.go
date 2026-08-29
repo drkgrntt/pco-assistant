@@ -494,6 +494,85 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 	return render(c, views.SetBuilderBody(data))
 }
 
+// RefreshSongInfo re-applies every already-published song's current
+// arrangement info (Description/Length/ArrangementID/KeyID) to its
+// existing plan item, via a plain PATCH per song - the low-cost
+// alternative to Discard-and-republish for when that info was wrong or
+// missing at the time it was originally published. PublishSet only ever
+// sets these once, at creation time (same as Title/ItemType/Sequence/
+// SongID) - it never goes back and fixes an already-published item, so
+// without this, correcting a stale/wrong item meant discarding the whole
+// local set and rebuilding it from scratch. Never touches Title/ItemType/
+// Sequence/SongID, and never creates, deletes, or reorders anything - a
+// targeted PATCH only, using the same cache-or-live-backfill resolution
+// PublishSet's own create path uses.
+func (sc *SchedulingController) RefreshSongInfo(c *fiber.Ctx) error {
+	ctx := middleware.RequestContext(c)
+	orgID := middleware.CurrentOrganizationID(c)
+	serviceTypeID := c.Params("service_type_id")
+	planID := c.Params("plan_id")
+
+	set, err := sc.store.GetOrCreateSet(ctx, orgID, serviceTypeID, planID)
+	if err != nil {
+		return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(ctx, orgID, serviceTypeID, planID, err.Error())))
+	}
+
+	setSongs, err := sc.store.ListSetSongs(ctx, set.ID)
+	if err != nil {
+		return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(ctx, orgID, serviceTypeID, planID, err.Error())))
+	}
+
+	songs, _ := fetchAllSongs(ctx)
+	titles := songTitleMap(songs)
+	arrangementCache, _ := sc.store.SongArrangementInfo(ctx, orgID)
+
+	var failures []string
+	refreshed := 0
+	for _, ss := range setSongs {
+		if ss.PCOItemID == "" {
+			continue
+		}
+		title := titleOrID(titles, ss.SongID)
+
+		info, ok := arrangementCache[ss.SongID]
+		if !ok || info.ArrangementID == "" {
+			if fetched, err := fetchAndCacheArrangementInfo(ctx, sc.store, orgID, ss.SongID); err == nil {
+				info = fetched
+			}
+		}
+
+		length := info.LengthSeconds
+		if _, err := pco.UpdateItem(ctx, serviceTypeID, planID, ss.PCOItemID, &pco.UpdateItemParams{
+			Description:   &info.Notes,
+			Length:        &length,
+			ArrangementID: &info.ArrangementID,
+			KeyID:         &info.KeyID,
+		}); err != nil {
+			failures = append(failures, fmt.Sprintf("%s: %s", title, err.Error()))
+			continue
+		}
+		refreshed++
+	}
+
+	publishMsg := fmt.Sprintf("Refreshed %d song(s).", refreshed)
+	if refreshed == 0 && len(failures) == 0 {
+		publishMsg = "Nothing to refresh - no published songs in this set yet."
+	}
+
+	errMsg := ""
+	if len(failures) > 0 {
+		errMsg = "Failed to refresh: " + strings.Join(failures, "; ")
+	}
+
+	data := sc.buildSetBuilderData(ctx, orgID, serviceTypeID, planID)
+	data.PublishMsg = publishMsg
+	if errMsg != "" {
+		data.ErrMsg = appendErr(errMsg, data.ErrMsg)
+	}
+
+	return render(c, views.SetBuilderBody(data))
+}
+
 // RevertSet is PublishSet's opposite: instead of pushing local changes to
 // Planning Center, it discards them and rebuilds the local set from
 // whatever Planning Center's plan currently has, so it's back in sync.

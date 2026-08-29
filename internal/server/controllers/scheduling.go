@@ -299,6 +299,7 @@ func (sc *SchedulingController) RegisterRoutes(router fiber.Router) {
 	group.Post("/sets/:service_type_id/:plan_id/set-songs/:set_song_id/reposition", sc.RepositionSetSong)
 	group.Post("/sets/:service_type_id/:plan_id/set-songs/:set_song_id/duplicate", sc.DuplicateSetSong)
 	group.Post("/sets/:service_type_id/:plan_id/publish", sc.PublishSet)
+	group.Post("/sets/:service_type_id/:plan_id/refresh-info", sc.RefreshSongInfo)
 	group.Post("/sets/:service_type_id/:plan_id/revert", sc.RevertSet)
 }
 
