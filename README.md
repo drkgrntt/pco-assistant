@@ -55,6 +55,12 @@ count into Stripe as that subscription's line-item quantity.
   whole library at once from the Song Info page
 - **Song / Person Preferences** - note who's preferred or discouraged for a
   given song
+- **Song notes** - click a song's row on the Build page to open its detail
+  card: "This week's note" is a local per-occurrence note ("cut the bridge
+  this week") that reaches Planning Center as that item's Description on
+  the next Publish/Refresh, and "Song notes" is a persistent note tied to
+  the song's arrangement itself ("acoustic version, no drums") that saves
+  straight to Planning Center immediately
 - **Build a Service (Songs tab)** - pick an upcoming plan and build its
   song lineup against the plan's *full* order of service (including
   template headers and non-song items already in Planning Center, not just

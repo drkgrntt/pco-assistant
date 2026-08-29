@@ -147,11 +147,20 @@ type SetSongView struct {
 	// doesn't get the same live-fetch fallback.
 	ArrangementInfo string
 	// Notes is the song's Planning Center arrangement notes (see
-	// fetchAndCacheArrangementInfo's Notes field) - shown read-only on the
-	// song detail sidebar card (song_detail_card.templ) when a song row is
-	// clicked. Same cache-or-live-fetch resolution as ArrangementInfo,
-	// empty when there's nothing on the arrangement.
+	// fetchAndCacheArrangementInfo's Notes field) - persistent across every
+	// plan this song is ever used in. Editable on the song detail sidebar
+	// card (song_detail_card.templ), which writes straight to Planning
+	// Center's Arrangement resource on save (see UpdateArrangementNotes) -
+	// not part of the local draft/publish cycle, since it isn't
+	// per-occurrence data.
 	Notes string
+	// Description is this one occurrence's local per-occurrence note (see
+	// scheduling.SetSong.Description) - "cut the bridge this week," not a
+	// persistent fact about the song. Unlike Notes, editing this only
+	// updates the local draft (UpdateSetSongDescription); it reaches
+	// Planning Center on the next Publish or Refresh song info, same as
+	// every other local set change.
+	Description string
 }
 
 // ServiceOrderRow is one row of the full order of service shown on the set

@@ -82,9 +82,50 @@ templ songDetailCard(data SetBuilderData, song SetSongView) {
 				<span class="badge status-pending" title="Moved since it was last published">Moved</span>
 			}
 		</div>
-		if song.Notes != "" {
-			<p class="build-detail-notes">{ song.Notes }</p>
-		}
+		<div class="build-detail-notes-group">
+			<!--
+				This week's note (SetSongView.Description) - a local draft
+				edit, same as everything else on this page: it reaches
+				Planning Center as this item's Description on the next
+				Publish or Refresh song info, not immediately (see
+				UpdateSetSongDescription).
+			-->
+			<form
+				class="build-detail-note-form"
+				hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/description", data.ServiceTypeID, data.PlanID, song.ID) }
+				hx-target="#set-builder-body"
+				hx-swap="outerHTML"
+			>
+				<label>
+					This week's note
+					<textarea name="description" rows="2" placeholder="e.g. cut the bridge this week">{ song.Description }</textarea>
+				</label>
+				<button type="submit">Save note</button>
+				<p class="muted">Saved here - Publish or Refresh song info to send it to Planning Center.</p>
+			</form>
+			<!--
+				Song notes (SetSongView.Notes) - persistent across every plan
+				this song is used in, unlike the per-occurrence note above.
+				Saves straight to Planning Center's Arrangement resource
+				immediately (see UpdateArrangementNotes), the same "ad hoc
+				setup-level write" shape as the Tag/Relate/Mark role actions
+				below.
+			-->
+			<form
+				class="build-detail-note-form"
+				hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/song-arrangement-notes", data.ServiceTypeID, data.PlanID) }
+				hx-target="#set-builder-body"
+				hx-swap="outerHTML"
+			>
+				<input type="hidden" name="song_id" value={ song.SongID }/>
+				<label>
+					Song notes (every plan)
+					<textarea name="notes" rows="2" placeholder="e.g. acoustic version, no drums">{ song.Notes }</textarea>
+				</label>
+				<button type="submit">Save song notes</button>
+				<p class="muted">Saves straight to this song's Planning Center arrangement.</p>
+			</form>
+		</div>
 		<div class="build-detail-actions">
 			<button
 				type="button"

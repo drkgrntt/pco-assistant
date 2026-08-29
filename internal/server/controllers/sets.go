@@ -273,6 +273,62 @@ func (sc *SchedulingController) DuplicateSetSong(c *fiber.Ctx) error {
 	return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(middleware.RequestContext(c), orgID, serviceTypeID, planID, errMsg)))
 }
 
+// UpdateSetSongDescription sets one set song's local per-occurrence note
+// (see scheduling.SetSong.Description) - a plain local draft edit, not a
+// live Planning Center write. It reaches Planning Center as that item's
+// Description on the next Publish or Refresh song info, same as every
+// other local change on this page (see itemDescriptionFor, scheduling.go).
+func (sc *SchedulingController) UpdateSetSongDescription(c *fiber.Ctx) error {
+	orgID := middleware.CurrentOrganizationID(c)
+	serviceTypeID := c.Params("service_type_id")
+	planID := c.Params("plan_id")
+
+	errMsg := ""
+	if rowID, err := c.ParamsInt("set_song_id"); err != nil {
+		errMsg = "set_song_id must be an integer"
+	} else if set, err := sc.store.GetOrCreateSet(c.Context(), orgID, serviceTypeID, planID); err != nil {
+		errMsg = err.Error()
+	} else if err := sc.store.UpdateSetSongDescription(c.Context(), set.ID, int64(rowID), c.FormValue("description")); err != nil {
+		errMsg = err.Error()
+	}
+
+	return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(middleware.RequestContext(c), orgID, serviceTypeID, planID, errMsg)))
+}
+
+// UpdateArrangementNotes sets songID's persistent arrangement notes -
+// unlike UpdateSetSongDescription above, this writes straight to Planning
+// Center (the Arrangement resource, see pco.UpdateArrangement) immediately,
+// the same "ad hoc setup-level write" shape as QuickAddSongTag/
+// QuickAddSongRelationship/QuickAddSongRole, just targeting a real PCO
+// record instead of this app's own tables. The local cache is updated
+// alongside it so the song detail card's next render (and every other
+// reader of song_arrangement_cache) reflects the new notes without a
+// separate Song Info sync.
+func (sc *SchedulingController) UpdateArrangementNotes(c *fiber.Ctx) error {
+	ctx := middleware.RequestContext(c)
+	orgID := middleware.CurrentOrganizationID(c)
+	serviceTypeID := c.Params("service_type_id")
+	planID := c.Params("plan_id")
+	songID := c.FormValue("song_id")
+	notes := c.FormValue("notes")
+
+	errMsg := ""
+	cache, _ := sc.store.SongArrangementInfo(ctx, orgID)
+	info := resolveArrangementCacheInfo(ctx, sc.store, orgID, cache, songID)
+	if info.ArrangementID == "" {
+		errMsg = "this song has no Planning Center arrangement to attach notes to"
+	} else if _, err := pco.UpdateArrangement(ctx, songID, info.ArrangementID, &pco.UpdateArrangementParams{Notes: &notes}); err != nil {
+		errMsg = "updating arrangement notes in Planning Center: " + err.Error()
+	} else {
+		info.Notes = notes
+		if err := sc.store.UpsertSongArrangementInfo(ctx, orgID, songID, info); err != nil {
+			errMsg = "saved to Planning Center but failed to update the local cache: " + err.Error()
+		}
+	}
+
+	return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(ctx, orgID, serviceTypeID, planID, errMsg)))
+}
+
 // PublishSet fully syncs the draft set to the real Planning Center plan:
 //   - songs removed/replaced since the last publish (tombstoned rows, see
 //     scheduling.Store.RemoveSongFromSet/ReplaceSongInSet) have their PCO
@@ -417,7 +473,7 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 						SongID:        ss.SongID,
 						ArrangementID: info.ArrangementID,
 						KeyID:         info.KeyID,
-						Description:   info.Notes,
+						Description:   itemDescriptionFor(ss, info),
 						Length:        info.LengthSeconds,
 					})
 					if err != nil {
@@ -542,8 +598,9 @@ func (sc *SchedulingController) RefreshSongInfo(c *fiber.Ctx) error {
 		}
 
 		length := info.LengthSeconds
+		description := itemDescriptionFor(ss, info)
 		if _, err := pco.UpdateItem(ctx, serviceTypeID, planID, ss.PCOItemID, &pco.UpdateItemParams{
-			Description:   &info.Notes,
+			Description:   &description,
 			Length:        &length,
 			ArrangementID: &info.ArrangementID,
 			KeyID:         &info.KeyID,
@@ -1289,6 +1346,7 @@ func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizati
 				Moved:           ss.Moved,
 				ArrangementInfo: formatArrangementInfo(arrangementInfo),
 				Notes:           arrangementInfo.Notes,
+				Description:     ss.Description,
 			},
 		})
 	}

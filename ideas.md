@@ -127,19 +127,13 @@ somewhere to put it.
 
 **Already in PCO's data model, just not surfaced in this app:**
 
-- **Per-service item notes** - `pco.CreateItemParams`/`UpdateItemParams`
-  already have a writable `Description` field, and this app already calls
-  both when publishing - it's just never set. A note tied to *this one
-  occurrence* of the song ("cut the bridge this week," "new keys player,
-  go slow"), not the song forever. The cheapest idea in this whole file:
-  no SDK work, just a text field on the set builder and one more param on
-  publish.
-- **Arrangement notes** - `Arrangement.Notes` is likewise already
-  writable (`CreateArrangementParams`/`UpdateArrangementParams` both have
-  it), and the arrangement is already fetched for key/tempo (see Song
-  Info). A persistent note tied to the arrangement itself ("acoustic
-  version, no drums," "we usually do the bridge twice") - same cheapness
-  as item notes, just read+display+edit instead of write-only.
+- ~~Per-service item notes~~ / ~~Arrangement notes~~ - **shipped.** The
+  song detail card (click a song row in the Build page) has both: "This
+  week's note" (local per-occurrence, reaches Planning Center as that
+  item's Description on the next Publish/Refresh) and "Song notes (every
+  plan)" (persistent, saves straight to the Arrangement resource
+  immediately). See `SetSongView.Description`/`.Notes`,
+  `UpdateSetSongDescription`, `UpdateArrangementNotes`.
 - **Song structure** - `Arrangement.Sequence`/`SequenceShort` ("Intro,
   Verse 1, Chorus..." / "Intro×2, V1, C, V2, C, Bridge, C, Outro") -
   already fetched alongside key/tempo, currently discarded. Read-only in
@@ -307,12 +301,13 @@ doesn't exist yet as a single view.
 
 ## Rough leverage-to-cost read
 
-Item notes and arrangement notes (Planning annotations, above) are the
-cheapest ideas in this whole file - both fields already exist and are
-already writable in the SDK, so this is display/edit UI, not new plumbing.
-Service length + key transitions are next (zero new PCO calls, same items
-already fetched for `ServiceOrder`) and are the closest cousins to the
-reinforcement feature already shipped. First-time-position pairing is
+Item notes and arrangement notes (Planning annotations, above) were the
+cheapest ideas in this whole file, and are now shipped - both fields
+already existed and were already writable in the SDK, so it was
+display/edit UI, not new plumbing. Service length + key transitions are
+next (zero new PCO calls, same items already fetched for `ServiceOrder`)
+and are the closest cousins to the reinforcement feature already shipped.
+First-time-position pairing is
 probably the most valuable of the rest but costs a PCO call per
 assignment, same tier as today's serving-frequency check.
 

@@ -112,6 +112,19 @@ func fetchAndCacheArrangementInfo(ctx context.Context, store *scheduling.Store, 
 	return info, nil
 }
 
+// itemDescriptionFor resolves what to publish as a set song's plan item
+// Description: its own local per-occurrence note (SetSong.Description) when
+// there is one, falling back to the song's persistent arrangement notes
+// (info.Notes) otherwise - the same default this app has used since before
+// per-occurrence notes were editable, just no longer overriding a note
+// someone's actually set for this specific week.
+func itemDescriptionFor(ss scheduling.SetSong, info scheduling.SongArrangementInfo) string {
+	if ss.Description != "" {
+		return ss.Description
+	}
+	return info.Notes
+}
+
 // resolveArrangementCacheInfo returns songID's full cached arrangement
 // info (not just the formatted display string - see resolveArrangementInfo
 // below for that), preferring the already-loaded cache (zero Planning
@@ -297,6 +310,7 @@ func (sc *SchedulingController) RegisterRoutes(router fiber.Router) {
 	group.Post("/build/:service_type_id/:plan_id/song-tags", sc.QuickAddSongTag)
 	group.Post("/build/:service_type_id/:plan_id/song-relationships", sc.QuickAddSongRelationship)
 	group.Post("/build/:service_type_id/:plan_id/song-roles", sc.QuickAddSongRole)
+	group.Post("/build/:service_type_id/:plan_id/song-arrangement-notes", sc.UpdateArrangementNotes)
 	group.Post("/build/:service_type_id/:plan_id/person-relationships", sc.QuickAddPersonRelationship)
 	group.Post("/build/:service_type_id/:plan_id/position-preferences", sc.QuickAddPositionPreference)
 
@@ -310,6 +324,7 @@ func (sc *SchedulingController) RegisterRoutes(router fiber.Router) {
 	group.Post("/sets/:service_type_id/:plan_id/set-songs/:set_song_id/replace", sc.ReplaceSetSong)
 	group.Post("/sets/:service_type_id/:plan_id/set-songs/:set_song_id/reposition", sc.RepositionSetSong)
 	group.Post("/sets/:service_type_id/:plan_id/set-songs/:set_song_id/duplicate", sc.DuplicateSetSong)
+	group.Post("/sets/:service_type_id/:plan_id/set-songs/:set_song_id/description", sc.UpdateSetSongDescription)
 	group.Post("/sets/:service_type_id/:plan_id/publish", sc.PublishSet)
 	group.Post("/sets/:service_type_id/:plan_id/refresh-info", sc.RefreshSongInfo)
 	group.Post("/sets/:service_type_id/:plan_id/revert", sc.RevertSet)

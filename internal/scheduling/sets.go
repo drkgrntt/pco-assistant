@@ -49,6 +49,14 @@ type SetSong struct {
 	// publish; never set on rows RevertSet rebuilds fresh from Planning
 	// Center, since those start in sync by definition.
 	Moved bool `json:"moved"`
+	// Description is a local, editable per-occurrence note for this one
+	// song in this one set ("cut the bridge this week," "new keys player,
+	// go slow") - distinct from the song's persistent arrangement notes
+	// (song_arrangement_cache.Notes). Empty means "nothing set yet," not
+	// "cleared to blank on purpose" - PublishSet/RefreshSongInfo fall back
+	// to the arrangement's own notes as the item's Description default
+	// when this is empty, same as before this field existed.
+	Description string `json:"description"`
 }
 
 // FindSet looks up an existing set without creating one - unlike
@@ -104,7 +112,7 @@ func (s *Store) GetOrCreateSet(ctx context.Context, organizationID, serviceTypeI
 // see ListPendingDeletions for songs awaiting removal from Planning Center.
 func (s *Store) ListSetSongs(ctx context.Context, setID int64) ([]SetSong, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, set_id, song_id, position, created_at, pco_item_id, anchor_item_id, moved
+		SELECT id, set_id, song_id, position, created_at, pco_item_id, anchor_item_id, moved, description
 		FROM set_songs
 		WHERE set_id = $1 AND pending_delete = false
 		ORDER BY position ASC
@@ -118,7 +126,7 @@ func (s *Store) ListSetSongs(ctx context.Context, setID int64) ([]SetSong, error
 	for rows.Next() {
 		var ss SetSong
 		var pcoItemID sql.NullString
-		if err := rows.Scan(&ss.ID, &ss.SetID, &ss.SongID, &ss.Position, &ss.CreatedAt, &pcoItemID, &ss.AnchorItemID, &ss.Moved); err != nil {
+		if err := rows.Scan(&ss.ID, &ss.SetID, &ss.SongID, &ss.Position, &ss.CreatedAt, &pcoItemID, &ss.AnchorItemID, &ss.Moved, &ss.Description); err != nil {
 			return nil, err
 		}
 		ss.PCOItemID = pcoItemID.String
@@ -126,6 +134,18 @@ func (s *Store) ListSetSongs(ctx context.Context, setID int64) ([]SetSong, error
 	}
 
 	return songs, rows.Err()
+}
+
+// UpdateSetSongDescription sets rowID's local per-occurrence note (see
+// SetSong.Description) - a plain field update, not part of the publish
+// cycle: it takes effect in Planning Center on the next Publish or Refresh
+// song info, same as every other local draft edit on this page (title
+// isn't editable here, but tags/relationships/roles all work the same way).
+func (s *Store) UpdateSetSongDescription(ctx context.Context, setID, rowID int64, description string) error {
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE set_songs SET description = $1 WHERE id = $2 AND set_id = $3 AND pending_delete = false
+	`, description, rowID, setID)
+	return err
 }
 
 // ListPendingDeletions returns songs that were removed/replaced locally
