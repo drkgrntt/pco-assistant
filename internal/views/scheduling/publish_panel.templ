@@ -2,6 +2,27 @@ package scheduling
 
 import "fmt"
 
+// hasPendingPublish reports whether there's anything for Publish to
+// actually do - every kind of local change PublishSet covers (sets.go):
+// creates, deletes, reorders, and (as of the InfoPending work) pending
+// note/key edits on already-published songs. Also gates Discard's own
+// visibility below - both buttons only make sense when the same thing is
+// true, "there's a real local change sitting here."
+func hasPendingPublish(data SetBuilderData) bool {
+	return data.UnpublishedCount > 0 || data.PendingDeleteCount > 0 || data.ReorderPending || data.InfoPendingCount > 0
+}
+
+// publishButtonTitle explains why the Publish button is disabled - "" (no
+// tooltip) the rest of the time, since a plain title on an enabled button
+// would just repeat what the button's own label and the page around it
+// already say.
+func publishButtonTitle(data SetBuilderData) string {
+	if hasPendingPublish(data) {
+		return ""
+	}
+	return "Nothing to publish - your local set already matches Planning Center"
+}
+
 // SongPublishPanel is the Songs tab's publish/discard controls, rendered
 // in the Build page's sidebar (see build.templ) instead of inline under
 // the order-of-service table - the whole point of a margin once there's a
@@ -54,11 +75,16 @@ templ songPublishPanelContent(data SetBuilderData) {
 				hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/publish", data.ServiceTypeID, data.PlanID) }
 				hx-target="#set-builder-body"
 				hx-swap="outerHTML"
-				hx-confirm={ fmt.Sprintf("Sync this set to Planning Center? %d song(s) added, %d removed, and any already-published songs reordered to match.", data.UnpublishedCount, data.PendingDeleteCount) }
+				hx-confirm={ fmt.Sprintf("Sync this set to Planning Center? %d song(s) added, %d removed, any already-published songs reordered to match, and %d note/key update(s) pushed.", data.UnpublishedCount, data.PendingDeleteCount, data.InfoPendingCount) }
 			>
-				<button type="submit" class="primary">Publish to Planning Center</button>
+				<button
+					type="submit"
+					class="primary"
+					disabled?={ !hasPendingPublish(data) }
+					title={ publishButtonTitle(data) }
+				>Publish to Planning Center</button>
 			</form>
-			if data.UnpublishedCount > 0 || data.PendingDeleteCount > 0 || data.ReorderPending || data.InfoPendingCount > 0 {
+			if hasPendingPublish(data) {
 				<form
 					hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/revert", data.ServiceTypeID, data.PlanID) }
 					hx-target="#set-builder-body"

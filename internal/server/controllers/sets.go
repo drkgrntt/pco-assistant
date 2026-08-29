@@ -603,6 +603,34 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 					ss.PCOItemID = item.Data.ID
 					created++
 				} else {
+					// Already published - nothing to create, but a pending
+					// note/key edit (see SetSong.InfoPending) still needs to
+					// reach Planning Center, and Publish is the one action a
+					// user reasonably expects to "sync everything," not just
+					// creates/deletes/reorders. Skipped entirely when
+					// nothing's pending, so a plain reorder-only publish
+					// doesn't cost an extra PCO call per already-in-sync song.
+					if ss.InfoPending {
+						info, ok := arrangementCache[ss.SongID]
+						if !ok || info.ArrangementID == "" {
+							if fetched, err := fetchAndCacheArrangementInfo(ctx, sc.store, orgID, ss.SongID); err == nil {
+								info = fetched
+							}
+						}
+						length := info.LengthSeconds
+						description := itemDescriptionFor(ss, info)
+						keyID := resolveKeyID(ctx, ss.SongID, info.ArrangementID, ss.KeyOverride, info.KeyID)
+						if _, err := pco.UpdateItem(ctx, serviceTypeID, planID, ss.PCOItemID, &pco.UpdateItemParams{
+							Description:   &description,
+							Length:        &length,
+							ArrangementID: &info.ArrangementID,
+							KeyID:         &keyID,
+						}); err != nil {
+							failures = append(failures, fmt.Sprintf("%s: %s", title, err.Error()))
+						} else {
+							_ = sc.store.ClearInfoPending(ctx, set.ID, ss.ID)
+						}
+					}
 					updated++
 				}
 				publishable = append(publishable, ss)
