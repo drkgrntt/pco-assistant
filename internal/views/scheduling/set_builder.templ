@@ -25,6 +25,24 @@ templ SetBuilderBody(data SetBuilderData) {
 	@songPublishPanelOOB(data)
 }
 
+// nextSongID returns the SongID of the next song in order after index i -
+// "next" meaning the next row that IsSong, skipping over any header/
+// foreign items in between, not just order[i+1]. Used to default the row
+// menu's "Relate to another song" picker to whatever's actually adjacent
+// in the order of service, since that's by far the most common pair to
+// relate - the same adjacency SongPairPrompt above already captures
+// automatically right after an add; this just offers the same default
+// when relating from the row menu instead. Returns "" when there's no
+// next song (i is the last song in the order).
+func nextSongID(order []ServiceOrderRow, i int) string {
+	for j := i + 1; j < len(order); j++ {
+		if order[j].IsSong {
+			return order[j].Song.SongID
+		}
+	}
+	return ""
+}
+
 // SetBuilderBodyContent is the actual content - split out from
 // SetBuilderBody so the Build page's initial full-page render
 // (build.templ) can embed just this, without also embedding
@@ -277,11 +295,12 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 											<input type="hidden" name="song_id_a" value={ row.Song.SongID }/>
 											<label>
 												Song
+												<!-- Defaults to the next song in the order (see nextSongID). -->
 												<select name="song_id_b" required>
-													<option value="" selected disabled>Choose a song</option>
+													<option value="" disabled selected?={ nextSongID(data.ServiceOrder, i) == "" }>Choose a song</option>
 													for _, song := range data.AllSongs {
 														if song.ID != row.Song.SongID {
-															<option value={ song.ID }>{ song.Attributes.Title }</option>
+															<option value={ song.ID } selected?={ song.ID == nextSongID(data.ServiceOrder, i) }>{ song.Attributes.Title }</option>
 														}
 													}
 												</select>
