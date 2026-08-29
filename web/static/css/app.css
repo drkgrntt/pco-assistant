@@ -607,10 +607,6 @@ header.site form {
   color: var(--muted);
 }
 
-.foreign-row td:first-child {
-  font-variant-numeric: tabular-nums;
-}
-
 /* Header items are section dividers in the real order of service (e.g.
    "Welcome," "Sermon") - rendered as their own full-width row rather than
    a normal 4-column one, so they read as landmarks rather than content. */
@@ -622,20 +618,6 @@ header.site form {
   letter-spacing: 0.03em;
   color: var(--muted);
   border-bottom-color: var(--text);
-}
-
-/* display: flex directly on the <td> (rather than an inner wrapper) used
-   to break the cell out of the table's normal row-height/vertical-align
-   handling in some browsers - the drag handle and number would end up
-   misaligned with the rest of the row whenever a neighboring cell (e.g.
-   the actions column, with its buttons/select) made the row taller. The
-   flex layout now lives on .row-number, an inline element inside the
-   <td>, so the <td> itself stays a normal, vertically-centered cell. */
-.row-number {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-variant-numeric: tabular-nums;
 }
 
 /* touch-action: none stops a touch-drag on the handle from also scrolling

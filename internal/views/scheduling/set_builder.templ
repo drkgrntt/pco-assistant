@@ -2,7 +2,6 @@ package scheduling
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
 	"pco-assistant/internal/scheduling"
@@ -110,14 +109,14 @@ templ SetBuilderBody(data SetBuilderData) {
 			<table>
 				<thead>
 					<tr>
-						<th>#</th>
+						<th></th>
 						<th>Item</th>
 						<th>Tags</th>
 						<th></th>
 					</tr>
 				</thead>
 				<tbody>
-					for i, row := range data.ServiceOrder {
+					for _, row := range data.ServiceOrder {
 						if row.IsSong {
 							<tr
 								class="song-row"
@@ -126,11 +125,8 @@ templ SetBuilderBody(data SetBuilderData) {
 								data-reposition-url={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/reposition", data.ServiceTypeID, data.PlanID, row.Song.ID) }
 							>
 								<td>
-									<span class="row-number">
-										<span class="drag-handle" title="Drag to reorder">
-											@views.IconDrag()
-										</span>
-										{ strconv.Itoa(i + 1) }
+									<span class="drag-handle" title="Drag to reorder">
+										@views.IconDrag()
 									</span>
 								</td>
 								<td>
@@ -326,7 +322,7 @@ templ SetBuilderBody(data SetBuilderData) {
 							</tr>
 						} else {
 							<tr class="foreign-row" data-token={ "item:" + row.ItemID }>
-								<td>{ strconv.Itoa(i + 1) }</td>
+								<td></td>
 								<td>{ row.ItemTitle }</td>
 								<td><span class="muted">{ row.ItemType }</span></td>
 								<td></td>
