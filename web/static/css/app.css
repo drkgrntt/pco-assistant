@@ -383,14 +383,16 @@ main:has(.build-layout) {
   gap: var(--space-3);
 }
 
-.build-glance-card {
+.build-glance-card,
+.build-publish-card {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: var(--space-3) var(--space-4);
 }
 
-.build-glance-card h3 {
+.build-glance-card h3,
+.build-publish-card h3 {
   margin: 0 0 var(--space-2);
   font-size: var(--text-sm);
   font-weight: var(--font-semibold);
@@ -401,6 +403,38 @@ main:has(.build-layout) {
 
 .build-glance-card .status-summary {
   margin-block: 0 var(--space-3);
+}
+
+/* The publish/discard cards (see SongPublishPanel/RosterPublishPanel) get
+   an accent top edge - the same "this one does something" treatment the
+   row quick-action forms (.quick-action-panel) use elsewhere on this page -
+   to stand out from the otherwise read-only glance cards beside them.
+   Their .publish-actions also gets its own layout here: the row of buttons
+   that reads fine full-width everywhere else it's used (the style guide's
+   demo, e.g.) just wraps mid-label into a scrunched stack in a 15rem
+   column. Full-width and stacked instead reads as a deliberate sidebar
+   action list, and the smaller type keeps the pending-changes list and
+   explanatory line from dominating a card this narrow. */
+.build-publish-card {
+  border-top: 2px solid var(--accent);
+}
+
+.build-publish-card .publish-actions {
+  flex-direction: column;
+}
+
+.build-publish-card .publish-actions button {
+  width: 100%;
+}
+
+.build-publish-card .warning,
+.build-publish-card .pending-changes,
+.build-publish-card p.muted {
+  font-size: var(--text-sm);
+}
+
+.build-publish-card .pending-changes {
+  padding-left: var(--space-4);
 }
 
 /* The glance card's actual content - song order or position/name list

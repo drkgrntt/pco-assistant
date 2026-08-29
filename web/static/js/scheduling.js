@@ -173,6 +173,13 @@ function toggleBuildTab(tabName) {
     var cardTab = card.id.replace("build-glance-", "");
     card.hidden = cardTab === tabName;
   });
+  // The sidebar's publish card is the opposite: only the tab you're
+  // actually ON has anything to publish from here, so it's the only one
+  // shown (see SongPublishPanel/RosterPublishPanel, build.templ).
+  document.querySelectorAll(".build-publish-card").forEach(function (card) {
+    var cardTab = card.id.replace("build-publish-", "");
+    card.hidden = cardTab !== tabName;
+  });
   // Keeps the address bar (and anything copied from it) pointing at
   // whichever tab is actually open - see BuildPlanPage's ?tab= query param.
   // replaceState, not pushState: switching tabs is a view change, not a

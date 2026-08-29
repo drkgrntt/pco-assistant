@@ -217,16 +217,17 @@ templ BuildPlan(personName, organizationName string, setData SetBuilderData, ros
 				</div>
 			</div>
 			<!--
-				The publish/discard controls for both tabs live here too, not
-				just whichever tab is open - see SongPublishPanel/
-				RosterPublishPanel's own doc comments for how they stay synced
-				via htmx out-of-band swaps even though the forms that trigger
-				those swaps live in the (structurally separate) tab panels
-				beside them, not inside these cards.
+				The publish/discard controls live here too, not inline under
+				each tab's own table - but only the open tab's, unlike the
+				glance cards below (which show the *other* tab). See
+				SongPublishPanel/RosterPublishPanel's own doc comments for how
+				they stay synced via htmx out-of-band swaps even though the
+				forms that trigger those swaps live in the (structurally
+				separate) tab panels beside them, not inside these cards.
 			-->
 			<aside class="build-glance">
-				@SongPublishPanel(setData)
-				@RosterPublishPanel(rosterData)
+				@SongPublishPanel(setData, activeTab == "team")
+				@RosterPublishPanel(rosterData, activeTab != "team")
 				<div class="build-glance-card" id="build-glance-team" hidden?={ activeTab == "team" }>
 					<h3>Team, at a glance</h3>
 					@RosterStatusSummary(rosterData)

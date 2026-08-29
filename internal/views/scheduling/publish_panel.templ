@@ -3,28 +3,32 @@ package scheduling
 import "fmt"
 
 // SongPublishPanel is the Songs tab's publish/discard controls, rendered
-// once in the Build page's sidebar (see build.templ) instead of inline
-// under the order-of-service table - the whole point of a margin once
-// there's a second column to put things in. Every add/remove/duplicate/
-// replace/tag/relate/role/publish/discard action on the Songs tab still
-// returns SetBuilderBody as its htmx response (hx-target="#set-builder-
-// body"), which no longer renders this panel itself - instead it carries
-// an out-of-band copy (songPublishPanelOOB below) that updates this same
-// sidebar card in place via hx-swap-oob, regardless of where in the
-// document it actually lives. So this card stays in sync with every
-// mutation, not just an explicit Publish/Discard click.
-templ SongPublishPanel(data SetBuilderData) {
-	<div class="build-glance-card" id="set-builder-publish">
+// in the Build page's sidebar (see build.templ) instead of inline under
+// the order-of-service table - the whole point of a margin once there's a
+// second column to put things in. Shown only while the Songs tab is
+// actually open (hidden mirrors build.templ's activeTab, same as the
+// glance cards but inverted - this is the tab you're ON, not the other
+// one) - toggleBuildTab (scheduling.js) flips it by id, same as it does
+// the glance cards.
+//
+// Every add/remove/duplicate/replace/tag/relate/role/publish/discard
+// action on the Songs tab still returns SetBuilderBody as its htmx
+// response (hx-target="#set-builder-body"), which no longer renders this
+// panel itself - instead it carries an out-of-band copy (songPublishPanelOOB
+// below) that updates this same sidebar card in place via hx-swap-oob,
+// regardless of where in the document it actually lives. So this card
+// stays in sync with every mutation, not just an explicit Publish/Discard
+// click. songPublishPanelOOB never sets hidden itself: it only ever fires
+// while its own tab's now-visible forms are what triggered it, so the tab
+// it belongs to is already the active one by definition.
+templ SongPublishPanel(data SetBuilderData, hidden bool) {
+	<div class="build-publish-card" id="build-publish-songs" hidden?={ hidden }>
 		@songPublishPanelContent(data)
 	</div>
 }
 
-// songPublishPanelOOB is what SetBuilderBody actually emits on every
-// swap - same content as SongPublishPanel, wrapped for htmx's
-// out-of-band swap instead of a normal in-place render. See
-// SongPublishPanel's doc comment for why.
 templ songPublishPanelOOB(data SetBuilderData) {
-	<div class="build-glance-card" id="set-builder-publish" hx-swap-oob="true">
+	<div class="build-publish-card" id="build-publish-songs" hx-swap-oob="true">
 		@songPublishPanelContent(data)
 	</div>
 }
@@ -38,7 +42,7 @@ templ songPublishPanelContent(data SetBuilderData) {
 			</div>
 		}
 		if len(data.PendingChanges) > 0 {
-			<p><strong>Pending changes</strong> - not yet reflected in Planning Center:</p>
+			<p><strong>Pending changes</strong>:</p>
 			<ul class="pending-changes">
 				for _, change := range data.PendingChanges {
 					<li>{ change }</li>
@@ -65,14 +69,14 @@ templ songPublishPanelContent(data SetBuilderData) {
 				</form>
 			}
 		</div>
-		<p class="muted">
-			Publishing fully syncs this set to the plan: adds new songs, deletes
-			ones you removed/replaced here, and reorders everything to match the
-			current order of service, including each song's chosen position. It
-			never touches or reorders plan items this tool didn't create.
-			Discarding does the opposite - it throws away every local change and
-			rebuilds this set from what's live in Planning Center right now.
-		</p>
+		<!--
+			Trimmed to the gist - the full explanation (what publish/discard
+			each actually do, item by item) lives in the buttons' own
+			hx-confirm text above, right where it matters (before someone
+			commits to the click), so it doesn't need repeating in prose that
+			has to wrap through a 15rem column too.
+		-->
+		<p class="muted">Publishing syncs this set to Planning Center. Discarding rebuilds it from what's live there now.</p>
 	} else {
 		<p class="muted">Nothing to publish yet - add a song to get started.</p>
 	}
@@ -80,15 +84,16 @@ templ songPublishPanelContent(data SetBuilderData) {
 
 // RosterPublishPanel is the Team tab's publish/discard controls - the
 // people equivalent of SongPublishPanel, which this mirrors in full
-// (including the out-of-band sync via rosterPublishPanelOOB).
-templ RosterPublishPanel(data RosterBuilderData) {
-	<div class="build-glance-card" id="roster-builder-publish">
+// (including the tab-scoped hidden and the out-of-band sync via
+// rosterPublishPanelOOB).
+templ RosterPublishPanel(data RosterBuilderData, hidden bool) {
+	<div class="build-publish-card" id="build-publish-team" hidden?={ hidden }>
 		@rosterPublishPanelContent(data)
 	</div>
 }
 
 templ rosterPublishPanelOOB(data RosterBuilderData) {
-	<div class="build-glance-card" id="roster-builder-publish" hx-swap-oob="true">
+	<div class="build-publish-card" id="build-publish-team" hx-swap-oob="true">
 		@rosterPublishPanelContent(data)
 	</div>
 }
@@ -121,12 +126,7 @@ templ rosterPublishPanelContent(data RosterBuilderData) {
 				</form>
 			}
 		</div>
-		<p class="muted">
-			Publishing fully syncs this roster to the plan: adds new assignments
-			and removes ones you removed here. Discarding does the opposite - it
-			throws away every local change and rebuilds this roster from what's
-			live in Planning Center right now.
-		</p>
+		<p class="muted">Publishing syncs this roster to Planning Center. Discarding rebuilds it from what's live there now.</p>
 	} else {
 		<p class="muted">Nothing to publish yet - add a position to get started.</p>
 	}
