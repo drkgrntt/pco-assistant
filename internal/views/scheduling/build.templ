@@ -187,12 +187,16 @@ templ BuildPlan(personName, organizationName string, setData SetBuilderData, ros
 			The sidebar (.build-glance) is the one thing that isn't just "the
 			inactive tab, hidden" - it's a standing glance at whichever tab
 			*isn't* open, so switching over just to check "is the roster
-			filled yet?" while heads-down on songs isn't necessary. Both cards
-			render the same SongStatusSummary/RosterStatusSummary chips
-			SetBuilderBody/RosterBuilderBody already show at the top of their
-			own tab, so there's no separate summary logic to keep in sync -
-			only one of the two cards is ever visible at a time (toggleBuildTab
-			shows whichever one belongs to the tab that just went hidden).
+			filled yet, and by whom?" while heads-down on songs isn't
+			necessary. Each card pairs the same SongStatusSummary/
+			RosterStatusSummary chips SetBuilderBody/RosterBuilderBody
+			already show at the top of their own tab (so there's no separate
+			counting logic to keep in sync) with the actual content -
+			SongGlanceList's song order, TeamGlanceList's names per position -
+			since the counts alone don't say *what's* in the lineup or *who's*
+			on it. Only one of the two cards is ever visible at a time
+			(toggleBuildTab shows whichever one belongs to the tab that just
+			went hidden).
 		-->
 		<div class="build-layout">
 			<div class="build-main">
@@ -211,11 +215,13 @@ templ BuildPlan(personName, organizationName string, setData SetBuilderData, ros
 				<div class="build-glance-card" id="build-glance-team">
 					<h3>Team, at a glance</h3>
 					@RosterStatusSummary(rosterData)
+					@TeamGlanceList(rosterData.Positions)
 					<button type="button" onclick="toggleBuildTab('team')">Switch to Team</button>
 				</div>
 				<div class="build-glance-card" id="build-glance-songs" hidden>
 					<h3>Songs, at a glance</h3>
 					@SongStatusSummary(setData)
+					@SongGlanceList(setData.SetSongs)
 					<button type="button" onclick="toggleBuildTab('songs')">Switch to Songs</button>
 				</div>
 			</aside>

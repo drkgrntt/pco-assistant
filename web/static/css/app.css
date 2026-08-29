@@ -352,6 +352,16 @@ header.site form {
   display: none;
 }
 
+/* base.css caps every page's <main> at 60rem for readable prose line
+   length - right for a form or a single list, too narrow once the Build
+   page is genuinely two columns (tab content + the glance sidebar below).
+   Scoped with :has() rather than a Layout parameter, so only a page that
+   actually contains .build-layout opts into the wider column; every other
+   page's <main> is untouched. */
+main:has(.build-layout) {
+  max-width: 75rem;
+}
+
 /* The Build page's "at a glance" sidebar (see build.templ, toggleBuildTab
    in scheduling.js) - a standing summary of whichever tab isn't currently
    open. Mobile-first: stacked full-width below the tabs by default (no
@@ -391,6 +401,25 @@ header.site form {
 
 .build-glance-card .status-summary {
   margin-block: 0 var(--space-3);
+}
+
+/* The glance card's actual content - song order or position/name list
+   (see SongGlanceList/TeamGlanceList) - beneath its status-summary chips.
+   Plain and compact rather than the .plan-list/.candidate-row card
+   treatment used elsewhere: this is a quick read, not something you
+   interact with row by row (that's what switching tabs is for). */
+.build-glance-list {
+  margin: 0 0 var(--space-3);
+  padding-left: var(--space-5);
+  font-size: var(--text-sm);
+}
+
+.build-glance-list li {
+  margin-block: var(--space-1);
+}
+
+.build-glance-list li > span:first-child {
+  font-weight: var(--font-medium);
 }
 
 @media (min-width: 900px) {

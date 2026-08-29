@@ -1,6 +1,9 @@
 package scheduling
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // statusChip is one pill in a builder's status-summary row - the first
 // thing shown in both SetBuilderBody and RosterBuilderBody, so a viewer
@@ -56,4 +59,54 @@ templ RosterStatusSummary(data RosterBuilderData) {
 			@statusChip(fmt.Sprintf("Warnings: %d", len(data.ExistingConflicts)), true)
 		}
 	</div>
+}
+
+// assignedNames pulls out just the names from a position's assignments -
+// TeamGlanceList's one non-trivial piece, so the comma-joined "who" a
+// position shows can go through the same strings.Join(..., ", ") idiom
+// CandidateSongView.ConflictTitles already uses elsewhere on this page,
+// rather than hand-building the join inline.
+func assignedNames(assigned []AssignmentView) []string {
+	names := make([]string, len(assigned))
+	for i, a := range assigned {
+		names[i] = a.Name
+	}
+	return names
+}
+
+// SongGlanceList is the Songs glance card's content (see build.templ) -
+// the set's actual song order, not just its counts, so checking "what's
+// the lineup again?" from the Team tab doesn't require switching over.
+// SetSongs is already position-ordered (see SetBuilderData.SetSongs), so
+// this is a plain ordered list, no re-sorting needed.
+templ SongGlanceList(songs []SetSongView) {
+	<ol class="build-glance-list">
+		for _, s := range songs {
+			<li>{ s.Title }</li>
+		}
+		if len(songs) == 0 {
+			<li class="muted">No songs yet.</li>
+		}
+	</ol>
+}
+
+// TeamGlanceList is the Team glance card's content (see build.templ) - one
+// line per position, naming who's actually filling it (or "Open" when
+// nobody is yet), the roster equivalent of SongGlanceList.
+templ TeamGlanceList(positions []PositionGroupView) {
+	<ul class="build-glance-list">
+		for _, pos := range positions {
+			<li>
+				<span>{ pos.TeamPositionName }</span>
+				if len(pos.Assigned) > 0 {
+					<span class="muted">{ strings.Join(assignedNames(pos.Assigned), ", ") }</span>
+				} else {
+					<span class="muted">Open</span>
+				}
+			</li>
+		}
+		if len(positions) == 0 {
+			<li class="muted">No positions yet.</li>
+		}
+	</ul>
 }
