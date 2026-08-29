@@ -43,7 +43,25 @@ templ Layout(title string, personName string, organizationName string) {
 			<header class="site">
 				<div class="site-primary">
 					<a href="/" class="site-brand"><strong>Resonance</strong></a>
-					<nav>
+					<!--
+						Below header.site's own row/column breakpoint, this is the
+						only other thing in the visible bar - everything else
+						(site-nav, site-actions) collapses behind it (see
+						toggleMobileMenu, scheduling.js) rather than wrapping into
+						several busy rows. Hidden entirely at that breakpoint, where
+						site-nav/site-actions are just always visible again.
+					-->
+					<button
+						type="button"
+						class="mobile-menu-toggle"
+						onclick="toggleMobileMenu(this)"
+						aria-haspopup="true"
+						aria-expanded="false"
+						aria-label="Menu"
+					>
+						@IconMenu()
+					</button>
+					<nav class="site-nav">
 						<a href="/">Home</a>
 						<a href="/scheduling/build">Build a Service</a>
 						<div class="nav-dropdown">
