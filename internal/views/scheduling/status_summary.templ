@@ -74,17 +74,38 @@ func assignedNames(assigned []AssignmentView) []string {
 	return names
 }
 
+// songRowCount is how many of order's rows are actually songs (as opposed
+// to headers/foreign PCO items) - SongGlanceList's empty-state check, since
+// an order full of nothing but non-song items would otherwise render an
+// empty <ol> with no explanation.
+func songRowCount(order []ServiceOrderRow) int {
+	n := 0
+	for _, row := range order {
+		if row.IsSong {
+			n++
+		}
+	}
+	return n
+}
+
 // SongGlanceList is the Songs glance card's content (see build.templ) -
 // the set's actual song order, not just its counts, so checking "what's
 // the lineup again?" from the Team tab doesn't require switching over.
-// SetSongs is already position-ordered (see SetBuilderData.SetSongs), so
-// this is a plain ordered list, no re-sorting needed.
-templ SongGlanceList(songs []SetSongView) {
+// Deliberately built from ServiceOrder, not SetSongs: SetSong.Position is
+// only a total order among the set's own songs, established by whatever
+// order they were spliced in - it says nothing about where their anchor
+// items actually fall relative to each other (see the comment on it in
+// sets.go), so it can disagree with the order actually shown in the Songs
+// tab's own table. ServiceOrder is that same merged, interleaved order the
+// table itself renders from, with the non-song rows skipped here.
+templ SongGlanceList(order []ServiceOrderRow) {
 	<ol class="build-glance-list">
-		for _, s := range songs {
-			<li>{ s.Title }</li>
+		for _, row := range order {
+			if row.IsSong {
+				<li>{ row.Song.Title }</li>
+			}
 		}
-		if len(songs) == 0 {
+		if songRowCount(order) == 0 {
 			<li class="muted">No songs yet.</li>
 		}
 	</ol>
