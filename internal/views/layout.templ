@@ -57,7 +57,7 @@ templ Layout(title string, personName string, organizationName string) {
 								<a href="/scheduling/song-tags">Song Tags</a>
 								<a href="/scheduling/song-tag-suggestions">Song Tag Suggestions</a>
 								<a href="/scheduling/song-info">Song Info</a>
-								<a href="/scheduling/song-preferences">Song Preferences</a>
+								<a href="/scheduling/song-preferences">Song / Person Preferences</a>
 								<a href="/scheduling/person-relationships">Person Relationships</a>
 								<a href="/scheduling/position-preferences">Position Preferences</a>
 							</div>
@@ -70,6 +70,13 @@ templ Layout(title string, personName string, organizationName string) {
 						@IconMoon()
 					</button>
 					if personName != "" {
+						<!--
+							The one persistent path to /billing - without it, an
+							actively-paying org (home.templ's trial banner only shows
+							while OrgStatus isn't "active") has no way back to plan/
+							seat info or the Stripe portal short of typing the URL.
+						-->
+						<a href="/billing">Billing</a>
 						<div class="account">
 							if organizationName != "" {
 								<span class="account-org">{ organizationName }</span>

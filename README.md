@@ -59,9 +59,12 @@ build or maintain beyond the plan picker itself.
   you're offered a one-click prompt to record how they relate (flows well,
   same theme, etc.) without leaving the page - ad hoc song tags/
   relationships/roles can also be created from a "Quick add" panel right on
-  the build page, not just the dedicated setup pages. Publish pushes
-  everything to real PCO plan items in one sync; Discard reverts your local
-  draft back to whatever's live in PCO.
+  the build page, not just the dedicated setup pages, or from each song
+  row's own "more actions" menu (tag it, relate it - defaulting to whichever
+  song comes next in the order - or mark a role, all already scoped to that
+  song, no picking it out of a list again). Publish pushes everything to
+  real PCO plan items in one sync; Discard reverts your local draft back to
+  whatever's live in PCO.
 
 **People**
 - **Person Relationships** - tag people as `works_well`, `mentorship`
@@ -81,6 +84,12 @@ build or maintain beyond the plan picker itself.
   Songs tab; ad hoc person relationships and position eligibility can also
   be set from a "Quick add" panel here. Publish/Discard mirror the Songs
   tab's sync model.
+
+Songs and Team stay on separate tabs (each directly linkable via `?tab=`),
+but a sidebar keeps both tabs' Publish/Discard controls available no matter
+which one is open, plus an at-a-glance card for whichever tab *isn't* open -
+the other tab's actual song order or who's filling each position, not just
+a count.
 
 Mobile-first, installable as a PWA, with light/dark theming.
 

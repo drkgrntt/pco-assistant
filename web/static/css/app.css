@@ -160,7 +160,11 @@ header.site nav {
   display: none;
 }
 
-header.site nav a {
+/* Also covers .site-actions' "Billing" link (layout.templ) - same plain-
+   link treatment as the primary nav, not styled as its own thing just
+   because it sits in a different cluster. */
+header.site nav a,
+.site-actions a {
   text-decoration: none;
   color: var(--accent);
   padding: 0.3rem 0;

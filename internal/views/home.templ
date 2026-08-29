@@ -27,7 +27,7 @@ templ Home(personName, organizationName string, data HomeData) {
 			<ul class="plan-list">
 				for _, plan := range data.UpcomingPlans {
 					<li>
-						<a href={ templ.URL("/scheduling/build/" + plan.ServiceTypeID + "/" + plan.PlanID) }>
+						<a href={ templ.URL(plan.TargetURL()) }>
 							if plan.Title != "" {
 								{ plan.Title }
 							} else {
