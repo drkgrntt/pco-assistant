@@ -718,6 +718,15 @@ main:has(.build-layout) {
   color: var(--muted);
 }
 
+/* Reserves one line's worth of height whether or not a song actually has
+   cached arrangement info to show (see set_builder.templ, which now
+   always renders this div, empty or not) - without it, rows for songs
+   without a cached arrangement were visibly shorter than rows for songs
+   with one, making the table's row heights uneven. */
+.song-meta {
+  min-height: calc(var(--text-md) * var(--leading-normal));
+}
+
 /* Header items are section dividers in the real order of service (e.g.
    "Welcome," "Sermon") - rendered as their own full-width row rather than
    a normal 4-column one, so they read as landmarks rather than content. */

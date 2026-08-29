@@ -11,6 +11,23 @@ type SongArrangementInfo struct {
 	BPM           float64
 	Meter         string
 	LengthSeconds int
+	// ArrangementID is the arrangement's own PCO id (migration 00026) -
+	// unlike Key/BPM/Meter/LengthSeconds (display-only summaries), this is
+	// an actual relationship target: publishing a song passes it as
+	// pco.CreateItemParams.ArrangementID so the resulting plan item is
+	// actually linked to the arrangement, not just the bare song.
+	ArrangementID string
+	// Notes is the arrangement's own persistent PCO notes text, carried
+	// through as a plan item's one-time Description default at publish
+	// time - see PublishSet.
+	Notes string
+	// KeyID is the song's real Key sub-resource id (migration 00027) -
+	// a genuinely separate relationship from ArrangementID, not implied by
+	// it (confirmed live: an item with only its arrangement linked still
+	// shows no key at all). Empty when the song has no Key sub-resource
+	// (Key, the field above, then falls back to the arrangement's own
+	// ChordChartKey - see fetchAndCacheArrangementInfo).
+	KeyID string
 }
 
 // UpsertSongArrangementInfo writes (or overwrites) songID's cached
@@ -20,15 +37,18 @@ type SongArrangementInfo struct {
 // whatever it was the first time this song was seen.
 func (s *Store) UpsertSongArrangementInfo(ctx context.Context, organizationID, songID string, info SongArrangementInfo) error {
 	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO song_arrangement_cache (organization_id, song_id, chord_chart_key, bpm, meter, length_seconds, cached_at)
-		VALUES ($1, $2, $3, $4, $5, $6, now())
+		INSERT INTO song_arrangement_cache (organization_id, song_id, chord_chart_key, bpm, meter, length_seconds, arrangement_id, notes, key_id, cached_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
 		ON CONFLICT (organization_id, song_id) DO UPDATE
 			SET chord_chart_key = EXCLUDED.chord_chart_key,
 				bpm = EXCLUDED.bpm,
 				meter = EXCLUDED.meter,
 				length_seconds = EXCLUDED.length_seconds,
+				arrangement_id = EXCLUDED.arrangement_id,
+				notes = EXCLUDED.notes,
+				key_id = EXCLUDED.key_id,
 				cached_at = now()
-	`, organizationID, songID, info.Key, info.BPM, info.Meter, info.LengthSeconds)
+	`, organizationID, songID, info.Key, info.BPM, info.Meter, info.LengthSeconds, info.ArrangementID, info.Notes, info.KeyID)
 	return err
 }
 
@@ -38,7 +58,7 @@ func (s *Store) UpsertSongArrangementInfo(ctx context.Context, organizationID, s
 // PublishedSongAppearanceCounts' bulk-map shape.
 func (s *Store) SongArrangementInfo(ctx context.Context, organizationID string) (map[string]SongArrangementInfo, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT song_id, chord_chart_key, bpm, meter, length_seconds
+		SELECT song_id, chord_chart_key, bpm, meter, length_seconds, arrangement_id, notes, key_id
 		FROM song_arrangement_cache
 		WHERE organization_id = $1
 	`, organizationID)
@@ -51,7 +71,7 @@ func (s *Store) SongArrangementInfo(ctx context.Context, organizationID string) 
 	for rows.Next() {
 		var songID string
 		var info SongArrangementInfo
-		if err := rows.Scan(&songID, &info.Key, &info.BPM, &info.Meter, &info.LengthSeconds); err != nil {
+		if err := rows.Scan(&songID, &info.Key, &info.BPM, &info.Meter, &info.LengthSeconds, &info.ArrangementID, &info.Notes, &info.KeyID); err != nil {
 			return nil, err
 		}
 		cache[songID] = info

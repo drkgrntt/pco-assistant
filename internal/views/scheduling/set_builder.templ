@@ -152,9 +152,16 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 								</td>
 								<td>
 									{ row.Song.Title }
-									if row.Song.ArrangementInfo != "" {
-										<div class="muted">{ row.Song.ArrangementInfo }</div>
-									}
+									<!--
+										Always rendered, even when there's nothing to show -
+										a song with no cached arrangement info used to just
+										omit this line entirely, making its row shorter than
+										a neighbor that has one. Reserving the same line
+										height either way (see .song-meta) keeps every row an
+										even height regardless of which songs happen to be
+										cached.
+									-->
+									<div class="muted song-meta">{ row.Song.ArrangementInfo }</div>
 								</td>
 								<td>
 									for _, role := range row.Song.Roles {

@@ -83,8 +83,16 @@ func fetchAndCacheArrangementInfo(ctx context.Context, store *scheduling.Store, 
 	arrangement := resp.Data[0]
 	attrs := arrangement.Attributes
 	key := attrs.ChordChartKey
+	keyID := ""
 	if keys, err := pco.GetKeys(ctx, songID, arrangement.ID, &pco.KeysParams{PerPage: 1}); err == nil && len(keys.Data) > 0 && keys.Data[0].Attributes.StartingKey != "" {
 		key = keys.Data[0].Attributes.StartingKey
+		// A genuinely separate relationship from the arrangement, not
+		// implied by it (confirmed live: an item with only its
+		// arrangement linked still shows no key at all) - only set when
+		// there's a real Key row to point at, same condition as the
+		// display string above, so the two stay consistent with each
+		// other.
+		keyID = keys.Data[0].ID
 	}
 
 	info := scheduling.SongArrangementInfo{
@@ -92,6 +100,9 @@ func fetchAndCacheArrangementInfo(ctx context.Context, store *scheduling.Store, 
 		BPM:           attrs.BPM,
 		Meter:         attrs.Meter,
 		LengthSeconds: attrs.Length,
+		ArrangementID: arrangement.ID,
+		Notes:         attrs.Notes,
+		KeyID:         keyID,
 	}
 
 	if err := store.UpsertSongArrangementInfo(ctx, organizationID, songID, info); err != nil {
@@ -288,6 +299,7 @@ func (sc *SchedulingController) RegisterRoutes(router fiber.Router) {
 	group.Post("/sets/:service_type_id/:plan_id/set-songs/:set_song_id/reposition", sc.RepositionSetSong)
 	group.Post("/sets/:service_type_id/:plan_id/set-songs/:set_song_id/duplicate", sc.DuplicateSetSong)
 	group.Post("/sets/:service_type_id/:plan_id/publish", sc.PublishSet)
+	group.Post("/sets/:service_type_id/:plan_id/refresh-info", sc.RefreshSongInfo)
 	group.Post("/sets/:service_type_id/:plan_id/revert", sc.RevertSet)
 }
 
