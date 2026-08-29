@@ -57,6 +57,14 @@ type SetSong struct {
 	// to the arrangement's own notes as the item's Description default
 	// when this is empty, same as before this field existed.
 	Description string `json:"description"`
+	// KeyOverride is a local, editable per-occurrence key ("put this in Bb
+	// this week"), distinct from the song's arrangement's own default key
+	// (song_arrangement_cache.Key). Empty means "use the arrangement's
+	// default," same fallback convention as Description -
+	// PublishSet/RefreshSongInfo resolve this to a real PCO Key id (see
+	// resolveKeyID, scheduling.go) without ever touching the arrangement's
+	// own default key.
+	KeyOverride string `json:"key_override"`
 }
 
 // FindSet looks up an existing set without creating one - unlike
@@ -112,7 +120,7 @@ func (s *Store) GetOrCreateSet(ctx context.Context, organizationID, serviceTypeI
 // see ListPendingDeletions for songs awaiting removal from Planning Center.
 func (s *Store) ListSetSongs(ctx context.Context, setID int64) ([]SetSong, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, set_id, song_id, position, created_at, pco_item_id, anchor_item_id, moved, description
+		SELECT id, set_id, song_id, position, created_at, pco_item_id, anchor_item_id, moved, description, key_override
 		FROM set_songs
 		WHERE set_id = $1 AND pending_delete = false
 		ORDER BY position ASC
@@ -126,7 +134,7 @@ func (s *Store) ListSetSongs(ctx context.Context, setID int64) ([]SetSong, error
 	for rows.Next() {
 		var ss SetSong
 		var pcoItemID sql.NullString
-		if err := rows.Scan(&ss.ID, &ss.SetID, &ss.SongID, &ss.Position, &ss.CreatedAt, &pcoItemID, &ss.AnchorItemID, &ss.Moved, &ss.Description); err != nil {
+		if err := rows.Scan(&ss.ID, &ss.SetID, &ss.SongID, &ss.Position, &ss.CreatedAt, &pcoItemID, &ss.AnchorItemID, &ss.Moved, &ss.Description, &ss.KeyOverride); err != nil {
 			return nil, err
 		}
 		ss.PCOItemID = pcoItemID.String
@@ -145,6 +153,16 @@ func (s *Store) UpdateSetSongDescription(ctx context.Context, setID, rowID int64
 	_, err := s.db.ExecContext(ctx, `
 		UPDATE set_songs SET description = $1 WHERE id = $2 AND set_id = $3 AND pending_delete = false
 	`, description, rowID, setID)
+	return err
+}
+
+// UpdateSetSongKeyOverride sets rowID's local per-occurrence key (see
+// SetSong.KeyOverride) - same local-draft-only semantics as
+// UpdateSetSongDescription above.
+func (s *Store) UpdateSetSongKeyOverride(ctx context.Context, setID, rowID int64, keyOverride string) error {
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE set_songs SET key_override = $1 WHERE id = $2 AND set_id = $3 AND pending_delete = false
+	`, keyOverride, rowID, setID)
 	return err
 }
 

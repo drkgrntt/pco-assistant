@@ -63,6 +63,14 @@ count into Stripe as that subscription's line-item quantity.
   type (e.g. "Audio/Visual," "Band," "Vocals"), each saving straight to
   Planning Center immediately - the same notes a team member sees when
   looking at that song in Planning Center itself
+- **Per-occurrence key** - also on the song detail card: a key for this
+  one week only, independent of the song's arrangement and its own
+  default key - reaches Planning Center as a Key relationship on the
+  song's plan item on the next Publish/Refresh, resolving to an existing
+  Key under that arrangement or creating one if it doesn't exist yet.
+  Tempo and time signature (BPM/meter) aren't offered here - Planning
+  Center only models those on the arrangement itself, with no
+  per-occurrence override at all
 - **Build a Service (Songs tab)** - pick an upcoming plan and build its
   song lineup against the plan's *full* order of service (including
   template headers and non-song items already in Planning Center, not just

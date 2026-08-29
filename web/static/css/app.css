@@ -646,8 +646,12 @@ main:has(.build-layout) {
   font-weight: var(--font-medium);
 }
 
-.build-detail-note-form textarea {
+.build-detail-note-form textarea,
+.build-detail-note-form input[type="text"] {
   width: 100%;
+}
+
+.build-detail-note-form textarea {
   resize: vertical;
 }
 

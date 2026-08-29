@@ -338,6 +338,39 @@ func (sc *SchedulingController) UpdateSetSongDescription(c *fiber.Ctx) error {
 	return render(c, views.DescriptionFormFragment(data, song, errMsg))
 }
 
+// UpdateSetSongKey sets one set song's local per-occurrence key override
+// (see scheduling.SetSong.KeyOverride) - same local-draft-only semantics
+// as UpdateSetSongDescription above (it reaches Planning Center as a Key
+// relationship on the next Publish or Refresh song info, see
+// resolveKeyID, not immediately), and the same single-form fragment
+// response.
+func (sc *SchedulingController) UpdateSetSongKey(c *fiber.Ctx) error {
+	ctx := middleware.RequestContext(c)
+	orgID := middleware.CurrentOrganizationID(c)
+	serviceTypeID := c.Params("service_type_id")
+	planID := c.Params("plan_id")
+
+	rowID, err := c.ParamsInt("set_song_id")
+	if err != nil {
+		return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(ctx, orgID, serviceTypeID, planID, "set_song_id must be an integer")))
+	}
+
+	errMsg := ""
+	if set, err := sc.store.GetOrCreateSet(ctx, orgID, serviceTypeID, planID); err != nil {
+		errMsg = err.Error()
+	} else if err := sc.store.UpdateSetSongKeyOverride(ctx, set.ID, int64(rowID), c.FormValue("key")); err != nil {
+		errMsg = err.Error()
+	}
+
+	data := sc.buildSetBuilderData(ctx, orgID, serviceTypeID, planID)
+	song, ok := findSongViewByRowID(data, int64(rowID))
+	if !ok {
+		data.ErrMsg = appendErr(errMsg, data.ErrMsg)
+		return render(c, views.SetBuilderBody(data))
+	}
+	return render(c, views.KeyFormFragment(data, song, errMsg))
+}
+
 // UpdateSongNote creates, updates, or deletes one category's Planning
 // Center ItemNote on a published song's plan item - unlike
 // UpdateSetSongDescription above, this writes straight to Planning Center
@@ -550,7 +583,7 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 						Sequence:      nextSequence + i,
 						SongID:        ss.SongID,
 						ArrangementID: info.ArrangementID,
-						KeyID:         info.KeyID,
+						KeyID:         resolveKeyID(ctx, ss.SongID, info.ArrangementID, ss.KeyOverride, info.KeyID),
 						Description:   itemDescriptionFor(ss, info),
 						Length:        info.LengthSeconds,
 					})
@@ -677,11 +710,12 @@ func (sc *SchedulingController) RefreshSongInfo(c *fiber.Ctx) error {
 
 		length := info.LengthSeconds
 		description := itemDescriptionFor(ss, info)
+		keyID := resolveKeyID(ctx, ss.SongID, info.ArrangementID, ss.KeyOverride, info.KeyID)
 		if _, err := pco.UpdateItem(ctx, serviceTypeID, planID, ss.PCOItemID, &pco.UpdateItemParams{
 			Description:   &description,
 			Length:        &length,
 			ArrangementID: &info.ArrangementID,
-			KeyID:         &info.KeyID,
+			KeyID:         &keyID,
 		}); err != nil {
 			failures = append(failures, fmt.Sprintf("%s: %s", title, err.Error()))
 			continue
@@ -1463,6 +1497,7 @@ func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizati
 				Moved:           ss.Moved,
 				ArrangementInfo: formatArrangementInfo(arrangementInfo),
 				Description:     ss.Description,
+				Key:             effectiveKey(*ss, arrangementInfo),
 				PCOItemID:       ss.PCOItemID,
 				Notes:           buildSongNoteViews(ctx, serviceTypeID, planID, ss.PCOItemID, noteCategories),
 			},

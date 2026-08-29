@@ -153,6 +153,16 @@ type SetSongView struct {
 	// next Publish or Refresh song info, same as every other local set
 	// change.
 	Description string
+	// Key is this song's effective key for this one occurrence - the local
+	// per-occurrence override (scheduling.SetSong.KeyOverride) when set,
+	// falling back to the arrangement's own cached default key (the same
+	// one ArrangementInfo's summary line shows) otherwise. Editable on the
+	// song detail card; like Description, it only updates the local draft
+	// and reaches Planning Center as a Key relationship on the next
+	// Publish or Refresh song info (see resolveKeyID, scheduling.go) -
+	// never the arrangement's own default key, unlike editing it directly
+	// in Planning Center would.
+	Key string
 	// PCOItemID is this song's real Planning Center plan item id, once
 	// published ("" otherwise) - see scheduling.SetSong.PCOItemID, which
 	// Published already derives from. Exposed here (unlike AnchorItemID,

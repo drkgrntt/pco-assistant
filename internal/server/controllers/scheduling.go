@@ -125,6 +125,53 @@ func itemDescriptionFor(ss scheduling.SetSong, info scheduling.SongArrangementIn
 	return info.Notes
 }
 
+// effectiveKey is the display/edit value for views.SetSongView.Key - the
+// local override when set, falling back to the arrangement's own cached
+// default key, same convention as itemDescriptionFor above.
+func effectiveKey(ss scheduling.SetSong, info scheduling.SongArrangementInfo) string {
+	if ss.KeyOverride != "" {
+		return ss.KeyOverride
+	}
+	return info.Key
+}
+
+// resolveKeyID resolves ss.KeyOverride ("put this in Bb this week") to a
+// real Planning Center Key id, live-fetching or creating it under the
+// song's own arrangement as needed - falling back to the arrangement's
+// cached default Key id (defaultKeyID) when there's no override, same
+// convention as itemDescriptionFor above. Never touches the arrangement's
+// own default key: a match under it is reused, a new one is added
+// alongside it, so every plan not overriding this song keeps seeing
+// whatever key it always has.
+//
+// Matched case-insensitively by Key.StartingKey against the override
+// string verbatim - including any trailing "m" someone types for a minor
+// key (e.g. "Em"). PCO's own StartingMinor flag can't be set through the
+// API at all (confirmed live: "starting_minor cannot be assigned"), so a
+// minor key only round-trips correctly through this app if it's created
+// and always re-matched here, not by relying on PCO's own minor-key
+// rendering - typing the same string back finds the same Key row again
+// rather than creating a duplicate.
+func resolveKeyID(ctx context.Context, songID, arrangementID, keyOverride, defaultKeyID string) string {
+	if keyOverride == "" || arrangementID == "" {
+		return defaultKeyID
+	}
+
+	if keys, err := pco.GetKeys(ctx, songID, arrangementID, nil); err == nil {
+		for _, k := range keys.Data {
+			if strings.EqualFold(k.Attributes.StartingKey, keyOverride) {
+				return k.ID
+			}
+		}
+	}
+
+	created, err := pco.CreateKey(ctx, songID, arrangementID, &pco.CreateKeyParams{StartingKey: keyOverride})
+	if err != nil {
+		return defaultKeyID
+	}
+	return created.Data.ID
+}
+
 // resolveArrangementCacheInfo returns songID's full cached arrangement
 // info (not just the formatted display string - see resolveArrangementInfo
 // below for that), preferring the already-loaded cache (zero Planning
@@ -324,6 +371,7 @@ func (sc *SchedulingController) RegisterRoutes(router fiber.Router) {
 	group.Post("/sets/:service_type_id/:plan_id/set-songs/:set_song_id/reposition", sc.RepositionSetSong)
 	group.Post("/sets/:service_type_id/:plan_id/set-songs/:set_song_id/duplicate", sc.DuplicateSetSong)
 	group.Post("/sets/:service_type_id/:plan_id/set-songs/:set_song_id/description", sc.UpdateSetSongDescription)
+	group.Post("/sets/:service_type_id/:plan_id/set-songs/:set_song_id/key", sc.UpdateSetSongKey)
 	group.Post("/sets/:service_type_id/:plan_id/items/:item_id/notes", sc.UpdateSongNote)
 	group.Post("/sets/:service_type_id/:plan_id/publish", sc.PublishSet)
 	group.Post("/sets/:service_type_id/:plan_id/refresh-info", sc.RefreshSongInfo)
