@@ -43,6 +43,41 @@ func nextSongID(order []ServiceOrderRow, i int) string {
 	return ""
 }
 
+// songBadges is the badge cluster in a song row's own Tags column -
+// factored out (rather than inlined in the row below) so it can also be
+// re-rendered as its own targeted out-of-band fragment (see
+// songBadgesOOB) when something that doesn't touch the rest of the row
+// still needs this list to reflect a change - saving "This week's note"
+// or a key override can flip InfoPending without going through a full
+// #set-builder-body re-render (see DescriptionFormFragment/
+// KeyFormFragment, song_detail_card.templ).
+templ songBadges(song SetSongView) {
+	<span id={ fmt.Sprintf("song-badges-%d", song.ID) }>
+		@songBadgeSpans(song)
+	</span>
+}
+
+templ songBadgesOOB(song SetSongView) {
+	<span id={ fmt.Sprintf("song-badges-%d", song.ID) } hx-swap-oob="true">
+		@songBadgeSpans(song)
+	</span>
+}
+
+templ songBadgeSpans(song SetSongView) {
+	for _, role := range song.Roles {
+		<span class="badge">{ role.Label }</span>
+	}
+	if song.Published {
+		<span class="badge published">Published</span>
+	}
+	if song.Moved {
+		<span class="badge status-pending" title="Moved since it was last published">Moved</span>
+	}
+	if song.InfoPending {
+		<span class="badge status-pending" title="This week's note or key changed since it was last published - Refresh song info (or Publish) to send it to Planning Center">Note/key pending</span>
+	}
+}
+
 // SetBuilderBodyContent is the actual content - split out from
 // SetBuilderBody so the Build page's initial full-page render
 // (build.templ) can embed just this, without also embedding
@@ -166,15 +201,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 									<div class="muted song-meta" id={ fmt.Sprintf("song-meta-%d", row.Song.ID) }>{ row.Song.ArrangementInfo }</div>
 								</td>
 								<td>
-									for _, role := range row.Song.Roles {
-										<span class="badge">{ role.Label }</span>
-									}
-									if row.Song.Published {
-										<span class="badge published">Published</span>
-									}
-									if row.Song.Moved {
-										<span class="badge status-pending" title="Moved since it was last published">Moved</span>
-									}
+									@songBadges(row.Song)
 								</td>
 								<!--
 									.set-song-actions (the flex row of action

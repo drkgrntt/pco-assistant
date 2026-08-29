@@ -52,21 +52,33 @@ templ songDetailCardsOOB(data SetBuilderData) {
 // the page - a tighter scope than even re-rendering the whole card would
 // be.
 //
-// KeyFormFragment is the one exception with something else to update: the
-// order-of-service row's own summary line (set_builder.templ's
-// #song-meta-<id>) shows this song's *effective* key (see
-// renderServiceOrder's own comment on why), so saving a key override here
-// changes what that line should read too - without this out-of-band
-// update, the row would keep showing the old key until some unrelated
-// action happened to re-render the whole table, which reads as "did that
-// actually save?" (see SetSongView.ArrangementInfo/.Key).
+// KeyFormFragment/DescriptionFormFragment both have more to update than
+// just the form itself, since either one can flip an already-published
+// song's InfoPending (see SetSongView.InfoPending): the row's own Tags
+// column badge (songBadgesOOB) and the sidebar's Discard button/pending
+// list (songPublishPanelOOB) both need to reflect that immediately, not
+// just after some unrelated action happens to re-render the whole page -
+// same "did that actually save?" reasoning as KeyFormFragment's own
+// #song-meta-<id> update below. SongNoteFormFragment doesn't need any of
+// this: category notes write straight to Planning Center immediately and
+// never set InfoPending in the first place.
+//
+// KeyFormFragment additionally updates the order-of-service row's own
+// summary line (set_builder.templ's #song-meta-<id>), which shows this
+// song's *effective* key (see renderServiceOrder's own comment on why) -
+// DescriptionFormFragment has no equivalent, since Description isn't
+// shown anywhere else on the row.
 templ KeyFormFragment(data SetBuilderData, song SetSongView, errMsg string) {
 	@keyForm(data, song, errMsg)
 	<div class="muted song-meta" id={ fmt.Sprintf("song-meta-%d", song.ID) } hx-swap-oob="true">{ song.ArrangementInfo }</div>
+	@songBadgesOOB(song)
+	@songPublishPanelOOB(data)
 }
 
 templ DescriptionFormFragment(data SetBuilderData, song SetSongView, errMsg string) {
 	@descriptionForm(data, song, errMsg)
+	@songBadgesOOB(song)
+	@songPublishPanelOOB(data)
 }
 
 templ SongNoteFormFragment(data SetBuilderData, song SetSongView, note SongNoteView, errMsg string) {

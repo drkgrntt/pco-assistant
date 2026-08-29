@@ -58,7 +58,7 @@ templ songPublishPanelContent(data SetBuilderData) {
 			>
 				<button type="submit" class="primary">Publish to Planning Center</button>
 			</form>
-			if data.UnpublishedCount > 0 || data.PendingDeleteCount > 0 || data.ReorderPending {
+			if data.UnpublishedCount > 0 || data.PendingDeleteCount > 0 || data.ReorderPending || data.InfoPendingCount > 0 {
 				<form
 					hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/revert", data.ServiceTypeID, data.PlanID) }
 					hx-target="#set-builder-body"

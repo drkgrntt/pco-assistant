@@ -69,6 +69,14 @@ type SetBuilderData struct {
 	// the "Discard changes" button never appeared for a pure reorder even
 	// though there was a real local change to discard or publish.
 	ReorderPending bool
+	// InfoPendingCount is how many already-published SetSongs have a
+	// Description or Key edit that hasn't reached Planning Center yet -
+	// see scheduling.SetSong.InfoPending, the item-content equivalent of
+	// ReorderPending above, and for the same reason: a note/key edit alone
+	// doesn't touch UnpublishedCount, PendingDeleteCount, or
+	// ReorderPending, so without this "Discard changes" wouldn't appear
+	// for a real local change sitting there unpushed.
+	InfoPendingCount int
 	// PendingChanges spells out exactly what's changed since this set was
 	// last published, one line per change (e.g. "Added: Amazing Grace",
 	// "Song order changed") - see buildSetBuilderData. Empty means fully
@@ -135,6 +143,14 @@ type SetSongView struct {
 	// a badge right on the row, since "the order changed" without saying
 	// which songs moved is easy to lose track of.
 	Moved bool
+	// InfoPending is true once Description or Key has been edited on an
+	// already-published song without that edit reaching Planning Center
+	// yet - see scheduling.SetSong.InfoPending, the item-content
+	// equivalent of Moved above. Shown as its own badge for the same
+	// reason Moved is: without it, an edited-but-not-yet-refreshed song
+	// looked identical to one already in sync, with nothing anywhere on
+	// the page saying so until the numbers underneath happened to change.
+	InfoPending bool
 	// ArrangementInfo is a pre-formatted "G · 72 BPM · 4/4 · 3:45" summary
 	// of this song's Planning Center arrangement (whatever PCO's own "add
 	// song" flow set up, dbseed/UpdateArrangement set, or a manual Song

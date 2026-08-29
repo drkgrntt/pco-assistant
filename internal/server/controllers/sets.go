@@ -595,6 +595,11 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 						failures = append(failures, fmt.Sprintf("%s: created in Planning Center but failed to record locally: %s", title, err.Error()))
 						continue
 					}
+					// Best-effort, same tolerance as ClearMovedFlags below -
+					// whatever Description/KeyOverride this create just
+					// pushed is now genuinely in sync, whether or not this
+					// call happens to succeed.
+					_ = sc.store.ClearInfoPending(ctx, set.ID, ss.ID)
 					ss.PCOItemID = item.Data.ID
 					created++
 				} else {
@@ -720,6 +725,10 @@ func (sc *SchedulingController) RefreshSongInfo(c *fiber.Ctx) error {
 			failures = append(failures, fmt.Sprintf("%s: %s", title, err.Error()))
 			continue
 		}
+		// Best-effort, same as ClearInfoPending's other call site (PublishSet) -
+		// this song's Description/KeyOverride genuinely just reached
+		// Planning Center, whether or not this particular call succeeds.
+		_ = sc.store.ClearInfoPending(ctx, set.ID, ss.ID)
 		refreshed++
 	}
 
@@ -1025,6 +1034,9 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 		if ss.Moved {
 			data.ReorderPending = true
 		}
+		if ss.InfoPending {
+			data.InfoPendingCount++
+		}
 		roleViews, _ := songRoleViews(rolesBySong, roleTypeLabels, ss.SongID)
 		data.SetSongs = append(data.SetSongs, views.SetSongView{
 			ID:           ss.ID,
@@ -1035,6 +1047,7 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 			Published:    ss.PCOItemID != "",
 			AnchorItemID: ss.AnchorItemID,
 			Moved:        ss.Moved,
+			InfoPending:  ss.InfoPending,
 		})
 	}
 
@@ -1056,6 +1069,8 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 			data.PendingChanges = append(data.PendingChanges, fmt.Sprintf("Added: %s", ss.Title))
 		} else if ss.Moved {
 			data.PendingChanges = append(data.PendingChanges, fmt.Sprintf("Moved: %s", ss.Title))
+		} else if ss.InfoPending {
+			data.PendingChanges = append(data.PendingChanges, fmt.Sprintf("Note/key updated: %s", ss.Title))
 		}
 	}
 	for _, ss := range pendingDeletions {
@@ -1506,6 +1521,7 @@ func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizati
 				Published:       ss.PCOItemID != "",
 				AnchorItemID:    ss.AnchorItemID,
 				Moved:           ss.Moved,
+				InfoPending:     ss.InfoPending,
 				ArrangementInfo: formatArrangementInfo(displayInfo),
 				Description:     ss.Description,
 				Key:             key,
