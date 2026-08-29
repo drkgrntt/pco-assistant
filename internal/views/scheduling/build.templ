@@ -210,13 +210,23 @@ templ BuildPlan(personName, organizationName string, setData SetBuilderData, ros
 					<button type="button" class={ "build-tab", templ.KV("active", activeTab == "team") } role="tab" aria-selected={ fmt.Sprintf("%t", activeTab == "team") } aria-controls="build-tab-team" onclick="toggleBuildTab('team')">Team</button>
 				</div>
 				<div class="build-tab-panel" id="build-tab-songs" role="tabpanel" hidden?={ activeTab == "team" }>
-					@SetBuilderBody(setData)
+					@SetBuilderBodyContent(setData)
 				</div>
 				<div class="build-tab-panel" id="build-tab-team" role="tabpanel" hidden?={ activeTab != "team" }>
-					@RosterBuilderBody(rosterData)
+					@RosterBuilderBodyContent(rosterData)
 				</div>
 			</div>
+			<!--
+				The publish/discard controls for both tabs live here too, not
+				just whichever tab is open - see SongPublishPanel/
+				RosterPublishPanel's own doc comments for how they stay synced
+				via htmx out-of-band swaps even though the forms that trigger
+				those swaps live in the (structurally separate) tab panels
+				beside them, not inside these cards.
+			-->
 			<aside class="build-glance">
+				@SongPublishPanel(setData)
+				@RosterPublishPanel(rosterData)
 				<div class="build-glance-card" id="build-glance-team" hidden?={ activeTab == "team" }>
 					<h3>Team, at a glance</h3>
 					@RosterStatusSummary(rosterData)

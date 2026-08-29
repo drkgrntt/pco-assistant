@@ -8,10 +8,19 @@ import (
 	"pco-assistant/internal/views"
 )
 
-// RosterBuilderBody is both the initial-render fragment and the htmx swap
-// target (id="roster-builder-body") for every add/remove action below - see
-// SetBuilderBody, which this mirrors.
+// RosterBuilderBody is the htmx swap target (id="roster-builder-body") for
+// every add/remove action below - see SetBuilderBody, which this mirrors,
+// including bundling rosterPublishPanelOOB alongside RosterBuilderBodyContent
+// to keep the sidebar's Team publish card in sync.
 templ RosterBuilderBody(data RosterBuilderData) {
+	@RosterBuilderBodyContent(data)
+	@rosterPublishPanelOOB(data)
+}
+
+// RosterBuilderBodyContent is the actual content - see
+// SetBuilderBodyContent, which this mirrors, for why it's split out from
+// RosterBuilderBody.
+templ RosterBuilderBodyContent(data RosterBuilderData) {
 	<div id="roster-builder-body">
 		if data.ErrMsg != "" {
 			<p class="error">{ data.ErrMsg }</p>
@@ -224,41 +233,12 @@ templ RosterBuilderBody(data RosterBuilderData) {
 				</div>
 			</div>
 		}
-		if data.UnpublishedCount > 0 || data.PendingDeleteCount > 0 || len(data.Positions) > 0 {
-			<div class="publish-panel">
-				if data.PendingDeleteCount > 0 {
-					<div class="warning">
-						{ fmt.Sprintf("%d assignment(s) removed here are still live in Planning Center - publishing will remove them there too.", data.PendingDeleteCount) }
-					</div>
-				}
-				<div class="publish-actions">
-					<form
-						hx-post={ fmt.Sprintf("/scheduling/rosters/%s/%s/publish", data.ServiceTypeID, data.PlanID) }
-						hx-target="#roster-builder-body"
-						hx-swap="outerHTML"
-						hx-confirm={ fmt.Sprintf("Sync this roster to Planning Center? %d assignment(s) added, %d removed.", data.UnpublishedCount, data.PendingDeleteCount) }
-					>
-						<button type="submit" class="primary">Publish to Planning Center</button>
-					</form>
-					if data.UnpublishedCount > 0 || data.PendingDeleteCount > 0 {
-						<form
-							hx-post={ fmt.Sprintf("/scheduling/rosters/%s/%s/revert", data.ServiceTypeID, data.PlanID) }
-							hx-target="#roster-builder-body"
-							hx-swap="outerHTML"
-							hx-confirm="Discard every change you've made here and rebuild this roster from what's currently live in Planning Center? This can't be undone."
-						>
-							<button type="submit" class="danger">Discard changes</button>
-						</form>
-					}
-				</div>
-				<p class="muted">
-					Publishing fully syncs this roster to the plan: adds new assignments and
-					removes ones you removed here. Discarding does the opposite - it throws
-					away every local change and rebuilds this roster from what's live in
-					Planning Center right now.
-				</p>
-			</div>
-		}
+		<!--
+			See SetBuilderBodyContent's matching comment - the publish/discard
+			controls live in the sidebar now (RosterPublishPanel, build.templ);
+			RosterBuilderBody (not this, RosterBuilderBodyContent) is what
+			keeps that card's out-of-band copy in sync.
+		-->
 		if len(data.Suggestions) > 0 {
 			@collapsibleSection("recommended-next-team", "Recommended next", false) {
 				<p class="muted">Based on works-well-with and mentorship relationships with people already on this roster.</p>

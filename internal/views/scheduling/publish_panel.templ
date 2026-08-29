@@ -1,0 +1,133 @@
+package scheduling
+
+import "fmt"
+
+// SongPublishPanel is the Songs tab's publish/discard controls, rendered
+// once in the Build page's sidebar (see build.templ) instead of inline
+// under the order-of-service table - the whole point of a margin once
+// there's a second column to put things in. Every add/remove/duplicate/
+// replace/tag/relate/role/publish/discard action on the Songs tab still
+// returns SetBuilderBody as its htmx response (hx-target="#set-builder-
+// body"), which no longer renders this panel itself - instead it carries
+// an out-of-band copy (songPublishPanelOOB below) that updates this same
+// sidebar card in place via hx-swap-oob, regardless of where in the
+// document it actually lives. So this card stays in sync with every
+// mutation, not just an explicit Publish/Discard click.
+templ SongPublishPanel(data SetBuilderData) {
+	<div class="build-glance-card" id="set-builder-publish">
+		@songPublishPanelContent(data)
+	</div>
+}
+
+// songPublishPanelOOB is what SetBuilderBody actually emits on every
+// swap - same content as SongPublishPanel, wrapped for htmx's
+// out-of-band swap instead of a normal in-place render. See
+// SongPublishPanel's doc comment for why.
+templ songPublishPanelOOB(data SetBuilderData) {
+	<div class="build-glance-card" id="set-builder-publish" hx-swap-oob="true">
+		@songPublishPanelContent(data)
+	</div>
+}
+
+templ songPublishPanelContent(data SetBuilderData) {
+	<h3>Publish Songs</h3>
+	if len(data.SetSongs) > 0 || data.PendingDeleteCount > 0 {
+		if data.PendingDeleteCount > 0 {
+			<div class="warning">
+				{ fmt.Sprintf("%d song(s) removed/replaced here are still live in Planning Center - publishing will delete them there too.", data.PendingDeleteCount) }
+			</div>
+		}
+		if len(data.PendingChanges) > 0 {
+			<p><strong>Pending changes</strong> - not yet reflected in Planning Center:</p>
+			<ul class="pending-changes">
+				for _, change := range data.PendingChanges {
+					<li>{ change }</li>
+				}
+			</ul>
+		}
+		<div class="publish-actions">
+			<form
+				hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/publish", data.ServiceTypeID, data.PlanID) }
+				hx-target="#set-builder-body"
+				hx-swap="outerHTML"
+				hx-confirm={ fmt.Sprintf("Sync this set to Planning Center? %d song(s) added, %d removed, and any already-published songs reordered to match.", data.UnpublishedCount, data.PendingDeleteCount) }
+			>
+				<button type="submit" class="primary">Publish to Planning Center</button>
+			</form>
+			if data.UnpublishedCount > 0 || data.PendingDeleteCount > 0 || data.ReorderPending {
+				<form
+					hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/revert", data.ServiceTypeID, data.PlanID) }
+					hx-target="#set-builder-body"
+					hx-swap="outerHTML"
+					hx-confirm="Discard every change you've made here and rebuild this set from what's currently live in Planning Center? This can't be undone."
+				>
+					<button type="submit" class="danger">Discard changes</button>
+				</form>
+			}
+		</div>
+		<p class="muted">
+			Publishing fully syncs this set to the plan: adds new songs, deletes
+			ones you removed/replaced here, and reorders everything to match the
+			current order of service, including each song's chosen position. It
+			never touches or reorders plan items this tool didn't create.
+			Discarding does the opposite - it throws away every local change and
+			rebuilds this set from what's live in Planning Center right now.
+		</p>
+	} else {
+		<p class="muted">Nothing to publish yet - add a song to get started.</p>
+	}
+}
+
+// RosterPublishPanel is the Team tab's publish/discard controls - the
+// people equivalent of SongPublishPanel, which this mirrors in full
+// (including the out-of-band sync via rosterPublishPanelOOB).
+templ RosterPublishPanel(data RosterBuilderData) {
+	<div class="build-glance-card" id="roster-builder-publish">
+		@rosterPublishPanelContent(data)
+	</div>
+}
+
+templ rosterPublishPanelOOB(data RosterBuilderData) {
+	<div class="build-glance-card" id="roster-builder-publish" hx-swap-oob="true">
+		@rosterPublishPanelContent(data)
+	</div>
+}
+
+templ rosterPublishPanelContent(data RosterBuilderData) {
+	<h3>Publish Team</h3>
+	if data.UnpublishedCount > 0 || data.PendingDeleteCount > 0 || len(data.Positions) > 0 {
+		if data.PendingDeleteCount > 0 {
+			<div class="warning">
+				{ fmt.Sprintf("%d assignment(s) removed here are still live in Planning Center - publishing will remove them there too.", data.PendingDeleteCount) }
+			</div>
+		}
+		<div class="publish-actions">
+			<form
+				hx-post={ fmt.Sprintf("/scheduling/rosters/%s/%s/publish", data.ServiceTypeID, data.PlanID) }
+				hx-target="#roster-builder-body"
+				hx-swap="outerHTML"
+				hx-confirm={ fmt.Sprintf("Sync this roster to Planning Center? %d assignment(s) added, %d removed.", data.UnpublishedCount, data.PendingDeleteCount) }
+			>
+				<button type="submit" class="primary">Publish to Planning Center</button>
+			</form>
+			if data.UnpublishedCount > 0 || data.PendingDeleteCount > 0 {
+				<form
+					hx-post={ fmt.Sprintf("/scheduling/rosters/%s/%s/revert", data.ServiceTypeID, data.PlanID) }
+					hx-target="#roster-builder-body"
+					hx-swap="outerHTML"
+					hx-confirm="Discard every change you've made here and rebuild this roster from what's currently live in Planning Center? This can't be undone."
+				>
+					<button type="submit" class="danger">Discard changes</button>
+				</form>
+			}
+		</div>
+		<p class="muted">
+			Publishing fully syncs this roster to the plan: adds new assignments
+			and removes ones you removed here. Discarding does the opposite - it
+			throws away every local change and rebuilds this roster from what's
+			live in Planning Center right now.
+		</p>
+	} else {
+		<p class="muted">Nothing to publish yet - add a position to get started.</p>
+	}
+}
