@@ -85,14 +85,25 @@ templ Home(personName, organizationName string, data HomeData) {
 				<a href="/scheduling/song-tags">Song tags</a>
 				<span class="muted">Theme, scripture, and idea tags for search and filtering.</span>
 			</li>
-			<li>
-				<a href="/scheduling/song-tag-suggestions">Song tag suggestions</a>
-				<span class="muted">Review songs sharing a title word and tag them together.</span>
-			</li>
-			<li>
-				<a href="/scheduling/song-info">Song info</a>
-				<span class="muted">Sync each song's key, tempo, and length from Planning Center.</span>
-			</li>
+			<!--
+				Both hidden once there's nothing pending there - the exact
+				same SuggestionCount/SongInfoCached-vs-Total facts the nudge
+				lines above already compute, not a second lookup. Mirrors
+				the nav dropdown's own version of this (see layout.templ,
+				middleware.PopulateNavState).
+			-->
+			if data.SuggestionCount > 0 {
+				<li>
+					<a href="/scheduling/song-tag-suggestions">Song tag suggestions</a>
+					<span class="muted">Review songs sharing a title word and tag them together.</span>
+				</li>
+			}
+			if data.SongInfoTotal > 0 && data.SongInfoCached < data.SongInfoTotal {
+				<li>
+					<a href="/scheduling/song-info">Song info</a>
+					<span class="muted">Sync each song's key, tempo, and length from Planning Center.</span>
+				</li>
+			}
 			<li>
 				<a href="/scheduling/song-preferences">Song / person preferences</a>
 				<span class="muted">Note who's preferred or discouraged for a song.</span>

@@ -16,15 +16,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// pcoSongPickerPageSize is PCO's max per_page, and pcoSongPickerMaxPages
-// caps how many pages fetchAllSongs will walk - a safety valve so an
-// unexpectedly huge library can't turn one page load into an unbounded
-// number of PCO requests.
-const (
-	pcoSongPickerPageSize = 100
-	pcoSongPickerMaxPages = 20
-)
-
 // personSearchResultLimit caps how many matches the person picker's
 // search-as-you-type shows at once. Unlike songs, a People directory is
 // often far too large to fetch in full, so people are looked up on demand
@@ -33,29 +24,12 @@ const personSearchResultLimit = 8
 
 // fetchAllSongs pages through the PCO song library, ordered by title, for
 // use as a picker's option list (song relationships, song/person
-// preferences). It returns whatever it managed to fetch even on a
-// mid-pagination error, since a stale-but-nonempty picker beats an empty one.
+// preferences). Delegates to scheduling.FetchAllSongs, which moved there
+// so middleware.PopulateNavState can fetch the same library without a
+// controllers/middleware import cycle - kept as this name/signature here
+// since it's called throughout this package already.
 func fetchAllSongs(ctx context.Context) ([]pco.SongData, error) {
-	var songs []pco.SongData
-
-	for page := 0; page < pcoSongPickerMaxPages; page++ {
-		resp, err := pco.GetSongs(ctx, &pco.SongsParams{
-			OrderBy: "title",
-			PerPage: pcoSongPickerPageSize,
-			Offset:  page * pcoSongPickerPageSize,
-		})
-		if err != nil {
-			return songs, err
-		}
-
-		songs = append(songs, resp.Data...)
-
-		if len(resp.Data) < pcoSongPickerPageSize || len(songs) >= resp.Meta.TotalCount {
-			break
-		}
-	}
-
-	return songs, nil
+	return scheduling.FetchAllSongs(ctx)
 }
 
 // formatArrangementInfo renders a cached (or freshly-fetched) arrangement

@@ -55,8 +55,19 @@ templ Layout(title string, personName string, organizationName string) {
 								<a href="/scheduling/song-relationships">Song Relationships</a>
 								<a href="/scheduling/song-roles">Song Roles</a>
 								<a href="/scheduling/song-tags">Song Tags</a>
-								<a href="/scheduling/song-tag-suggestions">Song Tag Suggestions</a>
-								<a href="/scheduling/song-info">Song Info</a>
+								<!--
+									Both hidden once there's nothing pending there (see
+									middleware.PopulateNavState/nav_state.go) - an "actionable
+									inbox" item that's actually empty is clutter, not
+									configuration to revisit. Reappears on its own the moment
+									a new song creates a suggestion or needs syncing again.
+								-->
+								if navSuggestionsPending(ctx) {
+									<a href="/scheduling/song-tag-suggestions">Song Tag Suggestions</a>
+								}
+								if navSongInfoNeedsSync(ctx) {
+									<a href="/scheduling/song-info">Song Info</a>
+								}
 								<a href="/scheduling/song-preferences">Song / Person Preferences</a>
 								<a href="/scheduling/person-relationships">Person Relationships</a>
 								<a href="/scheduling/position-preferences">Position Preferences</a>
