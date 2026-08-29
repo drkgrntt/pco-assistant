@@ -961,6 +961,21 @@ tr.song-row.selected {
   min-height: calc(var(--text-md) * var(--leading-normal));
 }
 
+/* .song-meta above keeps every row's TITLE cell the same natural height,
+   but that's only half the row - a native <select> (the Replace form)
+   renders with a slightly different intrinsic height than a <button> on
+   some browsers even with identical declared padding/min-height (UA
+   chrome around the dropdown), so the actions cell's natural height can
+   drift a pixel or two from row to row depending on which controls
+   happen to be present. An explicit floor on every song row's cells,
+   tall enough to comfortably fit both the 2-line title+meta stack and
+   the actions row's buttons/select, removes that drift instead of
+   chasing it browser by browser - the actual tallest cell still just
+   grows past this if it ever needs to. */
+tr.song-row > td {
+  min-height: 3.5rem;
+}
+
 /* Header items are section dividers in the real order of service (e.g.
    "Welcome," "Sermon") - rendered as their own full-width row rather than
    a normal 4-column one, so they read as landmarks rather than content. */
