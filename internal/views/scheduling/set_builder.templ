@@ -137,7 +137,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 					</tr>
 				</thead>
 				<tbody>
-					for _, row := range data.ServiceOrder {
+					for i, row := range data.ServiceOrder {
 						if row.IsSong {
 							<tr
 								class="song-row"
