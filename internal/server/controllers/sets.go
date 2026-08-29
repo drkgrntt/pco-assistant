@@ -295,34 +295,42 @@ func (sc *SchedulingController) UpdateSetSongDescription(c *fiber.Ctx) error {
 	return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(middleware.RequestContext(c), orgID, serviceTypeID, planID, errMsg)))
 }
 
-// UpdateArrangementNotes sets songID's persistent arrangement notes -
-// unlike UpdateSetSongDescription above, this writes straight to Planning
-// Center (the Arrangement resource, see pco.UpdateArrangement) immediately,
-// the same "ad hoc setup-level write" shape as QuickAddSongTag/
-// QuickAddSongRelationship/QuickAddSongRole, just targeting a real PCO
-// record instead of this app's own tables. The local cache is updated
-// alongside it so the song detail card's next render (and every other
-// reader of song_arrangement_cache) reflects the new notes without a
-// separate Song Info sync.
-func (sc *SchedulingController) UpdateArrangementNotes(c *fiber.Ctx) error {
+// UpdateSongNote creates, updates, or deletes one category's Planning
+// Center ItemNote on a published song's plan item - unlike
+// UpdateSetSongDescription above, this writes straight to Planning Center
+// immediately, the same "ad hoc setup-level write" shape as
+// QuickAddSongTag/QuickAddSongRelationship/QuickAddSongRole, just against
+// a real PCO record instead of this app's own tables. note_id present
+// means update that note (or delete it, if content was cleared to empty -
+// tidier than leaving an empty note sitting in Planning Center); note_id
+// empty and content non-empty means create a new one for category_id;
+// note_id empty and content empty is a no-op (nothing existed, nothing was
+// typed).
+func (sc *SchedulingController) UpdateSongNote(c *fiber.Ctx) error {
 	ctx := middleware.RequestContext(c)
 	orgID := middleware.CurrentOrganizationID(c)
 	serviceTypeID := c.Params("service_type_id")
 	planID := c.Params("plan_id")
-	songID := c.FormValue("song_id")
-	notes := c.FormValue("notes")
+	itemID := c.Params("item_id")
+	categoryID := c.FormValue("category_id")
+	noteID := c.FormValue("note_id")
+	content := c.FormValue("content")
 
 	errMsg := ""
-	cache, _ := sc.store.SongArrangementInfo(ctx, orgID)
-	info := resolveArrangementCacheInfo(ctx, sc.store, orgID, cache, songID)
-	if info.ArrangementID == "" {
-		errMsg = "this song has no Planning Center arrangement to attach notes to"
-	} else if _, err := pco.UpdateArrangement(ctx, songID, info.ArrangementID, &pco.UpdateArrangementParams{Notes: &notes}); err != nil {
-		errMsg = "updating arrangement notes in Planning Center: " + err.Error()
-	} else {
-		info.Notes = notes
-		if err := sc.store.UpsertSongArrangementInfo(ctx, orgID, songID, info); err != nil {
-			errMsg = "saved to Planning Center but failed to update the local cache: " + err.Error()
+	switch {
+	case content == "" && noteID != "":
+		if err := pco.DeleteItemNote(ctx, serviceTypeID, planID, itemID, noteID); err != nil {
+			errMsg = "removing note from Planning Center: " + err.Error()
+		}
+	case content == "":
+		// Nothing to do.
+	case noteID != "":
+		if _, err := pco.UpdateItemNote(ctx, serviceTypeID, planID, itemID, noteID, &pco.UpdateItemNoteParams{Content: content}); err != nil {
+			errMsg = "updating note in Planning Center: " + err.Error()
+		}
+	default:
+		if _, err := pco.CreateItemNote(ctx, serviceTypeID, planID, itemID, &pco.CreateItemNoteParams{Content: content, ItemNoteCategoryID: categoryID}); err != nil {
+			errMsg = "saving note to Planning Center: " + err.Error()
 		}
 	}
 
@@ -962,7 +970,10 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 			return pcoItems.Data[i].Attributes.Sequence < pcoItems.Data[j].Attributes.Sequence
 		})
 		merged := mergeServiceOrder(pcoItems.Data, setSongs)
-		data.ServiceOrder = renderServiceOrder(ctx, sc.store, organizationID, arrangementCache, merged, titles, rolesBySong, roleTypeLabels)
+		// Fetched once per render, not per song - see renderServiceOrder's
+		// own doc comment on noteCategories.
+		noteCategories, _ := pco.GetItemNoteCategories(ctx, serviceTypeID, nil)
+		data.ServiceOrder = renderServiceOrder(ctx, sc.store, organizationID, serviceTypeID, planID, arrangementCache, noteCategories.Data, merged, titles, rolesBySong, roleTypeLabels)
 
 		// Keep this service type's "where does the first song usually go"
 		// memory (see PreferredFirstSongAnchorTitle, and firstSongFallbackAnchor
@@ -1305,10 +1316,45 @@ func mergeServiceOrder(items []pco.ItemData, setSongs []scheduling.SetSong) []me
 	return rows
 }
 
+// buildSongNoteViews resolves one views.SongNoteView per available note
+// category for a published song's plan item (itemID) - "" means
+// unpublished, and there's no item to attach a note to yet, so this
+// returns nil without a wasted PCO call. Best-effort like everything else
+// on this page: a failed GetItemNotes just means every category shows
+// empty (create-on-save) rather than a broken page.
+func buildSongNoteViews(ctx context.Context, serviceTypeID, planID, itemID string, noteCategories []pco.ItemNoteCategoryData) []views.SongNoteView {
+	if itemID == "" || len(noteCategories) == 0 {
+		return nil
+	}
+
+	existing, _ := pco.GetItemNotes(ctx, serviceTypeID, planID, itemID, nil)
+	byCategory := make(map[string]pco.ItemNoteData, len(existing.Data))
+	for _, n := range existing.Data {
+		if n.Relationships.ItemNoteCategory.Data != nil {
+			byCategory[n.Relationships.ItemNoteCategory.Data.ID] = n
+		}
+	}
+
+	noteViews := make([]views.SongNoteView, 0, len(noteCategories))
+	for _, cat := range noteCategories {
+		v := views.SongNoteView{CategoryID: cat.ID, CategoryName: cat.Attributes.Name}
+		if note, ok := byCategory[cat.ID]; ok {
+			v.NoteID = note.ID
+			v.Content = note.Attributes.Content
+		}
+		noteViews = append(noteViews, v)
+	}
+	return noteViews
+}
+
 // renderServiceOrder turns a merge into display rows plus the anchor
 // picker's option list (every foreign item, in order, prefixed by "Top of
-// service").
-func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizationID string, arrangementCache map[string]scheduling.SongArrangementInfo, rows []mergedRow, titles map[string]string, rolesBySong map[string][]scheduling.SongRole, roleTypeLabels map[string]string) []views.ServiceOrderRow {
+// service"). noteCategories is this service type's Planning Center note
+// categories (Audio/Visual, Band, Vocals, etc.), fetched once by the
+// caller and reused for every published song's SongNoteView (see
+// buildSongNoteViews) - a service type has few of these, so one shared
+// fetch instead of a category lookup per song.
+func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizationID, serviceTypeID, planID string, arrangementCache map[string]scheduling.SongArrangementInfo, noteCategories []pco.ItemNoteCategoryData, rows []mergedRow, titles map[string]string, rolesBySong map[string][]scheduling.SongRole, roleTypeLabels map[string]string) []views.ServiceOrderRow {
 	out := make([]views.ServiceOrderRow, 0, len(rows))
 
 	for _, row := range rows {
@@ -1329,9 +1375,10 @@ func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizati
 		ss := row.Song
 		roleViews, _ := songRoleViews(rolesBySong, roleTypeLabels, ss.SongID)
 		// One lookup covers both ArrangementInfo (the formatted summary
-		// line) and Notes (the sidebar detail card - see songDetailCard,
-		// song_detail_card.templ) - see resolveArrangementCacheInfo's own
-		// doc comment for why this isn't two separate resolves.
+		// line) and the arrangement's Notes, which itemDescriptionFor
+		// (scheduling.go) falls back to as a publish-time Description
+		// default - see resolveArrangementCacheInfo's own doc comment for
+		// why this isn't two separate resolves.
 		arrangementInfo := resolveArrangementCacheInfo(ctx, store, organizationID, arrangementCache, ss.SongID)
 		out = append(out, views.ServiceOrderRow{
 			IsSong: true,
@@ -1345,8 +1392,9 @@ func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizati
 				AnchorItemID:    ss.AnchorItemID,
 				Moved:           ss.Moved,
 				ArrangementInfo: formatArrangementInfo(arrangementInfo),
-				Notes:           arrangementInfo.Notes,
 				Description:     ss.Description,
+				PCOItemID:       ss.PCOItemID,
+				Notes:           buildSongNoteViews(ctx, serviceTypeID, planID, ss.PCOItemID, noteCategories),
 			},
 		})
 	}

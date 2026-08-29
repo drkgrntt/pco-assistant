@@ -104,27 +104,40 @@ templ songDetailCard(data SetBuilderData, song SetSongView) {
 				<p class="muted">Saved here - Publish or Refresh song info to send it to Planning Center.</p>
 			</form>
 			<!--
-				Song notes (SetSongView.Notes) - persistent across every plan
-				this song is used in, unlike the per-occurrence note above.
-				Saves straight to Planning Center's Arrangement resource
-				immediately (see UpdateArrangementNotes), the same "ad hoc
-				setup-level write" shape as the Tag/Relate/Mark role actions
-				below.
+				Song.Notes - one Planning Center ItemNote per note category
+				(Audio/Visual, Band, Vocals, etc. - configured per service
+				type) already on this song's plan item, plus an empty slot
+				for any category that doesn't have one yet. Each saves
+				straight to Planning Center immediately (see UpdateSongNote),
+				same "ad hoc, not part of the draft/publish cycle" shape as
+				the Tag/Relate/Mark role actions below - these are real,
+				existing PCO records, not local state to publish later.
+				Only populated for a published song (nil otherwise, since
+				there's no plan item yet to attach a note to).
 			-->
-			<form
-				class="build-detail-note-form"
-				hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/song-arrangement-notes", data.ServiceTypeID, data.PlanID) }
-				hx-target="#set-builder-body"
-				hx-swap="outerHTML"
-			>
-				<input type="hidden" name="song_id" value={ song.SongID }/>
-				<label>
-					Song notes (every plan)
-					<textarea name="notes" rows="2" placeholder="e.g. acoustic version, no drums">{ song.Notes }</textarea>
-				</label>
-				<button type="submit">Save song notes</button>
-				<p class="muted">Saves straight to this song's Planning Center arrangement.</p>
-			</form>
+			for _, note := range song.Notes {
+				<form
+					class="build-detail-note-form"
+					hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/items/%s/notes", data.ServiceTypeID, data.PlanID, song.PCOItemID) }
+					hx-target="#set-builder-body"
+					hx-swap="outerHTML"
+				>
+					<input type="hidden" name="category_id" value={ note.CategoryID }/>
+					<input type="hidden" name="note_id" value={ note.NoteID }/>
+					<label>
+						{ note.CategoryName }
+						<textarea name="content" rows="2" placeholder={ fmt.Sprintf("Note for %s...", note.CategoryName) }>{ note.Content }</textarea>
+					</label>
+					<button type="submit">Save</button>
+				</form>
+			}
+			if len(song.Notes) == 0 {
+				if song.Published {
+					<p class="muted">No note categories are configured for this service type yet - add some in Planning Center.</p>
+				} else {
+					<p class="muted">Publish this song first to add notes here (Audio/Visual, Band, Vocals, etc.).</p>
+				}
+			}
 		</div>
 		<div class="build-detail-actions">
 			<button

@@ -310,7 +310,6 @@ func (sc *SchedulingController) RegisterRoutes(router fiber.Router) {
 	group.Post("/build/:service_type_id/:plan_id/song-tags", sc.QuickAddSongTag)
 	group.Post("/build/:service_type_id/:plan_id/song-relationships", sc.QuickAddSongRelationship)
 	group.Post("/build/:service_type_id/:plan_id/song-roles", sc.QuickAddSongRole)
-	group.Post("/build/:service_type_id/:plan_id/song-arrangement-notes", sc.UpdateArrangementNotes)
 	group.Post("/build/:service_type_id/:plan_id/person-relationships", sc.QuickAddPersonRelationship)
 	group.Post("/build/:service_type_id/:plan_id/position-preferences", sc.QuickAddPositionPreference)
 
@@ -325,6 +324,7 @@ func (sc *SchedulingController) RegisterRoutes(router fiber.Router) {
 	group.Post("/sets/:service_type_id/:plan_id/set-songs/:set_song_id/reposition", sc.RepositionSetSong)
 	group.Post("/sets/:service_type_id/:plan_id/set-songs/:set_song_id/duplicate", sc.DuplicateSetSong)
 	group.Post("/sets/:service_type_id/:plan_id/set-songs/:set_song_id/description", sc.UpdateSetSongDescription)
+	group.Post("/sets/:service_type_id/:plan_id/items/:item_id/notes", sc.UpdateSongNote)
 	group.Post("/sets/:service_type_id/:plan_id/publish", sc.PublishSet)
 	group.Post("/sets/:service_type_id/:plan_id/refresh-info", sc.RefreshSongInfo)
 	group.Post("/sets/:service_type_id/:plan_id/revert", sc.RevertSet)

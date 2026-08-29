@@ -146,21 +146,42 @@ type SetSongView struct {
 	// CandidateSongView.ArrangementInfo for why the full candidate list
 	// doesn't get the same live-fetch fallback.
 	ArrangementInfo string
-	// Notes is the song's Planning Center arrangement notes (see
-	// fetchAndCacheArrangementInfo's Notes field) - persistent across every
-	// plan this song is ever used in. Editable on the song detail sidebar
-	// card (song_detail_card.templ), which writes straight to Planning
-	// Center's Arrangement resource on save (see UpdateArrangementNotes) -
-	// not part of the local draft/publish cycle, since it isn't
-	// per-occurrence data.
-	Notes string
 	// Description is this one occurrence's local per-occurrence note (see
 	// scheduling.SetSong.Description) - "cut the bridge this week," not a
-	// persistent fact about the song. Unlike Notes, editing this only
-	// updates the local draft (UpdateSetSongDescription); it reaches
-	// Planning Center on the next Publish or Refresh song info, same as
-	// every other local set change.
+	// persistent fact about the song. Editing this only updates the local
+	// draft (UpdateSetSongDescription); it reaches Planning Center on the
+	// next Publish or Refresh song info, same as every other local set
+	// change.
 	Description string
+	// PCOItemID is this song's real Planning Center plan item id, once
+	// published ("" otherwise) - see scheduling.SetSong.PCOItemID, which
+	// Published already derives from. Exposed here (unlike AnchorItemID,
+	// which is a different item entirely - wherever this song is placed
+	// after) because the song detail sidebar card needs it directly, to
+	// post a note against *this* item (see Notes/SongNoteView below).
+	PCOItemID string
+	// Notes is one entry per Planning Center note category (Audio/Visual,
+	// Band, Vocals, etc. - configured per service type, see
+	// pco.ItemNoteCategory) already resolved against whatever note this
+	// song's plan item actually has in each one - not the same thing as
+	// the song's Description above, or its arrangement's own persistent
+	// Notes (which this app doesn't expose an editor for - it isn't the
+	// notes surface anyone actually looks at in Planning Center's own UI).
+	// Only populated for a published song (PCOItemID != "") - there's no
+	// plan item to attach a note to otherwise; nil for an unpublished one,
+	// which the song detail card takes as "publish this first."
+	Notes []SongNoteView
+}
+
+// SongNoteView is one Planning Center note category's state for a specific
+// published song - see SetSongView.Notes. NoteID is "" when this category
+// has no note on this item yet (the detail card creates one on save
+// instead of updating); Content is "" in that case too.
+type SongNoteView struct {
+	CategoryID   string
+	CategoryName string
+	NoteID       string
+	Content      string
 }
 
 // ServiceOrderRow is one row of the full order of service shown on the set

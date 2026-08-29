@@ -58,9 +58,11 @@ count into Stripe as that subscription's line-item quantity.
 - **Song notes** - click a song's row on the Build page to open its detail
   card: "This week's note" is a local per-occurrence note ("cut the bridge
   this week") that reaches Planning Center as that item's Description on
-  the next Publish/Refresh, and "Song notes" is a persistent note tied to
-  the song's arrangement itself ("acoustic version, no drums") that saves
-  straight to Planning Center immediately
+  the next Publish/Refresh; once a song is published, its item also gets
+  one box per Planning Center note category configured for the service
+  type (e.g. "Audio/Visual," "Band," "Vocals"), each saving straight to
+  Planning Center immediately - the same notes a team member sees when
+  looking at that song in Planning Center itself
 - **Build a Service (Songs tab)** - pick an upcoming plan and build its
   song lineup against the plan's *full* order of service (including
   template headers and non-song items already in Planning Center, not just
