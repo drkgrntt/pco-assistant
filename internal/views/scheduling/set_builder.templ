@@ -22,6 +22,7 @@ import (
 templ SetBuilderBody(data SetBuilderData) {
 	@SetBuilderBodyContent(data)
 	@songPublishPanelOOB(data)
+	@songDetailCardsOOB(data)
 }
 
 // nextSongID returns the SongID of the next song in order after index i -
@@ -144,6 +145,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 								data-token={ fmt.Sprintf("row:%d", row.Song.ID) }
 								data-row-id={ fmt.Sprintf("%d", row.Song.ID) }
 								data-reposition-url={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/reposition", data.ServiceTypeID, data.PlanID, row.Song.ID) }
+								onclick="selectSongRow(this, event)"
 							>
 								<td>
 									<span class="drag-handle" title="Drag to reorder">

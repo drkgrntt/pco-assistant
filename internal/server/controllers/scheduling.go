@@ -112,26 +112,38 @@ func fetchAndCacheArrangementInfo(ctx context.Context, store *scheduling.Store, 
 	return info, nil
 }
 
-// resolveArrangementInfo returns songID's display-ready arrangement info,
-// preferring the already-loaded cache (zero Planning Center calls) and
-// falling back to fetchAndCacheArrangementInfo on a miss. This is the
-// "song-by-song" catch-up the cache relies on: a song added to a library
-// after the last sync (or never synced at all) still shows correct info
-// the first time it's actually rendered, same as before this cache
-// existed, and every render after that is a cache hit. Best-effort: a
-// failed fetch/backfill just means "" for this render and another live
-// attempt next time, not a broken page.
-func resolveArrangementInfo(ctx context.Context, store *scheduling.Store, organizationID string, cache map[string]scheduling.SongArrangementInfo, songID string) string {
+// resolveArrangementCacheInfo returns songID's full cached arrangement
+// info (not just the formatted display string - see resolveArrangementInfo
+// below for that), preferring the already-loaded cache (zero Planning
+// Center calls) and falling back to fetchAndCacheArrangementInfo on a
+// miss. This is the "song-by-song" catch-up the cache relies on: a song
+// added to a library after the last sync (or never synced at all) still
+// shows correct info the first time it's actually rendered, same as
+// before this cache existed, and every render after that is a cache hit.
+// Best-effort: a failed fetch/backfill just means a zero-value info for
+// this render and another live attempt next time, not a broken page.
+//
+// Split out from resolveArrangementInfo so a caller needing more than the
+// formatted string (e.g. renderServiceOrder's song detail card, which also
+// wants the arrangement's raw Notes) can get everything from one lookup
+// instead of fetching the same song's arrangement twice on a cache miss.
+func resolveArrangementCacheInfo(ctx context.Context, store *scheduling.Store, organizationID string, cache map[string]scheduling.SongArrangementInfo, songID string) scheduling.SongArrangementInfo {
 	if info, ok := cache[songID]; ok {
-		return formatArrangementInfo(info)
+		return info
 	}
 
 	info, err := fetchAndCacheArrangementInfo(ctx, store, organizationID, songID)
 	if err != nil {
-		return ""
+		return scheduling.SongArrangementInfo{}
 	}
 
-	return formatArrangementInfo(info)
+	return info
+}
+
+// resolveArrangementInfo returns songID's display-ready arrangement info -
+// see resolveArrangementCacheInfo for the cache/fetch behavior this wraps.
+func resolveArrangementInfo(ctx context.Context, store *scheduling.Store, organizationID string, cache map[string]scheduling.SongArrangementInfo, songID string) string {
+	return formatArrangementInfo(resolveArrangementCacheInfo(ctx, store, organizationID, cache, songID))
 }
 
 // songTitleMap builds a song ID -> title lookup from a picker's song list,

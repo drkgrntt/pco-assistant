@@ -1,0 +1,143 @@
+package scheduling
+
+import (
+	"fmt"
+
+	"pco-assistant/internal/views"
+)
+
+// SongDetailCards is every song's own detail card, stacked in the Build
+// page's sidebar (see build.templ) right below the publish card - see
+// songDetailCard below for what's on one and why it exists at all. Only
+// ever one card is actually visible at a time: selectSongRow
+// (scheduling.js) shows whichever one matches the row that was just
+// clicked and hides the rest, the same "one open slot per song" idiom
+// set_builder.templ's own quick-action-row already uses.
+//
+// hidden mirrors SongPublishPanel's own param - true while the Team tab is
+// the one open, since this card group only makes sense next to the Songs
+// tab it belongs to. Rendered directly (not through SetBuilderBody) on the
+// Build page's initial full-page load - see SongDetailCards vs
+// songDetailCardsOOB, which mirrors SongPublishPanel vs songPublishPanelOOB
+// for the exact same reason (an hx-swap-oob fragment renders as an inert
+// visible duplicate outside of an htmx-processed response), including
+// songDetailCardsOOB never setting hidden itself (see that comment).
+templ SongDetailCards(data SetBuilderData, hidden bool) {
+	<div class="build-detail-group" id="build-detail-songs" hidden?={ hidden }>
+		for _, row := range data.ServiceOrder {
+			if row.IsSong {
+				@songDetailCard(data, row.Song)
+			}
+		}
+	</div>
+}
+
+templ songDetailCardsOOB(data SetBuilderData) {
+	<div class="build-detail-group" id="build-detail-songs" hx-swap-oob="true">
+		for _, row := range data.ServiceOrder {
+			if row.IsSong {
+				@songDetailCard(data, row.Song)
+			}
+		}
+	</div>
+}
+
+// songDetailCard is one song's detail card - hidden until selectSongRow
+// (scheduling.js) reveals it, in response to clicking that song's own row
+// in the order of service (set_builder.templ). Its content mirrors what
+// the row itself already carries (title, arrangement info, badges) plus
+// what there wasn't room for at a table row's height (the arrangement's
+// own Notes) and every one of the row's own actions, spelled out as
+// labeled buttons instead of icons-only - the sidebar has the room a
+// table cell doesn't.
+//
+// The action forms here (duplicate/remove/replace) are the exact same
+// hx-post/hx-delete targets and hx-confirm text as the row's own -
+// deliberate duplication, same as the Quick add panel already duplicates
+// these same tag/relate/role forms generically (see set_builder.templ's
+// own comment on that) - simpler than trying to share one set of DOM
+// elements between two different places on the page. Tag/Relate/Mark role
+// instead jump to (and reveal) the row's own hidden quick-action-row,
+// rather than yet another copy of those three forms - see openQuickAction
+// (scheduling.js), which already knows how to find that row by id.
+templ songDetailCard(data SetBuilderData, song SetSongView) {
+	<div class="build-glance-card build-detail-card" data-row-id={ fmt.Sprintf("%d", song.ID) } hidden>
+		<div class="build-detail-header">
+			<h3>{ song.Title }</h3>
+			<button type="button" class="icon-btn" aria-label="Close" title="Close" onclick="closeSongDetail()">
+				@views.IconX()
+			</button>
+		</div>
+		if song.ArrangementInfo != "" {
+			<p class="muted">{ song.ArrangementInfo }</p>
+		}
+		<div class="build-detail-badges">
+			for _, role := range song.Roles {
+				<span class="badge">{ role.Label }</span>
+			}
+			if song.Published {
+				<span class="badge published">Published</span>
+			}
+			if song.Moved {
+				<span class="badge status-pending" title="Moved since it was last published">Moved</span>
+			}
+		</div>
+		if song.Notes != "" {
+			<p class="build-detail-notes">{ song.Notes }</p>
+		}
+		<div class="build-detail-actions">
+			<button
+				type="button"
+				hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/duplicate", data.ServiceTypeID, data.PlanID, song.ID) }
+				hx-target="#set-builder-body"
+				hx-swap="outerHTML"
+			>
+				@views.IconCopy()
+				Duplicate
+			</button>
+			<button
+				type="button"
+				class="danger"
+				hx-delete={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d", data.ServiceTypeID, data.PlanID, song.ID) }
+				hx-target="#set-builder-body"
+				hx-swap="outerHTML"
+				hx-confirm="Remove this song from the set?"
+			>
+				@views.IconRemove()
+				Remove
+			</button>
+			if len(data.Candidates) > 0 {
+				<form
+					class="replace-form"
+					hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/replace", data.ServiceTypeID, data.PlanID, song.ID) }
+					hx-target="#set-builder-body"
+					hx-swap="outerHTML"
+					hx-confirm={ fmt.Sprintf("Replace %q with the selected song?", song.Title) }
+				>
+					<select name="song_id" required>
+						<option value="" selected disabled>Replace with...</option>
+						for _, cand := range data.Candidates {
+							<option value={ cand.SongID }>{ cand.Title }</option>
+						}
+					</select>
+					<button type="submit">
+						@views.IconEdit()
+						Replace
+					</button>
+				</form>
+			}
+			<button type="button" data-row-id={ fmt.Sprintf("%d", song.ID) } onclick="openQuickAction(this, 'tag')">
+				@views.IconTag()
+				Tag this song
+			</button>
+			<button type="button" data-row-id={ fmt.Sprintf("%d", song.ID) } onclick="openQuickAction(this, 'relate')">
+				@views.IconRelate()
+				Relate to another song
+			</button>
+			<button type="button" data-row-id={ fmt.Sprintf("%d", song.ID) } onclick="openQuickAction(this, 'role')">
+				@views.IconRole()
+				Mark a role
+			</button>
+		</div>
+	</div>
+}

@@ -84,7 +84,10 @@ templ songPublishPanelContent(data SetBuilderData) {
 					hx-swap="outerHTML"
 					hx-confirm="Re-push every already-published song's current key, length, and arrangement to Planning Center? This only updates existing items - it doesn't add, remove, or reorder anything, so your local set stays exactly as it is."
 				>
-					<button type="submit">Refresh song info</button>
+					<button
+						type="submit"
+						title="Fixes a wrong/missing key, length, or arrangement on songs already published to Planning Center - without discarding and republishing the whole set"
+					>Re-sync key, length &amp; arrangement</button>
 				</form>
 			}
 		</div>

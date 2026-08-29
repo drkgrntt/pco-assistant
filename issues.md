@@ -1,18 +1,26 @@
-- Fixed. Every song row's arrangement-info line now always reserves the
-  same height, whether or not that song actually has cached info to show -
-  a song without it used to make its row visibly shorter than its
-  neighbors.
-- Fixed - and it was a real bug, not the "first spot" memory being
-  overeager. Dragging the *last* song (nothing below it to drop onto)
-  could get silently misread as "drop at the very top of service," which
-  then legitimately (if wrongly) became the new remembered first-song
-  anchor. The drag code's fallback for "pointer never left the dragged
-  row's own space" defaulted to nothing, which the drop logic then treated
-  as top-of-service instead of "no change." Fixed at the source so the
-  first-spot memory itself didn't need touching.
-- Also real: publishing a song only ever linked the bare song, not its
-  arrangement - confirmed live, an item created that way shows no chord
-  chart, lyrics, or key in Planning Center at all, unlike a song added by
-  hand there. Added arrangement + key linking (plus the item's length and
-  a starter description from the arrangement's own notes) to `go-pco` and
-  wired it into publish, verified live end to end.
+- Please clean out our branches now that we're all merged.
+- In the team page, can we show who was selected for the positions even when the accordions are closed?
+- In the song page, can we make songs clickable, and then in the narrower column, show a card for the song and its metadata, as well as any notes or anything else going forward, and perhaps even the available actions since we have the real estate to spell it out more. Make the "selected song" card show up below the publish card.
+- Could we do something like that for people too?
+- Can we rename the "refresh song info" button or add copy to make it a little more clear what it does and what it's for? Maybe even a tooltip if that seems applicable?
+
+Please put responses in addition to the issues, do not replace them.
+
+## Responses
+
+- Deleted both merged branches, locally and on origin.
+- A position's collapsed header now lists the assigned people's names right
+  next to the "N of M filled" count, not just after opening it.
+- Song rows are now clickable (excluding the drag handle and action
+  buttons) and open a card below the Songs publish card showing the song's
+  title, arrangement info, roles/badges, and its Planning Center
+  arrangement notes (when there are any) - plus Duplicate/Remove/Replace
+  buttons and shortcuts into Tag/Relate/Mark role, all spelled out instead
+  of icon-only.
+- Same treatment for an assigned person's row on the Team tab: a card below
+  the Team publish card with their name, position, status/warning badges,
+  their Planning Center notes (once published - read-only for now), and a
+  Remove action.
+- Renamed the button to "Re-sync key, length & arrangement" and added a
+  tooltip explaining what it fixes and when to reach for it instead of a
+  full discard/republish.

@@ -3,10 +3,25 @@ package scheduling
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"pco-assistant/internal/scheduling"
 	"pco-assistant/internal/views"
 )
+
+// assignedNamesSummary joins every assigned person's name for display right
+// in a position's own collapsible header - see the h3 below. Fully-staffed
+// positions collapse by default (low-signal - see the header's own doc
+// comment), which used to hide who was actually on it until you opened the
+// accordion; this puts that same "who's on it" answer somewhere visible
+// whether the position is open or closed.
+func assignedNamesSummary(assigned []AssignmentView) string {
+	names := make([]string, 0, len(assigned))
+	for _, a := range assigned {
+		names = append(names, a.Name)
+	}
+	return strings.Join(names, ", ")
+}
 
 // RosterBuilderBody is the htmx swap target (id="roster-builder-body") for
 // every add/remove action below - see SetBuilderBody, which this mirrors,
@@ -15,6 +30,7 @@ import (
 templ RosterBuilderBody(data RosterBuilderData) {
 	@RosterBuilderBodyContent(data)
 	@rosterPublishPanelOOB(data)
+	@personDetailCardsOOB(data)
 }
 
 // RosterBuilderBodyContent is the actual content - see
@@ -138,6 +154,9 @@ templ RosterBuilderBodyContent(data RosterBuilderData) {
 						<span>
 							{ pos.TeamName } / { pos.TeamPositionName }
 							<span class="muted">({ strconv.Itoa(len(pos.Assigned)) } of { strconv.Itoa(pos.Quantity) } filled)</span>
+							if len(pos.Assigned) > 0 {
+								<span class="muted">- { assignedNamesSummary(pos.Assigned) }</span>
+							}
 						</span>
 						@views.IconChevronDown()
 					</button>
@@ -146,7 +165,7 @@ templ RosterBuilderBodyContent(data RosterBuilderData) {
 					if len(pos.Assigned) > 0 {
 						<ul class="assignment-list">
 							for _, a := range pos.Assigned {
-								<li>
+								<li data-row-id={ fmt.Sprintf("%d", a.ID) } onclick="selectPersonRow(this, event)">
 									<span>{ a.Name }</span>
 									<span class="badge">{ a.Status }</span>
 									if a.Published {

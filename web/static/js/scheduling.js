@@ -149,11 +149,97 @@ function closeRowMenus() {
 // set_builder.templ), so only one of the three is ever open at a time.
 // Closes whichever row-menu triggered this too, same as picking a real nav
 // link closes the nav dropdown.
+//
+// button's own data-row-id wins when present - the song detail card's
+// Tag/Relate/Mark role buttons (song_detail_card.templ) carry it directly
+// since they aren't nested inside the song's own <tr>, unlike the row
+// menu's copies of these same buttons. Triggering from the card also
+// scrolls the now-revealed row into view, since it lives in the table
+// above rather than right next to the button that opened it.
 function openQuickAction(button, action) {
-  var rowID = button.closest("tr.song-row").dataset.rowId;
+  var rowID = button.dataset.rowId || button.closest("tr.song-row").dataset.rowId;
   closeRowMenus();
+  var revealed = null;
   document.querySelectorAll('tr.quick-action-row[data-row-id="' + rowID + '"]').forEach(function (row) {
     row.hidden = row.dataset.action !== action;
+    if (!row.hidden) {
+      revealed = row;
+    }
+  });
+  if (revealed && button.closest(".build-detail-card")) {
+    revealed.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+}
+
+// Clicking a song's row in the order of service (set_builder.templ) opens
+// that song's detail card in the sidebar (song_detail_card.templ) - its
+// metadata, notes, and every one of the row's own actions spelled out with
+// the room a table cell doesn't have. Clicking the same row again, or its
+// card's own Close button, closes it - a plain toggle, same idiom as
+// toggleRowMenu. Ignores clicks on the row's own action cell (buttons,
+// forms, the replace <select>) and drag handle - those already do
+// something on their own; selecting the row on top of that would just be
+// noise (and, for the drag handle, fire on every drag as an unwanted
+// side effect).
+function selectSongRow(row, event) {
+  if (event.target.closest(".set-song-actions") || event.target.closest(".drag-handle")) {
+    return;
+  }
+  var rowID = row.dataset.rowId;
+  var alreadySelected = row.classList.contains("selected");
+  closeSongDetail();
+  if (alreadySelected) {
+    return;
+  }
+  row.classList.add("selected");
+  // Scoped to #build-detail-songs, not just .build-detail-card - a set_song
+  // row id and a roster_assignment row id are independent sequences that
+  // can collide, and closePersonDetail's card group shares the same class.
+  var card = document.querySelector('#build-detail-songs .build-detail-card[data-row-id="' + rowID + '"]');
+  if (card) {
+    card.hidden = false;
+  }
+}
+
+function closeSongDetail() {
+  document.querySelectorAll("tr.song-row.selected").forEach(function (row) {
+    row.classList.remove("selected");
+  });
+  document.querySelectorAll("#build-detail-songs .build-detail-card").forEach(function (card) {
+    card.hidden = true;
+  });
+}
+
+// The people equivalent of selectSongRow/closeSongDetail above - clicking
+// an assigned person's row in a position's assignment list
+// (roster_builder.templ) opens their detail card (person_detail_card.templ)
+// in the sidebar. Ignores clicks on the row's own Remove button, same
+// reasoning as selectSongRow ignoring its actions cell.
+function selectPersonRow(row, event) {
+  if (event.target.closest("button")) {
+    return;
+  }
+  var rowID = row.dataset.rowId;
+  var alreadySelected = row.classList.contains("selected");
+  closePersonDetail();
+  if (alreadySelected) {
+    return;
+  }
+  row.classList.add("selected");
+  // Scoped to #build-detail-team - see selectSongRow's own comment on why
+  // this can't just be .build-detail-card[data-row-id=...].
+  var card = document.querySelector('#build-detail-team .build-detail-card[data-row-id="' + rowID + '"]');
+  if (card) {
+    card.hidden = false;
+  }
+}
+
+function closePersonDetail() {
+  document.querySelectorAll(".assignment-list li.selected").forEach(function (row) {
+    row.classList.remove("selected");
+  });
+  document.querySelectorAll("#build-detail-team .build-detail-card").forEach(function (card) {
+    card.hidden = true;
   });
 }
 
@@ -164,6 +250,12 @@ document.addEventListener("click", function (event) {
   if (!event.target.closest(".row-menu")) {
     closeRowMenus();
   }
+  if (!event.target.closest("tr.song-row") && !event.target.closest(".build-detail-card")) {
+    closeSongDetail();
+  }
+  if (!event.target.closest(".assignment-list li") && !event.target.closest(".build-detail-card")) {
+    closePersonDetail();
+  }
 });
 
 document.addEventListener("keydown", function (event) {
@@ -171,6 +263,8 @@ document.addEventListener("keydown", function (event) {
     closeNavDropdowns();
     closeRowMenus();
     closeMobileMenu();
+    closeSongDetail();
+    closePersonDetail();
   }
 });
 
@@ -203,6 +297,13 @@ function toggleBuildTab(tabName) {
   document.querySelectorAll(".build-publish-card").forEach(function (card) {
     var cardTab = card.id.replace("build-publish-", "");
     card.hidden = cardTab !== tabName;
+  });
+  // The song/person detail card groups (see SongDetailCards/
+  // PersonDetailCards) are scoped to their own tab the same way - only
+  // the open tab's own group can have anything selected to show.
+  document.querySelectorAll(".build-detail-group").forEach(function (group) {
+    var groupTab = group.id.replace("build-detail-", "");
+    group.hidden = groupTab !== tabName;
   });
   // Keeps the address bar (and anything copied from it) pointing at
   // whichever tab is actually open - see BuildPlanPage's ?tab= query param.

@@ -646,18 +646,24 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 	}
 	data.PendingDeleteCount = len(pending)
 
-	// ImportableAssignmentCount only matters the first time this roster is
-	// opened - see SetBuilderData.ImportableSongCount, which this mirrors.
-	// The extra GetTeamMembers call only happens in that narrow case: once
-	// this roster has anything of its own, PCO's already-filled positions
-	// are either reflected in assignments or were deliberately removed, so
-	// there's nothing left to import. This is also why it can't reuse
-	// needed (fetched right below) - GetNeededPositions only reports
-	// *unfilled* slots, so a plan PCO already has fully staffed - the whole
-	// point of this prompt - shows zero needed positions.
-	if len(assignments) == 0 && data.PendingDeleteCount == 0 {
-		if members, err := pco.GetTeamMembers(ctx, serviceTypeID, planID, nil); err == nil {
+	// One bulk read of every PlanPerson Planning Center already has for
+	// this plan, reused for two independent things below rather than two
+	// separate calls: ImportableAssignmentCount (only meaningful the first
+	// time this roster is opened - see SetBuilderData.ImportableSongCount,
+	// which this mirrors) and notesByPlanPersonID (every published
+	// assignment's own Notes, read-only display on the person detail
+	// sidebar card - see AssignmentView.Notes). This is also why
+	// ImportableAssignmentCount can't reuse needed (fetched right below)
+	// instead - GetNeededPositions only reports *unfilled* slots, so a plan
+	// PCO already has fully staffed - the whole point of this prompt -
+	// shows zero needed positions.
+	notesByPlanPersonID := map[string]string{}
+	if members, err := pco.GetTeamMembers(ctx, serviceTypeID, planID, nil); err == nil {
+		if len(assignments) == 0 && data.PendingDeleteCount == 0 {
 			data.ImportableAssignmentCount = len(members.Data)
+		}
+		for _, m := range members.Data {
+			notesByPlanPersonID[m.ID] = m.Attributes.Notes
 		}
 	}
 
@@ -770,7 +776,10 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 				PersonID:         ra.PersonID,
 				Name:             titleOrID(names, ra.PersonID),
 				Status:           ra.Status,
+				TeamName:         pg.TeamName,
+				TeamPositionName: pg.TeamPositionName,
 				Published:        ra.PCOPlanPersonID != "",
+				Notes:            notesByPlanPersonID[ra.PCOPlanPersonID],
 				FrequencyWarning: freqWarn,
 				BlockoutWarning:  blockoutWarningIfKnown(planDate, blockoutsByPerson[ra.PersonID]),
 			})

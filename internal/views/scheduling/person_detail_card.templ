@@ -1,0 +1,79 @@
+package scheduling
+
+import (
+	"fmt"
+
+	"pco-assistant/internal/views"
+)
+
+// PersonDetailCards is every assigned person's own detail card, stacked in
+// the Build page's sidebar (see build.templ) right below the Team publish
+// card - the people equivalent of SongDetailCards, which this mirrors in
+// full (including the OOB/non-OOB split and the "one card visible at a
+// time" idiom - see personDetailCard below and selectPersonRow,
+// scheduling.js).
+templ PersonDetailCards(data RosterBuilderData, hidden bool) {
+	<div class="build-detail-group" id="build-detail-team" hidden?={ hidden }>
+		for _, pos := range data.Positions {
+			for _, a := range pos.Assigned {
+				@personDetailCard(data, a)
+			}
+		}
+	</div>
+}
+
+templ personDetailCardsOOB(data RosterBuilderData) {
+	<div class="build-detail-group" id="build-detail-team" hx-swap-oob="true">
+		for _, pos := range data.Positions {
+			for _, a := range pos.Assigned {
+				@personDetailCard(data, a)
+			}
+		}
+	</div>
+}
+
+// personDetailCard is one assigned person's detail card - hidden until
+// selectPersonRow (scheduling.js) reveals it, in response to clicking that
+// person's own row in a position's assignment list (roster_builder.templ).
+// Notes is read-only here (see AssignmentView.Notes) - there's no editing
+// UI for it yet, only display, same as ArrangementInfo/Notes on the song
+// card's arrangement side.
+templ personDetailCard(data RosterBuilderData, a AssignmentView) {
+	<div class="build-glance-card build-detail-card" data-row-id={ fmt.Sprintf("%d", a.ID) } hidden>
+		<div class="build-detail-header">
+			<h3>{ a.Name }</h3>
+			<button type="button" class="icon-btn" aria-label="Close" title="Close" onclick="closePersonDetail()">
+				@views.IconX()
+			</button>
+		</div>
+		<p class="muted">{ a.TeamName } / { a.TeamPositionName }</p>
+		<div class="build-detail-badges">
+			<span class="badge">{ a.Status }</span>
+			if a.Published {
+				<span class="badge published">Published</span>
+			}
+			if a.FrequencyWarning != "" {
+				<span class="conflict-badge">⚠ { a.FrequencyWarning }</span>
+			}
+			if a.BlockoutWarning != "" {
+				<span class="conflict-badge">⚠ { a.BlockoutWarning }</span>
+			}
+		</div>
+		if a.Notes != "" {
+			<p class="build-detail-notes">{ a.Notes }</p>
+		}
+		<div class="build-detail-actions">
+			<button
+				type="button"
+				class="danger"
+				hx-delete={ fmt.Sprintf("/scheduling/rosters/%s/%s/assignments/%d", data.ServiceTypeID, data.PlanID, a.ID) }
+				hx-target="#roster-builder-body"
+				hx-swap="outerHTML"
+				hx-confirm="Remove this person from this position?"
+			>
+				@views.IconRemove()
+				Remove from position
+			</button>
+		</div>
+	</div>
+}

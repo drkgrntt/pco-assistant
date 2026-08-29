@@ -100,9 +100,21 @@ type AssignmentView struct {
 	PersonID string
 	Name     string
 	Status   string
+	// TeamName/TeamPositionName repeat the values already on this
+	// assignment's own PositionGroupView - carried here too so the person
+	// detail sidebar card (person_detail_card.templ) can say which position
+	// it's showing without needing the group it came from.
+	TeamName         string
+	TeamPositionName string
 	// Published is true once this assignment has been pushed to Planning
 	// Center as a real PlanPerson - see SetSongView.Published.
 	Published bool
+	// Notes is this assignment's Planning Center PlanPerson notes -
+	// read-only display only (see buildRosterBuilderData), "" whenever this
+	// assignment isn't published yet (Planning Center has nothing to carry
+	// notes on until then) or has none set. Shown on the person detail
+	// sidebar card - see SetSongView.Notes, which this mirrors for people.
+	Notes string
 	// FrequencyWarning/BlockoutWarning are empty when there's nothing to
 	// flag - see the controller's frequencyWarning/blockoutWarning.
 	FrequencyWarning string
