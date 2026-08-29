@@ -961,17 +961,28 @@ tr.song-row.selected {
   min-height: calc(var(--text-md) * var(--leading-normal));
 }
 
-/* .song-meta above keeps every row's TITLE cell the same natural height,
-   but that's only half the row - a native <select> (the Replace form)
-   renders with a slightly different intrinsic height than a <button> on
-   some browsers even with identical declared padding/min-height (UA
-   chrome around the dropdown), so the actions cell's natural height can
-   drift a pixel or two from row to row depending on which controls
-   happen to be present. An explicit floor on every song row's cells,
-   tall enough to comfortably fit both the 2-line title+meta stack and
-   the actions row's buttons/select, removes that drift instead of
-   chasing it browser by browser - the actual tallest cell still just
-   grows past this if it ever needs to. */
+/* Root cause of the row-height complaint this (and the min-height rule
+   below) were chasing: components.css centers every table cell's content
+   vertically (td { vertical-align: middle }), and a song row's title
+   cell (title + .song-meta, always 2 lines) is naturally taller than its
+   actions cell (a single row of buttons/select). Each cell centers
+   independently within the row's shared height, so the title text sits
+   close to the row's top/bottom edges while the actions row floats with
+   noticeably more space around it - same row height, same border, but
+   visibly unbalanced within itself. Top-aligning both cells instead of
+   centering them fixes that: everything in a row now starts flush at the
+   same line regardless of which side has more content, instead of two
+   independently-centered blocks of different sizes. */
+tr.song-row > td {
+  vertical-align: top;
+}
+
+/* Belt-and-suspenders alongside the top-alignment above: keeps every
+   song row's actions cell at least tall enough to match the 2-line
+   title+meta stack even if that ever changes, so the row's height still
+   never depends on which controls happen to be present in the actions
+   cell (native <select> vs. plain buttons render with slightly different
+   intrinsic heights on some browsers). */
 tr.song-row > td {
   min-height: 3.5rem;
 }
