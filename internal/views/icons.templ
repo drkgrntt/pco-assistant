@@ -89,3 +89,40 @@ templ IconX() {
 		<line x1="6" y1="6" x2="18" y2="18"></line>
 	</svg>
 }
+
+// IconMore marks a row-scoped "more actions" menu toggle (the set
+// builder's per-song row menu - see openQuickAction in scheduling.js) - a
+// vertical 3-dot kebab, same filled-circle style as IconDrag rather than a
+// stroked one, so it doesn't read as a drag handle at a glance.
+templ IconMore() {
+	<svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+		<circle cx="12" cy="5" r="1.5"></circle>
+		<circle cx="12" cy="12" r="1.5"></circle>
+		<circle cx="12" cy="19" r="1.5"></circle>
+	</svg>
+}
+
+// IconTag marks the "tag this song" row-menu action.
+templ IconTag() {
+	<svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+		<path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82Z"></path>
+		<line x1="7" y1="7" x2="7.01" y2="7"></line>
+	</svg>
+}
+
+// IconRelate marks the "relate to another song" row-menu action.
+templ IconRelate() {
+	<svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+		<path d="M9 17H7A5 5 0 0 1 7 7h2"></path>
+		<path d="M15 7h2a5 5 0 1 1 0 10h-2"></path>
+		<line x1="8" y1="12" x2="16" y2="12"></line>
+	</svg>
+}
+
+// IconRole marks the "mark a role" row-menu action.
+templ IconRole() {
+	<svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+		<circle cx="12" cy="8" r="6"></circle>
+		<path d="M8.21 13.89 7 23l5-3 5 3-1.21-9.12"></path>
+	</svg>
+}
