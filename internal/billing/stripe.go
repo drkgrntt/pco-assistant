@@ -17,7 +17,7 @@ import (
 )
 
 // PlanStandard/PlanMultiCampus are this app's own plan codes, stored in
-// organizations.plan - see ROADMAP.md's pricing section for what each
+// organizations.plan - see the README's Setup section for what each
 // includes. Deliberately not Stripe Price ids themselves, so a Price id
 // can be rotated (e.g. a price change) without a data migration - only
 // Client's own priceToPlan map needs to change.

@@ -15,9 +15,24 @@ Every PCO organization gets a 14-day free trial automatically the first
 time it signs in (a row in `organizations` - name, `status`, `plan`,
 Stripe ids), enforced on every request by `RequireActiveOrganization`.
 Once the trial ends (or any time before that), `/billing` offers the two
-paid plans (see ROADMAP) via Stripe Checkout; an existing subscription is
-managed through Stripe's own Billing Portal - no custom billing UI to
-build or maintain beyond the plan picker itself.
+paid plans below via Stripe Checkout; an existing subscription is managed
+through Stripe's own Billing Portal - no custom billing UI to build or
+maintain beyond the plan picker itself.
+
+Pricing is seat-based, where a "seat" is a distinct admin (whoever's
+actually building sets/rosters here, not anyone just viewing or receiving
+a published schedule - that's always free, no matter how many people that
+is):
+
+| Tier | Price | Included admin seats |
+|---|---|---|
+| Standard | $14/mo | 2 |
+| Multi-Campus | $28/mo | 5 (+$5/mo per extra seat) |
+
+Standard has no paid overage - going over 2 seats just shows a
+non-blocking upsell nudge on `/billing`. Multi-Campus bills overage for
+real: a daily cron (`jobs.BillingJobs`) pushes each org's actual seat
+count into Stripe as that subscription's line-item quantity.
 
 ## Features
 
@@ -124,8 +139,9 @@ Mobile-first, installable as a PWA, with light/dark theming.
 3. **Stripe (optional for local dev).** Every organization gets a free
    trial automatically at sign-in - Stripe is only needed for the
    `/billing` page's "choose a plan"/"manage billing" buttons to
-   actually work. Create two Products/Prices (Standard, Multi-Campus -
-   see ROADMAP's pricing section) in a
+   actually work. Create two Products/Prices (Standard $14/mo,
+   Multi-Campus $28/mo with graduated per-seat overage - see the
+   pricing table above) in a
    [test-mode Stripe account](https://dashboard.stripe.com/test/apikeys),
    and a webhook endpoint pointed at `<APP_BASE_URL>/billing/webhook`
    listening for `checkout.session.completed`,

@@ -14,8 +14,8 @@ import (
 
 // homeServiceTypesCap bounds how many service types the "needs
 // attention" widget looks at - a defensive limit, not a real one for the
-// single/multi-campus churches this app targets (ROADMAP's pricing
-// section), so it's generous rather than tight.
+// single/multi-campus churches this app targets (see the README's
+// pricing table), so it's generous rather than tight.
 const homeServiceTypesCap = 5
 
 type HomeController struct {
