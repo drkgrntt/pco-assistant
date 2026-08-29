@@ -1484,6 +1484,17 @@ func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizati
 		// default - see resolveArrangementCacheInfo's own doc comment for
 		// why this isn't two separate resolves.
 		arrangementInfo := resolveArrangementCacheInfo(ctx, store, organizationID, arrangementCache, ss.SongID)
+		key := effectiveKey(*ss, arrangementInfo)
+		// The summary line shown right on the row uses the *effective*
+		// key, not the arrangement's own cached one - without this, saving
+		// a key override in the detail card changed nothing visible
+		// anywhere else on the page until the next Publish/Refresh
+		// actually pushed it, which read as "did that do anything?"
+		// Swapping just Key here (not the whole struct) leaves BPM/meter/
+		// length showing the arrangement's real values, since those have
+		// no per-occurrence override to reflect.
+		displayInfo := arrangementInfo
+		displayInfo.Key = key
 		out = append(out, views.ServiceOrderRow{
 			IsSong: true,
 			Song: views.SetSongView{
@@ -1495,9 +1506,9 @@ func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizati
 				Published:       ss.PCOItemID != "",
 				AnchorItemID:    ss.AnchorItemID,
 				Moved:           ss.Moved,
-				ArrangementInfo: formatArrangementInfo(arrangementInfo),
+				ArrangementInfo: formatArrangementInfo(displayInfo),
 				Description:     ss.Description,
-				Key:             effectiveKey(*ss, arrangementInfo),
+				Key:             key,
 				PCOItemID:       ss.PCOItemID,
 				Notes:           buildSongNoteViews(ctx, serviceTypeID, planID, ss.PCOItemID, noteCategories),
 			},

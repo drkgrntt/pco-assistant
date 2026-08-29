@@ -163,7 +163,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 										even height regardless of which songs happen to be
 										cached.
 									-->
-									<div class="muted song-meta">{ row.Song.ArrangementInfo }</div>
+									<div class="muted song-meta" id={ fmt.Sprintf("song-meta-%d", row.Song.ID) }>{ row.Song.ArrangementInfo }</div>
 								</td>
 								<td>
 									for _, role := range row.Song.Roles {

@@ -51,8 +51,18 @@ templ songDetailCardsOOB(data SetBuilderData) {
 // saving one never disturbs the card it lives in, let alone the rest of
 // the page - a tighter scope than even re-rendering the whole card would
 // be.
+//
+// KeyFormFragment is the one exception with something else to update: the
+// order-of-service row's own summary line (set_builder.templ's
+// #song-meta-<id>) shows this song's *effective* key (see
+// renderServiceOrder's own comment on why), so saving a key override here
+// changes what that line should read too - without this out-of-band
+// update, the row would keep showing the old key until some unrelated
+// action happened to re-render the whole table, which reads as "did that
+// actually save?" (see SetSongView.ArrangementInfo/.Key).
 templ KeyFormFragment(data SetBuilderData, song SetSongView, errMsg string) {
 	@keyForm(data, song, errMsg)
+	<div class="muted song-meta" id={ fmt.Sprintf("song-meta-%d", song.ID) } hx-swap-oob="true">{ song.ArrangementInfo }</div>
 }
 
 templ DescriptionFormFragment(data SetBuilderData, song SetSongView, errMsg string) {
