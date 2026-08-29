@@ -108,16 +108,81 @@ header.site .site-nav {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  position: relative;
+  width: var(--control-height);
+  height: var(--control-height);
   margin-left: auto;
   background: none;
   border: none;
-  padding: var(--space-1);
+  padding: 0;
   color: var(--text);
   cursor: pointer;
 }
 
 .mobile-menu-toggle:hover {
   background: var(--surface-hover);
+}
+
+/* The hamburger itself - three plain CSS bars morphing into an X on open,
+   not an icon asset - same technique (and the same compounded-rotation
+   trick: the middle bar rotates 45deg, ::before inherits that rotation
+   as-is to form one diagonal, ::after adds another 90deg on top of it to
+   form the other) as the toggle on midwestdaisy, adapted to this app's
+   tokens/colors and to a plain aria-expanded attribute selector instead
+   of the checkbox-hack that drove it there - toggleMobileMenu (scheduling.js)
+   already sets aria-expanded, so no extra state is needed to key off of. */
+.hamburger-bar {
+  position: absolute;
+  left: 8px;
+  width: 20px;
+  height: 2px;
+  top: 17px;
+  border-radius: var(--radius-full);
+  background: currentColor;
+  transition: transform var(--duration-base) var(--ease-standard),
+    background-color var(--duration-base) var(--ease-standard);
+}
+
+/* left:0/width:100% of .hamburger-bar's own box, not another left/right
+   inset off the button - .hamburger-bar is itself position:absolute, so
+   it's the containing block its ::before/::after size against, and a
+   second inset here would both double-offset them rightward and shrink
+   each to a sliver (their containing block is the already-20px bar, not
+   the 36px button). */
+.hamburger-bar::before,
+.hamburger-bar::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  border-radius: var(--radius-full);
+  background: currentColor;
+  transition: transform var(--duration-base) var(--ease-standard),
+    top var(--duration-base) var(--ease-standard);
+}
+
+.hamburger-bar::before {
+  top: -6px;
+}
+
+.hamburger-bar::after {
+  top: 6px;
+}
+
+.mobile-menu-toggle[aria-expanded="true"] .hamburger-bar {
+  background: transparent;
+  transform: rotate(45deg);
+}
+
+.mobile-menu-toggle[aria-expanded="true"] .hamburger-bar::before {
+  top: 0;
+  transform: rotate(0deg);
+}
+
+.mobile-menu-toggle[aria-expanded="true"] .hamburger-bar::after {
+  top: 0;
+  transform: rotate(90deg);
 }
 
 .site-nav,
