@@ -561,6 +561,19 @@ document.addEventListener("htmx:afterSwap", wireSortableTables);
     return (row && row.dataset.token) || "";
   }
 
+  // The nearest actual drop-target row before this one - not just
+  // previousElementSibling, which can land on a hidden, token-less
+  // <tr class="quick-action-row"> (each song row has up to three of these
+  // as its own siblings - see set_builder.templ) rather than the real
+  // previous song/header row.
+  function previousTargetRow(row) {
+    var sibling = row.previousElementSibling;
+    while (sibling && !sibling.dataset.token) {
+      sibling = sibling.previousElementSibling;
+    }
+    return sibling;
+  }
+
   function findDropTargetRow(tbody, clientY) {
     var rows = tbody.querySelectorAll("tr[data-token]");
     var target = null;
@@ -629,7 +642,7 @@ document.addEventListener("htmx:afterSwap", wireSortableTables);
       return;
     }
     // No-op if dropped back where it already was.
-    if (rowToken(draggedRow.previousElementSibling) === after) {
+    if (rowToken(previousTargetRow(draggedRow)) === after) {
       return;
     }
 
@@ -652,7 +665,20 @@ document.addEventListener("htmx:afterSwap", wireSortableTables);
 
     event.preventDefault();
     dragging = row;
-    dragOverRow = null;
+    // Defaults to the row's own current predecessor, not null - the
+    // dragged row is itself one of the candidates findDropTargetRow
+    // considers, so if the pointer never actually crosses a genuinely
+    // different row's midpoint (most reliably reproduced by dragging the
+    // *last* row, where there's nothing below to cross), it resolves to
+    // "dropped on itself" every single pointermove, and previously fell
+    // back to a still-null dragOverRow - read by onPointerUp as "no
+    // target at all," which onPointerMove's own fallback treats as
+    // dropping at the very top of service. Starting from the real
+    // previous row instead means that same "never found a new target"
+    // case now correctly resolves to "still after whatever it already
+    // was," which the existing no-op check below then catches instead of
+    // firing off a real (and wrong) reposition to the top.
+    dragOverRow = previousTargetRow(row);
     row.classList.add("dragging");
 
     document.addEventListener("pointermove", onPointerMove);

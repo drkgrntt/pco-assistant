@@ -378,17 +378,23 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 				title := titleOrID(titles, ss.SongID)
 
 				if ss.PCOItemID == "" {
-					// Description/Length/ArrangementID all come from the
-					// song's own cached arrangement, backfilling live on a
-					// cache miss (fetchAndCacheArrangementInfo, same
+					// Description/Length/ArrangementID/KeyID all come from
+					// the song's own cached arrangement, backfilling live
+					// on a cache miss (fetchAndCacheArrangementInfo, same
 					// cache-miss path resolveArrangementInfo uses for
 					// display) - a song published for the first time
 					// shouldn't have to wait for a separate Song Info sync
 					// just to get its arrangement actually linked. Without
-					// ArrangementID specifically, PCO shows nothing but
-					// the bare title for this item - no chord chart,
-					// lyrics, or structure (confirmed live) - unlike a
-					// song added through Planning Center's own UI.
+					// ArrangementID, PCO shows nothing but the bare title
+					// for this item - no chord chart, lyrics, or structure
+					// (confirmed live) - unlike a song added through
+					// Planning Center's own UI; KeyID is a separate
+					// relationship again (confirmed live: linking the
+					// arrangement alone still leaves the item's key blank),
+					// and stays empty when the song's key came from the
+					// arrangement's ChordChartKey fallback rather than a
+					// real Key sub-resource - there's nothing to link in
+					// that case, just a display string.
 					info, ok := arrangementCache[ss.SongID]
 					if !ok {
 						if fetched, err := fetchAndCacheArrangementInfo(ctx, sc.store, orgID, ss.SongID); err == nil {
@@ -402,6 +408,7 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 						Sequence:      nextSequence + i,
 						SongID:        ss.SongID,
 						ArrangementID: info.ArrangementID,
+						KeyID:         info.KeyID,
 						Description:   info.Notes,
 						Length:        info.LengthSeconds,
 					})
