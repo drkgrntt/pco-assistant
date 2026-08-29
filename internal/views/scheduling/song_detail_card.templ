@@ -26,7 +26,7 @@ templ SongDetailCards(data SetBuilderData, hidden bool) {
 	<div class="build-detail-group" id="build-detail-songs" hidden?={ hidden }>
 		for _, row := range data.ServiceOrder {
 			if row.IsSong {
-				@songDetailCard(data, row.Song)
+				@songDetailCard(data, row.Song, false, "")
 			}
 		}
 	</div>
@@ -36,10 +36,26 @@ templ songDetailCardsOOB(data SetBuilderData) {
 	<div class="build-detail-group" id="build-detail-songs" hx-swap-oob="true">
 		for _, row := range data.ServiceOrder {
 			if row.IsSong {
-				@songDetailCard(data, row.Song)
+				@songDetailCard(data, row.Song, false, "")
 			}
 		}
 	</div>
+}
+
+// SongDetailCardFragment re-renders a single song's own detail card,
+// already open (unlike every other render path here, which defaults to
+// hidden and leaves opening it to selectSongRow, scheduling.js) - the
+// response for an action scoped entirely to this one card (saving "This
+// week's note" or a category note, see UpdateSetSongDescription/
+// UpdateSongNote in sets.go). Neither of those touches the order of
+// service, publish status, or anything else on the page, so swapping just
+// this card in place - via the form's own hx-target="closest
+// .build-detail-card" - avoids the jarring reset a full #set-builder-body
+// swap would cause: every card defaults to hidden on a fresh render, so
+// the very card you're mid-edit in would otherwise snap shut on every
+// save.
+templ SongDetailCardFragment(data SetBuilderData, song SetSongView, errMsg string) {
+	@songDetailCard(data, song, true, errMsg)
 }
 
 // songDetailCard is one song's detail card - hidden until selectSongRow
@@ -60,14 +76,17 @@ templ songDetailCardsOOB(data SetBuilderData) {
 // instead jump to (and reveal) the row's own hidden quick-action-row,
 // rather than yet another copy of those three forms - see openQuickAction
 // (scheduling.js), which already knows how to find that row by id.
-templ songDetailCard(data SetBuilderData, song SetSongView) {
-	<div class="build-glance-card build-detail-card" data-row-id={ fmt.Sprintf("%d", song.ID) } hidden>
+templ songDetailCard(data SetBuilderData, song SetSongView, open bool, errMsg string) {
+	<div class="build-glance-card build-detail-card" data-row-id={ fmt.Sprintf("%d", song.ID) } hidden?={ !open }>
 		<div class="build-detail-header">
 			<h3>{ song.Title }</h3>
 			<button type="button" class="icon-btn" aria-label="Close" title="Close" onclick="closeSongDetail()">
 				@views.IconX()
 			</button>
 		</div>
+		if errMsg != "" {
+			<p class="error">{ errMsg }</p>
+		}
 		if song.ArrangementInfo != "" {
 			<p class="muted">{ song.ArrangementInfo }</p>
 		}
@@ -88,12 +107,14 @@ templ songDetailCard(data SetBuilderData, song SetSongView) {
 				edit, same as everything else on this page: it reaches
 				Planning Center as this item's Description on the next
 				Publish or Refresh song info, not immediately (see
-				UpdateSetSongDescription).
+				UpdateSetSongDescription). Targets this card itself, not
+				#set-builder-body - see SongDetailCardFragment's own doc
+				comment for why.
 			-->
 			<form
 				class="build-detail-note-form"
 				hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/description", data.ServiceTypeID, data.PlanID, song.ID) }
-				hx-target="#set-builder-body"
+				hx-target="closest .build-detail-card"
 				hx-swap="outerHTML"
 			>
 				<label>
@@ -119,7 +140,7 @@ templ songDetailCard(data SetBuilderData, song SetSongView) {
 				<form
 					class="build-detail-note-form"
 					hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/items/%s/notes", data.ServiceTypeID, data.PlanID, song.PCOItemID) }
-					hx-target="#set-builder-body"
+					hx-target="closest .build-detail-card"
 					hx-swap="outerHTML"
 				>
 					<input type="hidden" name="category_id" value={ note.CategoryID }/>

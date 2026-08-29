@@ -273,26 +273,68 @@ func (sc *SchedulingController) DuplicateSetSong(c *fiber.Ctx) error {
 	return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(middleware.RequestContext(c), orgID, serviceTypeID, planID, errMsg)))
 }
 
+// findSongViewByRowID/findSongViewByItemID locate one song's already-built
+// view inside data.ServiceOrder - used by UpdateSetSongDescription/
+// UpdateSongNote to re-render just that one song's detail card (see
+// views.SongDetailCardFragment) instead of the whole set builder body,
+// since neither action touches anything else on the page.
+func findSongViewByRowID(data views.SetBuilderData, rowID int64) (views.SetSongView, bool) {
+	for _, row := range data.ServiceOrder {
+		if row.IsSong && row.Song.ID == rowID {
+			return row.Song, true
+		}
+	}
+	return views.SetSongView{}, false
+}
+
+func findSongViewByItemID(data views.SetBuilderData, itemID string) (views.SetSongView, bool) {
+	for _, row := range data.ServiceOrder {
+		if row.IsSong && row.Song.PCOItemID == itemID {
+			return row.Song, true
+		}
+	}
+	return views.SetSongView{}, false
+}
+
 // UpdateSetSongDescription sets one set song's local per-occurrence note
 // (see scheduling.SetSong.Description) - a plain local draft edit, not a
 // live Planning Center write. It reaches Planning Center as that item's
 // Description on the next Publish or Refresh song info, same as every
 // other local change on this page (see itemDescriptionFor, scheduling.go).
+//
+// Re-renders just this song's own detail card (see
+// views.SongDetailCardFragment's own doc comment for why) rather than the
+// whole SetBuilderBody - a description edit never changes the order of
+// service, publish status, or any other song's card, so there's nothing
+// else on the page that needs to reflect it.
 func (sc *SchedulingController) UpdateSetSongDescription(c *fiber.Ctx) error {
+	ctx := middleware.RequestContext(c)
 	orgID := middleware.CurrentOrganizationID(c)
 	serviceTypeID := c.Params("service_type_id")
 	planID := c.Params("plan_id")
 
+	rowID, err := c.ParamsInt("set_song_id")
+	if err != nil {
+		return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(ctx, orgID, serviceTypeID, planID, "set_song_id must be an integer")))
+	}
+
 	errMsg := ""
-	if rowID, err := c.ParamsInt("set_song_id"); err != nil {
-		errMsg = "set_song_id must be an integer"
-	} else if set, err := sc.store.GetOrCreateSet(c.Context(), orgID, serviceTypeID, planID); err != nil {
+	if set, err := sc.store.GetOrCreateSet(ctx, orgID, serviceTypeID, planID); err != nil {
 		errMsg = err.Error()
-	} else if err := sc.store.UpdateSetSongDescription(c.Context(), set.ID, int64(rowID), c.FormValue("description")); err != nil {
+	} else if err := sc.store.UpdateSetSongDescription(ctx, set.ID, int64(rowID), c.FormValue("description")); err != nil {
 		errMsg = err.Error()
 	}
 
-	return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(middleware.RequestContext(c), orgID, serviceTypeID, planID, errMsg)))
+	data := sc.buildSetBuilderData(ctx, orgID, serviceTypeID, planID)
+	song, ok := findSongViewByRowID(data, int64(rowID))
+	if !ok {
+		// The row's gone (e.g. removed in another tab since this card was
+		// opened) - nothing left to render a fragment for, fall back to a
+		// full re-render so the page still reflects reality.
+		data.ErrMsg = appendErr(errMsg, data.ErrMsg)
+		return render(c, views.SetBuilderBody(data))
+	}
+	return render(c, views.SongDetailCardFragment(data, song, errMsg))
 }
 
 // UpdateSongNote creates, updates, or deletes one category's Planning
@@ -306,6 +348,10 @@ func (sc *SchedulingController) UpdateSetSongDescription(c *fiber.Ctx) error {
 // empty and content non-empty means create a new one for category_id;
 // note_id empty and content empty is a no-op (nothing existed, nothing was
 // typed).
+//
+// Re-renders just this song's own detail card - same reasoning as
+// UpdateSetSongDescription above (a note write here never touches
+// anything else on the page).
 func (sc *SchedulingController) UpdateSongNote(c *fiber.Ctx) error {
 	ctx := middleware.RequestContext(c)
 	orgID := middleware.CurrentOrganizationID(c)
@@ -334,7 +380,13 @@ func (sc *SchedulingController) UpdateSongNote(c *fiber.Ctx) error {
 		}
 	}
 
-	return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(ctx, orgID, serviceTypeID, planID, errMsg)))
+	data := sc.buildSetBuilderData(ctx, orgID, serviceTypeID, planID)
+	song, ok := findSongViewByItemID(data, itemID)
+	if !ok {
+		data.ErrMsg = appendErr(errMsg, data.ErrMsg)
+		return render(c, views.SetBuilderBody(data))
+	}
+	return render(c, views.SongDetailCardFragment(data, song, errMsg))
 }
 
 // PublishSet fully syncs the draft set to the real Planning Center plan:
