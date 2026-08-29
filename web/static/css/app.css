@@ -649,7 +649,6 @@ main:has(.build-layout) {
 .build-detail-note-form textarea {
   width: 100%;
   resize: vertical;
-  font: inherit;
 }
 
 .build-detail-note-form button {
