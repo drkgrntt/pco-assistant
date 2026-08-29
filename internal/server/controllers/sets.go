@@ -395,8 +395,16 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 					// arrangement's ChordChartKey fallback rather than a
 					// real Key sub-resource - there's nothing to link in
 					// that case, just a display string.
+					// info.ArrangementID == "" counts as a miss too, not just
+					// !ok - real bug, caught after shipping: a song cached
+					// before ArrangementID/KeyID existed as columns has a
+					// row that's present but permanently blank on both,
+					// and nothing ever re-fetched it since "cached" only
+					// checked presence. Any library synced before this
+					// session's arrangement-linking work landed would
+					// otherwise never get it, publish after publish.
 					info, ok := arrangementCache[ss.SongID]
-					if !ok {
+					if !ok || info.ArrangementID == "" {
 						if fetched, err := fetchAndCacheArrangementInfo(ctx, sc.store, orgID, ss.SongID); err == nil {
 							info = fetched
 						}

@@ -76,7 +76,13 @@ func (sc *SchedulingController) SyncSongInfo(c *fiber.Ctx) error {
 
 	applied, alreadyCached, failed := 0, 0, 0
 	for _, song := range songs {
-		if _, ok := cache[song.ID]; ok {
+		// info.ArrangementID == "" counts as needing a (re-)fetch too, not
+		// just a missing row - same reasoning as PublishSet's own version
+		// of this check: a song cached before ArrangementID/KeyID existed
+		// as columns has a row that's present but permanently blank on
+		// both, so "already cached" alone would never actually correct
+		// it - this sync is the one place meant to fix exactly that.
+		if info, ok := cache[song.ID]; ok && info.ArrangementID != "" {
 			alreadyCached++
 			continue
 		}
