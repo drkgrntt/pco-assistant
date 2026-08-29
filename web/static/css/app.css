@@ -520,6 +520,89 @@ header.site form {
   padding: 0.3rem var(--space-2);
 }
 
+/* The set builder's per-row "more actions" menu (see toggleRowMenu/
+   openQuickAction in scheduling.js) - the same open/closed, floating-menu
+   shape as the header's .nav-dropdown-menu, right-anchored instead of
+   left/JS-repositioned since the actions column is already the table's
+   rightmost edge and has nowhere further right to overflow into. */
+.row-menu {
+  position: relative;
+  display: inline-flex;
+}
+
+.row-menu-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 20;
+  flex-direction: column;
+  min-width: 13rem;
+  margin-top: 0.3rem;
+  padding: 0.3rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+
+.row-menu.open .row-menu-menu {
+  display: flex;
+}
+
+.row-menu-menu button {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 0;
+  padding: var(--space-2);
+  border: none;
+  background: none;
+  border-radius: var(--radius-md);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+}
+
+.row-menu-menu button:hover {
+  background: var(--accent-subtle);
+  border-color: transparent;
+}
+
+.row-menu-menu button .icon {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+/* The tag/relate/role form opened from a row's "more actions" menu - one
+   hidden <tr> "slot" per action per song (see quick-action-row in
+   set_builder.templ), toggled by openQuickAction. Full-width and anchored
+   directly under the row it's for, rather than the .quick-add-panel's
+   generic-dropdown card treatment - the song is already chosen, so this
+   is scoped visually as well as functionally. */
+.quick-action-row td {
+  padding: 0;
+}
+
+.quick-action-panel {
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-hover);
+  border-top: 2px solid var(--accent);
+}
+
+.quick-action-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-md);
+  font-weight: var(--font-semibold);
+}
+
+.quick-action-panel form.inline {
+  margin-block: 0;
+}
+
 .foreign-row {
   color: var(--muted);
 }

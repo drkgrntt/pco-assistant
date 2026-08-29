@@ -98,15 +98,55 @@ function closeNavDropdowns() {
   });
 }
 
+// The set builder's per-row "more actions" menu (song rows - see
+// row-menu/row-menu-toggle in set_builder.templ) - same open/closed idiom
+// as toggleNavDropdown above, just without the edge-of-screen
+// repositioning: the actions column is already the table's rightmost
+// edge, so a plain right-anchored menu (see .row-menu-menu in app.css)
+// never needs to flip sides.
+function toggleRowMenu(button) {
+  var wrapper = button.closest(".row-menu");
+  var open = wrapper.classList.toggle("open");
+  button.setAttribute("aria-expanded", open ? "true" : "false");
+}
+
+function closeRowMenus() {
+  document.querySelectorAll(".row-menu.open").forEach(function (wrapper) {
+    wrapper.classList.remove("open");
+    var toggle = wrapper.querySelector(".row-menu-toggle");
+    if (toggle) {
+      toggle.setAttribute("aria-expanded", "false");
+    }
+  });
+}
+
+// Reveals the hidden tag/relate/role form for one song row and hides its
+// two siblings - each song gets one <tr class="quick-action-row"> "slot"
+// per action, all sharing the same data-row-id as the song's own row (see
+// set_builder.templ), so only one of the three is ever open at a time.
+// Closes whichever row-menu triggered this too, same as picking a real nav
+// link closes the nav dropdown.
+function openQuickAction(button, action) {
+  var rowID = button.closest("tr.song-row").dataset.rowId;
+  closeRowMenus();
+  document.querySelectorAll('tr.quick-action-row[data-row-id="' + rowID + '"]').forEach(function (row) {
+    row.hidden = row.dataset.action !== action;
+  });
+}
+
 document.addEventListener("click", function (event) {
   if (!event.target.closest(".nav-dropdown")) {
     closeNavDropdowns();
+  }
+  if (!event.target.closest(".row-menu")) {
+    closeRowMenus();
   }
 });
 
 document.addEventListener("keydown", function (event) {
   if (event.key === "Escape") {
     closeNavDropdowns();
+    closeRowMenus();
   }
 });
 

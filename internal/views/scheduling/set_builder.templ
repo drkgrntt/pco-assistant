@@ -193,6 +193,131 @@ templ SetBuilderBody(data SetBuilderData) {
 											</button>
 										</form>
 									}
+									<!--
+										Row-scoped access to the same 3 actions the Quick add
+										panel below offers generically - see quick-action-row
+										just below and openQuickAction/toggleRowMenu
+										(scheduling.js). The song is already this row's, so
+										unlike the panel's forms there's no song picker to fill
+										in - just the category/relationship/role fields that
+										actually vary. The panel itself stays, since it's still
+										the only way to tag/relate/role a song that isn't in
+										this order of service yet.
+									-->
+									<div class="row-menu">
+										<button
+											type="button"
+											class="icon-btn row-menu-toggle"
+											aria-haspopup="true"
+											aria-expanded="false"
+											aria-label="More actions for this song"
+											title="More actions"
+											onclick="toggleRowMenu(this)"
+										>
+											@views.IconMore()
+										</button>
+										<div class="row-menu-menu">
+											<button type="button" onclick="openQuickAction(this, 'tag')">
+												@views.IconTag()
+												Tag this song
+											</button>
+											<button type="button" onclick="openQuickAction(this, 'relate')">
+												@views.IconRelate()
+												Relate to another song
+											</button>
+											<button type="button" onclick="openQuickAction(this, 'role')">
+												@views.IconRole()
+												Mark a role
+											</button>
+										</div>
+									</div>
+								</td>
+							</tr>
+							<tr class="quick-action-row" data-row-id={ fmt.Sprintf("%d", row.Song.ID) } data-action="tag" hidden>
+								<td colspan="4">
+									<div class="quick-action-panel">
+										<p class="quick-action-heading">
+											{ fmt.Sprintf("Tag %q", row.Song.Title) }
+											<button type="button" class="icon-btn" aria-label="Close" title="Close" onclick="this.closest('tr').hidden = true">
+												@views.IconX()
+											</button>
+										</p>
+										<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/song-tags", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
+											<input type="hidden" name="song_id" value={ row.Song.SongID }/>
+											<label>
+												Category
+												<select name="category">
+													for _, cat := range data.TagCategories {
+														<option value={ cat.Code }>{ cat.Label }</option>
+													}
+												</select>
+											</label>
+											<label>
+												Value
+												<input type="text" name="value" placeholder="e.g. Grace, Romans 8:1, New beginnings" required/>
+											</label>
+											<button type="submit" class="primary">Add tag</button>
+										</form>
+									</div>
+								</td>
+							</tr>
+							<tr class="quick-action-row" data-row-id={ fmt.Sprintf("%d", row.Song.ID) } data-action="relate" hidden>
+								<td colspan="4">
+									<div class="quick-action-panel">
+										<p class="quick-action-heading">
+											{ fmt.Sprintf("Relate %q to...", row.Song.Title) }
+											<button type="button" class="icon-btn" aria-label="Close" title="Close" onclick="this.closest('tr').hidden = true">
+												@views.IconX()
+											</button>
+										</p>
+										<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/song-relationships", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
+											<input type="hidden" name="song_id_a" value={ row.Song.SongID }/>
+											<label>
+												Song
+												<select name="song_id_b" required>
+													<option value="" selected disabled>Choose a song</option>
+													for _, song := range data.AllSongs {
+														if song.ID != row.Song.SongID {
+															<option value={ song.ID }>{ song.Attributes.Title }</option>
+														}
+													}
+												</select>
+											</label>
+											<label>
+												Relationship
+												<select name="relationship_type">
+													for _, t := range data.RelationshipTypes {
+														<option value={ t.Code }>{ t.Label }</option>
+													}
+												</select>
+											</label>
+											<button type="submit" class="primary">Relate songs</button>
+										</form>
+									</div>
+								</td>
+							</tr>
+							<tr class="quick-action-row" data-row-id={ fmt.Sprintf("%d", row.Song.ID) } data-action="role" hidden>
+								<td colspan="4">
+									<div class="quick-action-panel">
+										<p class="quick-action-heading">
+											{ fmt.Sprintf("Mark a role for %q", row.Song.Title) }
+											<button type="button" class="icon-btn" aria-label="Close" title="Close" onclick="this.closest('tr').hidden = true">
+												@views.IconX()
+											</button>
+										</p>
+										<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/song-roles", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
+											<input type="hidden" name="song_id" value={ row.Song.SongID }/>
+											<label>
+												Role
+												<select name="role">
+													for _, t := range data.RoleTypes {
+														<option value={ t.Code }>{ t.Label }</option>
+													}
+												</select>
+											</label>
+											<button type="submit" class="primary">Mark role</button>
+										</form>
+									</div>
 								</td>
 							</tr>
 						} else if row.ItemType == pco.ItemTypeHeader {
@@ -379,6 +504,13 @@ templ SetBuilderBody(data SetBuilderData) {
 			setup-page table. Create-only, same as those setup pages' forms
 			minus the edit affordance - see the build-page redesign plan for
 			why editing stays their job.
+
+			Every song here also gets these same 3 actions from its own row's
+			"more actions" menu (see row-menu/quick-action-row above), already
+			scoped to that song - the faster path once a song is already in
+			the order of service. This panel stays for the one thing the row
+			menu can't do: tag/relate/mark a role on a song that isn't in this
+			set yet.
 		-->
 		@collapsibleSection("quick-add-songs", "Quick add", false) {
 			<div class="quick-add-panel">
