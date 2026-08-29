@@ -10,12 +10,47 @@ import (
 	pco "github.com/drkgrntt/go-pco"
 )
 
-// SetBuilderBody is both the initial-render fragment and the htmx swap
-// target (id="set-builder-body") for every add/remove/move action below -
-// the whole thing re-renders each time since adding or removing a song can
-// change the current set, the recommendations (based on the last song
-// added), and the candidate list's conflict warnings all at once.
+// SetBuilderBody is the htmx swap target (id="set-builder-body") for every
+// add/remove/move action below - the whole thing re-renders each time
+// since adding or removing a song can change the current set, the
+// recommendations (based on the last song added), and the candidate
+// list's conflict warnings all at once. Bundles songPublishPanelOOB
+// alongside SetBuilderBodyContent so every one of those actions also keeps
+// the sidebar's publish card in sync (see its own doc comment) - every
+// htmx handler that used to just render SetBuilderBody keeps doing exactly
+// that, unchanged, and gets the sync for free.
 templ SetBuilderBody(data SetBuilderData) {
+	@SetBuilderBodyContent(data)
+	@songPublishPanelOOB(data)
+}
+
+// nextSongID returns the SongID of the next song in order after index i -
+// "next" meaning the next row that IsSong, skipping over any header/
+// foreign items in between, not just order[i+1]. Used to default the row
+// menu's "Relate to another song" picker to whatever's actually adjacent
+// in the order of service, since that's by far the most common pair to
+// relate - the same adjacency SongPairPrompt above already captures
+// automatically right after an add; this just offers the same default
+// when relating from the row menu instead. Returns "" when there's no
+// next song (i is the last song in the order).
+func nextSongID(order []ServiceOrderRow, i int) string {
+	for j := i + 1; j < len(order); j++ {
+		if order[j].IsSong {
+			return order[j].Song.SongID
+		}
+	}
+	return ""
+}
+
+// SetBuilderBodyContent is the actual content - split out from
+// SetBuilderBody so the Build page's initial full-page render
+// (build.templ) can embed just this, without also embedding
+// songPublishPanelOOB: that out-of-band fragment only does anything on an
+// htmx-processed response, not a plain page load, where it would
+// otherwise just render as an inert, visible second copy of the sidebar's
+// publish card (and a duplicate id) sitting in the main content instead of
+// being relocated anywhere.
+templ SetBuilderBodyContent(data SetBuilderData) {
 	<div id="set-builder-body">
 		if data.ErrMsg != "" {
 			<p class="error">{ data.ErrMsg }</p>
@@ -23,21 +58,7 @@ templ SetBuilderBody(data SetBuilderData) {
 		if data.PublishMsg != "" {
 			<p class="success">{ data.PublishMsg }</p>
 		}
-		<div class="status-summary">
-			@statusChip(fmt.Sprintf("Songs: %d", len(data.SetSongs)), false)
-			if data.UnpublishedCount > 0 {
-				@statusChip(fmt.Sprintf("Unpublished: %d", data.UnpublishedCount), true)
-			}
-			if data.PendingDeleteCount > 0 {
-				@statusChip(fmt.Sprintf("Pending removal: %d", data.PendingDeleteCount), true)
-			}
-			if data.ReorderPending {
-				@statusChip("Order changed", true)
-			}
-			if warnCount := len(data.ExistingConflicts) + len(data.RepeatWarnings); warnCount > 0 {
-				@statusChip(fmt.Sprintf("Warnings: %d", warnCount), true)
-			}
-		</div>
+		@SongStatusSummary(data)
 		for _, msg := range data.ExistingConflicts {
 			<div class="warning">{ msg }</div>
 		}
@@ -270,11 +291,12 @@ templ SetBuilderBody(data SetBuilderData) {
 											<input type="hidden" name="song_id_a" value={ row.Song.SongID }/>
 											<label>
 												Song
+												<!-- Defaults to the next song in the order (see nextSongID). -->
 												<select name="song_id_b" required>
-													<option value="" selected disabled>Choose a song</option>
+													<option value="" disabled selected?={ nextSongID(data.ServiceOrder, i) == "" }>Choose a song</option>
 													for _, song := range data.AllSongs {
 														if song.ID != row.Song.SongID {
-															<option value={ song.ID }>{ song.Attributes.Title }</option>
+															<option value={ song.ID } selected?={ song.ID == nextSongID(data.ServiceOrder, i) }>{ song.Attributes.Title }</option>
 														}
 													}
 												</select>
@@ -337,52 +359,13 @@ templ SetBuilderBody(data SetBuilderData) {
 				</tbody>
 			</table>
 		</div>
-		if len(data.SetSongs) > 0 || data.PendingDeleteCount > 0 {
-			<div class="publish-panel">
-				if data.PendingDeleteCount > 0 {
-					<div class="warning">
-						{ fmt.Sprintf("%d song(s) removed/replaced here are still live in Planning Center - publishing will delete them there too.", data.PendingDeleteCount) }
-					</div>
-				}
-				if len(data.PendingChanges) > 0 {
-					<p><strong>Pending changes</strong> - not yet reflected in Planning Center:</p>
-					<ul class="pending-changes">
-						for _, change := range data.PendingChanges {
-							<li>{ change }</li>
-						}
-					</ul>
-				}
-				<div class="publish-actions">
-					<form
-						hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/publish", data.ServiceTypeID, data.PlanID) }
-						hx-target="#set-builder-body"
-						hx-swap="outerHTML"
-						hx-confirm={ fmt.Sprintf("Sync this set to Planning Center? %d song(s) added, %d removed, and any already-published songs reordered to match.", data.UnpublishedCount, data.PendingDeleteCount) }
-					>
-						<button type="submit" class="primary">Publish to Planning Center</button>
-					</form>
-					if data.UnpublishedCount > 0 || data.PendingDeleteCount > 0 || data.ReorderPending {
-						<form
-							hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/revert", data.ServiceTypeID, data.PlanID) }
-							hx-target="#set-builder-body"
-							hx-swap="outerHTML"
-							hx-confirm="Discard every change you've made here and rebuild this set from what's currently live in Planning Center? This can't be undone."
-						>
-							<button type="submit" class="danger">Discard changes</button>
-						</form>
-					}
-				</div>
-				<p class="muted">
-					Publishing fully syncs this set to the plan: adds new songs, deletes
-					ones you removed/replaced here, and reorders everything to match
-					the order of service above - including each song's chosen
-					position. It never touches or reorders plan items this tool didn't
-					create. Discarding does the opposite - it throws away every local
-					change and rebuilds this set from what's live in Planning Center
-					right now.
-				</p>
-			</div>
-		}
+		<!--
+			The actual publish/discard controls live in the sidebar now (see
+			SongPublishPanel, build.templ) - SetBuilderBody (not this,
+			SetBuilderBodyContent) is the one that keeps that card in sync,
+			via songPublishPanelOOB, for every htmx response this content is
+			part of.
+		-->
 		if len(data.Suggestions) > 0 {
 			@collapsibleSection("recommended-next-songs", "Recommended next", true) {
 				<p class="muted">Based on the last song in the set.</p>

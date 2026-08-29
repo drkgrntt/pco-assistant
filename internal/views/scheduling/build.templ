@@ -155,7 +155,12 @@ templ BuildPlansResults(plans []PlanRow, serviceTypeID, search string, page, tot
 // of two separate pages. Each section (@SetBuilderBody/@RosterBuilderBody)
 // is fully self-contained, including its own <h2> and its own htmx swap
 // target, so interacting with one never touches the other.
-templ BuildPlan(personName, organizationName string, setData SetBuilderData, rosterData RosterBuilderData) {
+//
+// activeTab is "songs" or "team" (see BuildPlanPage's ?tab= query param) -
+// rendered server-side so a direct link to ?tab=team lands there with no
+// JS flash of the Songs tab first, rather than relying entirely on
+// toggleBuildTab (scheduling.js) to sort it out after the page loads.
+templ BuildPlan(personName, organizationName string, setData SetBuilderData, rosterData RosterBuilderData, activeTab string) {
 	@views.Layout("Build a Service", personName, organizationName) {
 		<h1>
 			if setData.PlanTitle != "" {
@@ -183,16 +188,59 @@ templ BuildPlan(personName, organizationName string, setData SetBuilderData, ros
 			client-side hidden toggle (toggleBuildTab, scheduling.js), so both
 			panels still fully server-render on every page load exactly as
 			before.
+
+			The sidebar (.build-glance) is the one thing that isn't just "the
+			inactive tab, hidden" - it's a standing glance at whichever tab
+			*isn't* open, so switching over just to check "is the roster
+			filled yet, and by whom?" while heads-down on songs isn't
+			necessary. Each card pairs the same SongStatusSummary/
+			RosterStatusSummary chips SetBuilderBody/RosterBuilderBody
+			already show at the top of their own tab (so there's no separate
+			counting logic to keep in sync) with the actual content -
+			SongGlanceList's song order, TeamGlanceList's names per position -
+			since the counts alone don't say *what's* in the lineup or *who's*
+			on it. Only one of the two cards is ever visible at a time
+			(toggleBuildTab shows whichever one belongs to the tab that just
+			went hidden).
 		-->
-		<div class="build-tabs" role="tablist">
-			<button type="button" class="build-tab active" role="tab" aria-selected="true" aria-controls="build-tab-songs" onclick="toggleBuildTab('songs')">Songs</button>
-			<button type="button" class="build-tab" role="tab" aria-selected="false" aria-controls="build-tab-team" onclick="toggleBuildTab('team')">Team</button>
-		</div>
-		<div class="build-tab-panel" id="build-tab-songs" role="tabpanel">
-			@SetBuilderBody(setData)
-		</div>
-		<div class="build-tab-panel" id="build-tab-team" role="tabpanel" hidden>
-			@RosterBuilderBody(rosterData)
+		<div class="build-layout">
+			<div class="build-main">
+				<div class="build-tabs" role="tablist">
+					<button type="button" class={ "build-tab", templ.KV("active", activeTab != "team") } role="tab" aria-selected={ fmt.Sprintf("%t", activeTab != "team") } aria-controls="build-tab-songs" onclick="toggleBuildTab('songs')">Songs</button>
+					<button type="button" class={ "build-tab", templ.KV("active", activeTab == "team") } role="tab" aria-selected={ fmt.Sprintf("%t", activeTab == "team") } aria-controls="build-tab-team" onclick="toggleBuildTab('team')">Team</button>
+				</div>
+				<div class="build-tab-panel" id="build-tab-songs" role="tabpanel" hidden?={ activeTab == "team" }>
+					@SetBuilderBodyContent(setData)
+				</div>
+				<div class="build-tab-panel" id="build-tab-team" role="tabpanel" hidden?={ activeTab != "team" }>
+					@RosterBuilderBodyContent(rosterData)
+				</div>
+			</div>
+			<!--
+				The publish/discard controls live here too, not inline under
+				each tab's own table - but only the open tab's, unlike the
+				glance cards below (which show the *other* tab). See
+				SongPublishPanel/RosterPublishPanel's own doc comments for how
+				they stay synced via htmx out-of-band swaps even though the
+				forms that trigger those swaps live in the (structurally
+				separate) tab panels beside them, not inside these cards.
+			-->
+			<aside class="build-glance">
+				@SongPublishPanel(setData, activeTab == "team")
+				@RosterPublishPanel(rosterData, activeTab != "team")
+				<div class="build-glance-card" id="build-glance-team" hidden?={ activeTab == "team" }>
+					<h3>Team, at a glance</h3>
+					@RosterStatusSummary(rosterData)
+					@TeamGlanceList(rosterData.Positions)
+					<button type="button" onclick="toggleBuildTab('team')">Switch to Team</button>
+				</div>
+				<div class="build-glance-card" id="build-glance-songs" hidden?={ activeTab != "team" }>
+					<h3>Songs, at a glance</h3>
+					@SongStatusSummary(setData)
+					@SongGlanceList(setData.ServiceOrder)
+					<button type="button" onclick="toggleBuildTab('songs')">Switch to Songs</button>
+				</div>
+			</aside>
 		</div>
 	}
 }

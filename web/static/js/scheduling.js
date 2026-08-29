@@ -166,6 +166,28 @@ function toggleBuildTab(tabName) {
   document.querySelectorAll(".build-tab-panel").forEach(function (panel) {
     panel.hidden = panel.id !== "build-tab-" + tabName;
   });
+  // The sidebar "at a glance" card (see build.templ) always shows whichever
+  // tab just went hidden, never the one that's now open - no point glancing
+  // at a summary of the tab you're already looking at.
+  document.querySelectorAll(".build-glance-card").forEach(function (card) {
+    var cardTab = card.id.replace("build-glance-", "");
+    card.hidden = cardTab === tabName;
+  });
+  // The sidebar's publish card is the opposite: only the tab you're
+  // actually ON has anything to publish from here, so it's the only one
+  // shown (see SongPublishPanel/RosterPublishPanel, build.templ).
+  document.querySelectorAll(".build-publish-card").forEach(function (card) {
+    var cardTab = card.id.replace("build-publish-", "");
+    card.hidden = cardTab !== tabName;
+  });
+  // Keeps the address bar (and anything copied from it) pointing at
+  // whichever tab is actually open - see BuildPlanPage's ?tab= query param.
+  // replaceState, not pushState: switching tabs is a view change, not a
+  // new place to land on with the back button, same as htmx's own default
+  // history behavior elsewhere on this page.
+  var url = new URL(window.location.href);
+  url.searchParams.set("tab", tabName);
+  window.history.replaceState(null, "", url);
 }
 
 // App-wide "your click registered" feedback for every htmx-driven action.
