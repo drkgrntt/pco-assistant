@@ -173,6 +173,14 @@ function toggleBuildTab(tabName) {
     var cardTab = card.id.replace("build-glance-", "");
     card.hidden = cardTab === tabName;
   });
+  // Keeps the address bar (and anything copied from it) pointing at
+  // whichever tab is actually open - see BuildPlanPage's ?tab= query param.
+  // replaceState, not pushState: switching tabs is a view change, not a
+  // new place to land on with the back button, same as htmx's own default
+  // history behavior elsewhere on this page.
+  var url = new URL(window.location.href);
+  url.searchParams.set("tab", tabName);
+  window.history.replaceState(null, "", url);
 }
 
 // App-wide "your click registered" feedback for every htmx-driven action.

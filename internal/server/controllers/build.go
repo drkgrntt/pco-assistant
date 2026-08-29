@@ -220,5 +220,14 @@ func (sc *SchedulingController) BuildPlanPage(c *fiber.Ctx) error {
 	setData := sc.buildSetBuilderData(ctx, orgID, serviceTypeID, planID)
 	rosterData := sc.buildRosterBuilderData(ctx, orgID, serviceTypeID, planID)
 
-	return render(c, views.BuildPlan(personName, orgName, setData, rosterData))
+	// ?tab=team makes the Team tab directly linkable/bookmarkable (see
+	// BuildPlan's activeTab doc comment) - anything other than exactly
+	// "team" (missing, "songs", a typo) falls back to Songs, the same
+	// default the page always had before this existed.
+	activeTab := "songs"
+	if c.Query("tab") == "team" {
+		activeTab = "team"
+	}
+
+	return render(c, views.BuildPlan(personName, orgName, setData, rosterData, activeTab))
 }

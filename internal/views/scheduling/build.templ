@@ -155,7 +155,12 @@ templ BuildPlansResults(plans []PlanRow, serviceTypeID, search string, page, tot
 // of two separate pages. Each section (@SetBuilderBody/@RosterBuilderBody)
 // is fully self-contained, including its own <h2> and its own htmx swap
 // target, so interacting with one never touches the other.
-templ BuildPlan(personName, organizationName string, setData SetBuilderData, rosterData RosterBuilderData) {
+//
+// activeTab is "songs" or "team" (see BuildPlanPage's ?tab= query param) -
+// rendered server-side so a direct link to ?tab=team lands there with no
+// JS flash of the Songs tab first, rather than relying entirely on
+// toggleBuildTab (scheduling.js) to sort it out after the page loads.
+templ BuildPlan(personName, organizationName string, setData SetBuilderData, rosterData RosterBuilderData, activeTab string) {
 	@views.Layout("Build a Service", personName, organizationName) {
 		<h1>
 			if setData.PlanTitle != "" {
@@ -201,24 +206,24 @@ templ BuildPlan(personName, organizationName string, setData SetBuilderData, ros
 		<div class="build-layout">
 			<div class="build-main">
 				<div class="build-tabs" role="tablist">
-					<button type="button" class="build-tab active" role="tab" aria-selected="true" aria-controls="build-tab-songs" onclick="toggleBuildTab('songs')">Songs</button>
-					<button type="button" class="build-tab" role="tab" aria-selected="false" aria-controls="build-tab-team" onclick="toggleBuildTab('team')">Team</button>
+					<button type="button" class={ "build-tab", templ.KV("active", activeTab != "team") } role="tab" aria-selected={ fmt.Sprintf("%t", activeTab != "team") } aria-controls="build-tab-songs" onclick="toggleBuildTab('songs')">Songs</button>
+					<button type="button" class={ "build-tab", templ.KV("active", activeTab == "team") } role="tab" aria-selected={ fmt.Sprintf("%t", activeTab == "team") } aria-controls="build-tab-team" onclick="toggleBuildTab('team')">Team</button>
 				</div>
-				<div class="build-tab-panel" id="build-tab-songs" role="tabpanel">
+				<div class="build-tab-panel" id="build-tab-songs" role="tabpanel" hidden?={ activeTab == "team" }>
 					@SetBuilderBody(setData)
 				</div>
-				<div class="build-tab-panel" id="build-tab-team" role="tabpanel" hidden>
+				<div class="build-tab-panel" id="build-tab-team" role="tabpanel" hidden?={ activeTab != "team" }>
 					@RosterBuilderBody(rosterData)
 				</div>
 			</div>
 			<aside class="build-glance">
-				<div class="build-glance-card" id="build-glance-team">
+				<div class="build-glance-card" id="build-glance-team" hidden?={ activeTab == "team" }>
 					<h3>Team, at a glance</h3>
 					@RosterStatusSummary(rosterData)
 					@TeamGlanceList(rosterData.Positions)
 					<button type="button" onclick="toggleBuildTab('team')">Switch to Team</button>
 				</div>
-				<div class="build-glance-card" id="build-glance-songs" hidden>
+				<div class="build-glance-card" id="build-glance-songs" hidden?={ activeTab != "team" }>
 					<h3>Songs, at a glance</h3>
 					@SongStatusSummary(setData)
 					@SongGlanceList(setData.ServiceOrder)
