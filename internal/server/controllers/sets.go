@@ -317,6 +317,14 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 
 	songs, _ := fetchAllSongs(middleware.RequestContext(c))
 	titles := songTitleMap(songs)
+	// Best-effort, same tolerance as everywhere else this cache is read -
+	// a miss here just means a newly-created item skips the Description/
+	// Length/ArrangementID defaults below rather than blocking the
+	// publish, and a fresh song that hasn't been through Song Info sync
+	// yet still gets a live backfill attempt per-song right where it's
+	// actually needed (see the create loop below), not just left blank
+	// until the next manual sync.
+	arrangementCache, _ := sc.store.SongArrangementInfo(ctx, orgID)
 
 	// 1. Deletions - clear out what was removed/replaced locally before
 	// creating or reordering anything else.
@@ -370,11 +378,32 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 				title := titleOrID(titles, ss.SongID)
 
 				if ss.PCOItemID == "" {
+					// Description/Length/ArrangementID all come from the
+					// song's own cached arrangement, backfilling live on a
+					// cache miss (fetchAndCacheArrangementInfo, same
+					// cache-miss path resolveArrangementInfo uses for
+					// display) - a song published for the first time
+					// shouldn't have to wait for a separate Song Info sync
+					// just to get its arrangement actually linked. Without
+					// ArrangementID specifically, PCO shows nothing but
+					// the bare title for this item - no chord chart,
+					// lyrics, or structure (confirmed live) - unlike a
+					// song added through Planning Center's own UI.
+					info, ok := arrangementCache[ss.SongID]
+					if !ok {
+						if fetched, err := fetchAndCacheArrangementInfo(ctx, sc.store, orgID, ss.SongID); err == nil {
+							info = fetched
+						}
+					}
+
 					item, err := pco.CreateItem(ctx, serviceTypeID, planID, &pco.CreateItemParams{
-						Title:    title,
-						ItemType: pco.ItemTypeSong,
-						Sequence: nextSequence + i,
-						SongID:   ss.SongID,
+						Title:         title,
+						ItemType:      pco.ItemTypeSong,
+						Sequence:      nextSequence + i,
+						SongID:        ss.SongID,
+						ArrangementID: info.ArrangementID,
+						Description:   info.Notes,
+						Length:        info.LengthSeconds,
 					})
 					if err != nil {
 						failures = append(failures, fmt.Sprintf("%s: %s", title, err.Error()))

@@ -92,6 +92,8 @@ func fetchAndCacheArrangementInfo(ctx context.Context, store *scheduling.Store, 
 		BPM:           attrs.BPM,
 		Meter:         attrs.Meter,
 		LengthSeconds: attrs.Length,
+		ArrangementID: arrangement.ID,
+		Notes:         attrs.Notes,
 	}
 
 	if err := store.UpsertSongArrangementInfo(ctx, organizationID, songID, info); err != nil {
