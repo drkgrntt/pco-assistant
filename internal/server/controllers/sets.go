@@ -275,9 +275,10 @@ func (sc *SchedulingController) DuplicateSetSong(c *fiber.Ctx) error {
 
 // findSongViewByRowID/findSongViewByItemID locate one song's already-built
 // view inside data.ServiceOrder - used by UpdateSetSongDescription/
-// UpdateSongNote to re-render just that one song's detail card (see
-// views.SongDetailCardFragment) instead of the whole set builder body,
-// since neither action touches anything else on the page.
+// UpdateSongNote to re-render just the one form that was actually
+// submitted (see views.DescriptionFormFragment/SongNoteFormFragment)
+// instead of the whole set builder body, since neither action touches
+// anything else on the page - not even the rest of the same card.
 func findSongViewByRowID(data views.SetBuilderData, rowID int64) (views.SetSongView, bool) {
 	for _, row := range data.ServiceOrder {
 		if row.IsSong && row.Song.ID == rowID {
@@ -302,11 +303,11 @@ func findSongViewByItemID(data views.SetBuilderData, itemID string) (views.SetSo
 // Description on the next Publish or Refresh song info, same as every
 // other local change on this page (see itemDescriptionFor, scheduling.go).
 //
-// Re-renders just this song's own detail card (see
-// views.SongDetailCardFragment's own doc comment for why) rather than the
-// whole SetBuilderBody - a description edit never changes the order of
-// service, publish status, or any other song's card, so there's nothing
-// else on the page that needs to reflect it.
+// Re-renders just this one form (see views.DescriptionFormFragment's own
+// doc comment for why) rather than the whole SetBuilderBody, or even the
+// whole card - a description edit never changes the order of service,
+// publish status, this card's own title/badges, or any other note, so
+// there's nothing else that needs to reflect it.
 func (sc *SchedulingController) UpdateSetSongDescription(c *fiber.Ctx) error {
 	ctx := middleware.RequestContext(c)
 	orgID := middleware.CurrentOrganizationID(c)
@@ -328,13 +329,13 @@ func (sc *SchedulingController) UpdateSetSongDescription(c *fiber.Ctx) error {
 	data := sc.buildSetBuilderData(ctx, orgID, serviceTypeID, planID)
 	song, ok := findSongViewByRowID(data, int64(rowID))
 	if !ok {
-		// The row's gone (e.g. removed in another tab since this card was
-		// opened) - nothing left to render a fragment for, fall back to a
-		// full re-render so the page still reflects reality.
+		// The row's gone (e.g. removed in another tab since this form was
+		// last rendered) - nothing left to render a fragment for, fall back
+		// to a full re-render so the page still reflects reality.
 		data.ErrMsg = appendErr(errMsg, data.ErrMsg)
 		return render(c, views.SetBuilderBody(data))
 	}
-	return render(c, views.SongDetailCardFragment(data, song, errMsg))
+	return render(c, views.DescriptionFormFragment(data, song, errMsg))
 }
 
 // UpdateSongNote creates, updates, or deletes one category's Planning
@@ -349,9 +350,9 @@ func (sc *SchedulingController) UpdateSetSongDescription(c *fiber.Ctx) error {
 // note_id empty and content empty is a no-op (nothing existed, nothing was
 // typed).
 //
-// Re-renders just this song's own detail card - same reasoning as
+// Re-renders just this one category's own form - same reasoning as
 // UpdateSetSongDescription above (a note write here never touches
-// anything else on the page).
+// anything else on the page, including any of this song's other notes).
 func (sc *SchedulingController) UpdateSongNote(c *fiber.Ctx) error {
 	ctx := middleware.RequestContext(c)
 	orgID := middleware.CurrentOrganizationID(c)
@@ -386,7 +387,24 @@ func (sc *SchedulingController) UpdateSongNote(c *fiber.Ctx) error {
 		data.ErrMsg = appendErr(errMsg, data.ErrMsg)
 		return render(c, views.SetBuilderBody(data))
 	}
-	return render(c, views.SongDetailCardFragment(data, song, errMsg))
+	note, ok := findSongNoteByCategoryID(song, categoryID)
+	if !ok {
+		// The category's gone from the fresh fetch above (e.g. deleted in
+		// Planning Center between page load and this save) - same
+		// fall-back reasoning as the row-gone case above.
+		data.ErrMsg = appendErr(errMsg, data.ErrMsg)
+		return render(c, views.SetBuilderBody(data))
+	}
+	return render(c, views.SongNoteFormFragment(data, song, note, errMsg))
+}
+
+func findSongNoteByCategoryID(song views.SetSongView, categoryID string) (views.SongNoteView, bool) {
+	for _, note := range song.Notes {
+		if note.CategoryID == categoryID {
+			return note, true
+		}
+	}
+	return views.SongNoteView{}, false
 }
 
 // PublishSet fully syncs the draft set to the real Planning Center plan:
