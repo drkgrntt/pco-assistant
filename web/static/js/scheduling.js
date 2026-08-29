@@ -166,6 +166,13 @@ function toggleBuildTab(tabName) {
   document.querySelectorAll(".build-tab-panel").forEach(function (panel) {
     panel.hidden = panel.id !== "build-tab-" + tabName;
   });
+  // The sidebar "at a glance" card (see build.templ) always shows whichever
+  // tab just went hidden, never the one that's now open - no point glancing
+  // at a summary of the tab you're already looking at.
+  document.querySelectorAll(".build-glance-card").forEach(function (card) {
+    var cardTab = card.id.replace("build-glance-", "");
+    card.hidden = cardTab === tabName;
+  });
 }
 
 // App-wide "your click registered" feedback for every htmx-driven action.

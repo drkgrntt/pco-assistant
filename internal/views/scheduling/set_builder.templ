@@ -24,21 +24,7 @@ templ SetBuilderBody(data SetBuilderData) {
 		if data.PublishMsg != "" {
 			<p class="success">{ data.PublishMsg }</p>
 		}
-		<div class="status-summary">
-			@statusChip(fmt.Sprintf("Songs: %d", len(data.SetSongs)), false)
-			if data.UnpublishedCount > 0 {
-				@statusChip(fmt.Sprintf("Unpublished: %d", data.UnpublishedCount), true)
-			}
-			if data.PendingDeleteCount > 0 {
-				@statusChip(fmt.Sprintf("Pending removal: %d", data.PendingDeleteCount), true)
-			}
-			if data.ReorderPending {
-				@statusChip("Order changed", true)
-			}
-			if warnCount := len(data.ExistingConflicts) + len(data.RepeatWarnings); warnCount > 0 {
-				@statusChip(fmt.Sprintf("Warnings: %d", warnCount), true)
-			}
-		</div>
+		@SongStatusSummary(data)
 		for _, msg := range data.ExistingConflicts {
 			<div class="warning">{ msg }</div>
 		}

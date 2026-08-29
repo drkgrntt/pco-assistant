@@ -1,5 +1,7 @@
 package scheduling
 
+import "fmt"
+
 // statusChip is one pill in a builder's status-summary row - the first
 // thing shown in both SetBuilderBody and RosterBuilderBody, so a viewer
 // knows whether this plan actually needs their attention before scrolling
@@ -14,4 +16,44 @@ templ statusChip(label string, warn bool) {
 	} else {
 		<span class="status-chip">{ label }</span>
 	}
+}
+
+// SongStatusSummary is the Songs tab's status-summary row - broken out of
+// SetBuilderBody (which still renders it first, unchanged) so the Build
+// page's "at a glance" sidebar can render the exact same chips a second
+// time while the Team tab is the one actually open, instead of hand-
+// duplicating the logic that decides which chips show.
+templ SongStatusSummary(data SetBuilderData) {
+	<div class="status-summary">
+		@statusChip(fmt.Sprintf("Songs: %d", len(data.SetSongs)), false)
+		if data.UnpublishedCount > 0 {
+			@statusChip(fmt.Sprintf("Unpublished: %d", data.UnpublishedCount), true)
+		}
+		if data.PendingDeleteCount > 0 {
+			@statusChip(fmt.Sprintf("Pending removal: %d", data.PendingDeleteCount), true)
+		}
+		if data.ReorderPending {
+			@statusChip("Order changed", true)
+		}
+		if warnCount := len(data.ExistingConflicts) + len(data.RepeatWarnings); warnCount > 0 {
+			@statusChip(fmt.Sprintf("Warnings: %d", warnCount), true)
+		}
+	</div>
+}
+
+// RosterStatusSummary is the Team tab's status-summary row - see
+// SongStatusSummary, which this mirrors for RosterBuilderBody.
+templ RosterStatusSummary(data RosterBuilderData) {
+	<div class="status-summary">
+		@statusChip(fmt.Sprintf("Filled: %d/%d", len(data.Positions)-data.OpenPositionCount, len(data.Positions)), data.OpenPositionCount > 0)
+		if data.UnpublishedCount > 0 {
+			@statusChip(fmt.Sprintf("Unpublished: %d", data.UnpublishedCount), true)
+		}
+		if data.PendingDeleteCount > 0 {
+			@statusChip(fmt.Sprintf("Pending removal: %d", data.PendingDeleteCount), true)
+		}
+		if len(data.ExistingConflicts) > 0 {
+			@statusChip(fmt.Sprintf("Warnings: %d", len(data.ExistingConflicts)), true)
+		}
+	</div>
 }

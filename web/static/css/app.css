@@ -352,6 +352,62 @@ header.site form {
   display: none;
 }
 
+/* The Build page's "at a glance" sidebar (see build.templ, toggleBuildTab
+   in scheduling.js) - a standing summary of whichever tab isn't currently
+   open. Mobile-first: stacked full-width below the tabs by default (no
+   room for a true margin on a phone), moving beside them at the same
+   900px breakpoint the landing page's own two-column sections use. */
+.build-layout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.build-main {
+  min-width: 0;
+}
+
+.build-glance {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.build-glance-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3) var(--space-4);
+}
+
+.build-glance-card h3 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+
+.build-glance-card .status-summary {
+  margin-block: 0 var(--space-3);
+}
+
+@media (min-width: 900px) {
+  .build-layout {
+    flex-direction: row;
+    align-items: start;
+  }
+
+  .build-main {
+    flex: 1 1 auto;
+  }
+
+  .build-glance {
+    flex: 0 0 15rem;
+  }
+}
+
 .quick-links {
   display: flex;
   flex-direction: column;
