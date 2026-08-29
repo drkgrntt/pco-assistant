@@ -175,6 +175,14 @@ header.site strong {
   font-size: var(--text-xl);
 }
 
+/* The brand mark doubles as a home link now - .site-brand only strips the
+   underline a bare <a> would otherwise get (the "Home" nav link already
+   does the same job in the text, so this doesn't need its own hover
+   treatment beyond that). */
+.site-brand {
+  text-decoration: none;
+}
+
 /* "Setup" - the granular relationships/preferences pages - tucked into a
    dropdown so the header nav leads with the two pages that actually matter
    week to week (Build a Set, Build a Team), not eight same-weight links. */
