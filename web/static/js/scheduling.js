@@ -98,6 +98,29 @@ function closeNavDropdowns() {
   });
 }
 
+// The mobile header's hamburger toggle (see layout.templ) - below
+// header.site's own row/column breakpoint, .site-nav/.site-actions collapse
+// behind this until .menu-open is set on the header itself (see app.css);
+// at that breakpoint and up they're just always visible and this button
+// doesn't render at all, so there's nothing to toggle there.
+function toggleMobileMenu(button) {
+  var header = button.closest(".site");
+  var open = header.classList.toggle("menu-open");
+  button.setAttribute("aria-expanded", open ? "true" : "false");
+}
+
+function closeMobileMenu() {
+  var header = document.querySelector(".site.menu-open");
+  if (!header) {
+    return;
+  }
+  header.classList.remove("menu-open");
+  var toggle = header.querySelector(".mobile-menu-toggle");
+  if (toggle) {
+    toggle.setAttribute("aria-expanded", "false");
+  }
+}
+
 // The set builder's per-row "more actions" menu (song rows - see
 // row-menu/row-menu-toggle in set_builder.templ) - same open/closed idiom
 // as toggleNavDropdown above, just without the edge-of-screen
@@ -147,6 +170,7 @@ document.addEventListener("keydown", function (event) {
   if (event.key === "Escape") {
     closeNavDropdowns();
     closeRowMenus();
+    closeMobileMenu();
   }
 });
 
