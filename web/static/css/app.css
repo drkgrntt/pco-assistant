@@ -160,7 +160,11 @@ header.site nav {
   display: none;
 }
 
-header.site nav a {
+/* Also covers .site-actions' "Billing" link (layout.templ) - same plain-
+   link treatment as the primary nav, not styled as its own thing just
+   because it sits in a different cluster. */
+header.site nav a,
+.site-actions a {
   text-decoration: none;
   color: var(--accent);
   padding: 0.3rem 0;
@@ -169,6 +173,14 @@ header.site nav a {
 header.site strong {
   color: var(--accent);
   font-size: var(--text-xl);
+}
+
+/* The brand mark doubles as a home link now - .site-brand only strips the
+   underline a bare <a> would otherwise get (the "Home" nav link already
+   does the same job in the text, so this doesn't need its own hover
+   treatment beyond that). */
+.site-brand {
+  text-decoration: none;
 }
 
 /* "Setup" - the granular relationships/preferences pages - tucked into a
@@ -493,31 +505,11 @@ main:has(.build-layout) {
   font-size: var(--text-lg);
 }
 
-/* The homepage's setup links - plain text, not buttons, so the two
-   workflow buttons above stay the visually obvious "start here." */
-.quick-links-secondary a {
-  padding: var(--space-1) var(--space-2);
-  margin-left: calc(var(--space-2) * -1);
-  border-radius: var(--radius-md);
-  color: var(--accent);
-  text-decoration: none;
-  font-size: var(--text-md);
-  transition: background-color var(--duration-fast) var(--ease-standard);
-}
-
-.quick-links-secondary a:hover {
-  background: var(--accent-subtle);
-}
-
 @media (min-width: 640px) {
   .quick-links {
     flex-direction: row;
     flex-wrap: wrap;
     gap: var(--space-3) var(--space-4);
-  }
-
-  .quick-links-secondary {
-    gap: var(--space-2) 1.5rem;
   }
 }
 

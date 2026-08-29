@@ -11,8 +11,14 @@ templ Head(title string) {
 		<meta name="viewport" content="width=device-width, initial-scale=1"/>
 		<title>{ title } - Resonance</title>
 		<link rel="manifest" href="/manifest.json"/>
-		<link rel="icon" href="/static/icon-192.png"/>
-		<link rel="apple-touch-icon" href="/static/icon-192.png"/>
+		<!--
+			Cache-busted like every other static asset below, unlike before -
+			favicons are cached unusually aggressively by browsers, so
+			swapping the icon file in place without this could leave a
+			visitor's already-cached old icon showing indefinitely.
+		-->
+		<link rel="icon" href={ "/static/icon-192.png?v=" + AssetVersion }/>
+		<link rel="apple-touch-icon" href={ "/static/icon-192.png?v=" + AssetVersion }/>
 		<meta name="theme-color" content="#2b7770"/>
 		<link rel="preconnect" href="https://fonts.googleapis.com"/>
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"/>
@@ -36,7 +42,7 @@ templ Layout(title string, personName string, organizationName string) {
 			<div id="htmx-progress-bar" aria-hidden="true"></div>
 			<header class="site">
 				<div class="site-primary">
-					<strong>Resonance</strong>
+					<a href="/" class="site-brand"><strong>Resonance</strong></a>
 					<nav>
 						<a href="/">Home</a>
 						<a href="/scheduling/build">Build a Service</a>
@@ -55,9 +61,20 @@ templ Layout(title string, personName string, organizationName string) {
 								<a href="/scheduling/song-relationships">Song Relationships</a>
 								<a href="/scheduling/song-roles">Song Roles</a>
 								<a href="/scheduling/song-tags">Song Tags</a>
-								<a href="/scheduling/song-tag-suggestions">Song Tag Suggestions</a>
-								<a href="/scheduling/song-info">Song Info</a>
-								<a href="/scheduling/song-preferences">Song Preferences</a>
+								<!--
+									Both hidden once there's nothing pending there (see
+									middleware.PopulateNavState/nav_state.go) - an "actionable
+									inbox" item that's actually empty is clutter, not
+									configuration to revisit. Reappears on its own the moment
+									a new song creates a suggestion or needs syncing again.
+								-->
+								if navSuggestionsPending(ctx) {
+									<a href="/scheduling/song-tag-suggestions">Song Tag Suggestions</a>
+								}
+								if navSongInfoNeedsSync(ctx) {
+									<a href="/scheduling/song-info">Song Info</a>
+								}
+								<a href="/scheduling/song-preferences">Song / Person Preferences</a>
 								<a href="/scheduling/person-relationships">Person Relationships</a>
 								<a href="/scheduling/position-preferences">Position Preferences</a>
 							</div>
@@ -70,6 +87,13 @@ templ Layout(title string, personName string, organizationName string) {
 						@IconMoon()
 					</button>
 					if personName != "" {
+						<!--
+							The one persistent path to /billing - without it, an
+							actively-paying org (home.templ's trial banner only shows
+							while OrgStatus isn't "active") has no way back to plan/
+							seat info or the Stripe portal short of typing the URL.
+						-->
+						<a href="/billing">Billing</a>
 						<div class="account">
 							if organizationName != "" {
 								<span class="account-org">{ organizationName }</span>

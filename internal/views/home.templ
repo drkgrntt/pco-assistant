@@ -27,7 +27,7 @@ templ Home(personName, organizationName string, data HomeData) {
 			<ul class="plan-list">
 				for _, plan := range data.UpcomingPlans {
 					<li>
-						<a href={ templ.URL("/scheduling/build/" + plan.ServiceTypeID + "/" + plan.PlanID) }>
+						<a href={ templ.URL(plan.TargetURL()) }>
 							if plan.Title != "" {
 								{ plan.Title }
 							} else {
@@ -66,15 +66,56 @@ templ Home(personName, organizationName string, data HomeData) {
 
 		<h2>Setup</h2>
 		<p class="muted">Configure once, then the workflows above put it to use - relationships, roles, and scheduling preferences for songs and people.</p>
-		<nav class="quick-links quick-links-secondary">
-			<a href="/scheduling/song-relationships">Song relationships</a>
-			<a href="/scheduling/song-roles">Song roles</a>
-			<a href="/scheduling/song-tags">Song tags</a>
-			<a href="/scheduling/song-tag-suggestions">Song tag suggestions</a>
-			<a href="/scheduling/song-info">Song info</a>
-			<a href="/scheduling/song-preferences">Song / person preferences</a>
-			<a href="/scheduling/person-relationships">Person relationships</a>
-			<a href="/scheduling/position-preferences">Position preferences</a>
-		</nav>
+		<!--
+			Reuses .plan-list's card-row treatment (already used for "Needs
+			attention" above) rather than the old quick-links-secondary's
+			plain wrapping link row - that had no room for a description
+			under each link, only the link text itself.
+		-->
+		<ul class="plan-list">
+			<li>
+				<a href="/scheduling/song-relationships">Song relationships</a>
+				<span class="muted">Flows well, same theme, or avoid pairing.</span>
+			</li>
+			<li>
+				<a href="/scheduling/song-roles">Song roles</a>
+				<span class="muted">Opener, response, or any role you add.</span>
+			</li>
+			<li>
+				<a href="/scheduling/song-tags">Song tags</a>
+				<span class="muted">Theme, scripture, and idea tags for search and filtering.</span>
+			</li>
+			<!--
+				Both hidden once there's nothing pending there - the exact
+				same SuggestionCount/SongInfoCached-vs-Total facts the nudge
+				lines above already compute, not a second lookup. Mirrors
+				the nav dropdown's own version of this (see layout.templ,
+				middleware.PopulateNavState).
+			-->
+			if data.SuggestionCount > 0 {
+				<li>
+					<a href="/scheduling/song-tag-suggestions">Song tag suggestions</a>
+					<span class="muted">Review songs sharing a title word and tag them together.</span>
+				</li>
+			}
+			if data.SongInfoTotal > 0 && data.SongInfoCached < data.SongInfoTotal {
+				<li>
+					<a href="/scheduling/song-info">Song info</a>
+					<span class="muted">Sync each song's key, tempo, and length from Planning Center.</span>
+				</li>
+			}
+			<li>
+				<a href="/scheduling/song-preferences">Song / person preferences</a>
+				<span class="muted">Note who's preferred or discouraged for a song.</span>
+			</li>
+			<li>
+				<a href="/scheduling/person-relationships">Person relationships</a>
+				<span class="muted">Works well, mentorship, or avoid pairing between people.</span>
+			</li>
+			<li>
+				<a href="/scheduling/position-preferences">Position preferences</a>
+				<span class="muted">How often someone wants to serve a position.</span>
+			</li>
+		</ul>
 	}
 }

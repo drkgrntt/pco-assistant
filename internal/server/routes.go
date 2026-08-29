@@ -40,6 +40,11 @@ func (s *FiberServer) RegisterFiberRoutes() {
 	// organization id RequireAuth just resolved into locals, so it has to
 	// come second.
 	s.App.Use(middleware.RequireActiveOrganization(s.authStore))
+	// PopulateNavState also needs the organization id RequireAuth
+	// resolved - runs on every page view since it drives Layout's nav,
+	// not just one page (see its own doc comment for the real per-page
+	// PCO cost this accepts).
+	s.App.Use(middleware.PopulateNavState(s.schedulingStore))
 
 	// Constructed once and shared with HomeController below (rather than a
 	// second instance) so Home can reuse its private page-builder methods
