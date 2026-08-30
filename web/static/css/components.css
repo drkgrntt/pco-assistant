@@ -113,6 +113,34 @@ form.inline select {
   }
 }
 
+/* A form.inline that should never flip into the side-by-side row above -
+   for a form built around one multi-line field (feedback's email +
+   textarea + submit), that row layout squeezes the short fields against
+   a tall textarea instead of reading top-to-bottom. Also caps the
+   measure, since a single-line email input and submit button stretching
+   the full width of main (60rem) reads just as awkwardly as the row
+   flip did. */
+form.inline.stacked {
+  max-width: 32rem;
+}
+
+@media (min-width: 640px) {
+  form.inline.stacked {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  form.inline.stacked label {
+    flex: none;
+    min-width: 0;
+  }
+
+  form.inline.stacked button {
+    flex: none;
+    align-self: flex-start;
+  }
+}
+
 /* === Buttons =============================================================== */
 
 button {
