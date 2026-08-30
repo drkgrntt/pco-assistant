@@ -1,0 +1,47 @@
+package views
+
+templ Feedback(personName, organizationName, errMsg string) {
+	@Layout("Feedback", personName, organizationName) {
+		<h1>Feedback</h1>
+		<p class="muted">
+			Whether something's broken, an idea, or just feedback - someone
+			actually reads these. Email is optional, and only needed if
+			you'd like a reply.
+		</p>
+		<form
+			id="feedback-form"
+			class="inline"
+			hx-post="/feedback"
+			hx-target="#feedback-result"
+			hx-swap="outerHTML"
+			hx-on::after-request="if(event.detail.successful) this.reset()"
+		>
+			<label>
+				Email (optional)
+				<input type="email" name="email"/>
+			</label>
+			<label>
+				Message
+				<textarea name="message" rows="6" required></textarea>
+			</label>
+			<button type="submit" class="primary">Send feedback</button>
+		</form>
+		@FeedbackResult(errMsg, false)
+	}
+}
+
+// FeedbackResult is both the page's initial (empty) result slot and the
+// htmx swap target for the submit form above (id="feedback-result",
+// matched by the form's hx-target) - sent is true only right after a
+// submission actually went through, so a "Thanks - sent!" message never
+// shows on first page load, only as the response to a real submission.
+templ FeedbackResult(errMsg string, sent bool) {
+	<div id="feedback-result">
+		if errMsg != "" {
+			<p class="error">{ errMsg }</p>
+		}
+		if sent {
+			<p class="success">Thanks - your feedback was sent.</p>
+		}
+	</div>
+}

@@ -8,6 +8,7 @@ import (
 	"pco-assistant/internal/auth"
 	"pco-assistant/internal/billing"
 	"pco-assistant/internal/database"
+	"pco-assistant/internal/notify"
 	"pco-assistant/internal/scheduling"
 )
 
@@ -18,6 +19,7 @@ type FiberServer struct {
 	schedulingStore *scheduling.Store
 	authStore       *auth.Store
 	billingClient   *billing.Client
+	notifyClient    *notify.Client
 }
 
 func New() *FiberServer {
@@ -38,6 +40,11 @@ func New() *FiberServer {
 			os.Getenv("STRIPE_PRICE_MULTI_CAMPUS"),
 			os.Getenv("STRIPE_WEBHOOK_SECRET"),
 			os.Getenv("APP_BASE_URL"),
+		),
+		notifyClient: notify.New(
+			os.Getenv("MG_DOMAIN"),
+			os.Getenv("MG_KEY"),
+			os.Getenv("FEEDBACK_RECIPIENT_EMAIL"),
 		),
 	}
 
