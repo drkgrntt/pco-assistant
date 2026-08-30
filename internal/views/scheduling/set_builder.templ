@@ -43,6 +43,41 @@ func nextSongID(order []ServiceOrderRow, i int) string {
 	return ""
 }
 
+// songBadges is the badge cluster in a song row's own Tags column -
+// factored out (rather than inlined in the row below) so it can also be
+// re-rendered as its own targeted out-of-band fragment (see
+// songBadgesOOB) when something that doesn't touch the rest of the row
+// still needs this list to reflect a change - saving "This week's note"
+// or a key override can flip InfoPending without going through a full
+// #set-builder-body re-render (see DescriptionFormFragment/
+// KeyFormFragment, song_detail_card.templ).
+templ songBadges(song SetSongView) {
+	<span id={ fmt.Sprintf("song-badges-%d", song.ID) }>
+		@songBadgeSpans(song)
+	</span>
+}
+
+templ songBadgesOOB(song SetSongView) {
+	<span id={ fmt.Sprintf("song-badges-%d", song.ID) } hx-swap-oob="true">
+		@songBadgeSpans(song)
+	</span>
+}
+
+templ songBadgeSpans(song SetSongView) {
+	for _, role := range song.Roles {
+		<span class="badge">{ role.Label }</span>
+	}
+	if song.Published {
+		<span class="badge published">Published</span>
+	}
+	if song.Moved {
+		<span class="badge status-pending" title="Moved since it was last published">Moved</span>
+	}
+	if song.InfoPending {
+		<span class="badge status-pending" title="This week's note or key changed since it was last published - Refresh song info (or Publish) to send it to Planning Center">Note/key pending</span>
+	}
+}
+
 // SetBuilderBodyContent is the actual content - split out from
 // SetBuilderBody so the Build page's initial full-page render
 // (build.templ) can embed just this, without also embedding
@@ -163,98 +198,108 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 										even height regardless of which songs happen to be
 										cached.
 									-->
-									<div class="muted song-meta">{ row.Song.ArrangementInfo }</div>
+									<div class="muted song-meta" id={ fmt.Sprintf("song-meta-%d", row.Song.ID) }>{ row.Song.ArrangementInfo }</div>
 								</td>
 								<td>
-									for _, role := range row.Song.Roles {
-										<span class="badge">{ role.Label }</span>
-									}
-									if row.Song.Published {
-										<span class="badge published">Published</span>
-									}
-									if row.Song.Moved {
-										<span class="badge status-pending" title="Moved since it was last published">Moved</span>
-									}
+									@songBadges(row.Song)
 								</td>
-								<td class="set-song-actions">
-									<button
-										type="button"
-										class="icon-btn"
-										aria-label="Duplicate song (e.g. reprise as the response)"
-										title="Duplicate song (e.g. reprise as the response)"
-										hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/duplicate", data.ServiceTypeID, data.PlanID, row.Song.ID) }
-										hx-target="#set-builder-body"
-										hx-swap="outerHTML"
-									>
-										@views.IconCopy()
-									</button>
-									<button
-										type="button"
-										class="danger icon-btn"
-										aria-label="Remove from set"
-										title="Remove from set"
-										hx-delete={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d", data.ServiceTypeID, data.PlanID, row.Song.ID) }
-										hx-target="#set-builder-body"
-										hx-swap="outerHTML"
-										hx-confirm="Remove this song from the set?"
-									>
-										@views.IconRemove()
-									</button>
-									if len(data.Candidates) > 0 {
-										<form
-											class="replace-form"
-											hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/replace", data.ServiceTypeID, data.PlanID, row.Song.ID) }
-											hx-target="#set-builder-body"
-											hx-swap="outerHTML"
-											hx-confirm={ fmt.Sprintf("Replace %q with the selected song?", row.Song.Title) }
-										>
-											<select name="song_id" required>
-												<option value="" selected disabled>Replace with...</option>
-												for _, cand := range data.Candidates {
-													<option value={ cand.SongID }>{ cand.Title }</option>
-												}
-											</select>
-											<button type="submit" class="icon-btn" aria-label="Replace song" title="Replace song">
-												@views.IconEdit()
-											</button>
-										</form>
-									}
-									<!--
-										Row-scoped access to the same 3 actions the Quick add
-										panel below offers generically - see quick-action-row
-										just below and openQuickAction/toggleRowMenu
-										(scheduling.js). The song is already this row's, so
-										unlike the panel's forms there's no song picker to fill
-										in - just the category/relationship/role fields that
-										actually vary. The panel itself stays, since it's still
-										the only way to tag/relate/role a song that isn't in
-										this order of service yet.
-									-->
-									<div class="row-menu">
+								<!--
+									.set-song-actions (the flex row of action
+									buttons) lives on an inner div, not this <td>
+									directly - display:flex on a <td> itself
+									overrides its native display:table-cell,
+									which pulls it out of the table's row-height
+									sharing entirely (confirmed via DevTools: this
+									cell was rendering visibly shorter than its
+									siblings in the same row, no matter what
+									vertical-align/min-height was set on it -
+									neither one does anything once a cell isn't
+									actually a table-cell box anymore). Keeping
+									the <td> itself unstyled lets it size like
+									every other cell in the row; the div just
+									carries the flex layout for its own children.
+								-->
+								<td>
+									<div class="set-song-actions">
 										<button
 											type="button"
-											class="icon-btn row-menu-toggle"
-											aria-haspopup="true"
-											aria-expanded="false"
-											aria-label="More actions for this song"
-											title="More actions"
-											onclick="toggleRowMenu(this)"
+											class="icon-btn"
+											aria-label="Duplicate song (e.g. reprise as the response)"
+											title="Duplicate song (e.g. reprise as the response)"
+											hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/duplicate", data.ServiceTypeID, data.PlanID, row.Song.ID) }
+											hx-target="#set-builder-body"
+											hx-swap="outerHTML"
 										>
-											@views.IconMore()
+											@views.IconCopy()
 										</button>
-										<div class="row-menu-menu">
-											<button type="button" onclick="openQuickAction(this, 'tag')">
-												@views.IconTag()
-												Tag this song
+										<button
+											type="button"
+											class="danger icon-btn"
+											aria-label="Remove from set"
+											title="Remove from set"
+											hx-delete={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d", data.ServiceTypeID, data.PlanID, row.Song.ID) }
+											hx-target="#set-builder-body"
+											hx-swap="outerHTML"
+											hx-confirm="Remove this song from the set?"
+										>
+											@views.IconRemove()
+										</button>
+										if len(data.Candidates) > 0 {
+											<form
+												class="replace-form"
+												hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/replace", data.ServiceTypeID, data.PlanID, row.Song.ID) }
+												hx-target="#set-builder-body"
+												hx-swap="outerHTML"
+												hx-confirm={ fmt.Sprintf("Replace %q with the selected song?", row.Song.Title) }
+											>
+												<select name="song_id" required>
+													<option value="" selected disabled>Replace with...</option>
+													for _, cand := range data.Candidates {
+														<option value={ cand.SongID }>{ cand.Title }</option>
+													}
+												</select>
+												<button type="submit" class="icon-btn" aria-label="Replace song" title="Replace song">
+													@views.IconEdit()
+												</button>
+											</form>
+										}
+										<!--
+											Row-scoped access to the same 3 actions the Quick add
+											panel below offers generically - see quick-action-row
+											just below and openQuickAction/toggleRowMenu
+											(scheduling.js). The song is already this row's, so
+											unlike the panel's forms there's no song picker to fill
+											in - just the category/relationship/role fields that
+											actually vary. The panel itself stays, since it's still
+											the only way to tag/relate/role a song that isn't in
+											this order of service yet.
+										-->
+										<div class="row-menu">
+											<button
+												type="button"
+												class="icon-btn row-menu-toggle"
+												aria-haspopup="true"
+												aria-expanded="false"
+												aria-label="More actions for this song"
+												title="More actions"
+												onclick="toggleRowMenu(this)"
+											>
+												@views.IconMore()
 											</button>
-											<button type="button" onclick="openQuickAction(this, 'relate')">
-												@views.IconRelate()
-												Relate to another song
-											</button>
-											<button type="button" onclick="openQuickAction(this, 'role')">
-												@views.IconRole()
-												Mark a role
-											</button>
+											<div class="row-menu-menu">
+												<button type="button" onclick="openQuickAction(this, 'tag')">
+													@views.IconTag()
+													Tag this song
+												</button>
+												<button type="button" onclick="openQuickAction(this, 'relate')">
+													@views.IconRelate()
+													Relate to another song
+												</button>
+												<button type="button" onclick="openQuickAction(this, 'role')">
+													@views.IconRole()
+													Mark a role
+												</button>
+											</div>
 										</div>
 									</div>
 								</td>

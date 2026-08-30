@@ -42,6 +42,49 @@ templ songDetailCardsOOB(data SetBuilderData) {
 	</div>
 }
 
+// KeyFormFragment/DescriptionFormFragment/SongNoteFormFragment re-render
+// just one form in place - the response for UpdateSetSongKey/
+// UpdateSetSongDescription/UpdateSongNote (sets.go), which each act on
+// exactly one form's own data and touch nothing else on the page (not the
+// order of service, not the card's own title/badges/actions, not any
+// other note). Each form's own hx-target="this" swaps only itself, so
+// saving one never disturbs the card it lives in, let alone the rest of
+// the page - a tighter scope than even re-rendering the whole card would
+// be.
+//
+// KeyFormFragment/DescriptionFormFragment both have more to update than
+// just the form itself, since either one can flip an already-published
+// song's InfoPending (see SetSongView.InfoPending): the row's own Tags
+// column badge (songBadgesOOB) and the sidebar's Discard button/pending
+// list (songPublishPanelOOB) both need to reflect that immediately, not
+// just after some unrelated action happens to re-render the whole page -
+// same "did that actually save?" reasoning as KeyFormFragment's own
+// #song-meta-<id> update below. SongNoteFormFragment doesn't need any of
+// this: category notes write straight to Planning Center immediately and
+// never set InfoPending in the first place.
+//
+// KeyFormFragment additionally updates the order-of-service row's own
+// summary line (set_builder.templ's #song-meta-<id>), which shows this
+// song's *effective* key (see renderServiceOrder's own comment on why) -
+// DescriptionFormFragment has no equivalent, since Description isn't
+// shown anywhere else on the row.
+templ KeyFormFragment(data SetBuilderData, song SetSongView, errMsg string) {
+	@keyForm(data, song, errMsg)
+	<div class="muted song-meta" id={ fmt.Sprintf("song-meta-%d", song.ID) } hx-swap-oob="true">{ song.ArrangementInfo }</div>
+	@songBadgesOOB(song)
+	@songPublishPanelOOB(data)
+}
+
+templ DescriptionFormFragment(data SetBuilderData, song SetSongView, errMsg string) {
+	@descriptionForm(data, song, errMsg)
+	@songBadgesOOB(song)
+	@songPublishPanelOOB(data)
+}
+
+templ SongNoteFormFragment(data SetBuilderData, song SetSongView, note SongNoteView, errMsg string) {
+	@songNoteForm(data, song, note, errMsg)
+}
+
 // songDetailCard is one song's detail card - hidden until selectSongRow
 // (scheduling.js) reveals it, in response to clicking that song's own row
 // in the order of service (set_builder.templ). Its content mirrors what
@@ -82,9 +125,32 @@ templ songDetailCard(data SetBuilderData, song SetSongView) {
 				<span class="badge status-pending" title="Moved since it was last published">Moved</span>
 			}
 		</div>
-		if song.Notes != "" {
-			<p class="build-detail-notes">{ song.Notes }</p>
-		}
+		<div class="build-detail-notes-group">
+			@keyForm(data, song, "")
+			@descriptionForm(data, song, "")
+			<!--
+				Song.Notes - one Planning Center ItemNote per note category
+				(Audio/Visual, Band, Vocals, etc. - configured per service
+				type) already on this song's plan item, plus an empty slot
+				for any category that doesn't have one yet. Each saves
+				straight to Planning Center immediately (see UpdateSongNote),
+				same "ad hoc, not part of the draft/publish cycle" shape as
+				the Tag/Relate/Mark role actions below - these are real,
+				existing PCO records, not local state to publish later.
+				Only populated for a published song (nil otherwise, since
+				there's no plan item yet to attach a note to).
+			-->
+			for _, note := range song.Notes {
+				@songNoteForm(data, song, note, "")
+			}
+			if len(song.Notes) == 0 {
+				if song.Published {
+					<p class="muted">No note categories are configured for this service type yet - add some in Planning Center.</p>
+				} else {
+					<p class="muted">Publish this song first to add notes here (Audio/Visual, Band, Vocals, etc.).</p>
+				}
+			}
+		</div>
 		<div class="build-detail-actions">
 			<button
 				type="button"
@@ -140,4 +206,94 @@ templ songDetailCard(data SetBuilderData, song SetSongView) {
 			</button>
 		</div>
 	</div>
+}
+
+// keyForm is this song's key for this one occurrence (SetSongView.Key) -
+// a local draft edit, same shape and same "reaches Planning Center on the
+// next Publish or Refresh, not immediately" timing as descriptionForm
+// below (see UpdateSetSongKey, resolveKeyID). Editing this never changes
+// the song's arrangement or its own default key - only what this one
+// occurrence's plan item links to.
+//
+// Free text, not a dropdown: Planning Center's own set of valid keys
+// isn't a fixed enum this app has any reason to hardcode, and typing a
+// key someone already knows (e.g. "Bb", "F#m") is faster than picking one
+// from a list built from a resource (Key) this app doesn't otherwise
+// surface. A trailing "m" for a minor key is accepted as part of the
+// string itself, not a separate flag - Planning Center's own minor-key
+// flag can't be set through its API at all (see resolveKeyID's own doc
+// comment), so this app treats the whole string, "m" included, as the
+// identity of the key rather than trying to split it into a flag PCO
+// won't accept anyway.
+templ keyForm(data SetBuilderData, song SetSongView, errMsg string) {
+	<form
+		class="build-detail-note-form"
+		hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/key", data.ServiceTypeID, data.PlanID, song.ID) }
+		hx-target="this"
+		hx-swap="outerHTML"
+	>
+		if errMsg != "" {
+			<p class="error">{ errMsg }</p>
+		}
+		<label>
+			Key (this week)
+			<input type="text" name="key" value={ song.Key } placeholder="e.g. G, Bb, F#m"/>
+		</label>
+		<button type="submit">Save key</button>
+		<p class="muted">Saved here - Publish or Refresh song info to send it to Planning Center.</p>
+	</form>
+}
+
+// descriptionForm is "This week's note" (SetSongView.Description) - a
+// local draft edit, same as everything else on this page: it reaches
+// Planning Center as this item's Description on the next Publish or
+// Refresh song info, not immediately (see UpdateSetSongDescription).
+// hx-target="this" swaps only this <form> itself on save (see
+// DescriptionFormFragment) - it's the element hx-post is on, so "this"
+// is unambiguous. errMsg renders inline (a failed save has nowhere else
+// to show up, since nothing outside this form gets touched).
+templ descriptionForm(data SetBuilderData, song SetSongView, errMsg string) {
+	<form
+		class="build-detail-note-form"
+		hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/description", data.ServiceTypeID, data.PlanID, song.ID) }
+		hx-target="this"
+		hx-swap="outerHTML"
+	>
+		if errMsg != "" {
+			<p class="error">{ errMsg }</p>
+		}
+		<label>
+			This week's note
+			<textarea name="description" rows="2" placeholder="e.g. cut the bridge this week">{ song.Description }</textarea>
+		</label>
+		<button type="submit">Save note</button>
+		<p class="muted">Saved here - Publish or Refresh song info to send it to Planning Center.</p>
+	</form>
+}
+
+// songNoteForm is one Planning Center note category's box - see
+// SetSongView.Notes' own doc comment for what this is and isn't. Same
+// hx-target="this" reasoning as descriptionForm above; note_id is carried
+// as a hidden field so UpdateSongNote knows whether to create or update
+// (and the response's fresh note_id - "" until a first save creates one -
+// is what makes the *next* save on this same form an update instead of a
+// second create).
+templ songNoteForm(data SetBuilderData, song SetSongView, note SongNoteView, errMsg string) {
+	<form
+		class="build-detail-note-form"
+		hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/items/%s/notes", data.ServiceTypeID, data.PlanID, song.PCOItemID) }
+		hx-target="this"
+		hx-swap="outerHTML"
+	>
+		<input type="hidden" name="category_id" value={ note.CategoryID }/>
+		<input type="hidden" name="note_id" value={ note.NoteID }/>
+		if errMsg != "" {
+			<p class="error">{ errMsg }</p>
+		}
+		<label>
+			{ note.CategoryName }
+			<textarea name="content" rows="2" placeholder={ fmt.Sprintf("Note for %s...", note.CategoryName) }>{ note.Content }</textarea>
+		</label>
+		<button type="submit">Save</button>
+	</form>
 }

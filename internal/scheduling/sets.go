@@ -49,6 +49,32 @@ type SetSong struct {
 	// publish; never set on rows RevertSet rebuilds fresh from Planning
 	// Center, since those start in sync by definition.
 	Moved bool `json:"moved"`
+	// Description is a local, editable per-occurrence note for this one
+	// song in this one set ("cut the bridge this week," "new keys player,
+	// go slow") - distinct from the song's persistent arrangement notes
+	// (song_arrangement_cache.Notes). Empty means "nothing set yet," not
+	// "cleared to blank on purpose" - PublishSet/RefreshSongInfo fall back
+	// to the arrangement's own notes as the item's Description default
+	// when this is empty, same as before this field existed.
+	Description string `json:"description"`
+	// KeyOverride is a local, editable per-occurrence key ("put this in Bb
+	// this week"), distinct from the song's arrangement's own default key
+	// (song_arrangement_cache.Key). Empty means "use the arrangement's
+	// default," same fallback convention as Description -
+	// PublishSet/RefreshSongInfo resolve this to a real PCO Key id (see
+	// resolveKeyID, scheduling.go) without ever touching the arrangement's
+	// own default key.
+	KeyOverride string `json:"key_override"`
+	// InfoPending is true once Description or KeyOverride has been edited
+	// on an already-published song without that edit reaching Planning
+	// Center yet - the item-content equivalent of Moved above, for exactly
+	// the same reason: without it, an edited-but-not-yet-refreshed song
+	// looked identical to one that was already in sync. Set by
+	// UpdateSetSongDescription/UpdateSetSongKeyOverride; cleared by
+	// ClearInfoPending once that content is actually pushed (a successful
+	// create at Publish time, or a successful update via Refresh song
+	// info).
+	InfoPending bool `json:"info_pending"`
 }
 
 // FindSet looks up an existing set without creating one - unlike
@@ -104,7 +130,7 @@ func (s *Store) GetOrCreateSet(ctx context.Context, organizationID, serviceTypeI
 // see ListPendingDeletions for songs awaiting removal from Planning Center.
 func (s *Store) ListSetSongs(ctx context.Context, setID int64) ([]SetSong, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, set_id, song_id, position, created_at, pco_item_id, anchor_item_id, moved
+		SELECT id, set_id, song_id, position, created_at, pco_item_id, anchor_item_id, moved, description, key_override, info_pending
 		FROM set_songs
 		WHERE set_id = $1 AND pending_delete = false
 		ORDER BY position ASC
@@ -118,7 +144,7 @@ func (s *Store) ListSetSongs(ctx context.Context, setID int64) ([]SetSong, error
 	for rows.Next() {
 		var ss SetSong
 		var pcoItemID sql.NullString
-		if err := rows.Scan(&ss.ID, &ss.SetID, &ss.SongID, &ss.Position, &ss.CreatedAt, &pcoItemID, &ss.AnchorItemID, &ss.Moved); err != nil {
+		if err := rows.Scan(&ss.ID, &ss.SetID, &ss.SongID, &ss.Position, &ss.CreatedAt, &pcoItemID, &ss.AnchorItemID, &ss.Moved, &ss.Description, &ss.KeyOverride, &ss.InfoPending); err != nil {
 			return nil, err
 		}
 		ss.PCOItemID = pcoItemID.String
@@ -126,6 +152,45 @@ func (s *Store) ListSetSongs(ctx context.Context, setID int64) ([]SetSong, error
 	}
 
 	return songs, rows.Err()
+}
+
+// UpdateSetSongDescription sets rowID's local per-occurrence note (see
+// SetSong.Description) - a plain field update, not part of the publish
+// cycle: it takes effect in Planning Center on the next Publish or Refresh
+// song info, same as every other local draft edit on this page (title
+// isn't editable here, but tags/relationships/roles all work the same way).
+// Always marks info_pending true, even if the new value happens to match
+// what's already live - same "don't bother checking, just flag it"
+// simplicity RepositionSongInSet already uses for moved.
+func (s *Store) UpdateSetSongDescription(ctx context.Context, setID, rowID int64, description string) error {
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE set_songs SET description = $1, info_pending = true WHERE id = $2 AND set_id = $3 AND pending_delete = false
+	`, description, rowID, setID)
+	return err
+}
+
+// UpdateSetSongKeyOverride sets rowID's local per-occurrence key (see
+// SetSong.KeyOverride) - same local-draft-only semantics (including
+// info_pending) as UpdateSetSongDescription above.
+func (s *Store) UpdateSetSongKeyOverride(ctx context.Context, setID, rowID int64, keyOverride string) error {
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE set_songs SET key_override = $1, info_pending = true WHERE id = $2 AND set_id = $3 AND pending_delete = false
+	`, keyOverride, rowID, setID)
+	return err
+}
+
+// ClearInfoPending marks rowID's Description/KeyOverride as in sync with
+// Planning Center - called once that content is actually pushed (a
+// successful create at Publish time, or a successful update via Refresh
+// song info), not before. Deliberately per-row, unlike ClearMovedFlags'
+// whole-set sweep: RefreshSongInfo pushes one song at a time and can fail
+// partway through, so only the rows that actually succeeded should stop
+// showing as pending.
+func (s *Store) ClearInfoPending(ctx context.Context, setID, rowID int64) error {
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE set_songs SET info_pending = false WHERE id = $1 AND set_id = $2
+	`, rowID, setID)
+	return err
 }
 
 // ListPendingDeletions returns songs that were removed/replaced locally

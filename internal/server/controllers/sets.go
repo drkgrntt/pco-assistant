@@ -273,6 +273,173 @@ func (sc *SchedulingController) DuplicateSetSong(c *fiber.Ctx) error {
 	return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(middleware.RequestContext(c), orgID, serviceTypeID, planID, errMsg)))
 }
 
+// findSongViewByRowID/findSongViewByItemID locate one song's already-built
+// view inside data.ServiceOrder - used by UpdateSetSongDescription/
+// UpdateSongNote to re-render just the one form that was actually
+// submitted (see views.DescriptionFormFragment/SongNoteFormFragment)
+// instead of the whole set builder body, since neither action touches
+// anything else on the page - not even the rest of the same card.
+func findSongViewByRowID(data views.SetBuilderData, rowID int64) (views.SetSongView, bool) {
+	for _, row := range data.ServiceOrder {
+		if row.IsSong && row.Song.ID == rowID {
+			return row.Song, true
+		}
+	}
+	return views.SetSongView{}, false
+}
+
+func findSongViewByItemID(data views.SetBuilderData, itemID string) (views.SetSongView, bool) {
+	for _, row := range data.ServiceOrder {
+		if row.IsSong && row.Song.PCOItemID == itemID {
+			return row.Song, true
+		}
+	}
+	return views.SetSongView{}, false
+}
+
+// UpdateSetSongDescription sets one set song's local per-occurrence note
+// (see scheduling.SetSong.Description) - a plain local draft edit, not a
+// live Planning Center write. It reaches Planning Center as that item's
+// Description on the next Publish or Refresh song info, same as every
+// other local change on this page (see itemDescriptionFor, scheduling.go).
+//
+// Re-renders just this one form (see views.DescriptionFormFragment's own
+// doc comment for why) rather than the whole SetBuilderBody, or even the
+// whole card - a description edit never changes the order of service,
+// publish status, this card's own title/badges, or any other note, so
+// there's nothing else that needs to reflect it.
+func (sc *SchedulingController) UpdateSetSongDescription(c *fiber.Ctx) error {
+	ctx := middleware.RequestContext(c)
+	orgID := middleware.CurrentOrganizationID(c)
+	serviceTypeID := c.Params("service_type_id")
+	planID := c.Params("plan_id")
+
+	rowID, err := c.ParamsInt("set_song_id")
+	if err != nil {
+		return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(ctx, orgID, serviceTypeID, planID, "set_song_id must be an integer")))
+	}
+
+	errMsg := ""
+	if set, err := sc.store.GetOrCreateSet(ctx, orgID, serviceTypeID, planID); err != nil {
+		errMsg = err.Error()
+	} else if err := sc.store.UpdateSetSongDescription(ctx, set.ID, int64(rowID), c.FormValue("description")); err != nil {
+		errMsg = err.Error()
+	}
+
+	data := sc.buildSetBuilderData(ctx, orgID, serviceTypeID, planID)
+	song, ok := findSongViewByRowID(data, int64(rowID))
+	if !ok {
+		// The row's gone (e.g. removed in another tab since this form was
+		// last rendered) - nothing left to render a fragment for, fall back
+		// to a full re-render so the page still reflects reality.
+		data.ErrMsg = appendErr(errMsg, data.ErrMsg)
+		return render(c, views.SetBuilderBody(data))
+	}
+	return render(c, views.DescriptionFormFragment(data, song, errMsg))
+}
+
+// UpdateSetSongKey sets one set song's local per-occurrence key override
+// (see scheduling.SetSong.KeyOverride) - same local-draft-only semantics
+// as UpdateSetSongDescription above (it reaches Planning Center as a Key
+// relationship on the next Publish or Refresh song info, see
+// resolveKeyID, not immediately), and the same single-form fragment
+// response.
+func (sc *SchedulingController) UpdateSetSongKey(c *fiber.Ctx) error {
+	ctx := middleware.RequestContext(c)
+	orgID := middleware.CurrentOrganizationID(c)
+	serviceTypeID := c.Params("service_type_id")
+	planID := c.Params("plan_id")
+
+	rowID, err := c.ParamsInt("set_song_id")
+	if err != nil {
+		return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(ctx, orgID, serviceTypeID, planID, "set_song_id must be an integer")))
+	}
+
+	errMsg := ""
+	if set, err := sc.store.GetOrCreateSet(ctx, orgID, serviceTypeID, planID); err != nil {
+		errMsg = err.Error()
+	} else if err := sc.store.UpdateSetSongKeyOverride(ctx, set.ID, int64(rowID), c.FormValue("key")); err != nil {
+		errMsg = err.Error()
+	}
+
+	data := sc.buildSetBuilderData(ctx, orgID, serviceTypeID, planID)
+	song, ok := findSongViewByRowID(data, int64(rowID))
+	if !ok {
+		data.ErrMsg = appendErr(errMsg, data.ErrMsg)
+		return render(c, views.SetBuilderBody(data))
+	}
+	return render(c, views.KeyFormFragment(data, song, errMsg))
+}
+
+// UpdateSongNote creates, updates, or deletes one category's Planning
+// Center ItemNote on a published song's plan item - unlike
+// UpdateSetSongDescription above, this writes straight to Planning Center
+// immediately, the same "ad hoc setup-level write" shape as
+// QuickAddSongTag/QuickAddSongRelationship/QuickAddSongRole, just against
+// a real PCO record instead of this app's own tables. note_id present
+// means update that note (or delete it, if content was cleared to empty -
+// tidier than leaving an empty note sitting in Planning Center); note_id
+// empty and content non-empty means create a new one for category_id;
+// note_id empty and content empty is a no-op (nothing existed, nothing was
+// typed).
+//
+// Re-renders just this one category's own form - same reasoning as
+// UpdateSetSongDescription above (a note write here never touches
+// anything else on the page, including any of this song's other notes).
+func (sc *SchedulingController) UpdateSongNote(c *fiber.Ctx) error {
+	ctx := middleware.RequestContext(c)
+	orgID := middleware.CurrentOrganizationID(c)
+	serviceTypeID := c.Params("service_type_id")
+	planID := c.Params("plan_id")
+	itemID := c.Params("item_id")
+	categoryID := c.FormValue("category_id")
+	noteID := c.FormValue("note_id")
+	content := c.FormValue("content")
+
+	errMsg := ""
+	switch {
+	case content == "" && noteID != "":
+		if err := pco.DeleteItemNote(ctx, serviceTypeID, planID, itemID, noteID); err != nil {
+			errMsg = "removing note from Planning Center: " + err.Error()
+		}
+	case content == "":
+		// Nothing to do.
+	case noteID != "":
+		if _, err := pco.UpdateItemNote(ctx, serviceTypeID, planID, itemID, noteID, &pco.UpdateItemNoteParams{Content: content}); err != nil {
+			errMsg = "updating note in Planning Center: " + err.Error()
+		}
+	default:
+		if _, err := pco.CreateItemNote(ctx, serviceTypeID, planID, itemID, &pco.CreateItemNoteParams{Content: content, ItemNoteCategoryID: categoryID}); err != nil {
+			errMsg = "saving note to Planning Center: " + err.Error()
+		}
+	}
+
+	data := sc.buildSetBuilderData(ctx, orgID, serviceTypeID, planID)
+	song, ok := findSongViewByItemID(data, itemID)
+	if !ok {
+		data.ErrMsg = appendErr(errMsg, data.ErrMsg)
+		return render(c, views.SetBuilderBody(data))
+	}
+	note, ok := findSongNoteByCategoryID(song, categoryID)
+	if !ok {
+		// The category's gone from the fresh fetch above (e.g. deleted in
+		// Planning Center between page load and this save) - same
+		// fall-back reasoning as the row-gone case above.
+		data.ErrMsg = appendErr(errMsg, data.ErrMsg)
+		return render(c, views.SetBuilderBody(data))
+	}
+	return render(c, views.SongNoteFormFragment(data, song, note, errMsg))
+}
+
+func findSongNoteByCategoryID(song views.SetSongView, categoryID string) (views.SongNoteView, bool) {
+	for _, note := range song.Notes {
+		if note.CategoryID == categoryID {
+			return note, true
+		}
+	}
+	return views.SongNoteView{}, false
+}
+
 // PublishSet fully syncs the draft set to the real Planning Center plan:
 //   - songs removed/replaced since the last publish (tombstoned rows, see
 //     scheduling.Store.RemoveSongFromSet/ReplaceSongInSet) have their PCO
@@ -416,8 +583,8 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 						Sequence:      nextSequence + i,
 						SongID:        ss.SongID,
 						ArrangementID: info.ArrangementID,
-						KeyID:         info.KeyID,
-						Description:   info.Notes,
+						KeyID:         resolveKeyID(ctx, ss.SongID, info.ArrangementID, ss.KeyOverride, info.KeyID),
+						Description:   itemDescriptionFor(ss, info),
 						Length:        info.LengthSeconds,
 					})
 					if err != nil {
@@ -428,9 +595,42 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 						failures = append(failures, fmt.Sprintf("%s: created in Planning Center but failed to record locally: %s", title, err.Error()))
 						continue
 					}
+					// Best-effort, same tolerance as ClearMovedFlags below -
+					// whatever Description/KeyOverride this create just
+					// pushed is now genuinely in sync, whether or not this
+					// call happens to succeed.
+					_ = sc.store.ClearInfoPending(ctx, set.ID, ss.ID)
 					ss.PCOItemID = item.Data.ID
 					created++
 				} else {
+					// Already published - nothing to create, but a pending
+					// note/key edit (see SetSong.InfoPending) still needs to
+					// reach Planning Center, and Publish is the one action a
+					// user reasonably expects to "sync everything," not just
+					// creates/deletes/reorders. Skipped entirely when
+					// nothing's pending, so a plain reorder-only publish
+					// doesn't cost an extra PCO call per already-in-sync song.
+					if ss.InfoPending {
+						info, ok := arrangementCache[ss.SongID]
+						if !ok || info.ArrangementID == "" {
+							if fetched, err := fetchAndCacheArrangementInfo(ctx, sc.store, orgID, ss.SongID); err == nil {
+								info = fetched
+							}
+						}
+						length := info.LengthSeconds
+						description := itemDescriptionFor(ss, info)
+						keyID := resolveKeyID(ctx, ss.SongID, info.ArrangementID, ss.KeyOverride, info.KeyID)
+						if _, err := pco.UpdateItem(ctx, serviceTypeID, planID, ss.PCOItemID, &pco.UpdateItemParams{
+							Description:   &description,
+							Length:        &length,
+							ArrangementID: &info.ArrangementID,
+							KeyID:         &keyID,
+						}); err != nil {
+							failures = append(failures, fmt.Sprintf("%s: %s", title, err.Error()))
+						} else {
+							_ = sc.store.ClearInfoPending(ctx, set.ID, ss.ID)
+						}
+					}
 					updated++
 				}
 				publishable = append(publishable, ss)
@@ -542,15 +742,21 @@ func (sc *SchedulingController) RefreshSongInfo(c *fiber.Ctx) error {
 		}
 
 		length := info.LengthSeconds
+		description := itemDescriptionFor(ss, info)
+		keyID := resolveKeyID(ctx, ss.SongID, info.ArrangementID, ss.KeyOverride, info.KeyID)
 		if _, err := pco.UpdateItem(ctx, serviceTypeID, planID, ss.PCOItemID, &pco.UpdateItemParams{
-			Description:   &info.Notes,
+			Description:   &description,
 			Length:        &length,
 			ArrangementID: &info.ArrangementID,
-			KeyID:         &info.KeyID,
+			KeyID:         &keyID,
 		}); err != nil {
 			failures = append(failures, fmt.Sprintf("%s: %s", title, err.Error()))
 			continue
 		}
+		// Best-effort, same as ClearInfoPending's other call site (PublishSet) -
+		// this song's Description/KeyOverride genuinely just reached
+		// Planning Center, whether or not this particular call succeeds.
+		_ = sc.store.ClearInfoPending(ctx, set.ID, ss.ID)
 		refreshed++
 	}
 
@@ -856,6 +1062,9 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 		if ss.Moved {
 			data.ReorderPending = true
 		}
+		if ss.InfoPending {
+			data.InfoPendingCount++
+		}
 		roleViews, _ := songRoleViews(rolesBySong, roleTypeLabels, ss.SongID)
 		data.SetSongs = append(data.SetSongs, views.SetSongView{
 			ID:           ss.ID,
@@ -866,6 +1075,7 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 			Published:    ss.PCOItemID != "",
 			AnchorItemID: ss.AnchorItemID,
 			Moved:        ss.Moved,
+			InfoPending:  ss.InfoPending,
 		})
 	}
 
@@ -887,6 +1097,8 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 			data.PendingChanges = append(data.PendingChanges, fmt.Sprintf("Added: %s", ss.Title))
 		} else if ss.Moved {
 			data.PendingChanges = append(data.PendingChanges, fmt.Sprintf("Moved: %s", ss.Title))
+		} else if ss.InfoPending {
+			data.PendingChanges = append(data.PendingChanges, fmt.Sprintf("Note/key updated: %s", ss.Title))
 		}
 	}
 	for _, ss := range pendingDeletions {
@@ -905,7 +1117,10 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 			return pcoItems.Data[i].Attributes.Sequence < pcoItems.Data[j].Attributes.Sequence
 		})
 		merged := mergeServiceOrder(pcoItems.Data, setSongs)
-		data.ServiceOrder = renderServiceOrder(ctx, sc.store, organizationID, arrangementCache, merged, titles, rolesBySong, roleTypeLabels)
+		// Fetched once per render, not per song - see renderServiceOrder's
+		// own doc comment on noteCategories.
+		noteCategories, _ := pco.GetItemNoteCategories(ctx, serviceTypeID, nil)
+		data.ServiceOrder = renderServiceOrder(ctx, sc.store, organizationID, serviceTypeID, planID, arrangementCache, noteCategories.Data, merged, titles, rolesBySong, roleTypeLabels)
 
 		// Keep this service type's "where does the first song usually go"
 		// memory (see PreferredFirstSongAnchorTitle, and firstSongFallbackAnchor
@@ -1248,10 +1463,45 @@ func mergeServiceOrder(items []pco.ItemData, setSongs []scheduling.SetSong) []me
 	return rows
 }
 
+// buildSongNoteViews resolves one views.SongNoteView per available note
+// category for a published song's plan item (itemID) - "" means
+// unpublished, and there's no item to attach a note to yet, so this
+// returns nil without a wasted PCO call. Best-effort like everything else
+// on this page: a failed GetItemNotes just means every category shows
+// empty (create-on-save) rather than a broken page.
+func buildSongNoteViews(ctx context.Context, serviceTypeID, planID, itemID string, noteCategories []pco.ItemNoteCategoryData) []views.SongNoteView {
+	if itemID == "" || len(noteCategories) == 0 {
+		return nil
+	}
+
+	existing, _ := pco.GetItemNotes(ctx, serviceTypeID, planID, itemID, nil)
+	byCategory := make(map[string]pco.ItemNoteData, len(existing.Data))
+	for _, n := range existing.Data {
+		if n.Relationships.ItemNoteCategory.Data != nil {
+			byCategory[n.Relationships.ItemNoteCategory.Data.ID] = n
+		}
+	}
+
+	noteViews := make([]views.SongNoteView, 0, len(noteCategories))
+	for _, cat := range noteCategories {
+		v := views.SongNoteView{CategoryID: cat.ID, CategoryName: cat.Attributes.Name}
+		if note, ok := byCategory[cat.ID]; ok {
+			v.NoteID = note.ID
+			v.Content = note.Attributes.Content
+		}
+		noteViews = append(noteViews, v)
+	}
+	return noteViews
+}
+
 // renderServiceOrder turns a merge into display rows plus the anchor
 // picker's option list (every foreign item, in order, prefixed by "Top of
-// service").
-func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizationID string, arrangementCache map[string]scheduling.SongArrangementInfo, rows []mergedRow, titles map[string]string, rolesBySong map[string][]scheduling.SongRole, roleTypeLabels map[string]string) []views.ServiceOrderRow {
+// service"). noteCategories is this service type's Planning Center note
+// categories (Audio/Visual, Band, Vocals, etc.), fetched once by the
+// caller and reused for every published song's SongNoteView (see
+// buildSongNoteViews) - a service type has few of these, so one shared
+// fetch instead of a category lookup per song.
+func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizationID, serviceTypeID, planID string, arrangementCache map[string]scheduling.SongArrangementInfo, noteCategories []pco.ItemNoteCategoryData, rows []mergedRow, titles map[string]string, rolesBySong map[string][]scheduling.SongRole, roleTypeLabels map[string]string) []views.ServiceOrderRow {
 	out := make([]views.ServiceOrderRow, 0, len(rows))
 
 	for _, row := range rows {
@@ -1272,10 +1522,22 @@ func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizati
 		ss := row.Song
 		roleViews, _ := songRoleViews(rolesBySong, roleTypeLabels, ss.SongID)
 		// One lookup covers both ArrangementInfo (the formatted summary
-		// line) and Notes (the sidebar detail card - see songDetailCard,
-		// song_detail_card.templ) - see resolveArrangementCacheInfo's own
-		// doc comment for why this isn't two separate resolves.
+		// line) and the arrangement's Notes, which itemDescriptionFor
+		// (scheduling.go) falls back to as a publish-time Description
+		// default - see resolveArrangementCacheInfo's own doc comment for
+		// why this isn't two separate resolves.
 		arrangementInfo := resolveArrangementCacheInfo(ctx, store, organizationID, arrangementCache, ss.SongID)
+		key := effectiveKey(*ss, arrangementInfo)
+		// The summary line shown right on the row uses the *effective*
+		// key, not the arrangement's own cached one - without this, saving
+		// a key override in the detail card changed nothing visible
+		// anywhere else on the page until the next Publish/Refresh
+		// actually pushed it, which read as "did that do anything?"
+		// Swapping just Key here (not the whole struct) leaves BPM/meter/
+		// length showing the arrangement's real values, since those have
+		// no per-occurrence override to reflect.
+		displayInfo := arrangementInfo
+		displayInfo.Key = key
 		out = append(out, views.ServiceOrderRow{
 			IsSong: true,
 			Song: views.SetSongView{
@@ -1287,8 +1549,12 @@ func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizati
 				Published:       ss.PCOItemID != "",
 				AnchorItemID:    ss.AnchorItemID,
 				Moved:           ss.Moved,
-				ArrangementInfo: formatArrangementInfo(arrangementInfo),
-				Notes:           arrangementInfo.Notes,
+				InfoPending:     ss.InfoPending,
+				ArrangementInfo: formatArrangementInfo(displayInfo),
+				Description:     ss.Description,
+				Key:             key,
+				PCOItemID:       ss.PCOItemID,
+				Notes:           buildSongNoteViews(ctx, serviceTypeID, planID, ss.PCOItemID, noteCategories),
 			},
 		})
 	}

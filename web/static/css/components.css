@@ -18,9 +18,14 @@
    - see the Song Tag Suggestions apply form, the first checkbox anywhere
    in this codebase). Native checkbox/radio rendering is left alone
    entirely, same "not worth custom-styling" call already made for select's
-   arrow. */
+   arrow. textarea was simply missing from this list (no code had used one
+   yet) rather than deliberately excluded - without it, the first two
+   textareas added to the app (the song detail card's notes fields) were
+   stuck looking like raw, unstyled browser chrome next to every other
+   field around them. */
 input:not([type="checkbox"]):not([type="radio"]),
 select,
+textarea,
 button {
   appearance: none;
   -webkit-appearance: none;
@@ -34,6 +39,7 @@ button {
    than a field (most visible in dark mode, where the two diverge most). */
 input:not([type="checkbox"]):not([type="radio"]),
 select,
+textarea,
 button {
   font: inherit;
   /* Was 0.4rem 0.7rem - nudged onto the scale's nearest steps (+1.6px/
@@ -48,6 +54,7 @@ button {
 
 input:focus-visible,
 select:focus-visible,
+textarea:focus-visible,
 button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;

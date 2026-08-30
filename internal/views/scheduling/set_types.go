@@ -69,6 +69,14 @@ type SetBuilderData struct {
 	// the "Discard changes" button never appeared for a pure reorder even
 	// though there was a real local change to discard or publish.
 	ReorderPending bool
+	// InfoPendingCount is how many already-published SetSongs have a
+	// Description or Key edit that hasn't reached Planning Center yet -
+	// see scheduling.SetSong.InfoPending, the item-content equivalent of
+	// ReorderPending above, and for the same reason: a note/key edit alone
+	// doesn't touch UnpublishedCount, PendingDeleteCount, or
+	// ReorderPending, so without this "Discard changes" wouldn't appear
+	// for a real local change sitting there unpushed.
+	InfoPendingCount int
 	// PendingChanges spells out exactly what's changed since this set was
 	// last published, one line per change (e.g. "Added: Amazing Grace",
 	// "Song order changed") - see buildSetBuilderData. Empty means fully
@@ -135,6 +143,14 @@ type SetSongView struct {
 	// a badge right on the row, since "the order changed" without saying
 	// which songs moved is easy to lose track of.
 	Moved bool
+	// InfoPending is true once Description or Key has been edited on an
+	// already-published song without that edit reaching Planning Center
+	// yet - see scheduling.SetSong.InfoPending, the item-content
+	// equivalent of Moved above. Shown as its own badge for the same
+	// reason Moved is: without it, an edited-but-not-yet-refreshed song
+	// looked identical to one already in sync, with nothing anywhere on
+	// the page saying so until the numbers underneath happened to change.
+	InfoPending bool
 	// ArrangementInfo is a pre-formatted "G · 72 BPM · 4/4 · 3:45" summary
 	// of this song's Planning Center arrangement (whatever PCO's own "add
 	// song" flow set up, dbseed/UpdateArrangement set, or a manual Song
@@ -146,12 +162,52 @@ type SetSongView struct {
 	// CandidateSongView.ArrangementInfo for why the full candidate list
 	// doesn't get the same live-fetch fallback.
 	ArrangementInfo string
-	// Notes is the song's Planning Center arrangement notes (see
-	// fetchAndCacheArrangementInfo's Notes field) - shown read-only on the
-	// song detail sidebar card (song_detail_card.templ) when a song row is
-	// clicked. Same cache-or-live-fetch resolution as ArrangementInfo,
-	// empty when there's nothing on the arrangement.
-	Notes string
+	// Description is this one occurrence's local per-occurrence note (see
+	// scheduling.SetSong.Description) - "cut the bridge this week," not a
+	// persistent fact about the song. Editing this only updates the local
+	// draft (UpdateSetSongDescription); it reaches Planning Center on the
+	// next Publish or Refresh song info, same as every other local set
+	// change.
+	Description string
+	// Key is this song's effective key for this one occurrence - the local
+	// per-occurrence override (scheduling.SetSong.KeyOverride) when set,
+	// falling back to the arrangement's own cached default key (the same
+	// one ArrangementInfo's summary line shows) otherwise. Editable on the
+	// song detail card; like Description, it only updates the local draft
+	// and reaches Planning Center as a Key relationship on the next
+	// Publish or Refresh song info (see resolveKeyID, scheduling.go) -
+	// never the arrangement's own default key, unlike editing it directly
+	// in Planning Center would.
+	Key string
+	// PCOItemID is this song's real Planning Center plan item id, once
+	// published ("" otherwise) - see scheduling.SetSong.PCOItemID, which
+	// Published already derives from. Exposed here (unlike AnchorItemID,
+	// which is a different item entirely - wherever this song is placed
+	// after) because the song detail sidebar card needs it directly, to
+	// post a note against *this* item (see Notes/SongNoteView below).
+	PCOItemID string
+	// Notes is one entry per Planning Center note category (Audio/Visual,
+	// Band, Vocals, etc. - configured per service type, see
+	// pco.ItemNoteCategory) already resolved against whatever note this
+	// song's plan item actually has in each one - not the same thing as
+	// the song's Description above, or its arrangement's own persistent
+	// Notes (which this app doesn't expose an editor for - it isn't the
+	// notes surface anyone actually looks at in Planning Center's own UI).
+	// Only populated for a published song (PCOItemID != "") - there's no
+	// plan item to attach a note to otherwise; nil for an unpublished one,
+	// which the song detail card takes as "publish this first."
+	Notes []SongNoteView
+}
+
+// SongNoteView is one Planning Center note category's state for a specific
+// published song - see SetSongView.Notes. NoteID is "" when this category
+// has no note on this item yet (the detail card creates one on save
+// instead of updating); Content is "" in that case too.
+type SongNoteView struct {
+	CategoryID   string
+	CategoryName string
+	NoteID       string
+	Content      string
 }
 
 // ServiceOrderRow is one row of the full order of service shown on the set
