@@ -23,6 +23,22 @@ func publishButtonTitle(data SetBuilderData) string {
 	return "Nothing to publish - your local set already matches Planning Center"
 }
 
+// hasPendingRosterPublish/rosterPublishButtonTitle are hasPendingPublish/
+// publishButtonTitle's people equivalent - the roster side has no
+// ReorderPending or InfoPending concept (positions aren't reordered, and
+// there's no per-occurrence note/key field on an assignment), so this is
+// just the two counts that already exist.
+func hasPendingRosterPublish(data RosterBuilderData) bool {
+	return data.UnpublishedCount > 0 || data.PendingDeleteCount > 0
+}
+
+func rosterPublishButtonTitle(data RosterBuilderData) string {
+	if hasPendingRosterPublish(data) {
+		return ""
+	}
+	return "Nothing to publish - your local roster already matches Planning Center"
+}
+
 // SongPublishPanel is the Songs tab's publish/discard controls, rendered
 // in the Build page's sidebar (see build.templ) instead of inline under
 // the order-of-service table - the whole point of a margin once there's a
@@ -161,9 +177,14 @@ templ rosterPublishPanelContent(data RosterBuilderData) {
 				hx-swap="outerHTML"
 				hx-confirm={ fmt.Sprintf("Sync this roster to Planning Center? %d assignment(s) added, %d removed.", data.UnpublishedCount, data.PendingDeleteCount) }
 			>
-				<button type="submit" class="primary">Publish to Planning Center</button>
+				<button
+					type="submit"
+					class="primary"
+					disabled?={ !hasPendingRosterPublish(data) }
+					title={ rosterPublishButtonTitle(data) }
+				>Publish to Planning Center</button>
 			</form>
-			if data.UnpublishedCount > 0 || data.PendingDeleteCount > 0 {
+			if hasPendingRosterPublish(data) {
 				<form
 					hx-post={ fmt.Sprintf("/scheduling/rosters/%s/%s/revert", data.ServiceTypeID, data.PlanID) }
 					hx-target="#roster-builder-body"
