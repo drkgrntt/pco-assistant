@@ -165,7 +165,14 @@ Mobile-first, installable as a PWA, with light/dark theming.
    Leave the `STRIPE_*` variables below blank to skip this - the
    trial/paywall gate itself still works, only checkout/portal don't.
 
-4. **`.env`**:
+4. **Mailgun (optional for local dev).** The `/feedback` page emails
+   submissions through [Mailgun](https://www.mailgun.com/) - a domain
+   and API key (`MG_DOMAIN`/`MG_KEY`) plus the address you want feedback
+   sent to (`FEEDBACK_RECIPIENT_EMAIL`). Leave `MG_DOMAIN`/`MG_KEY` blank
+   to skip this - feedback submissions are just logged instead of
+   emailed, so local dev never needs real Mailgun credentials.
+
+5. **`.env`**:
    ```
    PORT=8080
    APP_ENV=local
@@ -190,6 +197,10 @@ Mobile-first, installable as a PWA, with light/dark theming.
    STRIPE_PRICE_STANDARD=...
    STRIPE_PRICE_MULTI_CAMPUS=...
    STRIPE_WEBHOOK_SECRET=...
+
+   MG_DOMAIN=...
+   MG_KEY=...
+   FEEDBACK_RECIPIENT_EMAIL=...
    ```
 
 ## Makefile
