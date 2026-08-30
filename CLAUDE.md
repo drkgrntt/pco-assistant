@@ -71,6 +71,14 @@ Views are `.templ` files compiled to `_templ.go` by `templ generate` -
 wired up) before relying on the `_templ.go` output; don't hand-edit the
 generated `_templ.go` files.
 
+The IDE's own diagnostics lag behind this - `*_templ.go` is gitignored,
+so right after editing a `.templ` file (or when a new git worktree
+appears alongside the checkout) the editor's language server routinely
+flags real symbols as `undefined`/`unknown field`. This has been a false
+alarm every time it's come up - always confirm with a real `go build
+./...` (empty output = success) before trusting an IDE diagnostic over
+it.
+
 ## Deployment
 
 Production runs on a server reachable via the SSH alias `debian`, deployed
@@ -96,6 +104,16 @@ user's explicit ask to commit/push/deploy, same gating either way.
 
 Never run or touch the user's own local dev server (port 8080) directly -
 treat it as theirs, not something to start/stop/curl on their behalf.
+
+Never `cat`/`tail`/otherwise print a real `.env` file (local or on
+`debian`) - it's a live secrets file, and printing it puts every value in
+it into this conversation's transcript, not just the one you meant to
+check (this has actually happened - a `STRIPE_WEBHOOK_SECRET` leaked into
+a transcript this way). To check which keys exist without exposing
+values, `grep -o '^[A-Z_]*=' .env`; to check whether a specific key has a
+value set (not what it is), `grep -c '^KEY_NAME=.\+$' .env`. Appending new
+keys (`printf ... >> .env`) is fine and doesn't require reading the file
+first.
 
 When you need to confirm what Planning Center's API actually does rather
 than trust documentation or an assumption, verify it live against the
