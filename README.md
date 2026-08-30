@@ -109,7 +109,9 @@ count into Stripe as that subscription's line-item quantity.
   filling an upcoming plan's open positions from each position's real PCO
   eligibility list, with avoid-pairing conflict warnings, works-well/
   mentorship suggestions, serving-frequency warnings (checked against real
-  history), and blockout-date warnings (read live from Planning Center).
+  history), a cross-team warning when someone's already filling another
+  position/team the same week, and blockout-date warnings (read live from
+  Planning Center).
   Add someone right after someone else already on the roster and you're
   offered the same one-click "remember how they relate" prompt as the
   Songs tab; ad hoc person relationships and position eligibility can also
@@ -121,6 +123,13 @@ but a sidebar keeps both tabs' Publish/Discard controls available no matter
 which one is open, plus an at-a-glance card for whichever tab *isn't* open -
 the other tab's actual song order or who's filling each position, not just
 a count.
+
+**Run sheet** - a one-click printable page (a Print button using the
+browser's own print-to-PDF, no separate PDF library) combining the full
+order of service, each song's key/tempo/length and item notes, and the
+roster grouped by team/position, flagging any still-short-handed spots -
+the artifact a worship leader would otherwise assemble by hand every
+week. Linked from the Build page next to "Open in Planning Center."
 
 Mobile-first, installable as a PWA, with light/dark theming.
 

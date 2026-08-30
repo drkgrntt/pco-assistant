@@ -1,0 +1,212 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## What this is
+
+PCO Assistant - a self-hosted scheduling assistant for Planning Center
+Services. It does *not* duplicate PCO's own data model: songs, people,
+plans, teams, and positions are all read live from PCO via
+[`go-pco`](https://github.com/drkgrntt/go-pco) (a separate module/repo,
+pulled in as a normal tagged dependency). This app's own Postgres database
+only stores what PCO has no concept of - song/person relationships, role
+tags, scheduling preferences, and draft sets/rosters - which get synced
+back to real PCO records on Publish. See `README.md` for the full feature
+list and pricing/billing model; it's worth reading before making changes
+to billing, publish/sync, or the Build page.
+
+**Product direction**: `ideas.md`'s "Vision / positioning" section holds
+the True North - every feature should either **protect the team**
+(burnout, preferences, relational friction, mentorship pairing) or
+**protect the service** (repetition fatigue, set flow, conflicts caught
+before publish). Check a proposed feature against those two promises
+before recommending it, especially when asked to prioritize among
+ideas.md's brainstorm items - "does PCO already do this" is the wrong
+test (see that section for why); "which promise does this serve, and how
+directly" is the right one.
+
+**Agent delegation**: not a blanket default. Spawn a subagent (general-
+purpose, isolation: worktree) for a task that's fully-specified upfront,
+self-contained, and either runs in parallel with other independent work
+or benefits from not touching the live checkout - a feature build you can
+completely spec before handing off, with no need for the user to react
+mid-implementation, is the sweet spot (three ran well in parallel this
+way: a new read-only page, a warning-logic addition, and a new outbound-
+email package - none of which touched the same files). Do the rest
+directly: anything needing iterative back-and-forth with the user
+(debugging against screenshots, "still broken, try this instead" loops -
+a subagent can't see a screenshot and wait for a reaction), git workflow
+(merge/deploy/branch cleanup - sequential, sometimes touches production,
+and gated on the user's own explicit go-ahead), small edits and doc
+changes, and anything touching secrets/env files (worth doing carefully
+and visibly, not handed to a cold agent to explore blind). Each subagent
+spawn re-derives full context from its prompt alone and costs on the
+order of 100k tokens - real value for genuine parallel/isolated feature
+work, wasted on anything a direct edit would handle in one tool call.
+
+## Commands
+
+```bash
+make run        # templ generate + go run cmd/api/main.go
+make watch       # live reload via air (installs air if missing)
+make build       # templ generate + go build -o main cmd/api/main.go
+make test        # go test ./... -v
+make all         # build + test
+make db-reset    # wipe local DB and rebuild from migrations (ARGS=-yes to skip confirm)
+make db-seed     # populate local DB with example scheduling data
+make pco-reset   # delete every Song/Plan in the signed-in PCO org (dev orgs only!)
+```
+
+Run a single test: `go test ./internal/server/controllers/ -run TestMergeServiceOrder -v`
+(standard Go tooling throughout - no custom test runner).
+
+`db-reset`/`db-seed`/`pco-reset` all refuse to run unless `APP_ENV=local`.
+Local setup, `.env` variables, and what each of these commands actually does
+are documented in `README.md` - read it rather than re-deriving from code
+when working on seeding/reset flows.
+
+Views are `.templ` files compiled to `_templ.go` by `templ generate` -
+`make run`/`make build`/`make watch` all regenerate first. If you edit a
+`.templ` file directly, regenerate (`templ generate` or `go generate` if
+wired up) before relying on the `_templ.go` output; don't hand-edit the
+generated `_templ.go` files.
+
+## Deployment
+
+Production runs on a server reachable via the SSH alias `debian`, deployed
+from `~/sites/pco-assistant` there via Docker Compose. Standard sequence
+for a real (non-trivial) change:
+
+1. Branch, commit, push the branch.
+2. Wait for the user's explicit "merge and deploy" - never merge/deploy on
+   your own judgment just because CI (there is none) or tests pass.
+3. `git merge --no-ff <branch>` into `main`, push `main`.
+4. `ssh debian "cd ~/sites/pco-assistant && git pull --ff-only && docker
+   compose build && docker compose up -d"`.
+5. Check `docker compose logs` for the goose migration line if the change
+   included one (confirm it landed at the expected version, not just that
+   it ran), then `curl` the live URL (`pco.derekgarnett.com`) to confirm a
+   real response.
+6. Wait for the user's explicit "delete the branch" before deleting it,
+   locally and on origin.
+
+Small/doc-only changes (a copy tweak, a README/ideas.md correction) skip
+the branch ceremony - commit straight to `main` - but still only on the
+user's explicit ask to commit/push/deploy, same gating either way.
+
+Never run or touch the user's own local dev server (port 8080) directly -
+treat it as theirs, not something to start/stop/curl on their behalf.
+
+When you need to confirm what Planning Center's API actually does rather
+than trust documentation or an assumption, verify it live against the
+signed-in dev PCO account instead of guessing - pull a session's access
+token from the local `sessions` table rather than assuming a doc is
+accurate; PCO's own behavior has contradicted its docs more than once
+this project's history.
+
+## Keeping the docs current
+
+`CLAUDE.md`/`README.md`/`ideas.md` drift the moment a change lands without
+touching them - this has already happened more than once (a shipped
+`ideas.md` item left listed as open brainstorm, a new package missing from
+this file's own Architecture list, a new feature missing from README's
+Features section). Treat updating whichever of these a change actually
+affects as part of finishing that change, not a separate follow-up
+someone has to remember to ask for:
+
+- New `internal/` package, or a real architectural shift -> this file's
+  Architecture section.
+- New user-facing feature or Setup/env-var change -> `README.md`.
+- An `ideas.md` brainstorm item actually gets built -> mark it
+  `~~struck~~` with a one-line pointer to where it landed (see existing
+  examples in Planning annotations), don't just leave it listed as open.
+- A product-direction decision actually gets made -> `ideas.md`'s
+  Vision/positioning or the relevant settled-thinking section.
+
+## Architecture
+
+**Layout**: `cmd/` has the entrypoints (`api` is the server; `dbreset`,
+`dbseed`, `pcoreset` are the dev CLI tools above). `internal/` has the
+actual app, split by concern rather than by feature:
+
+- `internal/database` - connection setup + goose migrations, embedded from
+  `internal/database/migrations/*.sql` and run automatically on every
+  startup (`New()` calls `migrate()` - no separate migrate step).
+- `internal/auth` - sessions, PCO OAuth, organizations, seat counting.
+- `internal/billing` - Stripe checkout/portal/webhook handling.
+- `internal/notify` - Mailgun-backed outbound email (currently just
+  feedback submissions from `/feedback`) - a `Client` constructed once
+  from env vars in `server.go`, same shape as `internal/billing`'s.
+- `internal/scheduling` - the domain package: all local-database
+  scheduling data (relationships, roles, preferences, sets, rosters,
+  song-info cache) plus the algorithms built on top of live PCO data
+  (repetition warnings, avoid-pairing conflicts, tag suggestions,
+  first-song anchors). One `scheduling.Store` per concern-file
+  (`song_relationships.go`, `person_relationships.go`, `sets.go`,
+  `rosters.go`, ...), all sharing the same `*sql.DB` and struct.
+- `internal/server` - Fiber app wiring: `server.go` (dependency
+  construction), `routes.go` (route registration - read this first to find
+  where a given endpoint lives), `crons.go` (gocron job registration),
+  `controllers/`, `middleware/`, `jobs/`.
+- `internal/views` (+ `internal/views/scheduling`) - templ view templates
+  (`.templ` source, `_templ.go` generated output) rendered server-side and
+  swapped into the page via htmx - there is no client-side framework/SPA.
+- `web/static` - the in-house CSS design system (`tokens.css`, `base.css`,
+  `components.css`, `app.css` - see README's Tech stack section) plus PWA
+  assets (manifest, service worker, icons). Rendered live at `/style-guide`,
+  which only responds when `APP_ENV=local`.
+
+**Request pipeline** (`routes.go`): every route runs through
+`RequireAuth` -> `RequireActiveOrganization` -> `PopulateNavState`, in that
+order (each depends on locals the previous one set) - see the doc comments
+on each in `internal/server/middleware/` before touching this chain.
+`RequireAuth` resolves the session cookie into `person_id`/`organization_id`
+locals *and* a PCO-authenticated context (`pco_ctx`), refreshing the PCO
+access token first if it's near expiry. Handlers should read these via the
+middleware package's accessors rather than pulling locals directly:
+`middleware.CurrentPerson`, `middleware.CurrentOrganization`,
+`middleware.CurrentOrganizationID`, `middleware.RequestContext(c)` (use
+this instead of `c.Context()` any time you're about to call into `go-pco`,
+so the call authenticates as the signed-in person).
+
+**Organization scoping**: this is multi-tenant - every `scheduling.Store`
+query that touches org-owned data takes an organization id
+(`middleware.CurrentOrganizationID(c)`) and filters on it. A few tables
+(e.g. `song_relationship_types`) are shared vocabulary, not per-org data,
+and are deliberately *not* scoped - each store method's doc comment says
+which. When adding a new scheduling table/method, match the existing
+pattern in its file rather than guessing.
+
+**Controllers**: grouped by page/feature under
+`internal/server/controllers/` (`build.go` is the combined Songs/Team
+build workflow, `sets.go`/`rosters.go` are the underlying draft data,
+`scheduling_api.go` is a separate JSON API controller from the
+htmx-fragment controllers). Handlers call `render(c, views.Whatever(...))`
+to write a templ component as the response (`render.go`); htmx-driven
+partial updates render a narrower component (e.g. just the results
+fragment) rather than the whole page, so typing in a search box never
+clobbers its own input mid-keystroke - see `BuildPlansSearch`'s doc comment
+in `build.go` for the specific failure mode this avoids and match it in
+similar handlers.
+
+**Sync model (Publish/Discard)**: draft sets/rosters live only in this
+app's database until Publish pushes them to real PCO plan items/records in
+one sync; Discard reverts the local draft back to whatever's currently
+live in PCO. Changes here (song notes, per-occurrence key, position
+assignments) are two kinds: some (like `PersonTeamPositionAssignment.
+schedule_preference`) write straight to PCO immediately since PCO has no
+"draft" concept for them; others stay purely local until the next
+Publish/Refresh. Check how an existing similar field behaves before adding
+a new one.
+
+**Migrations**: goose, numbered sequentially
+(`internal/database/migrations/NNNNN_description.sql`), embedded at build
+time and applied automatically on startup - no manual migrate step in dev
+or prod. Add a new migration by following the existing numbering/naming
+pattern; don't edit an already-applied one.
+
+**Tests**: standard `go test`, colocated with the code
+(`internal/server/controllers/*_test.go`). Existing tests favor small
+helper constructors (e.g. `foreignItem`, `songItem`, `setSong` in
+`sets_test.go`) over fixture files or mocking frameworks - follow that
+style for new tests in the same package.

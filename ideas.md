@@ -243,10 +243,11 @@ pattern as `song_tags`/`song_relationships`:**
   pairs with zero/stale overlap, then surface them as an "untested
   pairing" suggestion - a genuinely different signal (novelty/coverage)
   from mentorship or works-well (quality of an already-known pairing).
-- **Cross-team burnout** - `schedule_preference`/frequency warnings today
-  are scoped per position. Someone could be within preference on vocals but
-  also serving photography and greeting the same week - no aggregate "how
-  much is this person actually doing this month" view exists yet.
+- ~~Cross-team burnout~~ - **shipped.** A warning on the Team roster
+  builder flags when someone's already filling another position/team in
+  the same Mon-Sun week, alongside the existing per-position frequency/
+  blockout warnings. See `crossTeamWarning`/`crossTeamAssignmentsThisWeek`
+  in `rosters.go`.
 - **Thin-bench warning** - flag a position whose eligible-and-actually-used
   pool has shrunk to 1-2 people, as an early flight-risk signal rather than
   discovering it the week nobody's available.
@@ -289,18 +290,22 @@ pattern as `song_tags`/`song_relationships`:**
 
 ## Run sheet (day-of output)
 
-Everything above already gets tracked somewhere in this app - order,
-key/tempo/capo, item notes, arrangement notes, roles, roster, gear tags.
-The actual artifact a worship leader builds by hand every week - the
-printed/PDF page carried into rehearsal and handed to the sound booth -
-doesn't exist yet as a single view.
+Most of what a worship leader needs for the printed/PDF page carried into
+rehearsal and handed to the sound booth was already tracked somewhere in
+this app - order, key/tempo/length, item notes, roles, roster. Capo and
+gear needs are *not* actually tracked anywhere (see Planning annotations
+above) - correcting an earlier version of this section that assumed they
+were.
 
-- **Combined service/run sheet** - a one-click printable/PDF export
-  flattening set list + key/tempo/capo + item & arrangement notes + roster
-  + positions + gear needs into one page. No new storage - purely a view
-  over data that already exists, same spirit as the cheapest ideas above.
-  Gets more valuable as the song-level ideas above (key fit, retired flag)
-  land, since it becomes the one place they all surface together.
+- ~~Combined service/run sheet~~ - **shipped**, scoped to what's actually
+  tracked (order, key/tempo/length, item notes, roles, roster/open spots -
+  not capo or gear needs, since neither exists in this app's data model).
+  A one-click printable page (Print button, no PDF library - the
+  browser's own print-to-PDF covers it), linked from the Build page. See
+  `internal/server/controllers/run_sheet.go`,
+  `internal/views/scheduling/run_sheet.templ`. Gets more valuable as the
+  song-level ideas above (key fit, retired flag) land, since it becomes
+  the one place they all surface together.
 - **Day-of ephemeral note** - "running 10 late," "swapped bass last
   minute." Distinct from the persistent item/arrangement notes above -
   this is throwaway-after-Sunday info that currently lives in a text
@@ -319,10 +324,12 @@ First-time-position pairing is
 probably the most valuable of the rest but costs a PCO call per
 assignment, same tier as today's serving-frequency check.
 
-Of the later additions, the **run sheet** is the standout: no new storage,
-just a view over data that already exists, and it directly replaces the
-paper artifact a worship leader currently builds by hand. **Per-person key
-fit** is nearly as cheap - `song_person_preferences` already has a
+Of the later additions, the **run sheet** was the standout - no new
+storage, just a view over data that already exists, directly replacing
+the paper artifact a worship leader builds by hand - and is now shipped,
+same as **cross-team burnout** below on the People side (one new PCO call
+per assigned/candidate person, same cost tier as the existing frequency/
+blockout checks). **Per-person key fit** is nearly as cheap - `song_person_preferences` already has a
 free-text `notes` column sitting next to its dynamic preference type, so a
 new preference code is most of the work. **Occasion reservation** barely
 needs building at all today, since `song_roles`/`song_tag_categories`
