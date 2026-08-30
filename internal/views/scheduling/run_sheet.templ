@@ -1,0 +1,156 @@
+package scheduling
+
+import (
+	"fmt"
+
+	"pco-assistant/internal/views"
+)
+
+// hasAnyNoteContent reports whether at least one of a song's note
+// categories actually has something written in it - see
+// SetSongView.Notes, which carries one entry per Planning Center note
+// category (Audio/Visual, Band, Vocals, etc.) whether or not anyone's
+// actually filled it in yet (Content == "" when not). RunSheet uses this
+// to skip a song's whole notes block rather than printing a page of empty
+// category headers.
+func hasAnyNoteContent(notes []SongNoteView) bool {
+	for _, n := range notes {
+		if n.Content != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// RunSheet is the single-page, print-first "day-of" run sheet - see
+// RunSheetPage (controllers/run_sheet.go) for the feature's framing. Pure
+// view over SetBuilderData/RosterBuilderData, the same data
+// BuildPlanPage's combined builder already computes for this plan: no new
+// storage, no PCO calls of its own.
+//
+// Deliberately its own <html>/<body>, not wrapped in views.Layout - same
+// reasoning as views.Landing (see its doc comment): the app nav, theme
+// toggle, and early-preview banner are all dead weight on a page meant to
+// be printed and read at a music stand or sound desk, not browsed. Still
+// shares views.Head for the same cache-busted assets/favicon, plus this
+// page's own stylesheet.
+templ RunSheet(setData SetBuilderData, rosterData RosterBuilderData) {
+	<!DOCTYPE html>
+	<html lang="en">
+		@views.Head("Run sheet") {
+			<link rel="stylesheet" href={ "/static/css/run-sheet.css?v=" + views.AssetVersion }/>
+		}
+		<body class="run-sheet">
+			<div class="run-sheet-page">
+				<header class="run-sheet-header">
+					<div>
+						<h1>
+							if setData.PlanTitle != "" {
+								{ setData.PlanTitle }
+							} else {
+								Run sheet
+							}
+						</h1>
+						if setData.PlanDates != "" {
+							<p class="muted">{ setData.PlanDates }</p>
+						}
+					</div>
+					<!--
+						Plain window.print() - the browser's own print dialog already
+						covers "export to PDF" (every modern browser's print dialog
+						offers "Save as PDF" as a destination), so there's no reason to
+						pull in a PDF-generation dependency just to duplicate that.
+						Hidden when actually printing (see run-sheet.css's @media print)
+						since it has nothing to do once print has already started.
+					-->
+					<button type="button" class="no-print" onclick="window.print()">Print</button>
+				</header>
+				if setData.ErrMsg != "" {
+					<p class="error no-print">{ setData.ErrMsg }</p>
+				}
+				if rosterData.ErrMsg != "" {
+					<p class="error no-print">{ rosterData.ErrMsg }</p>
+				}
+				<section class="run-sheet-section">
+					<h2>Order of service</h2>
+					if len(setData.ServiceOrder) == 0 {
+						<p class="muted">Nothing built for this plan yet.</p>
+					} else {
+						<ol class="run-sheet-order">
+							for _, row := range setData.ServiceOrder {
+								if row.IsSong {
+									<li class="run-sheet-item run-sheet-song">
+										<div class="run-sheet-song-head">
+											<span class="run-sheet-song-title">{ row.Song.Title }</span>
+											if row.Song.ArrangementInfo != "" {
+												<span class="muted">{ row.Song.ArrangementInfo }</span>
+											}
+										</div>
+										if len(row.Song.Roles) > 0 {
+											<div class="run-sheet-badges">
+												for _, role := range row.Song.Roles {
+													<span class="badge">{ role.Label }</span>
+												}
+											</div>
+										}
+										if hasAnyNoteContent(row.Song.Notes) {
+											<dl class="run-sheet-notes">
+												for _, note := range row.Song.Notes {
+													if note.Content != "" {
+														<div class="run-sheet-note">
+															<dt>{ note.CategoryName }</dt>
+															<dd>{ note.Content }</dd>
+														</div>
+													}
+												}
+											</dl>
+										}
+									</li>
+								} else {
+									<!--
+										Non-song item (header, media, or a plan item this app
+										doesn't manage) - read-only for context, same treatment
+										the order-of-service table gives it on the Build page
+										itself (see set_builder.templ).
+									-->
+									<li class="run-sheet-item run-sheet-other">
+										<span>{ row.ItemTitle }</span>
+										if row.ItemType != "" {
+											<span class="muted">{ row.ItemType }</span>
+										}
+									</li>
+								}
+							}
+						</ol>
+					}
+				</section>
+				<section class="run-sheet-section">
+					<h2>Roster</h2>
+					if len(rosterData.Positions) == 0 {
+						<p class="muted">No positions configured for this plan.</p>
+					} else {
+						<div class="run-sheet-roster">
+							for _, pos := range rosterData.Positions {
+								<div class="run-sheet-position">
+									<h3>{ pos.TeamName } / { pos.TeamPositionName }</h3>
+									if len(pos.Assigned) > 0 {
+										<ul class="run-sheet-assigned">
+											for _, a := range pos.Assigned {
+												<li>{ a.Name }</li>
+											}
+										</ul>
+									} else {
+										<p class="muted">Unassigned</p>
+									}
+									if open := pos.Quantity - len(pos.Assigned); open > 0 {
+										<p class="run-sheet-short-handed">{ fmt.Sprintf("%d more needed", open) }</p>
+									}
+								</div>
+							}
+						</div>
+					}
+				</section>
+			</div>
+		</body>
+	</html>
+}
