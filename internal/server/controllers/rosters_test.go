@@ -173,6 +173,81 @@ func TestBlockoutWarningSkipsRecurring(t *testing.T) {
 	}
 }
 
+func TestCrossTeamWarningEmptyWhenNoOtherCommitments(t *testing.T) {
+	got := crossTeamWarning(nil)
+	if got != "" {
+		t.Errorf("expected no warning with no other commitments, got %q", got)
+	}
+}
+
+func TestCrossTeamWarningListsOtherCommitments(t *testing.T) {
+	got := crossTeamWarning([]string{"Photography (Sun AM)", "Greeting (Sun AM)"})
+	want := "already serving 2 other position(s) this week: Photography (Sun AM), Greeting (Sun AM)"
+	if got != want {
+		t.Errorf("expected %q, got %q", want, got)
+	}
+}
+
+func TestCrossTeamWarningSingleCommitment(t *testing.T) {
+	got := crossTeamWarning([]string{"Photography (Sun AM)"})
+	want := "already serving 1 other position(s) this week: Photography (Sun AM)"
+	if got != want {
+		t.Errorf("expected %q, got %q", want, got)
+	}
+}
+
+func TestSameWeekTrueWithinMondayToSunday(t *testing.T) {
+	monday := time.Date(2026, 9, 7, 9, 0, 0, 0, time.UTC)
+	sunday := time.Date(2026, 9, 13, 20, 0, 0, 0, time.UTC)
+	if !sameWeek(monday, sunday) {
+		t.Error("expected Monday and the following Sunday to be in the same calendar week")
+	}
+}
+
+func TestSameWeekFalseAcrossWeekBoundary(t *testing.T) {
+	sunday := time.Date(2026, 9, 13, 20, 0, 0, 0, time.UTC)
+	nextMonday := time.Date(2026, 9, 14, 9, 0, 0, 0, time.UTC)
+	if sameWeek(sunday, nextMonday) {
+		t.Error("expected Sunday and the next day (Monday, a new calendar week) to differ")
+	}
+}
+
+func TestWeekdayAMPM(t *testing.T) {
+	morning := time.Date(2026, 9, 13, 9, 0, 0, 0, time.UTC)
+	evening := time.Date(2026, 9, 13, 18, 0, 0, 0, time.UTC)
+	if got := weekdayAMPM(morning); got != "Sun AM" {
+		t.Errorf("expected %q, got %q", "Sun AM", got)
+	}
+	if got := weekdayAMPM(evening); got != "Sun PM" {
+		t.Errorf("expected %q, got %q", "Sun PM", got)
+	}
+}
+
+func TestTeamNamesFromIncludedParsesTeamEntries(t *testing.T) {
+	included := []any{
+		map[string]any{
+			"type": "Team",
+			"id":   "t1",
+			"attributes": map[string]any{
+				"name": "Photography",
+			},
+		},
+		map[string]any{
+			"type": "Plan",
+			"id":   "p1",
+		},
+	}
+
+	got := teamNamesFromIncluded(included)
+
+	if len(got) != 1 {
+		t.Fatalf("expected exactly 1 team name (the Plan entry should be skipped), got %+v", got)
+	}
+	if got["t1"] != "Photography" {
+		t.Errorf("expected t1 -> Photography, got %q", got["t1"])
+	}
+}
+
 func TestPlanSortDatesFromIncludedParsesPlanEntries(t *testing.T) {
 	included := []any{
 		map[string]any{

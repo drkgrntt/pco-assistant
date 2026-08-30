@@ -58,6 +58,9 @@ templ personDetailCard(data RosterBuilderData, a AssignmentView) {
 			if a.BlockoutWarning != "" {
 				<span class="conflict-badge">⚠ { a.BlockoutWarning }</span>
 			}
+			if a.CrossTeamWarning != "" {
+				<span class="conflict-badge">⚠ { a.CrossTeamWarning }</span>
+			}
 		</div>
 		if a.Notes != "" {
 			<p class="build-detail-notes">{ a.Notes }</p>

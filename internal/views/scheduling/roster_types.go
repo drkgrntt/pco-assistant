@@ -115,10 +115,15 @@ type AssignmentView struct {
 	// notes on until then) or has none set. Shown on the person detail
 	// sidebar card - see SetSongView.Notes, which this mirrors for people.
 	Notes string
-	// FrequencyWarning/BlockoutWarning are empty when there's nothing to
-	// flag - see the controller's frequencyWarning/blockoutWarning.
+	// FrequencyWarning/BlockoutWarning/CrossTeamWarning are empty when
+	// there's nothing to flag - see the controller's
+	// frequencyWarning/blockoutWarning/crossTeamWarning. CrossTeamWarning
+	// looks across every team/position (not just this one), flagging when
+	// this person is also serving elsewhere the same calendar week - see
+	// ideas.md's "Cross-team burnout".
 	FrequencyWarning string
 	BlockoutWarning  string
+	CrossTeamWarning string
 }
 
 // CandidatePersonView is a person eligible for a position but not currently
@@ -131,6 +136,7 @@ type CandidatePersonView struct {
 	SchedulePreference string
 	FrequencyWarning   string
 	BlockoutWarning    string
+	CrossTeamWarning   string
 }
 
 // PersonSuggestionView is one recommended person for a specific open
