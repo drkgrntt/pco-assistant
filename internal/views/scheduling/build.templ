@@ -178,6 +178,8 @@ templ BuildPlan(personName, organizationName string, setData SetBuilderData, ros
 			<a href="/scheduling/build">&larr; Choose a different plan</a>
 			<span class="muted">·</span>
 			<a href={ templ.URL(pcoPlanURL(setData.PlanID)) } target="_blank" rel="noopener">Open in Planning Center ↗</a>
+			<span class="muted">·</span>
+			<a href={ templ.URL(fmt.Sprintf("/scheduling/build/%s/%s/run-sheet", setData.ServiceTypeID, setData.PlanID)) } target="_blank" rel="noopener">Run sheet ↗</a>
 		</p>
 		<!--
 			Songs and Team are two independently-interactive builders (each

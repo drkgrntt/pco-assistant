@@ -1,0 +1,165 @@
+/* The printable "day-of" run sheet only (see run_sheet.templ) - loaded
+   nowhere else, so none of this adds weight to the authenticated app's
+   pages. Built from tokens.css's existing vocabulary, same as landing.css,
+   so it themes for free in both light and dark on screen - the @media
+   print block at the bottom is what actually matters for this page's
+   reason to exist, since it's read on paper (or as a PDF) far more often
+   than on screen. */
+
+.run-sheet-page {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-4);
+}
+
+.run-sheet-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  border-bottom: 3px solid var(--accent);
+  padding-bottom: var(--space-3);
+  margin-bottom: var(--space-6);
+}
+
+/* h1 already picks up base.css's accent-underline treatment, which would
+   double up with the header's own border-bottom above - this page wants
+   exactly one rule under the whole header block, not one under the title
+   and a second one under the header. */
+.run-sheet-header h1 {
+  border-bottom: none;
+  padding-bottom: 0;
+  margin-bottom: var(--space-1);
+}
+
+.run-sheet-section {
+  margin-bottom: var(--space-8);
+}
+
+.run-sheet-section h2 {
+  font-size: var(--text-xl);
+  color: var(--accent);
+  margin-bottom: var(--space-3);
+}
+
+.run-sheet-order {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.run-sheet-item {
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.run-sheet-item:last-child {
+  border-bottom: none;
+}
+
+.run-sheet-other {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.run-sheet-song-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.run-sheet-song-title {
+  font-weight: var(--font-semibold);
+  font-size: var(--text-lg);
+}
+
+.run-sheet-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.run-sheet-notes {
+  margin: var(--space-3) 0 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-1) var(--space-3);
+}
+
+.run-sheet-note {
+  display: contents;
+}
+
+.run-sheet-note dt {
+  font-weight: var(--font-medium);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.run-sheet-note dd {
+  margin: 0;
+}
+
+.run-sheet-roster {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: var(--space-4);
+}
+
+.run-sheet-position {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  break-inside: avoid;
+}
+
+.run-sheet-position h3 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-base);
+}
+
+.run-sheet-assigned {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.run-sheet-assigned li {
+  padding: var(--space-1) 0;
+}
+
+.run-sheet-short-handed {
+  color: var(--pending);
+  font-weight: var(--font-medium);
+  margin: var(--space-2) 0 0;
+}
+
+/* Printing (including "Print to PDF," which covers this feature's PDF-export
+   half without a dedicated library) drops anything interactive and lets
+   the browser's own paper size take over instead of the on-screen
+   max-width column. */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: #fff;
+    color: #000;
+  }
+
+  .run-sheet-page {
+    max-width: none;
+    padding: 0;
+  }
+
+  .run-sheet-song,
+  .run-sheet-position {
+    break-inside: avoid;
+  }
+}
