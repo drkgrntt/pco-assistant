@@ -177,6 +177,9 @@ templ RosterBuilderBodyContent(data RosterBuilderData) {
 									if a.BlockoutWarning != "" {
 										<span class="conflict-badge">⚠ { a.BlockoutWarning }</span>
 									}
+									if a.CrossTeamWarning != "" {
+										<span class="conflict-badge">⚠ { a.CrossTeamWarning }</span>
+									}
 									<button
 										type="button"
 										class="danger icon-btn"
@@ -204,6 +207,9 @@ templ RosterBuilderBodyContent(data RosterBuilderData) {
 									}
 									if cand.BlockoutWarning != "" {
 										<span class="conflict-badge">⚠ { cand.BlockoutWarning }</span>
+									}
+									if cand.CrossTeamWarning != "" {
+										<span class="conflict-badge">⚠ { cand.CrossTeamWarning }</span>
 									}
 									<form hx-post={ fmt.Sprintf("/scheduling/rosters/%s/%s/assignments", data.ServiceTypeID, data.PlanID) } hx-target="#roster-builder-body" hx-swap="outerHTML">
 										<input type="hidden" name="person_id" value={ cand.PersonID }/>

@@ -603,6 +603,134 @@ func otherAssignmentDates(ctx context.Context, personID, teamID, teamPositionNam
 	return dates
 }
 
+// includedTeam is the Team equivalent of includedPlan - just enough of
+// Team's shape (see go-pco's TeamData) to resolve a team's name out of a
+// GetPersonPlanPeople response's Included array when fetched with
+// Include: []string{"team"}. Whether PCO's plan_people endpoint actually
+// honors that include isn't confirmed live (unlike "plan", which
+// GetPersonPlanPeople's own test fixtures cover) - if it doesn't, this map
+// just comes back empty and crossTeamAssignmentsThisWeek falls back to
+// Attributes.TeamPositionName alone, same best-effort spirit as every other
+// lookup in buildRosterBuilderData.
+type includedTeam struct {
+	Type       string `json:"type"`
+	ID         string `json:"id"`
+	Attributes struct {
+		Name string `json:"name"`
+	} `json:"attributes"`
+}
+
+// teamNamesFromIncluded extracts team id -> name from a GetPersonPlanPeople
+// response's Included array, mirroring planSortDatesFromIncluded. Any entry
+// that isn't a well-formed Team (or that lacks a name) is silently skipped.
+func teamNamesFromIncluded(included []any) map[string]string {
+	names := map[string]string{}
+	for _, raw := range included {
+		b, err := json.Marshal(raw)
+		if err != nil {
+			continue
+		}
+		var t includedTeam
+		if err := json.Unmarshal(b, &t); err != nil {
+			continue
+		}
+		if t.Type != "Team" || t.ID == "" || t.Attributes.Name == "" {
+			continue
+		}
+		names[t.ID] = t.Attributes.Name
+	}
+	return names
+}
+
+// startOfWeek returns the Monday 00:00 (in t's own location) that begins
+// t's Mon-Sun calendar week - the boundary crossTeamAssignmentsThisWeek uses
+// to decide "same week as the plan being built."
+func startOfWeek(t time.Time) time.Time {
+	daysFromMonday := (int(t.Weekday()) + 6) % 7 // Monday=0 ... Sunday=6
+	y, m, d := t.Date()
+	return time.Date(y, m, d, 0, 0, 0, 0, t.Location()).AddDate(0, 0, -daysFromMonday)
+}
+
+// sameWeek reports whether a and b fall in the same Mon-Sun calendar week.
+func sameWeek(a, b time.Time) bool {
+	return startOfWeek(a).Equal(startOfWeek(b))
+}
+
+// weekdayAMPM renders a plan's sort_date as a compact "Sun AM"/"Sun PM"
+// label - enough to tell two same-week commitments apart without a full
+// timestamp.
+func weekdayAMPM(t time.Time) string {
+	half := "AM"
+	if t.Hour() >= 12 {
+		half = "PM"
+	}
+	return fmt.Sprintf("%s %s", t.Format("Mon"), half)
+}
+
+// crossTeamAssignmentsThisWeek looks up personID's *other* serving
+// commitments - across every team and position, not just the one
+// (teamID, teamPositionName) slot otherAssignmentDates is scoped to - that
+// fall in the same Mon-Sun calendar week as targetDate (the plan being
+// built). excludePlanID (the plan currently being built) is left out: any
+// assignment already on that exact plan is either this same position being
+// considered (nothing new to report) or visible directly elsewhere on this
+// same roster page, so it isn't a "hidden" commitment worth surfacing here.
+// Returns one human-readable label per other commitment found (e.g.
+// "Photography (Sun AM)"), preferring the resolved team name and falling
+// back to the position name alone when the team can't be resolved.
+func crossTeamAssignmentsThisWeek(ctx context.Context, personID string, targetDate time.Time, excludePlanID string) []string {
+	history, err := pco.GetPersonPlanPeople(ctx, personID, &pco.PersonPlanPeopleParams{
+		Include: []string{"plan", "team"},
+		PerPage: 25,
+	})
+	if err != nil {
+		return nil
+	}
+
+	planDates := planSortDatesFromIncluded(history.Included)
+	teamNames := teamNamesFromIncluded(history.Included)
+
+	var labels []string
+	for _, pp := range history.Data {
+		if pp.Relationships.Plan.Data == nil {
+			continue
+		}
+		planID := pp.Relationships.Plan.Data.ID
+		if planID == excludePlanID {
+			continue
+		}
+		date, ok := planDates[planID]
+		if !ok || !sameWeek(date, targetDate) {
+			continue
+		}
+
+		label := pp.Attributes.TeamPositionName
+		if pp.Relationships.Team.Data != nil {
+			if name, ok := teamNames[pp.Relationships.Team.Data.ID]; ok && name != "" {
+				label = name
+			}
+		}
+		if label == "" {
+			label = "another position"
+		}
+
+		labels = append(labels, fmt.Sprintf("%s (%s)", label, weekdayAMPM(date)))
+	}
+	return labels
+}
+
+// crossTeamWarning turns crossTeamAssignmentsThisWeek's labels into a
+// display string, mirroring frequencyWarning/blockoutWarning's shape - a
+// non-blocking "protect the team" nudge (see ideas.md's "Cross-team
+// burnout") for someone within preference on any single position who's
+// nonetheless serving several positions/teams the same week.
+func crossTeamWarning(otherCommitments []string) string {
+	if len(otherCommitments) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("already serving %d other position(s) this week: %s", len(otherCommitments), strings.Join(otherCommitments, ", "))
+}
+
 // buildRosterBuilderData gathers everything the Team Builder page (and every
 // htmx fragment it swaps after an add/remove action) needs to render - the
 // people equivalent of buildSetBuilderData. Unlike songs, people aren't
@@ -767,8 +895,12 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 
 			pref := schedulePreferenceFor(candidatesByGroup[i], ra.PersonID)
 			var freqWarn string
-			if pref != "" && !planDate.IsZero() {
-				freqWarn = frequencyWarning(pref, planDate, otherAssignmentDates(ctx, ra.PersonID, g.TeamID, g.TeamPositionName, planID))
+			var crossWarn string
+			if !planDate.IsZero() {
+				if pref != "" {
+					freqWarn = frequencyWarning(pref, planDate, otherAssignmentDates(ctx, ra.PersonID, g.TeamID, g.TeamPositionName, planID))
+				}
+				crossWarn = crossTeamWarning(crossTeamAssignmentsThisWeek(ctx, ra.PersonID, planDate, planID))
 			}
 
 			pg.Assigned = append(pg.Assigned, views.AssignmentView{
@@ -782,6 +914,7 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 				Notes:            notesByPlanPersonID[ra.PCOPlanPersonID],
 				FrequencyWarning: freqWarn,
 				BlockoutWarning:  blockoutWarningIfKnown(planDate, blockoutsByPerson[ra.PersonID]),
+				CrossTeamWarning: crossWarn,
 			})
 		}
 
@@ -795,8 +928,12 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 			}
 
 			var freqWarn string
-			if pa.Attributes.SchedulePreference != "" && !planDate.IsZero() {
-				freqWarn = frequencyWarning(pa.Attributes.SchedulePreference, planDate, otherAssignmentDates(ctx, personID, g.TeamID, g.TeamPositionName, planID))
+			var crossWarn string
+			if !planDate.IsZero() {
+				if pa.Attributes.SchedulePreference != "" {
+					freqWarn = frequencyWarning(pa.Attributes.SchedulePreference, planDate, otherAssignmentDates(ctx, personID, g.TeamID, g.TeamPositionName, planID))
+				}
+				crossWarn = crossTeamWarning(crossTeamAssignmentsThisWeek(ctx, personID, planDate, planID))
 			}
 
 			pg.Candidates = append(pg.Candidates, views.CandidatePersonView{
@@ -805,6 +942,7 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 				SchedulePreference: pa.Attributes.SchedulePreference,
 				FrequencyWarning:   freqWarn,
 				BlockoutWarning:    blockoutWarningIfKnown(planDate, blockoutsByPerson[personID]),
+				CrossTeamWarning:   crossWarn,
 			})
 		}
 
