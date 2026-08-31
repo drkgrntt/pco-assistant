@@ -1,0 +1,470 @@
+package controllers
+
+// Assembling views.RosterBuilderData: merging local roster assignments with
+// PCO's needed-position/eligibility data, plus the pure grouping/parsing
+// helpers this leans on.
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"sort"
+	"strings"
+	"time"
+
+	"pco-assistant/internal/scheduling"
+	views "pco-assistant/internal/views/scheduling"
+
+	pco "github.com/drkgrntt/go-pco"
+)
+
+func (sc *SchedulingController) buildRosterBuilderDataWithErr(ctx context.Context, organizationID, serviceTypeID, planID, errMsg string) views.RosterBuilderData {
+	data := sc.buildRosterBuilderData(ctx, organizationID, serviceTypeID, planID)
+	if errMsg != "" {
+		data.ErrMsg = appendErr(errMsg, data.ErrMsg)
+	}
+	return data
+}
+
+func assignmentPersonIDs(assignments []scheduling.RosterAssignment) []string {
+	seen := map[string]bool{}
+	var ids []string
+	for _, a := range assignments {
+		if !seen[a.PersonID] {
+			seen[a.PersonID] = true
+			ids = append(ids, a.PersonID)
+		}
+	}
+	return ids
+}
+
+// positionGroup is one open slot - a team + position name, how many are
+// needed, and which local assignments fill it. This is the roster page's
+// equivalent of mergedRow: PCO's needed-position data merged with local
+// roster_assignments rows.
+type positionGroup struct {
+	TeamID           string
+	TeamPositionName string
+	Quantity         int
+	Assignments      []scheduling.RosterAssignment
+}
+
+// groupNeededPositions merges a plan's open slots (from PCO) with a
+// roster's local assignments, grouped by (team_id, team_position_name). A
+// position with assignments but no matching NeededPosition entry (e.g.
+// Planning Center's "needed" count was never configured) still appears -
+// data is never silently dropped, same principle as mergeServiceOrder.
+func groupNeededPositions(needed []pco.NeededPositionData, assignments []scheduling.RosterAssignment) []positionGroup {
+	type key struct{ teamID, positionName string }
+	var order []key
+	groups := map[key]*positionGroup{}
+
+	group := func(teamID, positionName string) *positionGroup {
+		k := key{teamID, positionName}
+		g, ok := groups[k]
+		if !ok {
+			g = &positionGroup{TeamID: teamID, TeamPositionName: positionName}
+			groups[k] = g
+			order = append(order, k)
+		}
+		return g
+	}
+
+	for _, np := range needed {
+		teamID := ""
+		if np.Relationships.Team.Data != nil {
+			teamID = np.Relationships.Team.Data.ID
+		}
+		group(teamID, np.Attributes.TeamPositionName).Quantity += np.Attributes.Quantity
+	}
+
+	for _, a := range assignments {
+		g := group(a.TeamID, a.TeamPositionName)
+		g.Assignments = append(g.Assignments, a)
+	}
+
+	out := make([]positionGroup, 0, len(order))
+	for _, k := range order {
+		out = append(out, *groups[k])
+	}
+	return out
+}
+
+// includedPlan is the shape this app reads back out of a JSON:API
+// "included" array's raw entries (see planSortDatesFromIncluded) - just
+// enough of Plan's shape to get each included plan's sort_date, since
+// go-pco leaves Included as []any rather than a typed union.
+type includedPlan struct {
+	Type       string `json:"type"`
+	ID         string `json:"id"`
+	Attributes struct {
+		SortDate time.Time `json:"sort_date"`
+	} `json:"attributes"`
+}
+
+// planSortDatesFromIncluded extracts plan id -> sort_date from a
+// GetPersonPlanPeople response's Included array (fetched with
+// Include: []string{"plan"}). Any entry that isn't a well-formed Plan is
+// silently skipped - this feeds an advisory warning, not something that
+// should fail the page over one malformed entry.
+func planSortDatesFromIncluded(included []any) map[string]time.Time {
+	dates := map[string]time.Time{}
+	for _, raw := range included {
+		b, err := json.Marshal(raw)
+		if err != nil {
+			continue
+		}
+		var p includedPlan
+		if err := json.Unmarshal(b, &p); err != nil {
+			continue
+		}
+		if p.Type != "Plan" || p.ID == "" || p.Attributes.SortDate.IsZero() {
+			continue
+		}
+		dates[p.ID] = p.Attributes.SortDate
+	}
+	return dates
+}
+
+// includedTeam is the Team equivalent of includedPlan - just enough of
+// Team's shape (see go-pco's TeamData) to resolve a team's name out of a
+// GetPersonPlanPeople response's Included array when fetched with
+// Include: []string{"team"}. Whether PCO's plan_people endpoint actually
+// honors that include isn't confirmed live (unlike "plan", which
+// GetPersonPlanPeople's own test fixtures cover) - if it doesn't, this map
+// just comes back empty and crossTeamAssignmentsThisWeek falls back to
+// Attributes.TeamPositionName alone, same best-effort spirit as every other
+// lookup in buildRosterBuilderData.
+type includedTeam struct {
+	Type       string `json:"type"`
+	ID         string `json:"id"`
+	Attributes struct {
+		Name string `json:"name"`
+	} `json:"attributes"`
+}
+
+// teamNamesFromIncluded extracts team id -> name from a GetPersonPlanPeople
+// response's Included array, mirroring planSortDatesFromIncluded. Any entry
+// that isn't a well-formed Team (or that lacks a name) is silently skipped.
+func teamNamesFromIncluded(included []any) map[string]string {
+	names := map[string]string{}
+	for _, raw := range included {
+		b, err := json.Marshal(raw)
+		if err != nil {
+			continue
+		}
+		var t includedTeam
+		if err := json.Unmarshal(b, &t); err != nil {
+			continue
+		}
+		if t.Type != "Team" || t.ID == "" || t.Attributes.Name == "" {
+			continue
+		}
+		names[t.ID] = t.Attributes.Name
+	}
+	return names
+}
+
+// buildRosterBuilderData gathers everything the Team Builder page (and every
+// htmx fragment it swaps after an add/remove action) needs to render - the
+// people equivalent of buildSetBuilderData. Unlike songs, people aren't
+// preloaded in full (a People directory can dwarf a song library) - instead
+// each open position's candidate pool comes from PCO's own eligibility list
+// (GetPersonTeamPositionAssignments), which is naturally small and bounded,
+// so it gets the same pre-add warning visibility Build a Set's song
+// candidates get without needing to fetch or filter the whole directory.
+func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, organizationID, serviceTypeID, planID string) views.RosterBuilderData {
+	data := views.RosterBuilderData{ServiceTypeID: serviceTypeID, PlanID: planID}
+
+	var planDate time.Time
+	if plan, err := pco.GetPlan(ctx, serviceTypeID, planID); err == nil {
+		data.PlanTitle = plan.Data.Attributes.Title
+		data.PlanDates = plan.Data.Attributes.Dates
+		planDate = plan.Data.Attributes.SortDate
+	} else {
+		data.ErrMsg = "loading plan from Planning Center: " + err.Error()
+	}
+
+	roster, err := sc.store.GetOrCreateRoster(ctx, organizationID, serviceTypeID, planID)
+	if err != nil {
+		data.ErrMsg = appendErr(data.ErrMsg, err.Error())
+		return data
+	}
+
+	assignments, err := sc.store.ListRosterAssignments(ctx, roster.ID)
+	if err != nil {
+		data.ErrMsg = appendErr(data.ErrMsg, err.Error())
+		return data
+	}
+	for _, ra := range assignments {
+		if ra.PCOPlanPersonID == "" {
+			data.UnpublishedCount++
+		}
+	}
+
+	pending, err := sc.store.ListPendingRosterDeletions(ctx, roster.ID)
+	if err != nil {
+		data.ErrMsg = appendErr(data.ErrMsg, err.Error())
+	}
+	data.PendingDeleteCount = len(pending)
+
+	// One bulk read of every PlanPerson Planning Center already has for
+	// this plan, reused for two independent things below rather than two
+	// separate calls: ImportableAssignmentCount (only meaningful the first
+	// time this roster is opened - see SetBuilderData.ImportableSongCount,
+	// which this mirrors) and notesByPlanPersonID (every published
+	// assignment's own Notes, read-only display on the person detail
+	// sidebar card - see AssignmentView.Notes). This is also why
+	// ImportableAssignmentCount can't reuse needed (fetched right below)
+	// instead - GetNeededPositions only reports *unfilled* slots, so a plan
+	// PCO already has fully staffed - the whole point of this prompt -
+	// shows zero needed positions.
+	notesByPlanPersonID := map[string]string{}
+	if members, err := pco.GetTeamMembers(ctx, serviceTypeID, planID, nil); err == nil {
+		if len(assignments) == 0 && data.PendingDeleteCount == 0 {
+			data.ImportableAssignmentCount = len(members.Data)
+		}
+		for _, m := range members.Data {
+			notesByPlanPersonID[m.ID] = m.Attributes.Notes
+		}
+	}
+
+	needed, err := pco.GetNeededPositions(ctx, serviceTypeID, planID, nil)
+	if err != nil {
+		data.ErrMsg = appendErr(data.ErrMsg, "loading needed positions from Planning Center: "+err.Error())
+	}
+	groups := groupNeededPositions(needed.Data, assignments)
+
+	teamNames := map[string]string{}
+	if teams, err := pco.GetTeams(ctx, serviceTypeID, nil); err != nil {
+		data.ErrMsg = appendErr(data.ErrMsg, "loading teams from Planning Center: "+err.Error())
+	} else {
+		for _, t := range teams.Data {
+			teamNames[t.ID] = t.Attributes.Name
+		}
+	}
+
+	// team_position ids aren't stored locally or on NeededPosition (both
+	// only carry the position's name) - resolve name -> id per team,
+	// fetched once per team and reused across every position group on it.
+	positionIDsByTeam := map[string]map[string]string{}
+	positionID := func(teamID, positionName string) string {
+		byName, ok := positionIDsByTeam[teamID]
+		if !ok {
+			byName = map[string]string{}
+			if positions, err := pco.GetTeamPositions(ctx, teamID, nil); err == nil {
+				for _, p := range positions.Data {
+					byName[p.Attributes.Name] = p.ID
+				}
+			}
+			positionIDsByTeam[teamID] = byName
+		}
+		return byName[positionName]
+	}
+
+	// Each group's candidate pool (PCO's own eligibility list for that
+	// position) is fetched once and reused for both "who's assigned"
+	// warnings and "who could be added" candidates below. positionIDs is
+	// kept alongside it - PositionGroupView.TeamPositionID needs this same
+	// resolved id so the roster tab's "+ Add eligible person" quick-add can
+	// post straight at a position without asking the user to pick it again.
+	candidatesByGroup := make([][]pco.PersonTeamPositionAssignmentData, len(groups))
+	positionIDs := make([]string, len(groups))
+	relevantPersonIDs := map[string]bool{}
+	for _, ra := range assignments {
+		relevantPersonIDs[ra.PersonID] = true
+	}
+	for i, g := range groups {
+		posID := positionID(g.TeamID, g.TeamPositionName)
+		positionIDs[i] = posID
+		if posID == "" {
+			continue
+		}
+		people, err := pco.GetPersonTeamPositionAssignments(ctx, g.TeamID, posID, nil)
+		if err != nil {
+			continue // best-effort - one position's candidate pool failing doesn't sink the page
+		}
+		candidatesByGroup[i] = people.Data
+		for _, pa := range people.Data {
+			if pa.Relationships.Person.Data != nil {
+				relevantPersonIDs[pa.Relationships.Person.Data.ID] = true
+			}
+		}
+	}
+
+	var relevantIDs []string
+	for id := range relevantPersonIDs {
+		relevantIDs = append(relevantIDs, id)
+	}
+	names := personNameMapForIDs(ctx, relevantIDs)
+
+	blockoutsByPerson := map[string][]pco.BlockoutData{}
+	for id := range relevantPersonIDs {
+		if bo, err := pco.GetBlockouts(ctx, id, &pco.BlockoutsParams{Filter: "future"}); err == nil {
+			blockoutsByPerson[id] = bo.Data
+		}
+	}
+
+	schedulePreferenceFor := func(candidates []pco.PersonTeamPositionAssignmentData, personID string) string {
+		for _, pa := range candidates {
+			if pa.Relationships.Person.Data != nil && pa.Relationships.Person.Data.ID == personID {
+				return pa.Attributes.SchedulePreference
+			}
+		}
+		return ""
+	}
+
+	for i, g := range groups {
+		pg := views.PositionGroupView{
+			TeamID:           g.TeamID,
+			TeamName:         titleOrID(teamNames, g.TeamID),
+			TeamPositionName: g.TeamPositionName,
+			TeamPositionID:   positionIDs[i],
+			Quantity:         g.Quantity,
+		}
+
+		assignedHere := map[string]bool{}
+		for _, ra := range g.Assignments {
+			assignedHere[ra.PersonID] = true
+
+			pref := schedulePreferenceFor(candidatesByGroup[i], ra.PersonID)
+			var freqWarn string
+			var crossWarn string
+			if !planDate.IsZero() {
+				if pref != "" {
+					freqWarn = frequencyWarning(pref, planDate, otherAssignmentDates(ctx, ra.PersonID, g.TeamID, g.TeamPositionName, planID))
+				}
+				crossWarn = crossTeamWarning(crossTeamAssignmentsThisWeek(ctx, ra.PersonID, planDate, planID))
+			}
+
+			pg.Assigned = append(pg.Assigned, views.AssignmentView{
+				ID:               ra.ID,
+				PersonID:         ra.PersonID,
+				Name:             titleOrID(names, ra.PersonID),
+				Status:           ra.Status,
+				TeamName:         pg.TeamName,
+				TeamPositionName: pg.TeamPositionName,
+				Published:        ra.PCOPlanPersonID != "",
+				Notes:            notesByPlanPersonID[ra.PCOPlanPersonID],
+				FrequencyWarning: freqWarn,
+				BlockoutWarning:  blockoutWarningIfKnown(planDate, blockoutsByPerson[ra.PersonID]),
+				CrossTeamWarning: crossWarn,
+			})
+		}
+
+		for _, pa := range candidatesByGroup[i] {
+			if pa.Relationships.Person.Data == nil {
+				continue
+			}
+			personID := pa.Relationships.Person.Data.ID
+			if assignedHere[personID] {
+				continue
+			}
+
+			var freqWarn string
+			var crossWarn string
+			if !planDate.IsZero() {
+				if pa.Attributes.SchedulePreference != "" {
+					freqWarn = frequencyWarning(pa.Attributes.SchedulePreference, planDate, otherAssignmentDates(ctx, personID, g.TeamID, g.TeamPositionName, planID))
+				}
+				crossWarn = crossTeamWarning(crossTeamAssignmentsThisWeek(ctx, personID, planDate, planID))
+			}
+
+			pg.Candidates = append(pg.Candidates, views.CandidatePersonView{
+				PersonID:           personID,
+				Name:               titleOrID(names, personID),
+				SchedulePreference: pa.Attributes.SchedulePreference,
+				FrequencyWarning:   freqWarn,
+				BlockoutWarning:    blockoutWarningIfKnown(planDate, blockoutsByPerson[personID]),
+				CrossTeamWarning:   crossWarn,
+			})
+		}
+
+		if len(pg.Assigned) < pg.Quantity {
+			data.OpenPositionCount++
+		}
+		data.Positions = append(data.Positions, pg)
+	}
+
+	// PersonRelationshipTypes/SchedulePreferenceOptions back the "Quick add
+	// a relationship" and per-position "+ Add eligible person" panels (see
+	// views.RosterBuilderData) - best-effort like the lookups above, since a
+	// failure here only costs those panels' dropdowns, not the page.
+	data.PersonRelationshipTypes, _ = sc.store.ListPersonRelationshipTypes(ctx)
+	data.SchedulePreferenceOptions = schedulePreferenceOptions()
+
+	if conflicts, existing, err := sc.store.AvoidPairingConflicts(ctx, organizationID, roster.ID); err != nil {
+		data.ErrMsg = appendErr(data.ErrMsg, err.Error())
+	} else {
+		_ = conflicts // candidates aren't pre-rendered as a flat pool for people, so only the existing-pair banner applies here
+		for _, ex := range existing {
+			data.ExistingConflicts = append(data.ExistingConflicts, fmt.Sprintf(
+				"%s conflicts with %s - both are already on this roster.",
+				titleOrID(names, ex.PersonID), titleOrID(names, ex.ConflictsWith),
+			))
+		}
+	}
+
+	if suggestions, err := sc.store.RelationshipSuggestions(ctx, organizationID, roster.ID); err != nil {
+		data.ErrMsg = appendErr(data.ErrMsg, err.Error())
+	} else {
+		data.Suggestions = suggestionsForOpenPositions(suggestions, groups, candidatesByGroup, teamNames, names)
+	}
+
+	sort.SliceStable(data.Positions, func(i, j int) bool {
+		if data.Positions[i].TeamName != data.Positions[j].TeamName {
+			return data.Positions[i].TeamName < data.Positions[j].TeamName
+		}
+		return data.Positions[i].TeamPositionName < data.Positions[j].TeamPositionName
+	})
+
+	return data
+}
+
+// suggestionsForOpenPositions attaches each relationship-based suggestion to
+// a specific open position they're eligible for - a suggestion is only
+// actionable if there's somewhere to actually put them, so a person who
+// isn't eligible for any of this plan's open positions is dropped rather
+// than shown with no add button.
+func suggestionsForOpenPositions(
+	suggestions []scheduling.PersonSuggestion,
+	groups []positionGroup,
+	candidatesByGroup [][]pco.PersonTeamPositionAssignmentData,
+	teamNames, personNames map[string]string,
+) []views.PersonSuggestionView {
+	var out []views.PersonSuggestionView
+	for _, sug := range suggestions {
+		for i, g := range groups {
+			eligible := false
+			for _, pa := range candidatesByGroup[i] {
+				if pa.Relationships.Person.Data != nil && pa.Relationships.Person.Data.ID == sug.PersonID {
+					eligible = true
+					break
+				}
+			}
+			if !eligible {
+				continue
+			}
+
+			alreadyAssigned := false
+			for _, ra := range g.Assignments {
+				if ra.PersonID == sug.PersonID {
+					alreadyAssigned = true
+					break
+				}
+			}
+			if alreadyAssigned {
+				continue
+			}
+
+			out = append(out, views.PersonSuggestionView{
+				PersonID:          sug.PersonID,
+				Name:              titleOrID(personNames, sug.PersonID),
+				TeamID:            g.TeamID,
+				TeamPositionName:  g.TeamPositionName,
+				RelationshipLabel: strings.Join(sug.RelationshipTypes, ", "),
+			})
+		}
+	}
+	return out
+}
