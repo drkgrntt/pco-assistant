@@ -39,6 +39,24 @@ func rosterPublishButtonTitle(data RosterBuilderData) string {
 	return "Nothing to publish - your local roster already matches Planning Center"
 }
 
+// publishCardShell/publishCardShellOOB are the build-publish-card wrapper
+// SongPublishPanel/RosterPublishPanel (and their OOB siblings) share -
+// only the wrapper is identical between songs and team; songPublishPanelContent/
+// rosterPublishPanelContent (below) stay separate since their actual
+// content genuinely differs (song publish has a pending-changes list and a
+// refresh-info form the roster side has no equivalent of).
+templ publishCardShell(id string, hidden bool) {
+	<div class="build-publish-card" id={ id } hidden?={ hidden }>
+		{ children... }
+	</div>
+}
+
+templ publishCardShellOOB(id string) {
+	<div class="build-publish-card" id={ id } hx-swap-oob="true">
+		{ children... }
+	</div>
+}
+
 // SongPublishPanel is the Songs tab's publish/discard controls, rendered
 // in the Build page's sidebar (see build.templ) instead of inline under
 // the order-of-service table - the whole point of a margin once there's a
@@ -59,15 +77,15 @@ func rosterPublishButtonTitle(data RosterBuilderData) string {
 // while its own tab's now-visible forms are what triggered it, so the tab
 // it belongs to is already the active one by definition.
 templ SongPublishPanel(data SetBuilderData, hidden bool) {
-	<div class="build-publish-card" id="build-publish-songs" hidden?={ hidden }>
+	@publishCardShell("build-publish-songs", hidden) {
 		@songPublishPanelContent(data)
-	</div>
+	}
 }
 
 templ songPublishPanelOOB(data SetBuilderData) {
-	<div class="build-publish-card" id="build-publish-songs" hx-swap-oob="true">
+	@publishCardShellOOB("build-publish-songs") {
 		@songPublishPanelContent(data)
-	</div>
+	}
 }
 
 templ songPublishPanelContent(data SetBuilderData) {
@@ -151,15 +169,15 @@ templ songPublishPanelContent(data SetBuilderData) {
 // (including the tab-scoped hidden and the out-of-band sync via
 // rosterPublishPanelOOB).
 templ RosterPublishPanel(data RosterBuilderData, hidden bool) {
-	<div class="build-publish-card" id="build-publish-team" hidden?={ hidden }>
+	@publishCardShell("build-publish-team", hidden) {
 		@rosterPublishPanelContent(data)
-	</div>
+	}
 }
 
 templ rosterPublishPanelOOB(data RosterBuilderData) {
-	<div class="build-publish-card" id="build-publish-team" hx-swap-oob="true">
+	@publishCardShellOOB("build-publish-team") {
 		@rosterPublishPanelContent(data)
-	</div>
+	}
 }
 
 templ rosterPublishPanelContent(data RosterBuilderData) {

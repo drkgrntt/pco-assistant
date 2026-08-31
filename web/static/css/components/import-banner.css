@@ -1,0 +1,21 @@
+/* Backs internal/views/import_banner.templ's ImportBanner. */
+
+/* The "this plan's already built in Planning Center - import it?" prompt
+   (see SetBuilderBody/RosterBuilderBody) - same tinted-banner treatment as
+   .warning (alert.css), but on the accent tokens rather than danger: this
+   is an invitation, not an alert. */
+.import-banner {
+  background: var(--accent-subtle);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  margin-block: var(--space-3);
+}
+
+.import-banner p {
+  margin-top: 0;
+}
+
+.import-banner form {
+  margin: 0;
+}

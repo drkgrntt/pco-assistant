@@ -1,0 +1,42 @@
+package views
+
+// Disclosure renders the toggle-button + popup-menu pattern shared by the
+// nav's "Setup" dropdown (layout.templ) and the set builder's per-row
+// "more actions" menu (set_builder.templ) - two independent hand-built
+// implementations of the same open/close/aria-expanded idiom, unified
+// here into one component. wrapperClass/toggleClass follow the existing
+// <wrapper>/<wrapper>-menu class-naming convention both patterns already
+// used (nav-dropdown/nav-dropdown-menu, row-menu/row-menu-menu) - the menu
+// class is derived as wrapperClass+"-menu" rather than taken as its own
+// param, since every real usage already follows that convention.
+// toggleFn is the onclick handler string (e.g. "toggleNavDropdown(this)")
+// - kept as two separate JS functions per caller rather than merged into
+// one generic toggle, since nav-dropdown repositions itself for narrow
+// viewports (positionNavDropdown) and row-menu never needs to (always
+// right-anchored to its own table edge) - genuinely different behavior,
+// not just a different selector. ariaLabel/title are optional (nav's
+// toggle needs neither, row-menu's needs both); toggle/menu carry the
+// button's own content and the popup's contents respectively, since they
+// differ completely between callers.
+templ Disclosure(wrapperClass, toggleClass, toggleFn, ariaLabel, title string, toggle, menu templ.Component) {
+	<div class={ wrapperClass }>
+		<button
+			type="button"
+			class={ toggleClass }
+			aria-haspopup="true"
+			aria-expanded="false"
+			if ariaLabel != "" {
+				aria-label={ ariaLabel }
+			}
+			if title != "" {
+				title={ title }
+			}
+			{ templ.Attributes{"onclick": toggleFn}... }
+		>
+			@toggle
+		</button>
+		<div class={ wrapperClass + "-menu" }>
+			@menu
+		</div>
+	</div>
+}

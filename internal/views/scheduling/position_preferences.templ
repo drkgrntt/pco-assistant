@@ -63,9 +63,8 @@ templ PositionAssignmentsFragment(rows []PreferenceRow, teamID, teamPositionID s
 			<p class="error">{ errMsg }</p>
 		}
 		if teamID != "" && teamPositionID != "" {
-			<div class="table-wrap">
-				<table>
-					<thead>
+			@views.TableWrap() {
+				<thead>
 						<tr>
 							<th>Person</th>
 							<th>Preference</th>
@@ -113,8 +112,7 @@ templ PositionAssignmentsFragment(rows []PreferenceRow, teamID, teamPositionID s
 							</tr>
 						}
 					</tbody>
-				</table>
-			</div>
+			}
 			<form
 				id="position-preference-form"
 				class="inline"

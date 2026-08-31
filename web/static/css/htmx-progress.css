@@ -1,0 +1,64 @@
+/* App-wide "something is happening" indicator - see scheduling.js, which
+   toggles .active on this for the duration of every htmx request. Single
+   instance, rendered once in layout.templ, not a reusable component. */
+
+/* Fixed at the very top of the viewport rather than inside any one page's
+   layout, since it's meant to read as "the app is working," not "this
+   section is." Invisible and inert (opacity 0, pointer-events none) until
+   then, so it never affects layout or intercepts a click on what's
+   underneath it. */
+#htmx-progress-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 1000;
+  transition: opacity var(--duration-base) var(--ease-standard);
+}
+
+#htmx-progress-bar.active {
+  opacity: 1;
+}
+
+/* A single "comet" that slides continuously left to right and loops - the
+   standard indeterminate-progress trick (nprogress, Material's linear
+   progress). Only ever animates transform, and never changes direction or
+   its transform-origin mid-flight (an earlier version scaled from the left
+   then flipped to scale from the right at the midpoint, which was a
+   "clunky in the middle" stutter - a transform-origin change can't be
+   smoothly interpolated, so it always looked like a jump no matter the
+   easing), so there's nothing for the eye to catch on. */
+#htmx-progress-bar::before {
+  content: "";
+  display: block;
+  height: 100%;
+  width: 40%;
+  background: var(--accent-solid);
+  border-radius: var(--radius-full);
+  transform: translateX(-100%);
+}
+
+#htmx-progress-bar.active::before {
+  animation: htmx-progress-sweep 1.3s var(--ease-emphasized) infinite;
+}
+
+@keyframes htmx-progress-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(350%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #htmx-progress-bar.active::before {
+    animation: none;
+    width: 100%;
+    transform: translateX(0);
+  }
+}

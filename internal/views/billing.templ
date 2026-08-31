@@ -25,25 +25,22 @@ templ Billing(personName, organizationName string, data BillingData) {
 					Pick a plan below any time to keep going without interruption.
 				</p>
 			}
-			<div class="position-group">
-				<h3>Standard</h3>
+			@Card("Standard") {
 				<p>$14/mo - 2 admin seats - single campus, small-to-mid church.</p>
 				<form hx-boost="false" method="post" action="/billing/checkout">
 					<input type="hidden" name="plan" value={ data.StandardPlan }/>
 					<button type="submit" class="primary">Choose Standard</button>
 				</form>
-			</div>
-			<div class="position-group">
-				<h3>Multi-Campus</h3>
+			}
+			@Card("Multi-Campus") {
 				<p>$28/mo - 5 admin seats (+$5/mo per extra seat) - multi-site or large team.</p>
 				<form hx-boost="false" method="post" action="/billing/checkout">
 					<input type="hidden" name="plan" value={ data.MultiCampusPlan }/>
 					<button type="submit" class="primary">Choose Multi-Campus</button>
 				</form>
-			</div>
+			}
 		} else {
-			<div class="position-group">
-				<h3>{ planLabel(data.Plan) }</h3>
+			@Card(planLabel(data.Plan)) {
 				<p class="muted">Status: { data.Status }</p>
 				<p class="muted">{ fmt.Sprintf("%d admin seat(s) used in the last 30 days.", data.SeatCount) }</p>
 				if data.StandardOverLimit {
@@ -57,7 +54,7 @@ templ Billing(personName, organizationName string, data BillingData) {
 				<form hx-boost="false" method="post" action="/billing/portal">
 					<button type="submit" class="primary">Manage billing</button>
 				</form>
-			</div>
+			}
 		}
 	}
 }

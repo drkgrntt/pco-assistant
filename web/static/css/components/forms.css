@@ -1,0 +1,138 @@
+/* Form controls - a pure CSS utility, not backed by any one templ
+   component: input/select/textarea/button base styling plus form.inline,
+   the stacked-mobile/row-desktop layout used by every setup-page create
+   form. */
+
+/* Strip native OS chrome (the "weird border" look) so our own
+   border/background fully replace it instead of fighting with it. select's
+   native dropdown arrow is left alone - restyling that needs a custom icon
+   and isn't worth it here. checkbox/radio inputs are excluded from both
+   this rule and the one below - appearance: none on a checkbox strips its
+   native box *and* checkmark with nothing here to replace either, so
+   without this exclusion every checkbox in the app renders as an
+   invisible/blank control (only surfaced once something actually used one
+   - see the Song Tag Suggestions apply form, the first checkbox anywhere
+   in this codebase). Native checkbox/radio rendering is left alone
+   entirely, same "not worth custom-styling" call already made for select's
+   arrow. textarea was simply missing from this list (no code had used one
+   yet) rather than deliberately excluded - without it, the first two
+   textareas added to the app (the song detail card's notes fields) were
+   stuck looking like raw, unstyled browser chrome next to every other
+   field around them. */
+input:not([type="checkbox"]):not([type="radio"]),
+select,
+textarea,
+button {
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+/* Sized for comfortable tapping (~44px) on top of being readable - a win on
+   desktop too, so this isn't gated behind a breakpoint. Controls sit on
+   --surface, not --bg - they're interactive elements floating above the
+   page, and now that tables/cards/list rows are --surface too, a --bg
+   control inside one of them would look like a mismatched cutout rather
+   than a field (most visible in dark mode, where the two diverge most). */
+input:not([type="checkbox"]):not([type="radio"]),
+select,
+textarea,
+button {
+  font: inherit;
+  /* Was 0.4rem 0.7rem - nudged onto the scale's nearest steps (+1.6px/
+     +0.8px), imperceptible on a control this size. */
+  padding: var(--space-2) var(--space-3);
+  min-height: var(--control-height);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Mobile-first: form fields stack full-width (easier to tap and read on a
+   phone). From 640px up they flow into an inline row, wrapping as needed. */
+form.inline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-block: var(--space-4);
+}
+
+form.inline label {
+  display: flex;
+  flex-direction: column;
+  font-size: var(--text-md);
+  gap: var(--space-1);
+}
+
+/* A checkbox paired with its own text (song selection, Song Tag
+   Suggestions' apply form) wants the opposite of the stacked "label text
+   above its field" layout above - checkbox and text side by side, like
+   any normal checkbox row. */
+form.inline label.checkbox-label {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+form.inline input,
+form.inline select {
+  width: 100%;
+}
+
+@media (min-width: 640px) {
+  form.inline {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: end;
+  }
+
+  form.inline label {
+    flex: 1 1 auto;
+    min-width: 10rem;
+  }
+
+  form.inline input,
+  form.inline select {
+    width: auto;
+  }
+
+  form.inline button {
+    flex: 0 0 auto;
+  }
+}
+
+/* A form.inline that should never flip into the side-by-side row above -
+   for a form built around one multi-line field (feedback's email +
+   textarea + submit), that row layout squeezes the short fields against
+   a tall textarea instead of reading top-to-bottom. Also caps the
+   measure, since a single-line email input and submit button stretching
+   the full width of main (60rem) reads just as awkwardly as the row
+   flip did. */
+form.inline.stacked {
+  max-width: 32rem;
+}
+
+@media (min-width: 640px) {
+  form.inline.stacked {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  form.inline.stacked label {
+    flex: none;
+    min-width: 0;
+  }
+
+  form.inline.stacked button {
+    flex: none;
+    align-self: flex-start;
+  }
+}

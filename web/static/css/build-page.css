@@ -1,0 +1,128 @@
+/* The combined Build a Service page's own shell (build.templ) - the back-
+   nav row, the two-column tab-content-plus-glance-sidebar layout, and the
+   glance cards themselves. Single page, not a reusable component. See
+   components/build-tabs.css for the tab buttons, components/
+   build-detail-card.css and components/publish-panel.css for the two
+   sidebar card variants built on top of .build-glance-card below, and
+   builder-rows.css for the set/roster builder tables' own row-level
+   styling. */
+
+/* The Build page's top-of-page nav row (see BuildPlan) - "Choose a
+   different plan" (this app's own back-navigation) on the left, "Open in
+   Planning Center"/"Run sheet" (both open a different site/page in a new
+   tab) grouped on the right. Splitting the group apart, rather than all
+   three inline with middle-dot separators, reads as "back" vs. "jump
+   elsewhere" instead of one flat list of three equally-weighted links -
+   the smaller/muted styling on the right-hand group reinforces that
+   they're secondary to the actual builder below, not another primary
+   action. */
+.build-page-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  margin-block: var(--space-2);
+}
+
+.build-page-nav-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+}
+
+.build-page-nav-links a {
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.build-page-nav-links a:hover {
+  color: var(--text);
+}
+
+/* base.css caps every page's <main> at 60rem for readable prose line
+   length - right for a form or a single list, too narrow once the Build
+   page is genuinely two columns (tab content + the glance sidebar below).
+   Scoped with :has() rather than a Layout parameter, so only a page that
+   actually contains .build-layout opts into the wider column; every other
+   page's <main> is untouched. */
+main:has(.build-layout) {
+  max-width: 75rem;
+}
+
+/* The Build page's "at a glance" sidebar (see build.templ, toggleBuildTab
+   in scheduling.js) - a standing summary of whichever tab isn't currently
+   open. Mobile-first: stacked full-width below the tabs by default (no
+   room for a true margin on a phone), moving beside them at the same
+   900px breakpoint the landing page's own two-column sections use. */
+.build-layout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.build-main {
+  min-width: 0;
+}
+
+.build-glance {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* Base card treatment shared with .build-publish-card (components/
+   publish-panel.css) - kept as one combined selector, not duplicated
+   across both files, so there's exactly one place that sets it. */
+.build-glance-card,
+.build-publish-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3) var(--space-4);
+}
+
+.build-glance-card h3,
+.build-publish-card h3 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+
+/* The glance card's actual content - song order or position/name list
+   (see SongGlanceList/TeamGlanceList) - beneath its status-summary chips
+   (components/status-summary.css). Plain and compact rather than the
+   .plan-list/.candidate-row card treatment used elsewhere: this is a
+   quick read, not something you interact with row by row (that's what
+   switching tabs is for). */
+.build-glance-list {
+  margin: 0 0 var(--space-3);
+  padding-left: var(--space-5);
+  font-size: var(--text-sm);
+}
+
+.build-glance-list li {
+  margin-block: var(--space-1);
+}
+
+.build-glance-list li > span:first-child {
+  font-weight: var(--font-medium);
+}
+
+@media (min-width: 900px) {
+  .build-layout {
+    flex-direction: row;
+    align-items: start;
+  }
+
+  .build-main {
+    flex: 1 1 auto;
+  }
+
+  .build-glance {
+    flex: 0 0 15rem;
+  }
+}

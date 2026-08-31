@@ -1,0 +1,112 @@
+/* Buttons - a pure CSS utility, not backed by any one templ component:
+   the base <button>, the .button link-styled-as-button class, .primary/
+   .danger modifiers, and .icon-btn for dense row actions. */
+
+button {
+  cursor: pointer;
+  font-weight: var(--font-medium);
+  background: color-mix(in srgb, var(--text) 4%, var(--surface));
+  transition: background-color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
+}
+
+button:hover {
+  background: var(--surface-hover);
+  border-color: color-mix(in srgb, var(--text) 8%, var(--border));
+}
+
+button:active {
+  background: color-mix(in srgb, var(--text) 4%, var(--surface));
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* A <button>-shaped <a> - link-driven actions (the sign-in link, the
+   homepage's workflow shortcuts) that should look identical to a real
+   button rather than plain text, since the input/select/button base rule
+   above only reaches actual form controls. */
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font: inherit;
+  font-weight: var(--font-medium);
+  padding: var(--space-2) var(--space-3);
+  min-height: var(--control-height);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
+}
+
+.button:hover {
+  background: var(--surface-hover);
+  border-color: color-mix(in srgb, var(--text) 8%, var(--border));
+}
+
+/* The one or two clearest calls to action per page (Publish, the top-of-
+   form Add/Save, "sign in") - everything else stays the neutral outline
+   style above so these actually stand out. */
+.primary {
+  /* border-width/style too, not just border-color - the base rule that
+     normally supplies those only targets input/select/button, and .primary
+     is also used on a plain <a> (the sign-in link). */
+  border: 1px solid var(--accent-solid);
+  background: var(--accent-solid);
+  color: white;
+}
+
+.primary:hover {
+  background: color-mix(in srgb, var(--accent-solid) 85%, black);
+  border-color: color-mix(in srgb, var(--accent-solid) 85%, black);
+}
+
+button.danger {
+  background: var(--surface);
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+  color: var(--danger);
+}
+
+button.danger:hover {
+  background: color-mix(in srgb, var(--danger) 12%, var(--surface));
+  border-color: var(--danger);
+}
+
+/* Icon-only buttons - square, just enough padding to keep the icon from
+   touching the edges. aria-label/title on each one carries the label that
+   would otherwise be visible text. Ghost style - transparent until
+   hovered - since these are dense, frequently-repeated row actions
+   (remove/duplicate/replace/add); a full outline on every one of them
+   would be a lot of visual noise. */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* Was 0.35rem all around - the scale's nearest step is 0.25rem. */
+  padding: var(--space-1);
+  min-width: var(--control-height);
+  background: transparent;
+  border-color: transparent;
+}
+
+.icon-btn:hover {
+  background: var(--surface-hover);
+  border-color: transparent;
+}
+
+.icon-btn.danger {
+  background: transparent;
+  border-color: transparent;
+}
+
+.icon-btn.danger:hover {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  border-color: transparent;
+}

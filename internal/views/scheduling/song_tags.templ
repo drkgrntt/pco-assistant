@@ -62,9 +62,8 @@ templ SongTagsTable(tags []scheduling.SongTag, songTitles map[string]string, cat
 		if errMsg != "" {
 			<p class="error">{ errMsg }</p>
 		}
-		<div class="table-wrap">
-			<table class="sortable">
-				<thead>
+		@views.SortableTableWrap() {
+			<thead>
 					<tr>
 						<th>Song</th>
 						<th>Category</th>
@@ -120,7 +119,6 @@ templ SongTagsTable(tags []scheduling.SongTag, songTitles map[string]string, cat
 						</tr>
 					}
 				</tbody>
-			</table>
-		</div>
+		}
 	</div>
 }

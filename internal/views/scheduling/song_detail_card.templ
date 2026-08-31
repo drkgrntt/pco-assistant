@@ -23,23 +23,23 @@ import (
 // visible duplicate outside of an htmx-processed response), including
 // songDetailCardsOOB never setting hidden itself (see that comment).
 templ SongDetailCards(data SetBuilderData, hidden bool) {
-	<div class="build-detail-group" id="build-detail-songs" hidden?={ hidden }>
+	@buildDetailGroupShell("build-detail-songs", hidden) {
 		for _, row := range data.ServiceOrder {
 			if row.IsSong {
 				@songDetailCard(data, row.Song)
 			}
 		}
-	</div>
+	}
 }
 
 templ songDetailCardsOOB(data SetBuilderData) {
-	<div class="build-detail-group" id="build-detail-songs" hx-swap-oob="true">
+	@buildDetailGroupShellOOB("build-detail-songs") {
 		for _, row := range data.ServiceOrder {
 			if row.IsSong {
 				@songDetailCard(data, row.Song)
 			}
 		}
-	</div>
+	}
 }
 
 // KeyFormFragment/DescriptionFormFragment/SongNoteFormFragment re-render
@@ -104,25 +104,19 @@ templ SongNoteFormFragment(data SetBuilderData, song SetSongView, note SongNoteV
 // rather than yet another copy of those three forms - see openQuickAction
 // (scheduling.js), which already knows how to find that row by id.
 templ songDetailCard(data SetBuilderData, song SetSongView) {
-	<div class="build-glance-card build-detail-card" data-row-id={ fmt.Sprintf("%d", song.ID) } hidden>
-		<div class="build-detail-header">
-			<h3>{ song.Title }</h3>
-			<button type="button" class="icon-btn" aria-label="Close" title="Close" onclick="closeSongDetail()">
-				@views.IconX()
-			</button>
-		</div>
+	@buildDetailCardShell(fmt.Sprintf("%d", song.ID), song.Title, "closeSongDetail()") {
 		if song.ArrangementInfo != "" {
 			<p class="muted">{ song.ArrangementInfo }</p>
 		}
 		<div class="build-detail-badges">
 			for _, role := range song.Roles {
-				<span class="badge">{ role.Label }</span>
+				@views.Badge("", role.Label)
 			}
 			if song.Published {
-				<span class="badge published">Published</span>
+				@views.Badge("published", "Published")
 			}
 			if song.Moved {
-				<span class="badge status-pending" title="Moved since it was last published">Moved</span>
+				@views.BadgeTitled("status-pending", "Moved", "Moved since it was last published")
 			}
 		</div>
 		<div class="build-detail-notes-group">
@@ -205,7 +199,7 @@ templ songDetailCard(data SetBuilderData, song SetSongView) {
 				Mark a role
 			</button>
 		</div>
-	</div>
+	}
 }
 
 // keyForm is this song's key for this one occurrence (SetSongView.Key) -

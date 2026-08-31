@@ -8,8 +8,9 @@ import (
 )
 
 // StyleGuideController serves a single living reference page for the CSS
-// design system (tokens.css/base.css/components.css - see their own header
-// comments) - colors, type scale, spacing, and every reusable component,
+// design system (tokens.css/base.css/web/static/css/components/ - see
+// their own header comments) - colors, type scale, spacing, and every
+// reusable component,
 // rendered from the actual classes rather than mocked up separately, so it
 // can't silently drift out of sync with them. Not a real end-user feature
 // (worship leaders/church admins have no reason to see it), so it's gated

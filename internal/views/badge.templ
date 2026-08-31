@@ -1,0 +1,25 @@
+package views
+
+// Badge renders a single pill from the shared .badge family - kind is one
+// of "" (default/neutral), "published", "status-pending", or
+// "status-todo", matching the modifier classes components/badge.css defines for
+// .badge. Factored out because the badge markup (span + coordinated class
+// pair) is a structured pattern hand-duplicated across song/person rows
+// and detail cards, not just a class droppable on any element - see
+// PlanStatusBadge, which predates this and switches on the same
+// vocabulary for plan status specifically.
+templ Badge(kind, label string) {
+	<span class={ "badge", kind }>{ label }</span>
+}
+
+// BadgeTitled is Badge plus a title attribute, for badges that explain
+// themselves on hover (e.g. "Moved since it was last published").
+templ BadgeTitled(kind, label, title string) {
+	<span class={ "badge", kind } title={ title }>{ label }</span>
+}
+
+// ConflictBadge renders the .conflict-badge pill used for avoid-pairing/
+// repeat-song/scheduling-conflict warnings inline in a row.
+templ ConflictBadge(message string) {
+	<span class="conflict-badge">⚠ { message }</span>
+}

@@ -1,0 +1,61 @@
+/* Backs internal/views/badge.templ (Badge/BadgeTitled/ConflictBadge).
+   .tag-badge and .badge-label are droppable modifiers on the same family
+   with no dedicated templ helper of their own - single real call sites,
+   kept here rather than split out since they're visually part of this
+   same badge system. */
+
+.badge {
+  display: inline-block;
+  background: var(--accent-subtle);
+  color: var(--accent);
+  border-radius: var(--radius-full);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
+  margin-right: var(--space-1);
+}
+
+.badge.published {
+  background: var(--success-subtle);
+  color: var(--success);
+}
+
+.badge.status-pending {
+  background: var(--pending-subtle);
+  color: var(--pending);
+}
+
+.badge.status-todo {
+  background: var(--accent-subtle);
+  color: var(--accent);
+}
+
+/* Theme/scripture/idea tags (see song_tags.go) on the set builder's
+   candidate list - deliberately muted rather than accent-colored like the
+   opener/response role badges beside them, since a song can carry several
+   of these and they're descriptive, not a set-builder signal. */
+.tag-badge {
+  background: color-mix(in srgb, var(--text) 8%, var(--surface));
+  color: var(--muted);
+}
+
+.conflict-badge {
+  display: inline-block;
+  background: var(--danger-subtle);
+  color: var(--danger);
+  border-radius: var(--radius-full);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
+}
+
+/* The Build page's plan list tags each row with two independent statuses
+   (songs, team) - this labels which badge is which, small and muted so it
+   doesn't compete with the badges themselves. */
+.badge-label {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  margin-left: var(--space-2);
+}
+
+.badge-label:first-of-type {
+  margin-left: var(--space-3);
+}

@@ -1,0 +1,21 @@
+package views
+
+// ImportBanner renders the .import-banner "invitation, not an alert" shape
+// - a structural pattern (not just a class) since a dismissible one needs
+// the icon-btn+onclick trio wired up correctly, not just the div. message
+// is the lead paragraph text; dismissible adds the "x" close button (for
+// the one-shot pairing-prompt banners, which disappear once acted on or
+// dismissed); children carries the trailing form every real usage has.
+templ ImportBanner(message string, dismissible bool) {
+	<div class="import-banner">
+		<p>
+			{ message }
+			if dismissible {
+				<button type="button" class="icon-btn" aria-label="Dismiss" title="Dismiss" onclick="this.closest('.import-banner').remove()">
+					@IconX()
+				</button>
+			}
+		</p>
+		{ children... }
+	</div>
+}

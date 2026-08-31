@@ -1,0 +1,30 @@
+/* Backs internal/views/scheduling/quick_action.templ's quickActionRow. */
+
+/* The tag/relate/role form opened from a row's "more actions" menu - one
+   hidden <tr> "slot" per action per song (see quickActionRow), toggled by
+   openQuickAction. Full-width and anchored directly under the row it's
+   for, rather than the .quick-add-panel's generic-dropdown card treatment
+   (collapsible.css) - the song is already chosen, so this is scoped
+   visually as well as functionally. */
+.quick-action-row td {
+  padding: 0;
+}
+
+.quick-action-panel {
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-hover);
+  border-top: 2px solid var(--accent);
+}
+
+.quick-action-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-md);
+  font-weight: var(--font-semibold);
+}
+
+.quick-action-panel form.inline {
+  margin-block: 0;
+}

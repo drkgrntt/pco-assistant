@@ -58,9 +58,8 @@ templ SongRolesTable(roles []scheduling.SongRole, songTitles map[string]string, 
 		if errMsg != "" {
 			<p class="error">{ errMsg }</p>
 		}
-		<div class="table-wrap">
-			<table class="sortable">
-				<thead>
+		@views.SortableTableWrap() {
+			<thead>
 					<tr>
 						<th>Song</th>
 						<th>Role</th>
@@ -113,7 +112,6 @@ templ SongRolesTable(roles []scheduling.SongRole, songTitles map[string]string, 
 						</tr>
 					}
 				</tbody>
-			</table>
-		</div>
+		}
 	</div>
 }

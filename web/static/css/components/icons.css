@@ -1,0 +1,17 @@
+/* Backs internal/views/icons.templ's IconXxx() components - icons follow
+   the surrounding button/text color (currentColor) rather than carrying
+   their own, so they never need theme-specific handling. */
+.icon {
+  vertical-align: -0.15em;
+  flex-shrink: 0;
+}
+
+.icon-drag {
+  cursor: grab;
+  color: var(--muted);
+}
+
+.icon-inline {
+  display: inline-flex;
+  vertical-align: -0.2em;
+}

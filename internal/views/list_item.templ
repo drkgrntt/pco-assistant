@@ -1,0 +1,27 @@
+package views
+
+// ListItem renders one <li> in the suggestion-list/candidate-list/
+// assignment-list family - NOT plan-list, which looks like the same
+// family (same shared row styling in components/list-item.css) but isn't:
+// a plan-list row's first child is an <a> (the row's own link), and
+// components/list-item.css's bold/flex-grow rule only ever targets
+// ".suggestion-list li/.candidate-row/.assignment-list li > span:first-
+// child" - plan-list was deliberately left off that selector, so its
+// rows get their emphasis from the link itself instead. The three lists
+// this does cover share an implicit contract no class name spells out:
+// the *first* child of the <li> must be a <span> holding the row's
+// title, with everything else (badges, muted meta, forms) following it.
+// This component makes that first-span-is-the-title rule structural
+// instead of a convention every call site has to remember to follow by
+// hand. class carries the optional "candidate-row" modifier (suggestion/
+// assignment rows leave it ""); attrs carries whatever data-*/onclick
+// attributes that particular row needs (candidate rows' data-title/
+// data-roles/data-tags for filterCandidates(), assignment rows'
+// data-row-id+onclick for selectPersonRow()) - nil where a row needs
+// none.
+templ ListItem(class string, attrs templ.Attributes, title string) {
+	<li class={ class } { attrs... }>
+		<span>{ title }</span>
+		{ children... }
+	</li>
+}

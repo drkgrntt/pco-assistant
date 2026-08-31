@@ -1,0 +1,182 @@
+/* Row-level interactions on the set/roster builders' own tables
+   (set_builder.templ/roster_builder.templ) - selection/drag states,
+   per-row action clusters, and the Songs tab's candidate search/filter
+   bar. Single page (the Build page's two builders), not a reusable
+   component - see components/search.css for the unrelated person-picker
+   search dropdown used elsewhere in the app. */
+
+/* The set builder's "find songs to add" filters - a role toggle plus the
+   search box below it (see filterCandidates in scheduling.js). */
+.role-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-block: var(--space-2);
+}
+
+.role-filter.active {
+  background: var(--accent-solid);
+  color: white;
+  border-color: var(--accent-solid);
+}
+
+#candidate-search {
+  width: 100%;
+  margin-bottom: var(--space-2);
+}
+
+@media (min-width: 640px) {
+  #candidate-search {
+    width: auto;
+    min-width: 16rem;
+  }
+}
+
+/* The Build page's plan search - an input + Search button side by side,
+   submitted as a real form (see build.templ) rather than searched live on
+   type, so unlike #candidate-search this needs to flex alongside a
+   sibling button instead of sitting alone. */
+.search-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.search-bar input {
+  flex: 1 1 12rem;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-block: var(--space-4);
+}
+
+/* Clicking a song row (see selectSongRow, scheduling.js) opens its detail
+   card in the sidebar (components/build-detail-card.css) - cursor:pointer
+   signals the row itself is clickable, not just its action buttons/drag
+   handle. .selected gets the same highlight .assignment-list li.selected
+   below uses, for the people equivalent. */
+tr.song-row {
+  cursor: pointer;
+}
+
+tr.song-row:hover,
+tr.song-row.selected {
+  background: var(--surface-hover);
+}
+
+.assignment-list li {
+  cursor: pointer;
+}
+
+.assignment-list li.selected {
+  background: var(--surface-hover);
+  border-color: var(--accent);
+}
+
+/* The set builder's per-row action cluster (duplicate/remove/replace). */
+.set-song-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.set-song-actions button {
+  min-height: var(--control-height);
+  padding: 0.3rem var(--space-2);
+}
+
+.replace-form {
+  display: flex;
+  gap: 0.3rem;
+  margin: 0;
+}
+
+.replace-form select {
+  min-height: var(--control-height);
+  padding: 0.3rem var(--space-2);
+  max-width: 12rem;
+}
+
+.replace-form button {
+  min-height: var(--control-height);
+  padding: 0.3rem var(--space-2);
+}
+
+.foreign-row {
+  color: var(--muted);
+}
+
+/* Reserves one line's worth of height whether or not a song actually has
+   cached arrangement info to show (see set_builder.templ, which now
+   always renders this div, empty or not) - without it, rows for songs
+   without a cached arrangement were visibly shorter than rows for songs
+   with one, making the table's row heights uneven. */
+.song-meta {
+  min-height: calc(var(--text-md) * var(--leading-normal));
+}
+
+/* Header items are section dividers in the real order of service (e.g.
+   "Welcome," "Sermon") - rendered as their own full-width row rather than
+   a normal 4-column one, so they read as landmarks rather than content. */
+.section-row td {
+  padding-top: 0.9rem;
+  font-weight: var(--font-semibold);
+  text-transform: uppercase;
+  font-size: var(--text-sm);
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  border-bottom-color: var(--text);
+}
+
+/* touch-action: none stops a touch-drag on the handle from also scrolling
+   the page - without it, dragging on a touchscreen just scrolls instead of
+   moving the row (see the pointer-events drag logic in scheduling.js). */
+.drag-handle {
+  display: inline-flex;
+  cursor: grab;
+  color: var(--muted);
+  touch-action: none;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+/* The row being dragged reads as "picked up" - tinted and lifted with a
+   soft shadow - rather than just faded out. */
+tr.dragging {
+  position: relative;
+  z-index: 1;
+  opacity: 0.85;
+  background: color-mix(in srgb, var(--accent-solid) 10%, var(--surface));
+  box-shadow: var(--shadow-lg);
+}
+
+/* Drop indicator. A drop always means "place after the row the pointer is
+   below the midpoint of" (see findDropTargetRow in scheduling.js), so the
+   marker line belongs on that row's *bottom* edge, not its top - a
+   top-edge line would visually point at the row above instead of the one
+   actually being targeted. The inset line plus a matching outer glow reads
+   as a deliberate insertion marker rather than a stray 1px border. */
+tr.drag-over {
+  position: relative;
+  box-shadow:
+    inset 0 -3px 0 0 var(--accent-solid),
+    0 2px 6px -2px var(--accent-solid);
+}
+
+/* Dropping above every row (top of service) - same treatment, top edge,
+   applied to the first row since there's no "row above" to attach a
+   bottom-edge line to. */
+tr.drag-over-top {
+  position: relative;
+  box-shadow:
+    inset 0 3px 0 0 var(--accent-solid),
+    0 -2px 6px -2px var(--accent-solid);
+}

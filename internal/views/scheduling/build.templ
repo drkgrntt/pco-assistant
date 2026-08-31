@@ -205,12 +205,19 @@ templ BuildPlan(personName, organizationName string, setData SetBuilderData, ros
 			(toggleBuildTab shows whichever one belongs to the tab that just
 			went hidden).
 		-->
+		<!--
+			normalizedTab mirrors activeTab's own "anything but 'team' means
+			Songs" default, just for buildTabs' equality check - every other
+			activeTab comparison on this page (hidden?/publish panels below)
+			keeps using activeTab directly and is unaffected.
+		-->
+		{{ normalizedTab := "songs" }}
+		if activeTab == "team" {
+			{{ normalizedTab = "team" }}
+		}
 		<div class="build-layout">
 			<div class="build-main">
-				<div class="build-tabs" role="tablist">
-					<button type="button" class={ "build-tab", templ.KV("active", activeTab != "team") } role="tab" aria-selected={ fmt.Sprintf("%t", activeTab != "team") } aria-controls="build-tab-songs" onclick="toggleBuildTab('songs')">Songs</button>
-					<button type="button" class={ "build-tab", templ.KV("active", activeTab == "team") } role="tab" aria-selected={ fmt.Sprintf("%t", activeTab == "team") } aria-controls="build-tab-team" onclick="toggleBuildTab('team')">Team</button>
-				</div>
+				@buildTabs([]BuildTab{{ID: "songs", Label: "Songs"}, {ID: "team", Label: "Team"}}, normalizedTab)
 				<div class="build-tab-panel" id="build-tab-songs" role="tabpanel" hidden?={ activeTab == "team" }>
 					@SetBuilderBodyContent(setData)
 				</div>
