@@ -1,9 +1,7 @@
-package controllers
+package scheduling
 
 import (
 	"testing"
-
-	"pco-assistant/internal/scheduling"
 
 	pco "github.com/drkgrntt/go-pco"
 )
@@ -14,8 +12,8 @@ func song(id, title string) pco.SongData {
 	return s
 }
 
-func songTag(songID, category, value string) scheduling.SongTag {
-	return scheduling.SongTag{SongID: songID, Category: category, Value: value}
+func songTag(songID, category, value string) SongTag {
+	return SongTag{SongID: songID, Category: category, Value: value}
 }
 
 func TestSongTagSuggestionsGroupsSharedTitleWords(t *testing.T) {
@@ -28,7 +26,7 @@ func TestSongTagSuggestionsGroupsSharedTitleWords(t *testing.T) {
 		song("6", "Lion of Judah"),
 	}
 
-	groups := songTagSuggestions(songs, nil, nil)
+	groups := SongTagSuggestions(songs, nil, nil)
 
 	var kingTitles, lionTitles []string
 	for _, g := range groups {
@@ -64,10 +62,10 @@ func TestSongTagSuggestionsExcludesStopwordsAndSingletons(t *testing.T) {
 		song("3", "Reckless Love"),
 	}
 
-	groups := songTagSuggestions(songs, nil, nil)
+	groups := SongTagSuggestions(songs, nil, nil)
 
 	for _, g := range groups {
-		if songTitleStopwords[g.Word] {
+		if SongTitleStopwords[g.Word] {
 			t.Errorf("stopword %q leaked through as a suggestion", g.Word)
 		}
 		if len(g.Songs) < 2 {
@@ -82,7 +80,7 @@ func TestSongTagSuggestionsSkipsIgnoredWords(t *testing.T) {
 		song("2", "Christ the King"),
 	}
 
-	groups := songTagSuggestions(songs, nil, map[string]bool{"king": true})
+	groups := SongTagSuggestions(songs, nil, map[string]bool{"king": true})
 
 	for _, g := range groups {
 		if g.Word == "king" {
@@ -92,7 +90,7 @@ func TestSongTagSuggestionsSkipsIgnoredWords(t *testing.T) {
 }
 
 // TestSongTagSuggestionsFlagsAlreadyTaggedSongs confirms the exact-match
-// rule documented on songTagSuggestions: a song already tagged "King"
+// rule documented on SongTagSuggestions: a song already tagged "King"
 // (any category) is flagged AlreadyTagged for the "king" group, and a
 // song in the same group that isn't tagged that way is not.
 func TestSongTagSuggestionsFlagsAlreadyTaggedSongs(t *testing.T) {
@@ -100,9 +98,9 @@ func TestSongTagSuggestionsFlagsAlreadyTaggedSongs(t *testing.T) {
 		song("1", "King of Kings"),
 		song("2", "Christ the King"),
 	}
-	tags := []scheduling.SongTag{songTag("1", scheduling.TagCategoryTheme, "King")}
+	tags := []SongTag{songTag("1", TagCategoryTheme, "King")}
 
-	groups := songTagSuggestions(songs, tags, nil)
+	groups := SongTagSuggestions(songs, tags, nil)
 
 	var taggedByID = map[string]bool{}
 	for _, g := range groups {
@@ -133,12 +131,12 @@ func TestSongTagSuggestionsOmitsFullyAppliedGroups(t *testing.T) {
 		song("1", "King of Kings"),
 		song("2", "Christ the King"),
 	}
-	tags := []scheduling.SongTag{
-		songTag("1", scheduling.TagCategoryTheme, "King"),
-		songTag("2", scheduling.TagCategoryTheme, "King"),
+	tags := []SongTag{
+		songTag("1", TagCategoryTheme, "King"),
+		songTag("2", TagCategoryTheme, "King"),
 	}
 
-	groups := songTagSuggestions(songs, tags, nil)
+	groups := SongTagSuggestions(songs, tags, nil)
 
 	for _, g := range groups {
 		if g.Word == "king" {
@@ -155,9 +153,9 @@ func TestSongTagSuggestionsKeepsPartiallyAppliedGroups(t *testing.T) {
 		song("1", "King of Kings"),
 		song("2", "Christ the King"),
 	}
-	tags := []scheduling.SongTag{songTag("1", scheduling.TagCategoryTheme, "King")}
+	tags := []SongTag{songTag("1", TagCategoryTheme, "King")}
 
-	groups := songTagSuggestions(songs, tags, nil)
+	groups := SongTagSuggestions(songs, tags, nil)
 
 	found := false
 	for _, g := range groups {
@@ -170,7 +168,7 @@ func TestSongTagSuggestionsKeepsPartiallyAppliedGroups(t *testing.T) {
 	}
 }
 
-// TestSongTitleWords locks in the tokenization rules songTagSuggestions
+// TestSongTitleWords locks in the tokenization rules SongTagSuggestions
 // depends on: lowercase, split on punctuation (not just whitespace),
 // short/stopword/all-digit tokens dropped, and a repeated word in one
 // title only counted once.
@@ -188,14 +186,14 @@ func TestSongTitleWords(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		got := songTitleWords(tt.title)
+		got := SongTitleWords(tt.title)
 		if len(got) != len(tt.want) {
-			t.Errorf("songTitleWords(%q) = %v, want %v", tt.title, got, tt.want)
+			t.Errorf("SongTitleWords(%q) = %v, want %v", tt.title, got, tt.want)
 			continue
 		}
 		for _, w := range tt.want {
 			if !got[w] {
-				t.Errorf("songTitleWords(%q) missing %q, got %v", tt.title, w, got)
+				t.Errorf("SongTitleWords(%q) missing %q, got %v", tt.title, w, got)
 			}
 		}
 	}
