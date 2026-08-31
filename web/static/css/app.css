@@ -452,6 +452,39 @@ header.site form {
   }
 }
 
+/* The Build page's top-of-page nav row (see BuildPlan) - "Choose a
+   different plan" (this app's own back-navigation) on the left, "Open in
+   Planning Center"/"Run sheet" (both open a different site/page in a new
+   tab) grouped on the right. Splitting the group apart, rather than all
+   three inline with middle-dot separators, reads as "back" vs. "jump
+   elsewhere" instead of one flat list of three equally-weighted links -
+   the smaller/muted styling on the right-hand group reinforces that
+   they're secondary to the actual builder below, not another primary
+   action. */
+.build-page-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  margin-block: var(--space-2);
+}
+
+.build-page-nav-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+}
+
+.build-page-nav-links a {
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.build-page-nav-links a:hover {
+  color: var(--text);
+}
+
 /* The combined Build a Service page's Songs/Team split (see BuildPlan,
    toggleBuildTab in scheduling.js) - styled like a segmented control rather
    than the header nav's link-style .nav-dropdown-toggle, since these are
