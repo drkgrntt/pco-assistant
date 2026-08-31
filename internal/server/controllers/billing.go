@@ -1,11 +1,11 @@
 package controllers
 
 import (
-	"log"
 	"time"
 
 	"pco-assistant/internal/auth"
 	"pco-assistant/internal/billing"
+	"pco-assistant/internal/logger"
 	"pco-assistant/internal/server/middleware"
 	"pco-assistant/internal/views"
 
@@ -137,7 +137,7 @@ func (bc *BillingController) Portal(c *fiber.Ctx) error {
 func (bc *BillingController) Webhook(c *fiber.Ctx) error {
 	sig := c.Get("Stripe-Signature")
 	if err := bc.billingClient.HandleWebhook(c.Context(), bc.authStore, c.Body(), sig); err != nil {
-		log.Println("stripe webhook error:", err.Error())
+		logger.Error("stripe webhook error", "error", err)
 		return c.Status(fiber.StatusBadRequest).SendString(err.Error())
 	}
 

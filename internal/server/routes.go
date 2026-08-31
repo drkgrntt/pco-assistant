@@ -1,8 +1,7 @@
 package server
 
 import (
-	"log"
-
+	"pco-assistant/internal/logger"
 	"pco-assistant/internal/server/controllers"
 	"pco-assistant/internal/server/middleware"
 
@@ -62,5 +61,5 @@ func (s *FiberServer) RegisterFiberRoutes() {
 	controllers.NewSchedulingAPIController(s.schedulingStore).RegisterRoutes(s.App)
 	schedulingController.RegisterRoutes(s.App)
 
-	log.Println("Routes registered")
+	logger.Info("routes registered")
 }

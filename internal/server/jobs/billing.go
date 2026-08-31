@@ -2,11 +2,11 @@ package jobs
 
 import (
 	"context"
-	"log"
 	"time"
 
 	"pco-assistant/internal/auth"
 	"pco-assistant/internal/billing"
+	"pco-assistant/internal/logger"
 
 	"github.com/go-co-op/gocron/v2"
 )
@@ -36,7 +36,7 @@ func (j *BillingJobs) Register(scheduler gocron.Scheduler) {
 		gocron.NewTask(j.reconcileSeats),
 	)
 	if err != nil {
-		log.Println("Error registering seat reconciliation cron", err.Error())
+		logger.Error("registering seat reconciliation cron failed", "error", err)
 	}
 }
 
@@ -45,13 +45,13 @@ func (j *BillingJobs) reconcileSeats() {
 
 	orgs, err := j.authStore.ListOrganizations(ctx)
 	if err != nil {
-		log.Println("Error listing organizations for seat reconciliation:", err)
+		logger.Error("listing organizations for seat reconciliation failed", "error", err)
 		return
 	}
 
 	counts, err := j.authStore.SeatCounts(ctx)
 	if err != nil {
-		log.Println("Error computing seat counts:", err)
+		logger.Error("computing seat counts failed", "error", err)
 		return
 	}
 
@@ -66,7 +66,7 @@ func (j *BillingJobs) reconcileSeats() {
 		}
 
 		if err := j.billingClient.SyncSeatQuantity(ctx, org.StripeSubscriptionID, counts[org.ID]); err != nil {
-			log.Printf("Error syncing seat quantity for org %s: %v", org.ID, err)
+			logger.Error("syncing seat quantity for org failed", "organization_id", org.ID, "error", err)
 		}
 	}
 }

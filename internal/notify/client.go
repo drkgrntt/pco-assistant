@@ -12,8 +12,9 @@ import (
 	"context"
 	"fmt"
 	"html"
-	"log"
 	"time"
+
+	"pco-assistant/internal/logger"
 
 	"github.com/mailgun/mailgun-go/v4"
 )
@@ -62,7 +63,7 @@ func (c *Client) hasCredentials() bool {
 // instead of sending anything - see New's doc comment.
 func (c *Client) SendFeedback(ctx context.Context, submitterEmail, message string) error {
 	if !c.hasCredentials() {
-		log.Printf("feedback received (Mailgun not configured - logging instead of emailing): from=%q message=%q", submitterEmail, message)
+		logger.Info("feedback received (Mailgun not configured - logging instead of emailing)", "from", submitterEmail, "message", message)
 		return nil
 	}
 

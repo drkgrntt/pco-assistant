@@ -1,8 +1,7 @@
 package server
 
 import (
-	"log"
-
+	"pco-assistant/internal/logger"
 	"pco-assistant/internal/server/jobs"
 
 	"github.com/go-co-op/gocron/v2"
@@ -11,7 +10,7 @@ import (
 func (s *FiberServer) RegisterCrons() {
 	scheduler, err := gocron.NewScheduler()
 	if err != nil {
-		log.Println("Error starting scheduler", err.Error())
+		logger.Error("starting scheduler failed", "error", err)
 		return
 	}
 
@@ -22,5 +21,5 @@ func (s *FiberServer) RegisterCrons() {
 
 	scheduler.Start()
 
-	log.Println("Crons registered")
+	logger.Info("crons registered")
 }

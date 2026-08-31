@@ -41,13 +41,13 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 	"time"
 
 	"pco-assistant/internal/auth"
 	"pco-assistant/internal/database"
+	"pco-assistant/internal/logger"
 	"pco-assistant/internal/scheduling"
 
 	pco "github.com/drkgrntt/go-pco"
@@ -72,12 +72,12 @@ type seedPerson struct{ ID, Name string }
 
 func main() {
 	if os.Getenv("APP_ENV") != "local" {
-		log.Fatal("dbseed refuses to run unless APP_ENV=local - .env should never point this at anything but a disposable local database")
+		logger.Fatal("dbseed refuses to run unless APP_ENV=local - .env should never point this at anything but a disposable local database")
 	}
 
 	db, err := database.Open()
 	if err != nil {
-		log.Fatalf("connect to database: %v", err)
+		logger.Fatal("connect to database", "error", err)
 	}
 	defer db.Close()
 
@@ -85,7 +85,7 @@ func main() {
 	// database dbreset (or a fresh install) just emptied, without requiring
 	// `go run ./cmd/api` to have been started first.
 	if err := database.Migrate(db); err != nil {
-		log.Fatalf("run migrations: %v", err)
+		logger.Fatal("run migrations", "error", err)
 	}
 
 	ctx := context.Background()
@@ -208,7 +208,7 @@ func (s *seedStats) report(action string, err error) {
 		fmt.Println("  =", action, "(already seeded)")
 		s.existed++
 	default:
-		log.Printf("  ! %s: %v", action, err)
+		logger.Error("seeding row failed", "action", action, "error", err)
 		s.failed++
 	}
 }
@@ -241,7 +241,7 @@ func seedSongTags(ctx context.Context, store *scheduling.Store, stats *seedStats
 	fmt.Println("Song tags:")
 	categories, err := store.ListSongTagCategories(ctx)
 	if err != nil {
-		log.Printf("  ! loading song tag categories: %v", err)
+		logger.Error("loading song tag categories failed", "error", err)
 		return
 	}
 
@@ -287,7 +287,7 @@ func seedSongRoles(ctx context.Context, store *scheduling.Store, stats *seedStat
 	fmt.Println("Song roles:")
 	types, err := store.ListSongRoleTypes(ctx)
 	if err != nil {
-		log.Printf("  ! loading song role types: %v", err)
+		logger.Error("loading song role types failed", "error", err)
 		return
 	}
 
@@ -325,7 +325,7 @@ func seedSongRelationships(ctx context.Context, store *scheduling.Store, stats *
 
 	types, err := store.ListSongRelationshipTypes(ctx)
 	if err != nil {
-		log.Printf("  ! loading song relationship types: %v", err)
+		logger.Error("loading song relationship types failed", "error", err)
 		return
 	}
 
@@ -354,7 +354,7 @@ func seedSongPreferences(ctx context.Context, store *scheduling.Store, stats *se
 	fmt.Println("Song/person preferences:")
 	types, err := store.ListSongPreferenceTypes(ctx)
 	if err != nil {
-		log.Printf("  ! loading song preference types: %v", err)
+		logger.Error("loading song preference types failed", "error", err)
 		return
 	}
 
@@ -404,7 +404,7 @@ func seedPersonRelationships(ctx context.Context, store *scheduling.Store, stats
 
 	types, err := store.ListPersonRelationshipTypes(ctx)
 	if err != nil {
-		log.Printf("  ! loading person relationship types: %v", err)
+		logger.Error("loading person relationship types failed", "error", err)
 		return
 	}
 
