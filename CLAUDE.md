@@ -169,10 +169,28 @@ actual app, split by concern rather than by feature:
 - `internal/views` (+ `internal/views/scheduling`) - templ view templates
   (`.templ` source, `_templ.go` generated output) rendered server-side and
   swapped into the page via htmx - there is no client-side framework/SPA.
+  Structured multi-part UI patterns that need specific nested markup,
+  ARIA, or JS hookup - not just a CSS class - are real templ components,
+  not hand-rolled at each call site: cross-package ones (`Badge`,
+  `ConflictBadge`, `Card`, `ImportBanner`, `ListItem`, `Disclosure`,
+  `TableWrap`/`SortableTableWrap`, `PlanStatusBadge`) live in the root
+  `internal/views` package for the same import-cycle reason
+  `PlanStatusBadge` already did; single-package ones (`quickActionRow`,
+  `collapsibleCard`, `buildTabs`, the Build page's detail/publish card
+  shells) stay unexported inside `internal/views/scheduling`. Purely
+  single-concern CSS (typography, spacing, `.muted`, icon classes, plain
+  button/badge modifiers) stays as bare classes - see `/style-guide`,
+  which demonstrates the real component call for every pattern that has
+  one.
 - `web/static` - the in-house CSS design system (`tokens.css`, `base.css`,
-  `components.css`, `app.css` - see README's Tech stack section) plus PWA
-  assets (manifest, service worker, icons). Rendered live at `/style-guide`,
-  which only responds when `APP_ENV=local`.
+  `components/*.css` one file per reusable component/utility group, plus a
+  handful of page-specific files for everything single-page - see README's
+  Tech stack section and `designSystemCSSFiles` in `internal/views/
+  layout.templ` for the full, ordered file list). A new CSS file must be
+  added to that list to actually load - forgetting isn't a build/test
+  failure, just a silently unstyled component, so don't skip it. Also
+  holds PWA assets (manifest, service worker, icons). Rendered live at
+  `/style-guide`, which only responds when `APP_ENV=local`.
 
 **Request pipeline** (`routes.go`): every route runs through
 `RequireAuth` -> `RequireActiveOrganization` -> `PopulateNavState`, in that

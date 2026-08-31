@@ -37,22 +37,14 @@ templ SongTagSuggestionsList(data SongTagSuggestionsData) {
 			<p class="success">{ data.SuccessMsg }</p>
 		}
 		for _, group := range data.Suggestions {
-			<!--
-				.position-group is the roster builder's per-position card
-				class (bordered, padded) - reused here rather than a new
-				class for the same "one bordered card per item" treatment,
-				same reuse-over-new-CSS approach as the rest of this app.
-			-->
-			<div class="position-group">
-				<h3>{ fmt.Sprintf("%q appears in %d song titles", group.Word, len(group.Songs)) }</h3>
+			@views.Card(fmt.Sprintf("%q appears in %d song titles", group.Word, len(group.Songs))) {
 				<ul class="candidate-list">
 					for _, song := range group.Songs {
-						<li>
-							<span>{ song.Title }</span>
+						@views.ListItem("", nil, song.Title) {
 							if song.AlreadyTagged {
-								<span class="badge published">Already tagged</span>
+								@views.Badge("published", "Already tagged")
 							}
-						</li>
+						}
 					}
 				</ul>
 				<form
@@ -98,7 +90,7 @@ templ SongTagSuggestionsList(data SongTagSuggestionsData) {
 					<input type="hidden" name="word" value={ group.Word }/>
 					<button type="submit" class="danger">Not a theme - ignore</button>
 				</form>
-			</div>
+			}
 		}
 		if len(data.Suggestions) == 0 {
 			<p class="muted">

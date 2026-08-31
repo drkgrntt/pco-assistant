@@ -4,8 +4,10 @@ import "fmt"
 
 // StyleGuide is a living reference for the CSS design system - tokens.css
 // (colors/spacing/typography/radius/shadow/motion), base.css (element
-// defaults), and components.css (buttons/badges/alerts/forms/tables/cards/
-// list rows). Every example below is the actual class/token, not a mockup,
+// defaults), and web/static/css/components/ (buttons/badges/alerts/forms/
+// tables/cards/list rows - one file per reusable templ component or
+// utility group, see designSystemCSSFiles in layout.templ for the full
+// list). Every example below is the actual class/token, not a mockup,
 // so this page can't quietly drift out of sync with what the app really
 // looks like - if a component's appearance changes, this page changes with
 // it for free. See StyleGuideController for why this isn't linked in the
@@ -16,9 +18,10 @@ templ StyleGuide(personName, organizationName string) {
 		<p class="muted">
 			The design system this app is built from - see
 			<code>web/static/css/tokens.css</code>, <code>base.css</code>, and
-			<code>components.css</code>. Everything on this page renders with the
-			real classes and custom properties, in whichever theme you currently
-			have selected (try the theme toggle in the header).
+			<code>components/</code> (one file per reusable component/utility
+			group). Everything on this page renders with the real classes and
+			custom properties, in whichever theme you currently have selected
+			(try the theme toggle in the header).
 		</p>
 
 		<section class="sg-section">
@@ -137,21 +140,19 @@ templ StyleGuide(personName, organizationName string) {
 		<section class="sg-section">
 			<h2>Badges</h2>
 			<div class="sg-demo-row">
-				<span class="badge">Default</span>
-				<span class="badge published">Published</span>
-				<span class="badge status-pending">Pending</span>
-				<span class="badge status-todo">Todo</span>
-				<span class="badge tag-badge">Tag</span>
-				<span class="conflict-badge">⚠ Conflict</span>
+				@Badge("", "Default")
+				@Badge("published", "Published")
+				@Badge("status-pending", "Pending")
+				@Badge("status-todo", "Todo")
+				@Badge("tag-badge", "Tag")
+				@ConflictBadge("Conflict")
 			</div>
 		</section>
 
 		<section class="sg-section">
 			<h2>Alerts &amp; banners</h2>
 			<div class="warning">This is a warning banner - conflicts, repeat-song alerts, pending-deletion notices.</div>
-			<div class="import-banner">
-				<p>This is an import banner - an invitation, not an alert (see the "already planned in Planning Center" prompts).</p>
-			</div>
+			@ImportBanner("This is an import banner - an invitation, not an alert (see the \"already planned in Planning Center\" prompts).", false)
 			<p class="error">This is an inline error message.</p>
 			<p class="success">This is an inline success message.</p>
 		</section>
@@ -175,59 +176,47 @@ templ StyleGuide(personName, organizationName string) {
 
 		<section class="sg-section">
 			<h2>Tables</h2>
-			<div class="table-wrap">
-				<table class="sortable">
-					<thead>
-						<tr>
-							<th class="sortable-col sort-asc">Song</th>
-							<th class="sortable-col">Category</th>
-							<th class="sortable-col">Value</th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr>
-							<td>Amazing Grace</td>
-							<td>Theme</td>
-							<td>Grace</td>
-						</tr>
-						<tr>
-							<td>Build My Life</td>
-							<td>Scripture</td>
-							<td>Romans 8:1</td>
-						</tr>
-					</tbody>
-				</table>
-			</div>
+			@SortableTableWrap() {
+				<thead>
+					<tr>
+						<th class="sortable-col sort-asc">Song</th>
+						<th class="sortable-col">Category</th>
+						<th class="sortable-col">Value</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr>
+						<td>Amazing Grace</td>
+						<td>Theme</td>
+						<td>Grace</td>
+					</tr>
+					<tr>
+						<td>Build My Life</td>
+						<td>Scripture</td>
+						<td>Romans 8:1</td>
+					</tr>
+				</tbody>
+			}
 		</section>
 
 		<section class="sg-section">
 			<h2>List rows</h2>
 			<ul class="candidate-list">
-				<li class="candidate-row">
-					<span>Great Are You Lord</span>
-					<span class="badge">Opener</span>
+				@ListItem("candidate-row", nil, "Great Are You Lord") {
+					@Badge("", "Opener")
 					<span class="muted">flows_well, same_theme</span>
-				</li>
-				<li class="candidate-row">
-					<span>Build My Life</span>
-					<span class="conflict-badge">⚠ avoid pairing with Amazing Grace</span>
-				</li>
+				}
+				@ListItem("candidate-row", nil, "Build My Life") {
+					@ConflictBadge("avoid pairing with Amazing Grace")
+				}
 			</ul>
 		</section>
 
 		<section class="sg-section">
 			<h2>Cards</h2>
-			<div class="position-group">
-				<h3>Worship Team / Vocals</h3>
+			@Card("Worship Team / Vocals") {
 				<p class="muted">1 of 2 filled - the roster builder's per-position card.</p>
-			</div>
-			<div class="publish-panel">
-				<div class="publish-actions">
-					<button type="button" class="primary">Publish to Planning Center</button>
-					<button type="button" class="danger">Discard changes</button>
-				</div>
-				<p class="muted" style="margin-top: 0.5rem;">The set/roster builders' publish panel (now shown in the Build page's sidebar, not inline).</p>
-			</div>
+			}
 		</section>
 	}
 }

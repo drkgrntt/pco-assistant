@@ -1,0 +1,39 @@
+/* Backs internal/views/scheduling/person_picker.templ's PersonPickerField
+   - the search-as-you-type dropdown used on song/person preferences,
+   person relationships, and the roster builder's quick-add forms. */
+
+/* A floating result list anchored to its search box. */
+.search-wrap {
+  position: relative;
+}
+
+.search-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  max-height: 12rem;
+  overflow-y: auto;
+  box-shadow: var(--shadow-md);
+}
+
+.search-results:empty {
+  border: none;
+}
+
+.search-result {
+  padding: var(--space-2);
+  cursor: pointer;
+}
+
+.search-result:hover {
+  background: var(--accent-subtle);
+}
+
+.search-result-empty {
+  padding: var(--space-2);
+}

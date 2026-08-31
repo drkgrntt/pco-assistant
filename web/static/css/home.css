@@ -1,0 +1,31 @@
+/* The signed-in home page's (home.templ) workflow shortcut row - single
+   page, not a reusable component. */
+.quick-links {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-block: var(--space-4);
+}
+
+/* :not(.button) so this doesn't fight with .button's own padding - it
+   collapsed the workflow buttons' horizontal padding to zero before this
+   exclusion existed (equal specificity, but this rule came later). */
+.quick-links a:not(.button) {
+  padding: 0.4rem 0;
+}
+
+/* The homepage's workflow buttons get a little more room than a standard
+   .button/.primary - they're the page's whole reason for being, not one
+   action among several. */
+.quick-links .button {
+  padding: var(--space-3) var(--space-6);
+  font-size: var(--text-lg);
+}
+
+@media (min-width: 640px) {
+  .quick-links {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: var(--space-3) var(--space-4);
+  }
+}

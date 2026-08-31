@@ -1,0 +1,17 @@
+/* Backs internal/views/card.templ's Card, and (combined with .collapsible)
+   scheduling/collapsible.templ's collapsibleCard. */
+
+/* Each position on the roster builder gets its own card - previously an
+   unstyled div, so positions ran together with nothing but an <h3> to tell
+   them apart. */
+.position-group {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-5);
+  margin-block: var(--space-4);
+}
+
+.position-group h3 {
+  margin-top: 0;
+}

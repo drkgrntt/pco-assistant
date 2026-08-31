@@ -10,17 +10,30 @@ import (
 )
 
 // assignedNamesSummary joins every assigned person's name for display right
-// in a position's own collapsible header - see the h3 below. Fully-staffed
-// positions collapse by default (low-signal - see the header's own doc
-// comment), which used to hide who was actually on it until you opened the
-// accordion; this puts that same "who's on it" answer somewhere visible
-// whether the position is open or closed.
+// in a position's own collapsible header - see positionHeading below.
+// Fully-staffed positions collapse by default (low-signal - see
+// collapsibleCard's own doc comment), which used to hide who was actually
+// on it until you opened the accordion; this puts that same "who's on it"
+// answer somewhere visible whether the position is open or closed.
 func assignedNamesSummary(assigned []AssignmentView) string {
 	names := make([]string, 0, len(assigned))
 	for _, a := range assigned {
 		names = append(names, a.Name)
 	}
 	return strings.Join(names, ", ")
+}
+
+// positionHeading is one position group's collapsibleCard heading - a
+// multi-span title (team/position name, muted fill-count, muted "who's on
+// it" summary) that collapsibleSection's plain string label can't express.
+templ positionHeading(pos PositionGroupView) {
+	<span>
+		{ pos.TeamName } / { pos.TeamPositionName }
+		<span class="muted">({ strconv.Itoa(len(pos.Assigned)) } of { strconv.Itoa(pos.Quantity) } filled)</span>
+		if len(pos.Assigned) > 0 {
+			<span class="muted">- { assignedNamesSummary(pos.Assigned) }</span>
+		}
+	</span>
 }
 
 // RosterBuilderBody is the htmx swap target (id="roster-builder-body") for
@@ -49,11 +62,7 @@ templ RosterBuilderBodyContent(data RosterBuilderData) {
 			<div class="warning">{ msg }</div>
 		}
 		if data.ImportableAssignmentCount > 0 {
-			<div class="import-banner">
-				<p>
-					{ fmt.Sprintf("Looks like this service is already planned in Planning Center - it has %d position(s) filled.", data.ImportableAssignmentCount) }
-					Want to import them here so you can reassign or remove people?
-				</p>
+			@views.ImportBanner(fmt.Sprintf("Looks like this service is already planned in Planning Center - it has %d position(s) filled. Want to import them here so you can reassign or remove people?", data.ImportableAssignmentCount), false) {
 				<form
 					hx-post={ fmt.Sprintf("/scheduling/rosters/%s/%s/revert", data.ServiceTypeID, data.PlanID) }
 					hx-target="#roster-builder-body"
@@ -61,7 +70,7 @@ templ RosterBuilderBodyContent(data RosterBuilderData) {
 				>
 					<button type="submit" class="primary">Import from Planning Center</button>
 				</form>
-			</div>
+			}
 		}
 		<!--
 			A one-shot nudge, not a permanent fixture - only ever appears
@@ -76,14 +85,7 @@ templ RosterBuilderBodyContent(data RosterBuilderData) {
 			after the fact.
 		-->
 		if data.PersonPairPrompt != nil {
-			<div class="import-banner">
-				<p>
-					{ fmt.Sprintf("Added %q to the team, right after %q - ", data.PersonPairPrompt.NewPersonName, data.PersonPairPrompt.PreviousPersonName) }
-					want to remember how these two work together?
-					<button type="button" class="icon-btn" aria-label="Dismiss" title="Dismiss" onclick="this.closest('.import-banner').remove()">
-						@views.IconX()
-					</button>
-				</p>
+			@views.ImportBanner(fmt.Sprintf("Added %q to the team, right after %q - want to remember how these two work together?", data.PersonPairPrompt.NewPersonName, data.PersonPairPrompt.PreviousPersonName), true) {
 				<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/person-relationships", data.ServiceTypeID, data.PlanID) } hx-target="#roster-builder-body" hx-swap="outerHTML">
 					<input type="hidden" name="person_id_a" value={ data.PersonPairPrompt.PreviousPersonID }/>
 					<input type="hidden" name="person_id_b" value={ data.PersonPairPrompt.NewPersonID }/>
@@ -97,7 +99,7 @@ templ RosterBuilderBodyContent(data RosterBuilderData) {
 					</label>
 					<button type="submit" class="primary">Remember this</button>
 				</form>
-			</div>
+			}
 		}
 		<!--
 			Ad hoc creation of the setup-level entity this page's "Recommended
@@ -134,51 +136,25 @@ templ RosterBuilderBodyContent(data RosterBuilderData) {
 				Fully-staffed positions are the low-signal case - collapsed by
 				default so an almost-done roster doesn't look as busy as a
 				mostly-empty one; still-open positions (the ones actually
-				needing a decision) stay expanded. The <h3>-wraps-<button>
-				structure is the standard accessible disclosure pattern -
-				see toggleCollapse in scheduling.js - built by hand here rather
-				than through collapsibleSection since the heading's own text is
-				per-position and its default open/closed state depends on
-				pos.Assigned/pos.Quantity.
+				needing a decision) stay expanded (see collapsibleCard).
 			-->
-			<div
-				if len(pos.Assigned) < pos.Quantity {
-					class="position-group collapsible open"
-				} else {
-					class="position-group collapsible"
-				}
-				id={ fmt.Sprintf("position-group-%d", i) }
-			>
-				<h3>
-					<button type="button" class="collapsible-toggle" onclick="toggleCollapse(this)" aria-expanded={ fmt.Sprintf("%t", len(pos.Assigned) < pos.Quantity) }>
-						<span>
-							{ pos.TeamName } / { pos.TeamPositionName }
-							<span class="muted">({ strconv.Itoa(len(pos.Assigned)) } of { strconv.Itoa(pos.Quantity) } filled)</span>
-							if len(pos.Assigned) > 0 {
-								<span class="muted">- { assignedNamesSummary(pos.Assigned) }</span>
-							}
-						</span>
-						@views.IconChevronDown()
-					</button>
-				</h3>
-				<div class="collapsible-body">
-					if len(pos.Assigned) > 0 {
+			@collapsibleCard(fmt.Sprintf("position-group-%d", i), len(pos.Assigned) < pos.Quantity, positionHeading(pos)) {
+				if len(pos.Assigned) > 0 {
 						<ul class="assignment-list">
 							for _, a := range pos.Assigned {
-								<li data-row-id={ fmt.Sprintf("%d", a.ID) } onclick="selectPersonRow(this, event)">
-									<span>{ a.Name }</span>
-									<span class="badge">{ a.Status }</span>
+								@views.ListItem("", templ.Attributes{"data-row-id": fmt.Sprintf("%d", a.ID), "onclick": "selectPersonRow(this, event)"}, a.Name) {
+									@views.Badge("", a.Status)
 									if a.Published {
-										<span class="badge published">Published</span>
+										@views.Badge("published", "Published")
 									}
 									if a.FrequencyWarning != "" {
-										<span class="conflict-badge">⚠ { a.FrequencyWarning }</span>
+										@views.ConflictBadge(a.FrequencyWarning)
 									}
 									if a.BlockoutWarning != "" {
-										<span class="conflict-badge">⚠ { a.BlockoutWarning }</span>
+										@views.ConflictBadge(a.BlockoutWarning)
 									}
 									if a.CrossTeamWarning != "" {
-										<span class="conflict-badge">⚠ { a.CrossTeamWarning }</span>
+										@views.ConflictBadge(a.CrossTeamWarning)
 									}
 									<button
 										type="button"
@@ -192,24 +168,23 @@ templ RosterBuilderBodyContent(data RosterBuilderData) {
 									>
 										@views.IconRemove()
 									</button>
-								</li>
+								}
 							}
 						</ul>
 					}
 					if len(pos.Candidates) > 0 {
 						<ul class="candidate-list">
 							for _, cand := range pos.Candidates {
-								<li class="candidate-row">
-									<span>{ cand.Name }</span>
+								@views.ListItem("candidate-row", nil, cand.Name) {
 									<span class="muted">{ cand.SchedulePreference }</span>
 									if cand.FrequencyWarning != "" {
-										<span class="conflict-badge">⚠ { cand.FrequencyWarning }</span>
+										@views.ConflictBadge(cand.FrequencyWarning)
 									}
 									if cand.BlockoutWarning != "" {
-										<span class="conflict-badge">⚠ { cand.BlockoutWarning }</span>
+										@views.ConflictBadge(cand.BlockoutWarning)
 									}
 									if cand.CrossTeamWarning != "" {
-										<span class="conflict-badge">⚠ { cand.CrossTeamWarning }</span>
+										@views.ConflictBadge(cand.CrossTeamWarning)
 									}
 									<form hx-post={ fmt.Sprintf("/scheduling/rosters/%s/%s/assignments", data.ServiceTypeID, data.PlanID) } hx-target="#roster-builder-body" hx-swap="outerHTML">
 										<input type="hidden" name="person_id" value={ cand.PersonID }/>
@@ -219,7 +194,7 @@ templ RosterBuilderBodyContent(data RosterBuilderData) {
 											@views.IconAdd()
 										</button>
 									</form>
-								</li>
+								}
 							}
 						</ul>
 					} else if len(pos.Assigned) == 0 {
@@ -255,8 +230,7 @@ templ RosterBuilderBodyContent(data RosterBuilderData) {
 							</form>
 						}
 					}
-				</div>
-			</div>
+			}
 		}
 		<!--
 			See SetBuilderBodyContent's matching comment - the publish/discard
@@ -269,8 +243,7 @@ templ RosterBuilderBodyContent(data RosterBuilderData) {
 				<p class="muted">Based on works-well-with and mentorship relationships with people already on this roster.</p>
 				<ul class="suggestion-list">
 					for _, sug := range data.Suggestions {
-						<li>
-							<span>{ sug.Name }</span>
+						@views.ListItem("", nil, sug.Name) {
 							<span class="muted">{ sug.TeamPositionName } &middot; { sug.RelationshipLabel }</span>
 							<form hx-post={ fmt.Sprintf("/scheduling/rosters/%s/%s/assignments", data.ServiceTypeID, data.PlanID) } hx-target="#roster-builder-body" hx-swap="outerHTML">
 								<input type="hidden" name="person_id" value={ sug.PersonID }/>
@@ -280,7 +253,7 @@ templ RosterBuilderBodyContent(data RosterBuilderData) {
 									@views.IconAdd()
 								</button>
 							</form>
-						</li>
+						}
 					}
 				</ul>
 			}

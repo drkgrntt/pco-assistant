@@ -144,9 +144,15 @@ Mobile-first, installable as a PWA, with light/dark theming.
   its own separate repo/module, pulled in as a normal tagged dependency
 - A small in-house CSS design system - `web/static/css/tokens.css` (colors,
   spacing, type scale, radius, shadow, motion), `base.css` (element
-  defaults), `components.css` (buttons, badges, alerts, forms, tables,
-  cards, list rows), and `app.css` for everything page-specific. See it
-  rendered live at `/style-guide` (only responds when `APP_ENV=local`).
+  defaults), `components/` (one file per reusable component/utility group -
+  buttons, badges, alerts, forms, tables, cards, list rows, disclosure
+  menus, tabs, ...), and a handful of page-specific files (`header-nav.css`,
+  `build-page.css`, ...) for everything that's only ever used in one place.
+  Structured patterns (cards, dismissible banners, sortable-table chrome,
+  list rows, disclosure menus, tabs) are backed by real templ components so
+  every page gets the correct markup/ARIA/JS wiring automatically, not just
+  the right class name. See it rendered live at `/style-guide` (only
+  responds when `APP_ENV=local`).
 
 ## Setup
 

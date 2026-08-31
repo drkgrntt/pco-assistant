@@ -1,0 +1,17 @@
+package views
+
+// Card renders the .position-group bordered-card pattern - originally the
+// roster builder's per-position card, since reused verbatim (bordered
+// div + h3 title) wherever a page needs "one bordered card per item"
+// (billing plan boxes, song-tag-suggestion groups, this style guide's own
+// demo). Factored out so that reuse goes through one component instead of
+// each caller hand-copying the div/h3 skeleton. Positions that also need
+// the collapsible open/close behavior use collapsibleCard
+// (internal/views/scheduling/collapsible.templ) instead - a different,
+// richer shape this doesn't cover.
+templ Card(title string) {
+	<div class="position-group">
+		<h3>{ title }</h3>
+		{ children... }
+	</div>
+}

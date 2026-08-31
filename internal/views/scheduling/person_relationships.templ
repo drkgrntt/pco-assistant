@@ -54,9 +54,8 @@ templ PersonRelationshipsTable(relationships []scheduling.PersonRelationship, pe
 		if errMsg != "" {
 			<p class="error">{ errMsg }</p>
 		}
-		<div class="table-wrap">
-			<table class="sortable">
-				<thead>
+		@views.SortableTableWrap() {
+			<thead>
 					<tr>
 						<th>Person A</th>
 						<th>Person B</th>
@@ -123,7 +122,6 @@ templ PersonRelationshipsTable(relationships []scheduling.PersonRelationship, pe
 						</tr>
 					}
 				</tbody>
-			</table>
-		</div>
+		}
 	</div>
 }

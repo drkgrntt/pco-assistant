@@ -1,0 +1,40 @@
+package scheduling
+
+import (
+	"strconv"
+
+	"pco-assistant/internal/views"
+)
+
+// quickActionRow renders one hidden quick-action-row/quick-action-panel -
+// a per-row slide-out form (tag/relate/mark-role) opened by
+// openQuickAction (scheduling.js) from the row's own menu, and closed
+// again by the button built in here. Factored out since the set
+// builder's order-of-service table repeats this exact tr/td/panel/
+// heading/close-button skeleton once per action (3x per song row) -
+// only the heading text, data-action value, and the form itself differ.
+templ quickActionRow(rowID, action, heading string, colspan int) {
+	<tr class="quick-action-row" data-row-id={ rowID } data-action={ action } hidden>
+		<td colspan={ strconv.Itoa(colspan) }>
+			<div class="quick-action-panel">
+				<p class="quick-action-heading">
+					{ heading }
+					<button type="button" class="icon-btn" aria-label="Close" title="Close" onclick="this.closest('tr').hidden = true">
+						@views.IconX()
+					</button>
+				</p>
+				{ children... }
+			</div>
+		</td>
+	</tr>
+}
+
+// quickAddItem renders one labeled item inside the .quick-add-panel grid
+// (Quick add's Tag/Relate/Mark role forms) - just the h4+children skeleton
+// each of those three blocks repeats by hand.
+templ quickAddItem(label string) {
+	<div>
+		<h4>{ label }</h4>
+		{ children... }
+	</div>
+}

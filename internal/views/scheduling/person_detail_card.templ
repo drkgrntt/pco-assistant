@@ -13,23 +13,23 @@ import (
 // time" idiom - see personDetailCard below and selectPersonRow,
 // scheduling.js).
 templ PersonDetailCards(data RosterBuilderData, hidden bool) {
-	<div class="build-detail-group" id="build-detail-team" hidden?={ hidden }>
+	@buildDetailGroupShell("build-detail-team", hidden) {
 		for _, pos := range data.Positions {
 			for _, a := range pos.Assigned {
 				@personDetailCard(data, a)
 			}
 		}
-	</div>
+	}
 }
 
 templ personDetailCardsOOB(data RosterBuilderData) {
-	<div class="build-detail-group" id="build-detail-team" hx-swap-oob="true">
+	@buildDetailGroupShellOOB("build-detail-team") {
 		for _, pos := range data.Positions {
 			for _, a := range pos.Assigned {
 				@personDetailCard(data, a)
 			}
 		}
-	</div>
+	}
 }
 
 // personDetailCard is one assigned person's detail card - hidden until
@@ -39,27 +39,21 @@ templ personDetailCardsOOB(data RosterBuilderData) {
 // UI for it yet, only display, same as ArrangementInfo/Notes on the song
 // card's arrangement side.
 templ personDetailCard(data RosterBuilderData, a AssignmentView) {
-	<div class="build-glance-card build-detail-card" data-row-id={ fmt.Sprintf("%d", a.ID) } hidden>
-		<div class="build-detail-header">
-			<h3>{ a.Name }</h3>
-			<button type="button" class="icon-btn" aria-label="Close" title="Close" onclick="closePersonDetail()">
-				@views.IconX()
-			</button>
-		</div>
+	@buildDetailCardShell(fmt.Sprintf("%d", a.ID), a.Name, "closePersonDetail()") {
 		<p class="muted">{ a.TeamName } / { a.TeamPositionName }</p>
 		<div class="build-detail-badges">
-			<span class="badge">{ a.Status }</span>
+			@views.Badge("", a.Status)
 			if a.Published {
-				<span class="badge published">Published</span>
+				@views.Badge("published", "Published")
 			}
 			if a.FrequencyWarning != "" {
-				<span class="conflict-badge">⚠ { a.FrequencyWarning }</span>
+				@views.ConflictBadge(a.FrequencyWarning)
 			}
 			if a.BlockoutWarning != "" {
-				<span class="conflict-badge">⚠ { a.BlockoutWarning }</span>
+				@views.ConflictBadge(a.BlockoutWarning)
 			}
 			if a.CrossTeamWarning != "" {
-				<span class="conflict-badge">⚠ { a.CrossTeamWarning }</span>
+				@views.ConflictBadge(a.CrossTeamWarning)
 			}
 		</div>
 		if a.Notes != "" {
@@ -78,5 +72,5 @@ templ personDetailCard(data RosterBuilderData, a AssignmentView) {
 				Remove from position
 			</button>
 		</div>
-	</div>
+	}
 }

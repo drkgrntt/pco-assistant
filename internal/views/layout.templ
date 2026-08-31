@@ -1,5 +1,45 @@
 package views
 
+// designSystemCSSFiles is loaded after tokens.css/base.css (see Head
+// below) - components/*.css first (each one backing a specific reusable
+// templ component or CSS-only utility group, see that directory's own
+// files for which), then the page-specific files that used to all live in
+// one app.css (each backing exactly one page/feature, not shared).
+// landing.css and run-sheet.css aren't here - they're loaded only by the
+// one page each that needs them (landing.templ, run_sheet.templ), not
+// every page via Head. Adding a new CSS file for a new component/page
+// only needs an entry here, not a second edit anywhere else.
+var designSystemCSSFiles = []string{
+	// components/ - reusable, each backing a specific templ component or
+	// a pure-CSS utility group with no templ component of its own.
+	"components/forms.css",
+	"components/buttons.css",
+	"components/icons.css",
+	"components/badge.css",
+	"components/alert.css",
+	"components/import-banner.css",
+	"components/table.css",
+	"components/list-item.css",
+	"components/card.css",
+	"components/publish-panel.css",
+	"components/status-summary.css",
+	"components/collapsible.css",
+	"components/disclosure.css",
+	"components/quick-action.css",
+	"components/build-tabs.css",
+	"components/build-detail-card.css",
+	"components/search.css",
+	// Page-specific - each backing exactly one page/feature.
+	"htmx-progress.css",
+	"header-nav.css",
+	"site-banner.css",
+	"build-page.css",
+	"builder-rows.css",
+	"home.css",
+	"sign-in.css",
+	"style-guide.css",
+}
+
 // Head is the <head> every page shares - the authenticated app shell
 // (Layout, below) and the public Landing page alike - so cache-busted
 // asset links, the favicon/manifest, and font preconnects live in exactly
@@ -25,8 +65,9 @@ templ Head(title string) {
 		<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 		<link rel="stylesheet" href={ "/static/css/tokens.css?v=" + AssetVersion }/>
 		<link rel="stylesheet" href={ "/static/css/base.css?v=" + AssetVersion }/>
-		<link rel="stylesheet" href={ "/static/css/components.css?v=" + AssetVersion }/>
-		<link rel="stylesheet" href={ "/static/css/app.css?v=" + AssetVersion }/>
+		for _, f := range designSystemCSSFiles {
+			<link rel="stylesheet" href={ "/static/css/" + f + "?v=" + AssetVersion }/>
+		}
 		<script src={ "/static/js/htmx.min.js?v=" + AssetVersion }></script>
 		<script src={ "/static/js/scheduling.js?v=" + AssetVersion }></script>
 		<script src={ "/static/js/register-sw.js?v=" + AssetVersion }></script>
@@ -64,39 +105,7 @@ templ Layout(title string, personName string, organizationName string) {
 					<nav class="site-nav">
 						<a href="/">Home</a>
 						<a href="/scheduling/build">Build a Service</a>
-						<div class="nav-dropdown">
-							<button
-								type="button"
-								class="nav-dropdown-toggle"
-								onclick="toggleNavDropdown(this)"
-								aria-haspopup="true"
-								aria-expanded="false"
-							>
-								Setup
-								@IconChevronDown()
-							</button>
-							<div class="nav-dropdown-menu">
-								<a href="/scheduling/song-relationships">Song Relationships</a>
-								<a href="/scheduling/song-roles">Song Roles</a>
-								<a href="/scheduling/song-tags">Song Tags</a>
-								<!--
-									Both hidden once there's nothing pending there (see
-									middleware.PopulateNavState/nav_state.go) - an "actionable
-									inbox" item that's actually empty is clutter, not
-									configuration to revisit. Reappears on its own the moment
-									a new song creates a suggestion or needs syncing again.
-								-->
-								if navSuggestionsPending(ctx) {
-									<a href="/scheduling/song-tag-suggestions">Song Tag Suggestions</a>
-								}
-								if navSongInfoNeedsSync(ctx) {
-									<a href="/scheduling/song-info">Song Info</a>
-								}
-								<a href="/scheduling/song-preferences">Song / Person Preferences</a>
-								<a href="/scheduling/person-relationships">Person Relationships</a>
-								<a href="/scheduling/position-preferences">Position Preferences</a>
-							</div>
-						</div>
+						@Disclosure("nav-dropdown", "nav-dropdown-toggle", "toggleNavDropdown(this)", "", "", navToggleContent(), navMenuContent())
 					</nav>
 				</div>
 				<div class="site-actions">
@@ -139,4 +148,33 @@ templ Layout(title string, personName string, organizationName string) {
 			</main>
 		</body>
 	</html>
+}
+
+// navToggleContent/navMenuContent are the nav's "Setup" Disclosure's
+// toggle-button content and popup contents.
+templ navToggleContent() {
+	Setup
+	@IconChevronDown()
+}
+
+templ navMenuContent() {
+	<a href="/scheduling/song-relationships">Song Relationships</a>
+	<a href="/scheduling/song-roles">Song Roles</a>
+	<a href="/scheduling/song-tags">Song Tags</a>
+	<!--
+		Both hidden once there's nothing pending there (see
+		middleware.PopulateNavState/nav_state.go) - an "actionable
+		inbox" item that's actually empty is clutter, not
+		configuration to revisit. Reappears on its own the moment
+		a new song creates a suggestion or needs syncing again.
+	-->
+	if navSuggestionsPending(ctx) {
+		<a href="/scheduling/song-tag-suggestions">Song Tag Suggestions</a>
+	}
+	if navSongInfoNeedsSync(ctx) {
+		<a href="/scheduling/song-info">Song Info</a>
+	}
+	<a href="/scheduling/song-preferences">Song / Person Preferences</a>
+	<a href="/scheduling/person-relationships">Person Relationships</a>
+	<a href="/scheduling/position-preferences">Position Preferences</a>
 }

@@ -1,0 +1,126 @@
+/* Backs internal/views/disclosure.templ's Disclosure - two independent
+   concrete usages (the nav's "Setup" dropdown and the set builder's
+   per-row "more actions" menu), sharing the same toggle-button+popup-menu
+   shape and open/aria-expanded idiom but NOT a single CSS selector: each
+   keeps its own class family (.nav-dropdown* / .row-menu*) because they
+   differ in real ways (nav-dropdown repositions itself for narrow
+   viewports via .align-right; row-menu is always right-anchored to its
+   own table row and never needs to). Kept together in one file since one
+   templ component renders both. */
+
+/* "Setup" - the granular relationships/preferences pages - tucked into a
+   dropdown so the header nav leads with the two pages that actually matter
+   week to week (Build a Set, Build a Team), not eight same-weight links. */
+.nav-dropdown {
+  position: relative;
+}
+
+.nav-dropdown-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: none;
+  border: none;
+  min-height: 0;
+  padding: 0.3rem 0;
+  font: inherit;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.nav-dropdown-toggle:hover {
+  background: none;
+}
+
+.nav-dropdown-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 20;
+  flex-direction: column;
+  min-width: 12rem;
+  margin-top: 0.4rem;
+  padding: 0.4rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+
+.nav-dropdown.open .nav-dropdown-menu {
+  display: flex;
+}
+
+/* Flipped by scheduling.js's positionNavDropdown when the default left: 0
+   anchoring would grow the menu off the right edge of the viewport (the
+   toggle sits near the right side of the header on mobile widths). */
+.nav-dropdown.align-right .nav-dropdown-menu {
+  left: auto;
+  right: 0;
+}
+
+.nav-dropdown-menu a {
+  padding: var(--space-2) calc(var(--space-2) + 0.1rem);
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  color: var(--text);
+}
+
+.nav-dropdown-menu a:hover {
+  background: var(--accent-subtle);
+}
+
+/* The set builder's per-row "more actions" menu (see toggleRowMenu/
+   openQuickAction in scheduling.js) - the same open/closed, floating-menu
+   shape as the header's .nav-dropdown-menu above, right-anchored instead
+   of left/JS-repositioned since the actions column is already the table's
+   rightmost edge and has nowhere further right to overflow into. */
+.row-menu {
+  position: relative;
+  display: inline-flex;
+}
+
+.row-menu-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 20;
+  flex-direction: column;
+  min-width: 13rem;
+  margin-top: 0.3rem;
+  padding: 0.3rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+
+.row-menu.open .row-menu-menu {
+  display: flex;
+}
+
+.row-menu-menu button {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 0;
+  padding: var(--space-2);
+  border: none;
+  background: none;
+  border-radius: var(--radius-md);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+}
+
+.row-menu-menu button:hover {
+  background: var(--accent-subtle);
+  border-color: transparent;
+}
+
+.row-menu-menu button .icon {
+  color: var(--accent);
+  flex-shrink: 0;
+}

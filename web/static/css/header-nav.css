@@ -1,0 +1,265 @@
+/* The site header/nav shell (layout.templ) - single instance, rendered
+   once per page, not a reusable component. See components/disclosure.css
+   for the "Setup" dropdown's own styling (.nav-dropdown*), split out
+   since that's a concrete usage of the shared Disclosure component, and
+   site-banner.css for the early-preview strip beneath the header. */
+
+/* Two clusters, not four loose items: .site-primary (brand + nav) and
+   .site-actions (theme toggle + account + logout) each read as one group,
+   so what widens into "brand/nav on the left, account stuff on the right"
+   at desktop width doesn't depend on how much text happens to be in the
+   person's name or the logout button - the two clusters are what
+   space-between balances, not their contents individually. Mobile-first:
+   the two clusters stack (each wrapping internally if it needs to);
+   widened into a single row once there's room. */
+header.site {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.site-primary,
+.site-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+}
+
+header.site .site-nav {
+  flex-wrap: wrap;
+  gap: 0.4rem var(--space-4);
+}
+
+/* Mobile: everything past the brand collapses behind the hamburger toggle
+   (see toggleMobileMenu, scheduling.js) instead of wrapping .site-primary/
+   .site-actions into several busy rows - only .mobile-menu-toggle stays in
+   the visible bar. Widened back into the normal always-visible two-cluster
+   layout at the same breakpoint header.site itself switches from column to
+   row (below), where the toggle button is hidden in turn since there's
+   nothing left for it to reveal. */
+.mobile-menu-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  width: var(--control-height);
+  height: var(--control-height);
+  margin-left: auto;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.mobile-menu-toggle:hover {
+  background: var(--surface-hover);
+}
+
+/* The hamburger itself - three plain CSS bars morphing into an X on open,
+   not an icon asset - same technique (and the same compounded-rotation
+   trick: the middle bar rotates 45deg, ::before inherits that rotation
+   as-is to form one diagonal, ::after adds another 90deg on top of it to
+   form the other) as the toggle on midwestdaisy, adapted to this app's
+   tokens/colors and to a plain aria-expanded attribute selector instead
+   of the checkbox-hack that drove it there - toggleMobileMenu (scheduling.js)
+   already sets aria-expanded, so no extra state is needed to key off of. */
+.hamburger-bar {
+  position: absolute;
+  left: 8px;
+  width: 20px;
+  height: 2px;
+  top: 17px;
+  border-radius: var(--radius-full);
+  background: currentColor;
+  transition: transform var(--duration-base) var(--ease-standard),
+    background-color var(--duration-base) var(--ease-standard);
+}
+
+/* left:0/width:100% of .hamburger-bar's own box, not another left/right
+   inset off the button - .hamburger-bar is itself position:absolute, so
+   it's the containing block its ::before/::after size against, and a
+   second inset here would both double-offset them rightward and shrink
+   each to a sliver (their containing block is the already-20px bar, not
+   the 36px button). */
+.hamburger-bar::before,
+.hamburger-bar::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  border-radius: var(--radius-full);
+  background: currentColor;
+  transition: transform var(--duration-base) var(--ease-standard),
+    top var(--duration-base) var(--ease-standard);
+}
+
+.hamburger-bar::before {
+  top: -6px;
+}
+
+.hamburger-bar::after {
+  top: 6px;
+}
+
+.mobile-menu-toggle[aria-expanded="true"] .hamburger-bar {
+  background: transparent;
+  transform: rotate(45deg);
+}
+
+.mobile-menu-toggle[aria-expanded="true"] .hamburger-bar::before {
+  top: 0;
+  transform: rotate(0deg);
+}
+
+.mobile-menu-toggle[aria-expanded="true"] .hamburger-bar::after {
+  top: 0;
+  transform: rotate(90deg);
+}
+
+.site-nav,
+.site-actions {
+  display: none;
+  width: 100%;
+}
+
+header.site.menu-open .site-nav,
+header.site.menu-open .site-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+@media (min-width: 640px) {
+  .mobile-menu-toggle {
+    display: none;
+  }
+
+  /* The header.site.menu-open variant is repeated here (not just relying
+     on source order) so this reset still wins on its own specificity even
+     if a viewport is resized past this breakpoint without a page reload
+     while .menu-open is still set from an earlier mobile toggle - without
+     it, that rule's higher specificity would otherwise keep the column
+     layout stuck until something removed the class. */
+  .site-nav,
+  .site-actions,
+  header.site.menu-open .site-nav,
+  header.site.menu-open .site-actions {
+    display: flex;
+    width: auto;
+    flex-direction: row;
+    align-items: center;
+    padding-top: 0;
+    border-top: none;
+  }
+}
+
+/* Also covers .site-actions' "Billing" link (layout.templ) - same plain-
+   link treatment as the primary nav, not styled as its own thing just
+   because it sits in a different cluster. */
+header.site nav a,
+.site-actions a {
+  text-decoration: none;
+  color: var(--accent);
+  padding: 0.3rem 0;
+}
+
+header.site strong {
+  color: var(--accent);
+  font-size: var(--text-xl);
+}
+
+/* The brand mark doubles as a home link now - .site-brand only strips the
+   underline a bare <a> would otherwise get (the "Home" nav link already
+   does the same job in the text, so this doesn't need its own hover
+   treatment beyond that). */
+.site-brand {
+  text-decoration: none;
+}
+
+header.site form {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* The signed-in person's name, with their PCO organization (church) name
+   above it when known (see Session.OrganizationName - it's not always
+   available) - stacked rather than run together inline so it reads as
+   "which church, which person" at a glance instead of one long string. */
+.account {
+  display: flex;
+  flex-direction: column;
+  line-height: var(--leading-tight);
+}
+
+.account-org {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.account-person {
+  font-size: var(--text-md);
+}
+
+/* Two-state (not three-way) toggle: it starts wherever the system
+   preference resolves to and flips to an explicit choice from there - see
+   toggleTheme in scheduling.js. Which icon shows is driven entirely by
+   these selectors (mirroring the ones the palette itself uses above), so
+   it can't drift out of sync with the actual applied theme. */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-1);
+  min-width: var(--control-height);
+}
+
+.theme-toggle .icon:nth-child(2) {
+  display: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .theme-toggle .icon:first-child {
+    display: none;
+  }
+  :root:not([data-theme="light"]) .theme-toggle .icon:nth-child(2) {
+    display: block;
+  }
+}
+
+:root[data-theme="dark"] .theme-toggle .icon:first-child {
+  display: none;
+}
+
+:root[data-theme="dark"] .theme-toggle .icon:nth-child(2) {
+  display: block;
+}
+
+:root[data-theme="light"] .theme-toggle .icon:first-child {
+  display: block;
+}
+
+:root[data-theme="light"] .theme-toggle .icon:nth-child(2) {
+  display: none;
+}
+
+@media (min-width: 640px) {
+  header.site {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-3) var(--space-6);
+  }
+
+  .site-actions {
+    justify-content: flex-end;
+  }
+}

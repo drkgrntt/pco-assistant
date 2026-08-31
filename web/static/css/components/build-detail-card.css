@@ -1,0 +1,95 @@
+/* Backs internal/views/scheduling/build_detail_card.templ's
+   buildDetailCardShell. Its base surface/border/padding and h3 label
+   styling come for free from .build-glance-card (build-page.css) - every
+   real usage combines both classes (class="build-glance-card
+   build-detail-card") rather than this file redefining them. */
+
+/* The song/person detail cards (see SongDetailCards/PersonDetailCards) -
+   what clicking a row in the order of service or an assignment list opens,
+   right below that tab's own publish card (see build.templ). Same accent
+   top edge as .build-publish-card (publish-panel.css) - this is also
+   somewhere you take action, not a read-only glance - but its own class
+   since the two aren't otherwise identical (no .publish-actions
+   column-stacking here). */
+.build-detail-card {
+  border-top: 2px solid var(--accent);
+}
+
+.build-detail-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.build-detail-header h3 {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: var(--font-semibold);
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--text);
+}
+
+.build-detail-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-block: var(--space-2);
+}
+
+.build-detail-notes-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-block: var(--space-2);
+}
+
+.build-detail-note-form {
+  margin: 0;
+}
+
+.build-detail-note-form label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+}
+
+.build-detail-note-form textarea,
+.build-detail-note-form input[type="text"] {
+  width: 100%;
+}
+
+.build-detail-note-form textarea {
+  resize: vertical;
+}
+
+.build-detail-note-form button {
+  margin-top: var(--space-2);
+}
+
+.build-detail-note-form p.muted {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-xs);
+}
+
+.build-detail-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.build-detail-actions button,
+.build-detail-actions .replace-form {
+  width: 100%;
+}
+
+.build-detail-actions button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}

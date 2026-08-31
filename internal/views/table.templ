@@ -1,0 +1,26 @@
+package views
+
+// TableWrap and SortableTableWrap emit the .table-wrap > table chrome that
+// every data table on this site needs - a plain <table> for a fixed-order
+// table, .sortable for one whose column headers are clickable (see
+// components/table.css's table.sortable rules, which key off that exact class
+// combination). Two separate functions rather than one with a bool so the
+// non-sortable case still renders a bare <table> with no class attribute
+// at all, byte-identical to what every caller wrote by hand before.
+// <thead>/<tbody> content is left to the caller - column shapes differ too
+// much page to page to share past this point.
+templ TableWrap() {
+	<div class="table-wrap">
+		<table>
+			{ children... }
+		</table>
+	</div>
+}
+
+templ SortableTableWrap() {
+	<div class="table-wrap">
+		<table class="sortable">
+			{ children... }
+		</table>
+	</div>
+}

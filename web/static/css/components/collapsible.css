@@ -1,0 +1,60 @@
+/* Backs internal/views/scheduling/collapsible.templ (collapsibleSection,
+   collapsibleCard) and, for .quick-add-panel/.quick-add-panel h4,
+   quick_action.templ's quickAddItem. */
+
+/* Generic show/hide wrapper (see toggleCollapse in scheduling.js) for
+   secondary build-page content that doesn't need to be visible by
+   default - Recommended next, the full song candidate list, quick-add
+   panels, and a fully-staffed position-group card (collapsibleCard). */
+.collapsible-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 0;
+  background: none;
+  border: none;
+  padding: var(--space-2) 0;
+  font: inherit;
+  font-weight: var(--font-medium);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.collapsible-toggle:hover {
+  background: none;
+  color: var(--accent);
+}
+
+.collapsible-toggle .icon {
+  transition: transform var(--duration-base) var(--ease-standard);
+}
+
+.collapsible.open .collapsible-toggle .icon {
+  transform: rotate(180deg);
+}
+
+.collapsible-body {
+  display: none;
+}
+
+.collapsible.open .collapsible-body {
+  display: block;
+}
+
+/* The "Quick add" panels (song tags/relationships/roles, person
+   relationships, position eligibility - see set_builder.templ/
+   roster_builder.templ) - a handful of stacked mini-forms, each an
+   abbreviated clone of the matching setup page's create form. */
+.quick-add-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.quick-add-panel h4 {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-md);
+  color: var(--muted);
+}

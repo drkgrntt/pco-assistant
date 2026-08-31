@@ -16,17 +16,37 @@ import (
 // person toggles a section, that swap-to-swap memory takes over exactly
 // the same way regardless of which way it started. Shared between the
 // set and roster builders for "Recommended next", the set builder's
-// candidate list, and both builders' "Quick add" panels - anything with
-// its own <h3>-wraps-<button> heading (like a still-filling position
-// group, which needs per-position default open/closed state) builds the
-// same collapsible/collapsible-toggle/collapsible-body structure by hand
-// instead of through this component.
+// candidate list, and both builders' "Quick add" panels - a plain string
+// label is enough for all of these. collapsibleCard below covers the
+// richer case (a multi-span heading, combined with .position-group) this
+// signature can't express.
 templ collapsibleSection(id, label string, open bool) {
 	<div class={ "collapsible", templ.KV("open", open) } id={ id }>
 		<button type="button" class="collapsible-toggle" onclick="toggleCollapse(this)" aria-expanded={ fmt.Sprintf("%t", open) }>
 			<span>{ label }</span>
 			@views.IconChevronDown()
 		</button>
+		<div class="collapsible-body">
+			{ children... }
+		</div>
+	</div>
+}
+
+// collapsibleCard is collapsibleSection's sibling for a still-filling
+// position group (roster_builder.templ) - it combines .position-group
+// with .collapsible on the same div, wraps the toggle in an <h3> (real
+// per-position document-outline semantics, not just a heading-shaped
+// span), and takes the heading as a templ.Component rather than a plain
+// string, since a position's heading is itself multiple spans (name,
+// muted fill-count, muted assigned-names).
+templ collapsibleCard(id string, open bool, heading templ.Component) {
+	<div class={ "position-group collapsible", templ.KV("open", open) } id={ id }>
+		<h3>
+			<button type="button" class="collapsible-toggle" onclick="toggleCollapse(this)" aria-expanded={ fmt.Sprintf("%t", open) }>
+				@heading
+				@views.IconChevronDown()
+			</button>
+		</h3>
 		<div class="collapsible-body">
 			{ children... }
 		</div>

@@ -77,9 +77,8 @@ templ RelationshipsTable(relationships []scheduling.SongRelationship, songTitles
 		if errMsg != "" {
 			<p class="error">{ errMsg }</p>
 		}
-		<div class="table-wrap">
-			<table class="sortable">
-				<thead>
+		@views.SortableTableWrap() {
+			<thead>
 					<tr>
 						<th>Song A</th>
 						<th>Song B</th>
@@ -144,7 +143,6 @@ templ RelationshipsTable(relationships []scheduling.SongRelationship, songTitles
 						</tr>
 					}
 				</tbody>
-			</table>
-		</div>
+		}
 	</div>
 }

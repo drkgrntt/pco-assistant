@@ -65,9 +65,8 @@ templ PreferencesTable(preferences []scheduling.SongPersonPreference, songTitles
 		if errMsg != "" {
 			<p class="error">{ errMsg }</p>
 		}
-		<div class="table-wrap">
-			<table class="sortable">
-				<thead>
+		@views.SortableTableWrap() {
+			<thead>
 					<tr>
 						<th>Song</th>
 						<th>Person</th>
@@ -134,7 +133,6 @@ templ PreferencesTable(preferences []scheduling.SongPersonPreference, songTitles
 						</tr>
 					}
 				</tbody>
-			</table>
-		</div>
+		}
 	</div>
 }

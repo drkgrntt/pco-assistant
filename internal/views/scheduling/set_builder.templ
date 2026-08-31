@@ -65,17 +65,41 @@ templ songBadgesOOB(song SetSongView) {
 
 templ songBadgeSpans(song SetSongView) {
 	for _, role := range song.Roles {
-		<span class="badge">{ role.Label }</span>
+		@views.Badge("", role.Label)
 	}
 	if song.Published {
-		<span class="badge published">Published</span>
+		@views.Badge("published", "Published")
 	}
 	if song.Moved {
-		<span class="badge status-pending" title="Moved since it was last published">Moved</span>
+		@views.BadgeTitled("status-pending", "Moved", "Moved since it was last published")
 	}
 	if song.InfoPending {
-		<span class="badge status-pending" title="This week's note or key changed since it was last published - Refresh song info (or Publish) to send it to Planning Center">Note/key pending</span>
+		@views.BadgeTitled("status-pending", "Note/key pending", "This week's note or key changed since it was last published - Refresh song info (or Publish) to send it to Planning Center")
 	}
+}
+
+// rowMenuToggle/rowMenuItems are the row-menu Disclosure's toggle-button
+// content and popup contents - the same 3 fixed actions (tag/relate/mark
+// role) for every song row, jumping to (and revealing) that row's own
+// hidden quick-action-row via openQuickAction (scheduling.js), so neither
+// needs any per-row data passed in.
+templ rowMenuToggle() {
+	@views.IconMore()
+}
+
+templ rowMenuItems() {
+	<button type="button" onclick="openQuickAction(this, 'tag')">
+		@views.IconTag()
+		Tag this song
+	</button>
+	<button type="button" onclick="openQuickAction(this, 'relate')">
+		@views.IconRelate()
+		Relate to another song
+	</button>
+	<button type="button" onclick="openQuickAction(this, 'role')">
+		@views.IconRole()
+		Mark a role
+	</button>
 }
 
 // SetBuilderBodyContent is the actual content - split out from
@@ -102,11 +126,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 			<div class="warning">{ msg }</div>
 		}
 		if data.ImportableSongCount > 0 {
-			<div class="import-banner">
-				<p>
-					{ fmt.Sprintf("Looks like this service is already planned in Planning Center - it has %d song(s).", data.ImportableSongCount) }
-					Want to import them here so you can reorder, replace, or tag them?
-				</p>
+			@views.ImportBanner(fmt.Sprintf("Looks like this service is already planned in Planning Center - it has %d song(s). Want to import them here so you can reorder, replace, or tag them?", data.ImportableSongCount), false) {
 				<form
 					hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/revert", data.ServiceTypeID, data.PlanID) }
 					hx-target="#set-builder-body"
@@ -114,7 +134,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 				>
 					<button type="submit" class="primary">Import from Planning Center</button>
 				</form>
-			</div>
+			}
 		}
 		<!--
 			A one-shot nudge, not a permanent fixture - only ever appears
@@ -128,14 +148,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 			after the fact.
 		-->
 		if data.SongPairPrompt != nil {
-			<div class="import-banner">
-				<p>
-					{ fmt.Sprintf("Added %q right after %q - ", data.SongPairPrompt.NewSongTitle, data.SongPairPrompt.PreviousSongTitle) }
-					want to remember how these two relate?
-					<button type="button" class="icon-btn" aria-label="Dismiss" title="Dismiss" onclick="this.closest('.import-banner').remove()">
-						@views.IconX()
-					</button>
-				</p>
+			@views.ImportBanner(fmt.Sprintf("Added %q right after %q - want to remember how these two relate?", data.SongPairPrompt.NewSongTitle, data.SongPairPrompt.PreviousSongTitle), true) {
 				<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/song-relationships", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
 					<input type="hidden" name="song_id_a" value={ data.SongPairPrompt.PreviousSongID }/>
 					<input type="hidden" name="song_id_b" value={ data.SongPairPrompt.NewSongID }/>
@@ -149,7 +162,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 					</label>
 					<button type="submit" class="primary">Remember this</button>
 				</form>
-			</div>
+			}
 		}
 		<h2>Order of service</h2>
 		<p class="muted">
@@ -162,9 +175,8 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 			handle to move it anywhere in the order, including onto or past a
 			section header.
 		</p>
-		<div class="table-wrap">
-			<table>
-				<thead>
+		@views.TableWrap() {
+			<thead>
 					<tr>
 						<th></th>
 						<th>Item</th>
@@ -274,124 +286,68 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 											the only way to tag/relate/role a song that isn't in
 											this order of service yet.
 										-->
-										<div class="row-menu">
-											<button
-												type="button"
-												class="icon-btn row-menu-toggle"
-												aria-haspopup="true"
-												aria-expanded="false"
-												aria-label="More actions for this song"
-												title="More actions"
-												onclick="toggleRowMenu(this)"
-											>
-												@views.IconMore()
-											</button>
-											<div class="row-menu-menu">
-												<button type="button" onclick="openQuickAction(this, 'tag')">
-													@views.IconTag()
-													Tag this song
-												</button>
-												<button type="button" onclick="openQuickAction(this, 'relate')">
-													@views.IconRelate()
-													Relate to another song
-												</button>
-												<button type="button" onclick="openQuickAction(this, 'role')">
-													@views.IconRole()
-													Mark a role
-												</button>
-											</div>
-										</div>
+										@views.Disclosure("row-menu", "icon-btn row-menu-toggle", "toggleRowMenu(this)", "More actions for this song", "More actions", rowMenuToggle(), rowMenuItems())
 									</div>
 								</td>
 							</tr>
-							<tr class="quick-action-row" data-row-id={ fmt.Sprintf("%d", row.Song.ID) } data-action="tag" hidden>
-								<td colspan="4">
-									<div class="quick-action-panel">
-										<p class="quick-action-heading">
-											{ fmt.Sprintf("Tag %q", row.Song.Title) }
-											<button type="button" class="icon-btn" aria-label="Close" title="Close" onclick="this.closest('tr').hidden = true">
-												@views.IconX()
-											</button>
-										</p>
-										<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/song-tags", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
-											<input type="hidden" name="song_id" value={ row.Song.SongID }/>
-											<label>
-												Category
-												<select name="category">
-													for _, cat := range data.TagCategories {
-														<option value={ cat.Code }>{ cat.Label }</option>
-													}
-												</select>
-											</label>
-											<label>
-												Value
-												<input type="text" name="value" placeholder="e.g. Grace, Romans 8:1, New beginnings" required/>
-											</label>
-											<button type="submit" class="primary">Add tag</button>
-										</form>
-									</div>
-								</td>
-							</tr>
-							<tr class="quick-action-row" data-row-id={ fmt.Sprintf("%d", row.Song.ID) } data-action="relate" hidden>
-								<td colspan="4">
-									<div class="quick-action-panel">
-										<p class="quick-action-heading">
-											{ fmt.Sprintf("Relate %q to...", row.Song.Title) }
-											<button type="button" class="icon-btn" aria-label="Close" title="Close" onclick="this.closest('tr').hidden = true">
-												@views.IconX()
-											</button>
-										</p>
-										<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/song-relationships", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
-											<input type="hidden" name="song_id_a" value={ row.Song.SongID }/>
-											<label>
-												Song
-												<!-- Defaults to the next song in the order (see nextSongID). -->
-												<select name="song_id_b" required>
-													<option value="" disabled selected?={ nextSongID(data.ServiceOrder, i) == "" }>Choose a song</option>
-													for _, song := range data.AllSongs {
-														if song.ID != row.Song.SongID {
-															<option value={ song.ID } selected?={ song.ID == nextSongID(data.ServiceOrder, i) }>{ song.Attributes.Title }</option>
-														}
-													}
-												</select>
-											</label>
-											<label>
-												Relationship
-												<select name="relationship_type">
-													for _, t := range data.RelationshipTypes {
-														<option value={ t.Code }>{ t.Label }</option>
-													}
-												</select>
-											</label>
-											<button type="submit" class="primary">Relate songs</button>
-										</form>
-									</div>
-								</td>
-							</tr>
-							<tr class="quick-action-row" data-row-id={ fmt.Sprintf("%d", row.Song.ID) } data-action="role" hidden>
-								<td colspan="4">
-									<div class="quick-action-panel">
-										<p class="quick-action-heading">
-											{ fmt.Sprintf("Mark a role for %q", row.Song.Title) }
-											<button type="button" class="icon-btn" aria-label="Close" title="Close" onclick="this.closest('tr').hidden = true">
-												@views.IconX()
-											</button>
-										</p>
-										<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/song-roles", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
-											<input type="hidden" name="song_id" value={ row.Song.SongID }/>
-											<label>
-												Role
-												<select name="role">
-													for _, t := range data.RoleTypes {
-														<option value={ t.Code }>{ t.Label }</option>
-													}
-												</select>
-											</label>
-											<button type="submit" class="primary">Mark role</button>
-										</form>
-									</div>
-								</td>
-							</tr>
+							@quickActionRow(fmt.Sprintf("%d", row.Song.ID), "tag", fmt.Sprintf("Tag %q", row.Song.Title), 4) {
+								<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/song-tags", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
+									<input type="hidden" name="song_id" value={ row.Song.SongID }/>
+									<label>
+										Category
+										<select name="category">
+											for _, cat := range data.TagCategories {
+												<option value={ cat.Code }>{ cat.Label }</option>
+											}
+										</select>
+									</label>
+									<label>
+										Value
+										<input type="text" name="value" placeholder="e.g. Grace, Romans 8:1, New beginnings" required/>
+									</label>
+									<button type="submit" class="primary">Add tag</button>
+								</form>
+							}
+							@quickActionRow(fmt.Sprintf("%d", row.Song.ID), "relate", fmt.Sprintf("Relate %q to...", row.Song.Title), 4) {
+								<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/song-relationships", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
+									<input type="hidden" name="song_id_a" value={ row.Song.SongID }/>
+									<label>
+										Song
+										<!-- Defaults to the next song in the order (see nextSongID). -->
+										<select name="song_id_b" required>
+											<option value="" disabled selected?={ nextSongID(data.ServiceOrder, i) == "" }>Choose a song</option>
+											for _, song := range data.AllSongs {
+												if song.ID != row.Song.SongID {
+													<option value={ song.ID } selected?={ song.ID == nextSongID(data.ServiceOrder, i) }>{ song.Attributes.Title }</option>
+												}
+											}
+										</select>
+									</label>
+									<label>
+										Relationship
+										<select name="relationship_type">
+											for _, t := range data.RelationshipTypes {
+												<option value={ t.Code }>{ t.Label }</option>
+											}
+										</select>
+									</label>
+									<button type="submit" class="primary">Relate songs</button>
+								</form>
+							}
+							@quickActionRow(fmt.Sprintf("%d", row.Song.ID), "role", fmt.Sprintf("Mark a role for %q", row.Song.Title), 4) {
+								<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/song-roles", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
+									<input type="hidden" name="song_id" value={ row.Song.SongID }/>
+									<label>
+										Role
+										<select name="role">
+											for _, t := range data.RoleTypes {
+												<option value={ t.Code }>{ t.Label }</option>
+											}
+										</select>
+									</label>
+									<button type="submit" class="primary">Mark role</button>
+								</form>
+							}
 						} else if row.ItemType == pco.ItemTypeHeader {
 							<tr class="section-row" data-token={ "item:" + row.ItemID }>
 								<td colspan="4">{ row.ItemTitle }</td>
@@ -411,8 +367,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 						</tr>
 					}
 				</tbody>
-			</table>
-		</div>
+		}
 		<!--
 			The actual publish/discard controls live in the sidebar now (see
 			SongPublishPanel, build.templ) - SetBuilderBody (not this,
@@ -425,8 +380,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 				<p class="muted">Based on the last song in the set.</p>
 				<ul class="suggestion-list">
 					for _, sug := range data.Suggestions {
-						<li>
-							<span>{ sug.Title }</span>
+						@views.ListItem("", nil, sug.Title) {
 							<span class="muted">{ sug.RelationshipLabel }</span>
 							<form hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/songs", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
 								<input type="hidden" name="song_id" value={ sug.SongID }/>
@@ -434,7 +388,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 									@views.IconAdd()
 								</button>
 							</form>
-						</li>
+						}
 					}
 				</ul>
 			}
@@ -444,8 +398,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 				<p class="muted">New to the church - a repeat helps it stick.</p>
 				<ul class="suggestion-list">
 					for _, sug := range data.SongsToReinforce {
-						<li>
-							<span>{ sug.Title }</span>
+						@views.ListItem("", nil, sug.Title) {
 							<span class="muted">{ sug.RelationshipLabel }</span>
 							<form hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/songs", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
 								<input type="hidden" name="song_id" value={ sug.SongID }/>
@@ -453,7 +406,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 									@views.IconAdd()
 								</button>
 							</form>
-						</li>
+						}
 					}
 				</ul>
 			}
@@ -492,25 +445,24 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 		@collapsibleSection("find-songs-candidates", "Browse all songs", true) {
 			<ul id="set-candidates" class="candidate-list">
 				for _, cand := range data.Candidates {
-					<li class="candidate-row" data-title={ cand.Title } data-roles={ cand.RolesAttr } data-tags={ cand.TagsAttr }>
-						<span>{ cand.Title }</span>
+					@views.ListItem("candidate-row", templ.Attributes{"data-title": cand.Title, "data-roles": cand.RolesAttr, "data-tags": cand.TagsAttr}, cand.Title) {
 						if cand.NewSongLabel != "" {
-							<span class="badge status-pending" title="New to the church - a repeat helps it stick">{ cand.NewSongLabel }</span>
+							@views.BadgeTitled("status-pending", cand.NewSongLabel, "New to the church - a repeat helps it stick")
 						}
 						if cand.ArrangementInfo != "" {
 							<span class="muted">{ cand.ArrangementInfo }</span>
 						}
 						for _, role := range cand.Roles {
-							<span class="badge">{ role.Label }</span>
+							@views.Badge("", role.Label)
 						}
 						for _, tag := range cand.Tags {
-							<span class="badge tag-badge" title={ tag.Category }>{ tag.Value }</span>
+							@views.BadgeTitled("tag-badge", tag.Value, tag.Category)
 						}
 						if len(cand.ConflictTitles) > 0 {
-							<span class="conflict-badge">⚠ avoid pairing with { strings.Join(cand.ConflictTitles, ", ") }</span>
+							@views.ConflictBadge(fmt.Sprintf("avoid pairing with %s", strings.Join(cand.ConflictTitles, ", ")))
 						}
 						if cand.RecentlyRepeated {
-							<span class="conflict-badge">⚠ sung in each of the last two plans</span>
+							@views.ConflictBadge("sung in each of the last two plans")
 						}
 						<form hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/songs", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
 							<input type="hidden" name="song_id" value={ cand.SongID }/>
@@ -518,7 +470,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 								@views.IconAdd()
 							</button>
 						</form>
-					</li>
+					}
 				}
 				if len(data.Candidates) == 0 {
 					<li class="muted">No more songs to add.</li>
@@ -547,8 +499,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 		-->
 		@collapsibleSection("quick-add-songs", "Quick add", false) {
 			<div class="quick-add-panel">
-				<div>
-					<h4>Tag a song</h4>
+				@quickAddItem("Tag a song") {
 					<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/song-tags", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
 						<label>
 							Song
@@ -573,9 +524,8 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 						</label>
 						<button type="submit" class="primary">Add tag</button>
 					</form>
-				</div>
-				<div>
-					<h4>Relate two songs</h4>
+				}
+				@quickAddItem("Relate two songs") {
 					<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/song-relationships", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
 						<label>
 							Song A
@@ -605,9 +555,8 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 						</label>
 						<button type="submit" class="primary">Relate songs</button>
 					</form>
-				</div>
-				<div>
-					<h4>Add a role</h4>
+				}
+				@quickAddItem("Add a role") {
 					<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/song-roles", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
 						<label>
 							Song
@@ -628,7 +577,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 						</label>
 						<button type="submit" class="primary">Mark role</button>
 					</form>
-				</div>
+				}
 			</div>
 		}
 	</div>

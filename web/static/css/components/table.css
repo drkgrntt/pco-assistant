@@ -1,0 +1,84 @@
+/* Backs internal/views/table.templ (TableWrap/SortableTableWrap) plus the
+   bare table/th/td/thead element defaults every table on the site
+   inherits regardless of which wrapper it uses. */
+
+/* Tables scroll horizontally within their own box instead of overflowing
+   the page - narrow phones can't fit 5 columns without it. Also doubles as
+   the table's card: elevated off the page on --surface, rather than a bare
+   table floating directly on --bg. */
+.table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-block: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 32rem;
+  margin-block: 0;
+}
+
+th,
+td {
+  text-align: left;
+  vertical-align: middle;
+  /* Was 0.5rem 0.6rem - both round to the same 0.5rem step. */
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--border);
+}
+
+/* A little branding on table headers, not just page headings - bolder,
+   spaced-out label text under an accent-colored rule, on its own subtly
+   raised bar so the header row reads as a fixture, not just another row. */
+thead {
+  background: var(--surface-hover);
+}
+
+thead th {
+  border-bottom: 2px solid var(--accent);
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* Row-level hover only where rows are actually distinct records browsed
+   one at a time - not the set builder's order-of-service table, where
+   .dragging/.drag-over already carry their own, differently-purposed
+   highlight states this would visually compete with. */
+table.sortable tbody tr:hover,
+#position-assignments tbody tr:hover {
+  background: var(--surface-hover);
+}
+
+/* Sortable admin tables (see makeSortable in scheduling.js) - never used
+   on the set builder's order-of-service table, where row order is real
+   data, not just a display convenience. */
+.sortable-col {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.sortable-col::after {
+  content: "\21C5"; /* ⇅, both-directions - neutral until sorted */
+  display: inline-block;
+  margin-left: 0.35rem;
+  opacity: 0.4;
+  font-size: 0.85em;
+}
+
+.sortable-col.sort-asc::after {
+  content: "\2191"; /* ↑ */
+  opacity: 1;
+}
+
+.sortable-col.sort-desc::after {
+  content: "\2193"; /* ↓ */
+  opacity: 1;
+}

@@ -1,0 +1,40 @@
+package scheduling
+
+import (
+	"pco-assistant/internal/views"
+)
+
+// buildDetailCardShell is the outer shell song/person detail cards share -
+// the build-glance-card/build-detail-card div (hidden until
+// selectSongRow/selectPersonRow, scheduling.js, reveals it by data-row-id)
+// and the build-detail-header (title + close button). Everything past
+// that (badges/notes/actions) differs enough per entity type to stay in
+// songDetailCard/personDetailCard themselves - only this shell is shared.
+templ buildDetailCardShell(rowID, title, closeOnclick string) {
+	<div class="build-glance-card build-detail-card" data-row-id={ rowID } hidden>
+		<div class="build-detail-header">
+			<h3>{ title }</h3>
+			<button type="button" class="icon-btn" aria-label="Close" title="Close" { templ.Attributes{"onclick": closeOnclick}... }>
+				@views.IconX()
+			</button>
+		</div>
+		{ children... }
+	</div>
+}
+
+// buildDetailGroupShell/buildDetailGroupShellOOB are the outer
+// "build-detail-group" wrapper SongDetailCards/PersonDetailCards and
+// their OOB siblings share - one card group per tab, only one of whose
+// cards is ever actually visible at a time (see buildDetailCardShell's
+// own doc comment).
+templ buildDetailGroupShell(id string, hidden bool) {
+	<div class="build-detail-group" id={ id } hidden?={ hidden }>
+		{ children... }
+	</div>
+}
+
+templ buildDetailGroupShellOOB(id string) {
+	<div class="build-detail-group" id={ id } hx-swap-oob="true">
+		{ children... }
+	</div>
+}
