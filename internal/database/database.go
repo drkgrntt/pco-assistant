@@ -42,6 +42,13 @@ var (
 	dbInstance *service
 )
 
+// ConnectionString returns the Postgres DSN this service connects with, for
+// callers (like jobs.BackupJobs) that need to shell out to pg_dump rather
+// than go through the DB() pool.
+func ConnectionString() string {
+	return connString()
+}
+
 func connString() string {
 	schema := dbSchema
 	if schema == "" {
