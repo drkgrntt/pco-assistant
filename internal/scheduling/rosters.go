@@ -281,6 +281,33 @@ func (s *Store) AvoidPairingConflicts(ctx context.Context, organizationID string
 		return nil, nil, nil
 	}
 
+	relsByPerson := make(map[string][]PersonRelationship, len(assignments))
+	for _, ra := range assignments {
+		rels, err := s.ListPersonRelationships(ctx, organizationID, ra.PersonID)
+		if err != nil {
+			return nil, nil, err
+		}
+		relsByPerson[ra.PersonID] = rels
+	}
+
+	candidates, existing = computeAvoidPairingConflicts(assignments, relsByPerson)
+	return candidates, existing, nil
+}
+
+// computeAvoidPairingConflicts is the pure conflict-detection logic behind
+// AvoidPairingConflicts, pulled out so it's unit-testable without a live
+// *sql.DB (mirroring computeAvoidPairings in sets.go, backupsToPrune in
+// internal/server/jobs/backup.go, and cacheEntryFresh in
+// internal/server/middleware/nav.go). relsByPerson holds every
+// relationship touching each roster member, keyed by that person's ID
+// (each fetched via ListPersonRelationships in the loop
+// AvoidPairingConflicts runs). Returns zero values for an empty
+// assignments, matching AvoidPairingConflicts itself.
+func computeAvoidPairingConflicts(assignments []RosterAssignment, relsByPerson map[string][]PersonRelationship) (candidates map[string][]string, existing []RosterConflict) {
+	if len(assignments) == 0 {
+		return nil, nil
+	}
+
 	inRoster := make(map[string]bool, len(assignments))
 	for _, ra := range assignments {
 		inRoster[ra.PersonID] = true
@@ -290,12 +317,7 @@ func (s *Store) AvoidPairingConflicts(ctx context.Context, organizationID string
 	seenExisting := map[string]bool{}
 
 	for _, ra := range assignments {
-		rels, err := s.ListPersonRelationships(ctx, organizationID, ra.PersonID)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		for _, rel := range rels {
+		for _, rel := range relsByPerson[ra.PersonID] {
 			if rel.RelationshipType != PersonRelationshipAvoidPairing {
 				continue
 			}
@@ -322,7 +344,7 @@ func (s *Store) AvoidPairingConflicts(ctx context.Context, organizationID string
 		}
 	}
 
-	return candidates, existing, nil
+	return candidates, existing
 }
 
 // PersonSuggestion is one recommended person, with every reason they're
@@ -349,6 +371,25 @@ func (s *Store) RelationshipSuggestions(ctx context.Context, organizationID stri
 		return nil, nil
 	}
 
+	relsByPerson := make(map[string][]PersonRelationship, len(assignments))
+	for _, ra := range assignments {
+		rels, err := s.ListPersonRelationships(ctx, organizationID, ra.PersonID)
+		if err != nil {
+			return nil, err
+		}
+		relsByPerson[ra.PersonID] = rels
+	}
+
+	return computeRelationshipSuggestions(assignments, relsByPerson), nil
+}
+
+// computeRelationshipSuggestions is the pure aggregation logic behind
+// RelationshipSuggestions, pulled out so it's unit-testable without a live
+// *sql.DB (see computeAvoidPairingConflicts above for the same reasoning).
+// relsByPerson holds every relationship touching each roster member, keyed
+// by that person's ID (each fetched via ListPersonRelationships in the
+// loop RelationshipSuggestions runs).
+func computeRelationshipSuggestions(assignments []RosterAssignment, relsByPerson map[string][]PersonRelationship) []PersonSuggestion {
 	inRoster := make(map[string]bool, len(assignments))
 	for _, ra := range assignments {
 		inRoster[ra.PersonID] = true
@@ -358,12 +399,7 @@ func (s *Store) RelationshipSuggestions(ctx context.Context, organizationID stri
 	var order []string
 
 	for _, ra := range assignments {
-		rels, err := s.ListPersonRelationships(ctx, organizationID, ra.PersonID)
-		if err != nil {
-			return nil, err
-		}
-
-		for _, rel := range rels {
+		for _, rel := range relsByPerson[ra.PersonID] {
 			if rel.RelationshipType != PersonRelationshipWorksWell && rel.RelationshipType != PersonRelationshipMentorship {
 				continue
 			}
@@ -394,5 +430,5 @@ func (s *Store) RelationshipSuggestions(ctx context.Context, organizationID stri
 		suggestions = append(suggestions, *bySuggestion[personID])
 	}
 
-	return suggestions, nil
+	return suggestions
 }

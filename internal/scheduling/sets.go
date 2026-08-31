@@ -723,6 +723,16 @@ func (s *Store) Recommendations(ctx context.Context, organizationID string, setI
 		return nil, err
 	}
 
+	return computeRecommendations(rels, lastSongID, inSet), nil
+}
+
+// computeRecommendations is the pure grouping/filtering logic behind
+// Recommendations, pulled out so it's unit-testable without a live
+// *sql.DB (mirroring backupsToPrune in internal/server/jobs/backup.go and
+// cacheEntryFresh in internal/server/middleware/nav.go). rels is every
+// relationship touching lastSongID (from ListSongRelationships); inSet
+// flags which song IDs are already in the set.
+func computeRecommendations(rels []SongRelationship, lastSongID string, inSet map[string]bool) []SetSuggestion {
 	bySong := map[string]*SetSuggestion{}
 	var order []string
 	for _, rel := range rels {
@@ -755,7 +765,7 @@ func (s *Store) Recommendations(ctx context.Context, organizationID string, setI
 		suggestions = append(suggestions, *bySong[songID])
 	}
 
-	return suggestions, nil
+	return suggestions
 }
 
 type SetConflict struct {
@@ -778,6 +788,31 @@ func (s *Store) AvoidPairings(ctx context.Context, organizationID string, setID 
 		return nil, nil, nil
 	}
 
+	relsBySong := make(map[string][]SongRelationship, len(setSongs))
+	for _, ss := range setSongs {
+		rels, err := s.ListSongRelationships(ctx, organizationID, ss.SongID)
+		if err != nil {
+			return nil, nil, err
+		}
+		relsBySong[ss.SongID] = rels
+	}
+
+	candidates, existing = computeAvoidPairings(setSongs, relsBySong)
+	return candidates, existing, nil
+}
+
+// computeAvoidPairings is the pure conflict-detection logic behind
+// AvoidPairings, pulled out so it's unit-testable without a live *sql.DB
+// (see computeRecommendations above for the same reasoning). relsBySong
+// holds every relationship touching each set song, keyed by that song's
+// ID (each fetched via ListSongRelationships in the loop AvoidPairings
+// runs). Returns zero values for an empty setSongs, matching AvoidPairings
+// itself.
+func computeAvoidPairings(setSongs []SetSong, relsBySong map[string][]SongRelationship) (candidates map[string][]string, existing []SetConflict) {
+	if len(setSongs) == 0 {
+		return nil, nil
+	}
+
 	inSet := make(map[string]bool, len(setSongs))
 	for _, ss := range setSongs {
 		inSet[ss.SongID] = true
@@ -787,12 +822,7 @@ func (s *Store) AvoidPairings(ctx context.Context, organizationID string, setID 
 	seenExisting := map[string]bool{}
 
 	for _, ss := range setSongs {
-		rels, err := s.ListSongRelationships(ctx, organizationID, ss.SongID)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		for _, rel := range rels {
+		for _, rel := range relsBySong[ss.SongID] {
 			if rel.RelationshipType != RelationshipAvoidPairing {
 				continue
 			}
@@ -819,5 +849,5 @@ func (s *Store) AvoidPairings(ctx context.Context, organizationID string, setID 
 		}
 	}
 
-	return candidates, existing, nil
+	return candidates, existing
 }
