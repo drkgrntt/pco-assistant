@@ -68,11 +68,7 @@ func RequireAuth(store *auth.Store) fiber.Handler {
 				// refresh: sign out and make them sign in again properly.
 				if session.OrganizationID == "" {
 					log.Println("session has no organization id, signing out:", session.PersonID)
-					_ = store.DeleteSession(c.Context(), token)
-					if softAuth {
-						return c.Next()
-					}
-					return redirectToLogin(c)
+					return signOutAndReject(c, store, token, softAuth)
 				}
 
 				accessToken := session.AccessToken
@@ -85,11 +81,7 @@ func RequireAuth(store *auth.Store) fiber.Handler {
 						// fall back to for a specific person, so this has
 						// to be treated as session-invalid, not ignored.
 						log.Println("refreshing PCO token failed, signing out:", err.Error())
-						_ = store.DeleteSession(c.Context(), token)
-						if softAuth {
-							return c.Next()
-						}
-						return redirectToLogin(c)
+						return signOutAndReject(c, store, token, softAuth)
 					}
 
 					if err := store.UpdateSessionTokens(c.Context(), token, result.AccessToken, result.RefreshToken, result.ExpiresAt); err != nil {
@@ -112,6 +104,19 @@ func RequireAuth(store *auth.Store) fiber.Handler {
 		}
 		return redirectToLogin(c)
 	}
+}
+
+// signOutAndReject is the second half of every "this session is no longer
+// good" path in RequireAuth (no organization id, a failed access-token
+// refresh): delete the session, then either let a soft-auth route through
+// unauthenticated or redirect to /login like any other rejected session.
+// Callers log their own reason first, since that message differs each time.
+func signOutAndReject(c *fiber.Ctx, store *auth.Store, token string, softAuth bool) error {
+	_ = store.DeleteSession(c.Context(), token)
+	if softAuth {
+		return c.Next()
+	}
+	return redirectToLogin(c)
 }
 
 func redirectToLogin(c *fiber.Ctx) error {
