@@ -2,9 +2,9 @@ package controllers
 
 import (
 	"context"
-	"log"
 	"strings"
 
+	"pco-assistant/internal/logger"
 	"pco-assistant/internal/notify"
 	"pco-assistant/internal/server/middleware"
 	"pco-assistant/internal/views"
@@ -61,7 +61,7 @@ func (fc *FeedbackController) SubmitFeedback(c *fiber.Ctx) error {
 
 	go func() {
 		if err := fc.client.SendFeedback(context.Background(), email, message); err != nil {
-			log.Println("error sending feedback email:", err.Error())
+			logger.Error("sending feedback email failed", "error", err)
 		}
 	}()
 

@@ -4,10 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
 	"os"
 	"strconv"
 	"time"
+
+	"pco-assistant/internal/logger"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 	_ "github.com/joho/godotenv/autoload"
@@ -71,11 +72,11 @@ func New() Service {
 	if err != nil {
 		// This will not be a connection error, but a DSN parse error or
 		// another initialization error.
-		log.Fatal(err)
+		logger.Fatal("open database", "error", err)
 	}
 
 	if err := migrate(db); err != nil {
-		log.Fatal(err)
+		logger.Fatal("run migrations", "error", err)
 	}
 
 	dbInstance = &service{
@@ -102,7 +103,7 @@ func (s *service) Health() map[string]string {
 	if err != nil {
 		stats["status"] = "down"
 		stats["error"] = fmt.Sprintf("db down: %v", err)
-		log.Fatalf("db down: %v", err) // Log the error and terminate the program
+		logger.Fatal("db down", "error", err) // Log the error and terminate the program
 		return stats
 	}
 
@@ -145,6 +146,6 @@ func (s *service) Health() map[string]string {
 // If the connection is successfully closed, it returns nil.
 // If an error occurs while closing the connection, it returns the error.
 func (s *service) Close() error {
-	log.Printf("Disconnected from database: %s", dbDatabase)
+	logger.Info("disconnected from database", "database", dbDatabase)
 	return s.db.Close()
 }

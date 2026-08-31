@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,6 +12,7 @@ import (
 	"time"
 
 	"pco-assistant/internal/database"
+	"pco-assistant/internal/logger"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
@@ -48,7 +48,7 @@ func (j *BackupJobs) Register(scheduler gocron.Scheduler) {
 		gocron.NewTask(j.runBackup),
 	)
 	if err != nil {
-		log.Println("Error registering backup cron", err.Error())
+		logger.Error("registering backup cron failed", "error", err)
 	}
 }
 
@@ -59,18 +59,18 @@ func (j *BackupJobs) runBackup() {
 
 	path, err := dumpDatabase(database.ConnectionString())
 	if err != nil {
-		log.Println("Error dumping database for backup:", err)
+		logger.Error("dumping database for backup failed", "error", err)
 		return
 	}
 	defer os.Remove(path)
 
 	if err := uploadBackup(path); err != nil {
-		log.Println("Error uploading backup:", err)
+		logger.Error("uploading backup failed", "error", err)
 		return
 	}
 
 	if err := pruneBackups(); err != nil {
-		log.Println("Error pruning backups:", err)
+		logger.Error("pruning backups failed", "error", err)
 	}
 }
 
@@ -179,7 +179,7 @@ func pruneBackups() error {
 		return fmt.Errorf("delete objects failed: %w", err)
 	}
 
-	log.Println("Pruned backups:", len(toDelete))
+	logger.Info("pruned backups", "count", len(toDelete))
 	return nil
 }
 

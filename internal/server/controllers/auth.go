@@ -3,10 +3,10 @@ package controllers
 import (
 	"crypto/rand"
 	"encoding/base64"
-	"log"
 	"time"
 
 	"pco-assistant/internal/auth"
+	"pco-assistant/internal/logger"
 	"pco-assistant/internal/server/middleware"
 	"pco-assistant/internal/views"
 
@@ -96,7 +96,7 @@ func (ac *AuthController) Callback(c *fiber.Ctx) error {
 	// bookkeeping (see auth.UpsertOrganization), not something a request
 	// gets scoped by, so a failure here shouldn't block sign-in.
 	if err := ac.store.UpsertOrganization(c.Context(), org.Data.ID, org.Data.Attributes.Name); err != nil {
-		log.Println("upserting organization failed:", err.Error())
+		logger.Error("upserting organization failed", "error", err)
 	}
 
 	token, err := ac.store.CreateSession(c.Context(), personID, personName, org.Data.ID, org.Data.Attributes.Name, tokenResult.AccessToken, tokenResult.RefreshToken, tokenResult.ExpiresAt)

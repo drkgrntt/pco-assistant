@@ -26,13 +26,13 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 	"time"
 
 	"pco-assistant/internal/auth"
 	"pco-assistant/internal/database"
+	"pco-assistant/internal/logger"
 
 	pco "github.com/drkgrntt/go-pco"
 	_ "github.com/joho/godotenv/autoload"
@@ -58,22 +58,22 @@ func main() {
 	// there's no local database to just re-migrate from - once a Song or
 	// Plan is deleted from Planning Center itself, it's gone.
 	if os.Getenv("APP_ENV") != "local" {
-		log.Fatal("pcoreset refuses to run unless APP_ENV=local - it permanently deletes real Planning Center Songs and Plans, and should only ever be pointed at a disposable dev/test PCO account")
+		logger.Fatal("pcoreset refuses to run unless APP_ENV=local - it permanently deletes real Planning Center Songs and Plans, and should only ever be pointed at a disposable dev/test PCO account")
 	}
 
 	db, err := database.Open()
 	if err != nil {
-		log.Fatalf("connect to database: %v", err)
+		logger.Fatal("connect to database", "error", err)
 	}
 	defer db.Close()
 
 	ctx := context.Background()
 	session, err := auth.NewStore(db).MostRecentSession(ctx)
 	if err != nil {
-		log.Fatalf("no signed-in session found (%v) - sign in at http://localhost:8080/login first, pcoreset acts as whichever PCO user last signed in", err)
+		logger.Fatal("no signed-in session found - sign in at http://localhost:8080/login first, pcoreset acts as whichever PCO user last signed in", "error", err)
 	}
 	if !time.Now().Add(5 * time.Minute).Before(session.TokenExpiresAt) {
-		log.Fatal("the most recent signed-in session's token is expired or about to expire - sign in again at http://localhost:8080/login, then re-run pcoreset")
+		logger.Fatal("the most recent signed-in session's token is expired or about to expire - sign in again at http://localhost:8080/login, then re-run pcoreset")
 	}
 	reqCtx := pco.WithAccessToken(ctx, session.AccessToken)
 
@@ -81,11 +81,11 @@ func main() {
 
 	plans, err := allPlans(reqCtx)
 	if err != nil {
-		log.Fatalf("listing plans: %v", err)
+		logger.Fatal("listing plans", "error", err)
 	}
 	songs, err := allSongs(reqCtx)
 	if err != nil {
-		log.Fatalf("listing songs: %v", err)
+		logger.Fatal("listing songs", "error", err)
 	}
 
 	if len(plans) == 0 && len(songs) == 0 {

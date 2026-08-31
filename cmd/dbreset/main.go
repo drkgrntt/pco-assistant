@@ -15,11 +15,11 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 
 	"pco-assistant/internal/database"
+	"pco-assistant/internal/logger"
 
 	_ "github.com/joho/godotenv/autoload"
 )
@@ -33,7 +33,7 @@ func main() {
 	// whatever DB_* env vars happen to be loaded unless APP_ENV explicitly
 	// says this is a disposable local database.
 	if os.Getenv("APP_ENV") != "local" {
-		log.Fatal("dbreset refuses to run unless APP_ENV=local - it deletes every row in every table, and .env should never point that at anything but a throwaway local database")
+		logger.Fatal("dbreset refuses to run unless APP_ENV=local - it deletes every row in every table, and .env should never point that at anything but a throwaway local database")
 	}
 
 	if !*skipConfirm && !confirm() {
@@ -43,13 +43,13 @@ func main() {
 
 	db, err := database.Open()
 	if err != nil {
-		log.Fatalf("connect to database: %v", err)
+		logger.Fatal("connect to database", "error", err)
 	}
 	defer db.Close()
 
 	fmt.Println("Dropping every table and re-running migrations from scratch...")
 	if err := database.Reset(db); err != nil {
-		log.Fatalf("reset database: %v", err)
+		logger.Fatal("reset database", "error", err)
 	}
 
 	fmt.Println("Database reset complete. Run `go run ./cmd/dbseed` if you want it populated with sample data.")

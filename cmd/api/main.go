@@ -3,9 +3,9 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"os/signal"
+	"pco-assistant/internal/logger"
 	"pco-assistant/internal/server"
 	"strconv"
 	"syscall"
@@ -22,17 +22,17 @@ func gracefulShutdown(fiberServer *server.FiberServer, done chan bool) {
 	// Listen for the interrupt signal.
 	<-ctx.Done()
 
-	log.Println("shutting down gracefully, press Ctrl+C again to force")
+	logger.Info("shutting down gracefully, press Ctrl+C again to force")
 
 	// The context is used to inform the server it has 5 seconds to finish
 	// the request it is currently handling
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := fiberServer.ShutdownWithContext(ctx); err != nil {
-		log.Printf("Server forced to shutdown with error: %v", err)
+		logger.Error("server forced to shutdown", "error", err)
 	}
 
-	log.Println("Server exiting")
+	logger.Info("server exiting")
 
 	// Notify the main goroutine that the shutdown is complete
 	done <- true
@@ -61,5 +61,5 @@ func main() {
 
 	// Wait for the graceful shutdown to complete
 	<-done
-	log.Println("Graceful shutdown complete.")
+	logger.Info("graceful shutdown complete")
 }

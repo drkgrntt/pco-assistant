@@ -2,11 +2,11 @@ package middleware
 
 import (
 	"context"
-	"log"
 	"strings"
 	"time"
 
 	"pco-assistant/internal/auth"
+	"pco-assistant/internal/logger"
 
 	pco "github.com/drkgrntt/go-pco"
 	"github.com/gofiber/fiber/v2"
@@ -67,7 +67,7 @@ func RequireAuth(store *auth.Store) fiber.Handler {
 				// same "" bucket. Treat it exactly like a failed token
 				// refresh: sign out and make them sign in again properly.
 				if session.OrganizationID == "" {
-					log.Println("session has no organization id, signing out:", session.PersonID)
+					logger.Error("session has no organization id, signing out", "person_id", session.PersonID)
 					_ = store.DeleteSession(c.Context(), token)
 					if softAuth {
 						return c.Next()
@@ -84,7 +84,7 @@ func RequireAuth(store *auth.Store) fiber.Handler {
 						// refresh token itself expired - there's no PAT to
 						// fall back to for a specific person, so this has
 						// to be treated as session-invalid, not ignored.
-						log.Println("refreshing PCO token failed, signing out:", err.Error())
+						logger.Error("refreshing PCO token failed, signing out", "error", err)
 						_ = store.DeleteSession(c.Context(), token)
 						if softAuth {
 							return c.Next()
@@ -93,7 +93,7 @@ func RequireAuth(store *auth.Store) fiber.Handler {
 					}
 
 					if err := store.UpdateSessionTokens(c.Context(), token, result.AccessToken, result.RefreshToken, result.ExpiresAt); err != nil {
-						log.Println("saving refreshed PCO token failed:", err.Error())
+						logger.Error("saving refreshed PCO token failed", "error", err)
 					}
 					accessToken = result.AccessToken
 				}

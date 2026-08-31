@@ -2,10 +2,10 @@ package jobs
 
 import (
 	"context"
-	"log"
 	"time"
 
 	"pco-assistant/internal/auth"
+	"pco-assistant/internal/logger"
 
 	"github.com/go-co-op/gocron/v2"
 )
@@ -27,17 +27,17 @@ func (j *AuthJobs) Register(scheduler gocron.Scheduler) {
 		gocron.NewTask(j.deleteExpiredSessions),
 	)
 	if err != nil {
-		log.Println("Error registering session cleanup cron", err.Error())
+		logger.Error("registering session cleanup cron failed", "error", err)
 	}
 }
 
 func (j *AuthJobs) deleteExpiredSessions() {
 	deleted, err := j.store.DeleteExpiredSessions(context.Background())
 	if err != nil {
-		log.Println("Error deleting expired sessions:", err)
+		logger.Error("deleting expired sessions failed", "error", err)
 		return
 	}
 	if deleted > 0 {
-		log.Println("Deleted expired sessions:", deleted)
+		logger.Info("deleted expired sessions", "count", deleted)
 	}
 }
