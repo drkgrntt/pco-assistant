@@ -8,6 +8,7 @@ import (
 
 	"pco-assistant/internal/scheduling"
 	"pco-assistant/internal/views"
+	"pco-assistant/internal/views/components"
 )
 
 templ Preferences(personName, organizationName string, songs []pco.SongData, preferences []scheduling.SongPersonPreference, preferenceTypes []scheduling.SongPreferenceType, songTitles map[string]string, personNames map[string]string, preferenceLabels map[string]string, errMsg string) {
@@ -65,7 +66,7 @@ templ PreferencesTable(preferences []scheduling.SongPersonPreference, songTitles
 		if errMsg != "" {
 			<p class="error">{ errMsg }</p>
 		}
-		@views.SortableTableWrap() {
+		@components.SortableTableWrap() {
 			<thead>
 					<tr>
 						<th>Song</th>
@@ -111,7 +112,7 @@ templ PreferencesTable(preferences []scheduling.SongPersonPreference, songTitles
 									}) }
 									onclick="editRow(this)"
 								>
-									@views.IconEdit()
+									@components.IconEdit()
 								</button>
 								<button
 									class="danger icon-btn"
@@ -122,7 +123,7 @@ templ PreferencesTable(preferences []scheduling.SongPersonPreference, songTitles
 									hx-swap="outerHTML"
 									hx-confirm="Delete this preference?"
 								>
-									@views.IconRemove()
+									@components.IconRemove()
 								</button>
 							</td>
 						</tr>

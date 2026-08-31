@@ -8,6 +8,7 @@ import (
 
 	"pco-assistant/internal/scheduling"
 	"pco-assistant/internal/views"
+	"pco-assistant/internal/views/components"
 )
 
 templ SongRoles(personName, organizationName string, songs []pco.SongData, roles []scheduling.SongRole, roleTypes []scheduling.SongRoleType, songTitles map[string]string, roleLabels map[string]string, errMsg string) {
@@ -58,7 +59,7 @@ templ SongRolesTable(roles []scheduling.SongRole, songTitles map[string]string, 
 		if errMsg != "" {
 			<p class="error">{ errMsg }</p>
 		}
-		@views.SortableTableWrap() {
+		@components.SortableTableWrap() {
 			<thead>
 					<tr>
 						<th>Song</th>
@@ -90,7 +91,7 @@ templ SongRolesTable(roles []scheduling.SongRole, songTitles map[string]string, 
 									}) }
 									onclick="editRow(this)"
 								>
-									@views.IconEdit()
+									@components.IconEdit()
 								</button>
 								<button
 									class="danger icon-btn"
@@ -101,7 +102,7 @@ templ SongRolesTable(roles []scheduling.SongRole, songTitles map[string]string, 
 									hx-swap="outerHTML"
 									hx-confirm="Remove this tag?"
 								>
-									@views.IconRemove()
+									@components.IconRemove()
 								</button>
 							</td>
 						</tr>

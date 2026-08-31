@@ -3,7 +3,7 @@ package scheduling
 import (
 	"strconv"
 
-	"pco-assistant/internal/views"
+	"pco-assistant/internal/views/components"
 )
 
 // quickActionRow renders one hidden quick-action-row/quick-action-panel -
@@ -20,7 +20,7 @@ templ quickActionRow(rowID, action, heading string, colspan int) {
 				<p class="quick-action-heading">
 					{ heading }
 					<button type="button" class="icon-btn" aria-label="Close" title="Close" onclick="this.closest('tr').hidden = true">
-						@views.IconX()
+						@components.IconX()
 					</button>
 				</p>
 				{ children... }

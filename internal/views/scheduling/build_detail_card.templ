@@ -1,7 +1,7 @@
 package scheduling
 
 import (
-	"pco-assistant/internal/views"
+	"pco-assistant/internal/views/components"
 )
 
 // buildDetailCardShell is the outer shell song/person detail cards share -
@@ -15,7 +15,7 @@ templ buildDetailCardShell(rowID, title, closeOnclick string) {
 		<div class="build-detail-header">
 			<h3>{ title }</h3>
 			<button type="button" class="icon-btn" aria-label="Close" title="Close" { templ.Attributes{"onclick": closeOnclick}... }>
-				@views.IconX()
+				@components.IconX()
 			</button>
 		</div>
 		{ children... }

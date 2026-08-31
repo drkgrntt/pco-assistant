@@ -1,6 +1,10 @@
 package views
 
-import "fmt"
+import (
+	"fmt"
+
+	"pco-assistant/internal/views/components"
+)
 
 templ Billing(personName, organizationName string, data BillingData) {
 	@Layout("Billing", personName, organizationName) {
@@ -25,14 +29,14 @@ templ Billing(personName, organizationName string, data BillingData) {
 					Pick a plan below any time to keep going without interruption.
 				</p>
 			}
-			@Card("Standard") {
+			@components.Card("Standard") {
 				<p>$14/mo - 2 admin seats - single campus, small-to-mid church.</p>
 				<form hx-boost="false" method="post" action="/billing/checkout">
 					<input type="hidden" name="plan" value={ data.StandardPlan }/>
 					<button type="submit" class="primary">Choose Standard</button>
 				</form>
 			}
-			@Card("Multi-Campus") {
+			@components.Card("Multi-Campus") {
 				<p>$28/mo - 5 admin seats (+$5/mo per extra seat) - multi-site or large team.</p>
 				<form hx-boost="false" method="post" action="/billing/checkout">
 					<input type="hidden" name="plan" value={ data.MultiCampusPlan }/>
@@ -40,7 +44,7 @@ templ Billing(personName, organizationName string, data BillingData) {
 				</form>
 			}
 		} else {
-			@Card(planLabel(data.Plan)) {
+			@components.Card(planLabel(data.Plan)) {
 				<p class="muted">Status: { data.Status }</p>
 				<p class="muted">{ fmt.Sprintf("%d admin seat(s) used in the last 30 days.", data.SeatCount) }</p>
 				if data.StandardOverLimit {

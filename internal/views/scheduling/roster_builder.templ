@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"pco-assistant/internal/scheduling"
-	"pco-assistant/internal/views"
+	"pco-assistant/internal/views/components"
 )
 
 // assignedNamesSummary joins every assigned person's name for display right
@@ -62,7 +62,7 @@ templ RosterBuilderBodyContent(data RosterBuilderData) {
 			<div class="warning">{ msg }</div>
 		}
 		if data.ImportableAssignmentCount > 0 {
-			@views.ImportBanner(fmt.Sprintf("Looks like this service is already planned in Planning Center - it has %d position(s) filled. Want to import them here so you can reassign or remove people?", data.ImportableAssignmentCount), false) {
+			@components.ImportBanner(fmt.Sprintf("Looks like this service is already planned in Planning Center - it has %d position(s) filled. Want to import them here so you can reassign or remove people?", data.ImportableAssignmentCount), false) {
 				<form
 					hx-post={ fmt.Sprintf("/scheduling/rosters/%s/%s/revert", data.ServiceTypeID, data.PlanID) }
 					hx-target="#roster-builder-body"
@@ -85,7 +85,7 @@ templ RosterBuilderBodyContent(data RosterBuilderData) {
 			after the fact.
 		-->
 		if data.PersonPairPrompt != nil {
-			@views.ImportBanner(fmt.Sprintf("Added %q to the team, right after %q - want to remember how these two work together?", data.PersonPairPrompt.NewPersonName, data.PersonPairPrompt.PreviousPersonName), true) {
+			@components.ImportBanner(fmt.Sprintf("Added %q to the team, right after %q - want to remember how these two work together?", data.PersonPairPrompt.NewPersonName, data.PersonPairPrompt.PreviousPersonName), true) {
 				<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/person-relationships", data.ServiceTypeID, data.PlanID) } hx-target="#roster-builder-body" hx-swap="outerHTML">
 					<input type="hidden" name="person_id_a" value={ data.PersonPairPrompt.PreviousPersonID }/>
 					<input type="hidden" name="person_id_b" value={ data.PersonPairPrompt.NewPersonID }/>
@@ -142,19 +142,19 @@ templ RosterBuilderBodyContent(data RosterBuilderData) {
 				if len(pos.Assigned) > 0 {
 						<ul class="assignment-list">
 							for _, a := range pos.Assigned {
-								@views.ListItem("", templ.Attributes{"data-row-id": fmt.Sprintf("%d", a.ID), "onclick": "selectPersonRow(this, event)"}, a.Name) {
-									@views.Badge("", a.Status)
+								@components.ListItem("", templ.Attributes{"data-row-id": fmt.Sprintf("%d", a.ID), "onclick": "selectPersonRow(this, event)"}, a.Name) {
+									@components.Badge("", a.Status)
 									if a.Published {
-										@views.Badge("published", "Published")
+										@components.Badge("published", "Published")
 									}
 									if a.FrequencyWarning != "" {
-										@views.ConflictBadge(a.FrequencyWarning)
+										@components.ConflictBadge(a.FrequencyWarning)
 									}
 									if a.BlockoutWarning != "" {
-										@views.ConflictBadge(a.BlockoutWarning)
+										@components.ConflictBadge(a.BlockoutWarning)
 									}
 									if a.CrossTeamWarning != "" {
-										@views.ConflictBadge(a.CrossTeamWarning)
+										@components.ConflictBadge(a.CrossTeamWarning)
 									}
 									<button
 										type="button"
@@ -166,7 +166,7 @@ templ RosterBuilderBodyContent(data RosterBuilderData) {
 										hx-swap="outerHTML"
 										hx-confirm="Remove this person from this position?"
 									>
-										@views.IconRemove()
+										@components.IconRemove()
 									</button>
 								}
 							}
@@ -175,23 +175,23 @@ templ RosterBuilderBodyContent(data RosterBuilderData) {
 					if len(pos.Candidates) > 0 {
 						<ul class="candidate-list">
 							for _, cand := range pos.Candidates {
-								@views.ListItem("candidate-row", nil, cand.Name) {
+								@components.ListItem("candidate-row", nil, cand.Name) {
 									<span class="muted">{ cand.SchedulePreference }</span>
 									if cand.FrequencyWarning != "" {
-										@views.ConflictBadge(cand.FrequencyWarning)
+										@components.ConflictBadge(cand.FrequencyWarning)
 									}
 									if cand.BlockoutWarning != "" {
-										@views.ConflictBadge(cand.BlockoutWarning)
+										@components.ConflictBadge(cand.BlockoutWarning)
 									}
 									if cand.CrossTeamWarning != "" {
-										@views.ConflictBadge(cand.CrossTeamWarning)
+										@components.ConflictBadge(cand.CrossTeamWarning)
 									}
 									<form hx-post={ fmt.Sprintf("/scheduling/rosters/%s/%s/assignments", data.ServiceTypeID, data.PlanID) } hx-target="#roster-builder-body" hx-swap="outerHTML">
 										<input type="hidden" name="person_id" value={ cand.PersonID }/>
 										<input type="hidden" name="team_id" value={ pos.TeamID }/>
 										<input type="hidden" name="team_position_name" value={ pos.TeamPositionName }/>
 										<button type="submit" class="icon-btn" aria-label="Add to position" title="Add to position">
-											@views.IconAdd()
+											@components.IconAdd()
 										</button>
 									</form>
 								}
@@ -243,14 +243,14 @@ templ RosterBuilderBodyContent(data RosterBuilderData) {
 				<p class="muted">Based on works-well-with and mentorship relationships with people already on this roster.</p>
 				<ul class="suggestion-list">
 					for _, sug := range data.Suggestions {
-						@views.ListItem("", nil, sug.Name) {
+						@components.ListItem("", nil, sug.Name) {
 							<span class="muted">{ sug.TeamPositionName } &middot; { sug.RelationshipLabel }</span>
 							<form hx-post={ fmt.Sprintf("/scheduling/rosters/%s/%s/assignments", data.ServiceTypeID, data.PlanID) } hx-target="#roster-builder-body" hx-swap="outerHTML">
 								<input type="hidden" name="person_id" value={ sug.PersonID }/>
 								<input type="hidden" name="team_id" value={ sug.TeamID }/>
 								<input type="hidden" name="team_position_name" value={ sug.TeamPositionName }/>
 								<button type="submit" class="icon-btn" aria-label="Add to position" title="Add to position">
-									@views.IconAdd()
+									@components.IconAdd()
 								</button>
 							</form>
 						}

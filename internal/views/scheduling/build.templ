@@ -6,6 +6,7 @@ import (
 	pco "github.com/drkgrntt/go-pco"
 
 	"pco-assistant/internal/views"
+	"pco-assistant/internal/views/components"
 )
 
 templ Build(personName, organizationName string, serviceTypes []pco.ServiceTypeData, selectedServiceTypeID string, initialPlans []PlanRow, page, totalPages int, errMsg string) {
@@ -122,9 +123,9 @@ templ BuildPlansResults(plans []PlanRow, serviceTypeID, search string, page, tot
 					<span class="muted">{ plan.Dates }</span>
 				}
 				<span class="badge-label">Songs</span>
-				@views.PlanStatusBadge(plan.SetStatus)
+				@components.PlanStatusBadge(plan.SetStatus)
 				<span class="badge-label">Team</span>
-				@views.PlanStatusBadge(plan.RosterStatus)
+				@components.PlanStatusBadge(plan.RosterStatus)
 			</li>
 		}
 		if len(plans) == 0 {

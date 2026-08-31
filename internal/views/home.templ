@@ -1,6 +1,10 @@
 package views
 
-import "fmt"
+import (
+	"fmt"
+
+	"pco-assistant/internal/views/components"
+)
 
 templ Home(personName, organizationName string, data HomeData) {
 	@Layout("Home", personName, organizationName) {
@@ -36,9 +40,9 @@ templ Home(personName, organizationName string, data HomeData) {
 						</a>
 						<span class="muted">{ plan.ServiceTypeName }</span>
 						<span class="badge-label">Songs</span>
-						@PlanStatusBadge(plan.SetStatus)
+						@components.PlanStatusBadge(plan.SetStatus)
 						<span class="badge-label">Team</span>
-						@PlanStatusBadge(plan.RosterStatus)
+						@components.PlanStatusBadge(plan.RosterStatus)
 					</li>
 				}
 			</ul>

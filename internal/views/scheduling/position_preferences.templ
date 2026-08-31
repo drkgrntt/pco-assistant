@@ -6,6 +6,7 @@ import (
 	pco "github.com/drkgrntt/go-pco"
 
 	"pco-assistant/internal/views"
+	"pco-assistant/internal/views/components"
 )
 
 templ PositionPreferences(personName, organizationName string, serviceTypes []pco.ServiceTypeData, positionGroups []PositionGroup, selectedServiceTypeID, errMsg string) {
@@ -63,7 +64,7 @@ templ PositionAssignmentsFragment(rows []PreferenceRow, teamID, teamPositionID s
 			<p class="error">{ errMsg }</p>
 		}
 		if teamID != "" && teamPositionID != "" {
-			@views.TableWrap() {
+			@components.TableWrap() {
 				<thead>
 						<tr>
 							<th>Person</th>
@@ -90,7 +91,7 @@ templ PositionAssignmentsFragment(rows []PreferenceRow, teamID, teamPositionID s
 										}) }
 										onclick="editRow(this)"
 									>
-										@views.IconEdit()
+										@components.IconEdit()
 									</button>
 									<button
 										class="danger icon-btn"
@@ -101,7 +102,7 @@ templ PositionAssignmentsFragment(rows []PreferenceRow, teamID, teamPositionID s
 										hx-swap="outerHTML"
 										hx-confirm="Remove this person from this position?"
 									>
-										@views.IconRemove()
+										@components.IconRemove()
 									</button>
 								</td>
 							</tr>

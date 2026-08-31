@@ -1,6 +1,10 @@
 package views
 
-import "fmt"
+import (
+	"fmt"
+
+	"pco-assistant/internal/views/components"
+)
 
 // StyleGuide is a living reference for the CSS design system - tokens.css
 // (colors/spacing/typography/radius/shadow/motion), base.css (element
@@ -123,16 +127,16 @@ templ StyleGuide(personName, organizationName string) {
 			<p class="muted">Icon buttons - ghost until hovered, used for dense, repeated row actions.</p>
 			<div class="sg-demo-row">
 				<button type="button" class="icon-btn" aria-label="Add" title="Add">
-					@IconAdd()
+					@components.IconAdd()
 				</button>
 				<button type="button" class="icon-btn" aria-label="Edit" title="Edit">
-					@IconEdit()
+					@components.IconEdit()
 				</button>
 				<button type="button" class="icon-btn" aria-label="Copy" title="Copy">
-					@IconCopy()
+					@components.IconCopy()
 				</button>
 				<button type="button" class="icon-btn danger" aria-label="Remove" title="Remove">
-					@IconRemove()
+					@components.IconRemove()
 				</button>
 			</div>
 		</section>
@@ -140,19 +144,19 @@ templ StyleGuide(personName, organizationName string) {
 		<section class="sg-section">
 			<h2>Badges</h2>
 			<div class="sg-demo-row">
-				@Badge("", "Default")
-				@Badge("published", "Published")
-				@Badge("status-pending", "Pending")
-				@Badge("status-todo", "Todo")
-				@Badge("tag-badge", "Tag")
-				@ConflictBadge("Conflict")
+				@components.Badge("", "Default")
+				@components.Badge("published", "Published")
+				@components.Badge("status-pending", "Pending")
+				@components.Badge("status-todo", "Todo")
+				@components.Badge("tag-badge", "Tag")
+				@components.ConflictBadge("Conflict")
 			</div>
 		</section>
 
 		<section class="sg-section">
 			<h2>Alerts &amp; banners</h2>
 			<div class="warning">This is a warning banner - conflicts, repeat-song alerts, pending-deletion notices.</div>
-			@ImportBanner("This is an import banner - an invitation, not an alert (see the \"already planned in Planning Center\" prompts).", false)
+			@components.ImportBanner("This is an import banner - an invitation, not an alert (see the \"already planned in Planning Center\" prompts).", false)
 			<p class="error">This is an inline error message.</p>
 			<p class="success">This is an inline success message.</p>
 		</section>
@@ -176,7 +180,7 @@ templ StyleGuide(personName, organizationName string) {
 
 		<section class="sg-section">
 			<h2>Tables</h2>
-			@SortableTableWrap() {
+			@components.SortableTableWrap() {
 				<thead>
 					<tr>
 						<th class="sortable-col sort-asc">Song</th>
@@ -202,19 +206,19 @@ templ StyleGuide(personName, organizationName string) {
 		<section class="sg-section">
 			<h2>List rows</h2>
 			<ul class="candidate-list">
-				@ListItem("candidate-row", nil, "Great Are You Lord") {
-					@Badge("", "Opener")
+				@components.ListItem("candidate-row", nil, "Great Are You Lord") {
+					@components.Badge("", "Opener")
 					<span class="muted">flows_well, same_theme</span>
 				}
-				@ListItem("candidate-row", nil, "Build My Life") {
-					@ConflictBadge("avoid pairing with Amazing Grace")
+				@components.ListItem("candidate-row", nil, "Build My Life") {
+					@components.ConflictBadge("avoid pairing with Amazing Grace")
 				}
 			</ul>
 		</section>
 
 		<section class="sg-section">
 			<h2>Cards</h2>
-			@Card("Worship Team / Vocals") {
+			@components.Card("Worship Team / Vocals") {
 				<p class="muted">1 of 2 filled - the roster builder's per-position card.</p>
 			}
 		</section>
