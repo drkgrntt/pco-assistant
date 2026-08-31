@@ -6,6 +6,7 @@ import (
 
 	"pco-assistant/internal/scheduling"
 	"pco-assistant/internal/views"
+	"pco-assistant/internal/views/components"
 )
 
 templ PersonRelationships(personName, organizationName string, relationships []scheduling.PersonRelationship, relationshipTypes []scheduling.PersonRelationshipType, personNames map[string]string, typeLabels map[string]string, errMsg string) {
@@ -54,7 +55,7 @@ templ PersonRelationshipsTable(relationships []scheduling.PersonRelationship, pe
 		if errMsg != "" {
 			<p class="error">{ errMsg }</p>
 		}
-		@views.SortableTableWrap() {
+		@components.SortableTableWrap() {
 			<thead>
 					<tr>
 						<th>Person A</th>
@@ -100,7 +101,7 @@ templ PersonRelationshipsTable(relationships []scheduling.PersonRelationship, pe
 									}) }
 									onclick="editRow(this)"
 								>
-									@views.IconEdit()
+									@components.IconEdit()
 								</button>
 								<button
 									class="danger icon-btn"
@@ -111,7 +112,7 @@ templ PersonRelationshipsTable(relationships []scheduling.PersonRelationship, pe
 									hx-swap="outerHTML"
 									hx-confirm="Delete this relationship?"
 								>
-									@views.IconRemove()
+									@components.IconRemove()
 								</button>
 							</td>
 						</tr>

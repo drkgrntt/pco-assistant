@@ -6,6 +6,7 @@ import (
 
 	"pco-assistant/internal/scheduling"
 	"pco-assistant/internal/views"
+	"pco-assistant/internal/views/components"
 )
 
 templ SongTagSuggestions(personName, organizationName string, data SongTagSuggestionsData) {
@@ -37,12 +38,12 @@ templ SongTagSuggestionsList(data SongTagSuggestionsData) {
 			<p class="success">{ data.SuccessMsg }</p>
 		}
 		for _, group := range data.Suggestions {
-			@views.Card(fmt.Sprintf("%q appears in %d song titles", group.Word, len(group.Songs))) {
+			@components.Card(fmt.Sprintf("%q appears in %d song titles", group.Word, len(group.Songs))) {
 				<ul class="candidate-list">
 					for _, song := range group.Songs {
-						@views.ListItem("", nil, song.Title) {
+						@components.ListItem("", nil, song.Title) {
 							if song.AlreadyTagged {
-								@views.Badge("published", "Already tagged")
+								@components.Badge("published", "Already tagged")
 							}
 						}
 					}

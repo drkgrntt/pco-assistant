@@ -3,7 +3,7 @@ package scheduling
 import (
 	"fmt"
 
-	"pco-assistant/internal/views"
+	"pco-assistant/internal/views/components"
 )
 
 // SongDetailCards is every song's own detail card, stacked in the Build
@@ -110,13 +110,13 @@ templ songDetailCard(data SetBuilderData, song SetSongView) {
 		}
 		<div class="build-detail-badges">
 			for _, role := range song.Roles {
-				@views.Badge("", role.Label)
+				@components.Badge("", role.Label)
 			}
 			if song.Published {
-				@views.Badge("published", "Published")
+				@components.Badge("published", "Published")
 			}
 			if song.Moved {
-				@views.BadgeTitled("status-pending", "Moved", "Moved since it was last published")
+				@components.BadgeTitled("status-pending", "Moved", "Moved since it was last published")
 			}
 		</div>
 		<div class="build-detail-notes-group">
@@ -152,7 +152,7 @@ templ songDetailCard(data SetBuilderData, song SetSongView) {
 				hx-target="#set-builder-body"
 				hx-swap="outerHTML"
 			>
-				@views.IconCopy()
+				@components.IconCopy()
 				Duplicate
 			</button>
 			<button
@@ -163,7 +163,7 @@ templ songDetailCard(data SetBuilderData, song SetSongView) {
 				hx-swap="outerHTML"
 				hx-confirm="Remove this song from the set?"
 			>
-				@views.IconRemove()
+				@components.IconRemove()
 				Remove
 			</button>
 			if len(data.Candidates) > 0 {
@@ -181,21 +181,21 @@ templ songDetailCard(data SetBuilderData, song SetSongView) {
 						}
 					</select>
 					<button type="submit">
-						@views.IconEdit()
+						@components.IconEdit()
 						Replace
 					</button>
 				</form>
 			}
 			<button type="button" data-row-id={ fmt.Sprintf("%d", song.ID) } onclick="openQuickAction(this, 'tag')">
-				@views.IconTag()
+				@components.IconTag()
 				Tag this song
 			</button>
 			<button type="button" data-row-id={ fmt.Sprintf("%d", song.ID) } onclick="openQuickAction(this, 'relate')">
-				@views.IconRelate()
+				@components.IconRelate()
 				Relate to another song
 			</button>
 			<button type="button" data-row-id={ fmt.Sprintf("%d", song.ID) } onclick="openQuickAction(this, 'role')">
-				@views.IconRole()
+				@components.IconRole()
 				Mark a role
 			</button>
 		</div>

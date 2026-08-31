@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"pco-assistant/internal/scheduling"
-	"pco-assistant/internal/views"
+	"pco-assistant/internal/views/components"
 
 	pco "github.com/drkgrntt/go-pco"
 )
@@ -65,16 +65,16 @@ templ songBadgesOOB(song SetSongView) {
 
 templ songBadgeSpans(song SetSongView) {
 	for _, role := range song.Roles {
-		@views.Badge("", role.Label)
+		@components.Badge("", role.Label)
 	}
 	if song.Published {
-		@views.Badge("published", "Published")
+		@components.Badge("published", "Published")
 	}
 	if song.Moved {
-		@views.BadgeTitled("status-pending", "Moved", "Moved since it was last published")
+		@components.BadgeTitled("status-pending", "Moved", "Moved since it was last published")
 	}
 	if song.InfoPending {
-		@views.BadgeTitled("status-pending", "Note/key pending", "This week's note or key changed since it was last published - Refresh song info (or Publish) to send it to Planning Center")
+		@components.BadgeTitled("status-pending", "Note/key pending", "This week's note or key changed since it was last published - Refresh song info (or Publish) to send it to Planning Center")
 	}
 }
 
@@ -84,20 +84,20 @@ templ songBadgeSpans(song SetSongView) {
 // hidden quick-action-row via openQuickAction (scheduling.js), so neither
 // needs any per-row data passed in.
 templ rowMenuToggle() {
-	@views.IconMore()
+	@components.IconMore()
 }
 
 templ rowMenuItems() {
 	<button type="button" onclick="openQuickAction(this, 'tag')">
-		@views.IconTag()
+		@components.IconTag()
 		Tag this song
 	</button>
 	<button type="button" onclick="openQuickAction(this, 'relate')">
-		@views.IconRelate()
+		@components.IconRelate()
 		Relate to another song
 	</button>
 	<button type="button" onclick="openQuickAction(this, 'role')">
-		@views.IconRole()
+		@components.IconRole()
 		Mark a role
 	</button>
 }
@@ -126,7 +126,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 			<div class="warning">{ msg }</div>
 		}
 		if data.ImportableSongCount > 0 {
-			@views.ImportBanner(fmt.Sprintf("Looks like this service is already planned in Planning Center - it has %d song(s). Want to import them here so you can reorder, replace, or tag them?", data.ImportableSongCount), false) {
+			@components.ImportBanner(fmt.Sprintf("Looks like this service is already planned in Planning Center - it has %d song(s). Want to import them here so you can reorder, replace, or tag them?", data.ImportableSongCount), false) {
 				<form
 					hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/revert", data.ServiceTypeID, data.PlanID) }
 					hx-target="#set-builder-body"
@@ -148,7 +148,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 			after the fact.
 		-->
 		if data.SongPairPrompt != nil {
-			@views.ImportBanner(fmt.Sprintf("Added %q right after %q - want to remember how these two relate?", data.SongPairPrompt.NewSongTitle, data.SongPairPrompt.PreviousSongTitle), true) {
+			@components.ImportBanner(fmt.Sprintf("Added %q right after %q - want to remember how these two relate?", data.SongPairPrompt.NewSongTitle, data.SongPairPrompt.PreviousSongTitle), true) {
 				<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/song-relationships", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
 					<input type="hidden" name="song_id_a" value={ data.SongPairPrompt.PreviousSongID }/>
 					<input type="hidden" name="song_id_b" value={ data.SongPairPrompt.NewSongID }/>
@@ -170,12 +170,12 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 			placed where you've put them. Non-song items are shown for context
 			only - this tool doesn't manage them. Drag a song's
 			<span class="icon-inline">
-				@views.IconDrag()
+				@components.IconDrag()
 			</span>
 			handle to move it anywhere in the order, including onto or past a
 			section header.
 		</p>
-		@views.TableWrap() {
+		@components.TableWrap() {
 			<thead>
 					<tr>
 						<th></th>
@@ -196,7 +196,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 							>
 								<td>
 									<span class="drag-handle" title="Drag to reorder">
-										@views.IconDrag()
+										@components.IconDrag()
 									</span>
 								</td>
 								<td>
@@ -242,7 +242,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 											hx-target="#set-builder-body"
 											hx-swap="outerHTML"
 										>
-											@views.IconCopy()
+											@components.IconCopy()
 										</button>
 										<button
 											type="button"
@@ -254,7 +254,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 											hx-swap="outerHTML"
 											hx-confirm="Remove this song from the set?"
 										>
-											@views.IconRemove()
+											@components.IconRemove()
 										</button>
 										if len(data.Candidates) > 0 {
 											<form
@@ -271,7 +271,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 													}
 												</select>
 												<button type="submit" class="icon-btn" aria-label="Replace song" title="Replace song">
-													@views.IconEdit()
+													@components.IconEdit()
 												</button>
 											</form>
 										}
@@ -286,7 +286,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 											the only way to tag/relate/role a song that isn't in
 											this order of service yet.
 										-->
-										@views.Disclosure("row-menu", "icon-btn row-menu-toggle", "toggleRowMenu(this)", "More actions for this song", "More actions", rowMenuToggle(), rowMenuItems())
+										@components.Disclosure("row-menu", "icon-btn row-menu-toggle", "toggleRowMenu(this)", "More actions for this song", "More actions", rowMenuToggle(), rowMenuItems())
 									</div>
 								</td>
 							</tr>
@@ -380,12 +380,12 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 				<p class="muted">Based on the last song in the set.</p>
 				<ul class="suggestion-list">
 					for _, sug := range data.Suggestions {
-						@views.ListItem("", nil, sug.Title) {
+						@components.ListItem("", nil, sug.Title) {
 							<span class="muted">{ sug.RelationshipLabel }</span>
 							<form hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/songs", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
 								<input type="hidden" name="song_id" value={ sug.SongID }/>
 								<button type="submit" class="icon-btn" aria-label="Add to set" title="Add to set">
-									@views.IconAdd()
+									@components.IconAdd()
 								</button>
 							</form>
 						}
@@ -398,12 +398,12 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 				<p class="muted">New to the church - a repeat helps it stick.</p>
 				<ul class="suggestion-list">
 					for _, sug := range data.SongsToReinforce {
-						@views.ListItem("", nil, sug.Title) {
+						@components.ListItem("", nil, sug.Title) {
 							<span class="muted">{ sug.RelationshipLabel }</span>
 							<form hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/songs", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
 								<input type="hidden" name="song_id" value={ sug.SongID }/>
 								<button type="submit" class="icon-btn" aria-label="Add to set" title="Add to set">
-									@views.IconAdd()
+									@components.IconAdd()
 								</button>
 							</form>
 						}
@@ -445,29 +445,29 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 		@collapsibleSection("find-songs-candidates", "Browse all songs", true) {
 			<ul id="set-candidates" class="candidate-list">
 				for _, cand := range data.Candidates {
-					@views.ListItem("candidate-row", templ.Attributes{"data-title": cand.Title, "data-roles": cand.RolesAttr, "data-tags": cand.TagsAttr}, cand.Title) {
+					@components.ListItem("candidate-row", templ.Attributes{"data-title": cand.Title, "data-roles": cand.RolesAttr, "data-tags": cand.TagsAttr}, cand.Title) {
 						if cand.NewSongLabel != "" {
-							@views.BadgeTitled("status-pending", cand.NewSongLabel, "New to the church - a repeat helps it stick")
+							@components.BadgeTitled("status-pending", cand.NewSongLabel, "New to the church - a repeat helps it stick")
 						}
 						if cand.ArrangementInfo != "" {
 							<span class="muted">{ cand.ArrangementInfo }</span>
 						}
 						for _, role := range cand.Roles {
-							@views.Badge("", role.Label)
+							@components.Badge("", role.Label)
 						}
 						for _, tag := range cand.Tags {
-							@views.BadgeTitled("tag-badge", tag.Value, tag.Category)
+							@components.BadgeTitled("tag-badge", tag.Value, tag.Category)
 						}
 						if len(cand.ConflictTitles) > 0 {
-							@views.ConflictBadge(fmt.Sprintf("avoid pairing with %s", strings.Join(cand.ConflictTitles, ", ")))
+							@components.ConflictBadge(fmt.Sprintf("avoid pairing with %s", strings.Join(cand.ConflictTitles, ", ")))
 						}
 						if cand.RecentlyRepeated {
-							@views.ConflictBadge("sung in each of the last two plans")
+							@components.ConflictBadge("sung in each of the last two plans")
 						}
 						<form hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/songs", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
 							<input type="hidden" name="song_id" value={ cand.SongID }/>
 							<button type="submit" class="icon-btn" aria-label="Add to set" title="Add to set">
-								@views.IconAdd()
+								@components.IconAdd()
 							</button>
 						</form>
 					}

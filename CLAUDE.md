@@ -173,11 +173,14 @@ actual app, split by concern rather than by feature:
   ARIA, or JS hookup - not just a CSS class - are real templ components,
   not hand-rolled at each call site: cross-package ones (`Badge`,
   `ConflictBadge`, `Card`, `ImportBanner`, `ListItem`, `Disclosure`,
-  `TableWrap`/`SortableTableWrap`, `PlanStatusBadge`) live in the root
-  `internal/views` package for the same import-cycle reason
-  `PlanStatusBadge` already did; single-package ones (`quickActionRow`,
-  `collapsibleCard`, `buildTabs`, the Build page's detail/publish card
-  shells) stay unexported inside `internal/views/scheduling`. Purely
+  `TableWrap`/`SortableTableWrap`, `PlanStatusBadge`, and the `Icon*` set)
+  live in `internal/views/components`, a leaf package with no dependency
+  on `views` or `views/scheduling`, so both can import it freely without
+  an import cycle - mirroring `web/static/css/components/`'s split of
+  reusable CSS from page-specific CSS; single-package ones
+  (`quickActionRow`, `collapsibleCard`, `buildTabs`, the Build page's
+  detail/publish card shells) stay unexported inside
+  `internal/views/scheduling`. Purely
   single-concern CSS (typography, spacing, `.muted`, icon classes, plain
   button/badge modifiers) stays as bare classes - see `/style-guide`,
   which demonstrates the real component call for every pattern that has

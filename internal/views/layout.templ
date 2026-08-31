@@ -1,5 +1,7 @@
 package views
 
+import "pco-assistant/internal/views/components"
+
 // designSystemCSSFiles is loaded after tokens.css/base.css (see Head
 // below) - components/*.css first (each one backing a specific reusable
 // templ component or CSS-only utility group, see that directory's own
@@ -105,13 +107,13 @@ templ Layout(title string, personName string, organizationName string) {
 					<nav class="site-nav">
 						<a href="/">Home</a>
 						<a href="/scheduling/build">Build a Service</a>
-						@Disclosure("nav-dropdown", "nav-dropdown-toggle", "toggleNavDropdown(this)", "", "", navToggleContent(), navMenuContent())
+						@components.Disclosure("nav-dropdown", "nav-dropdown-toggle", "toggleNavDropdown(this)", "", "", navToggleContent(), navMenuContent())
 					</nav>
 				</div>
 				<div class="site-actions">
 					<button type="button" class="theme-toggle" onclick="toggleTheme()" aria-label="Switch between light and dark theme" title="Switch between light and dark theme">
-						@IconSun()
-						@IconMoon()
+						@components.IconSun()
+						@components.IconMoon()
 					</button>
 					if personName != "" {
 						<!--
@@ -136,11 +138,11 @@ templ Layout(title string, personName string, organizationName string) {
 			</header>
 			<div class="site-banner" role="note">
 				<div class="site-banner-content">
-					@IconAlertTriangle()
+					@components.IconAlertTriangle()
 					<span><strong>Early preview:</strong> this app is still in active development. Data can be wiped or reset without notice - use at your own risk, and don't rely on it as your only copy of anything.</span>
 				</div>
 				<button type="button" class="site-banner-dismiss" onclick="dismissSiteBanner()" aria-label="Dismiss this notice" title="Dismiss this notice">
-					@IconX()
+					@components.IconX()
 				</button>
 			</div>
 			<main>
@@ -154,7 +156,7 @@ templ Layout(title string, personName string, organizationName string) {
 // toggle-button content and popup contents.
 templ navToggleContent() {
 	Setup
-	@IconChevronDown()
+	@components.IconChevronDown()
 }
 
 templ navMenuContent() {

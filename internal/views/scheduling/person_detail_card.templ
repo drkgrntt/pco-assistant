@@ -3,7 +3,7 @@ package scheduling
 import (
 	"fmt"
 
-	"pco-assistant/internal/views"
+	"pco-assistant/internal/views/components"
 )
 
 // PersonDetailCards is every assigned person's own detail card, stacked in
@@ -42,18 +42,18 @@ templ personDetailCard(data RosterBuilderData, a AssignmentView) {
 	@buildDetailCardShell(fmt.Sprintf("%d", a.ID), a.Name, "closePersonDetail()") {
 		<p class="muted">{ a.TeamName } / { a.TeamPositionName }</p>
 		<div class="build-detail-badges">
-			@views.Badge("", a.Status)
+			@components.Badge("", a.Status)
 			if a.Published {
-				@views.Badge("published", "Published")
+				@components.Badge("published", "Published")
 			}
 			if a.FrequencyWarning != "" {
-				@views.ConflictBadge(a.FrequencyWarning)
+				@components.ConflictBadge(a.FrequencyWarning)
 			}
 			if a.BlockoutWarning != "" {
-				@views.ConflictBadge(a.BlockoutWarning)
+				@components.ConflictBadge(a.BlockoutWarning)
 			}
 			if a.CrossTeamWarning != "" {
-				@views.ConflictBadge(a.CrossTeamWarning)
+				@components.ConflictBadge(a.CrossTeamWarning)
 			}
 		</div>
 		if a.Notes != "" {
@@ -68,7 +68,7 @@ templ personDetailCard(data RosterBuilderData, a AssignmentView) {
 				hx-swap="outerHTML"
 				hx-confirm="Remove this person from this position?"
 			>
-				@views.IconRemove()
+				@components.IconRemove()
 				Remove from position
 			</button>
 		</div>

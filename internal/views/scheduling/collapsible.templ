@@ -3,7 +3,7 @@ package scheduling
 import (
 	"fmt"
 
-	"pco-assistant/internal/views"
+	"pco-assistant/internal/views/components"
 )
 
 // collapsibleSection wraps a chunk of the build page that's useful but
@@ -24,7 +24,7 @@ templ collapsibleSection(id, label string, open bool) {
 	<div class={ "collapsible", templ.KV("open", open) } id={ id }>
 		<button type="button" class="collapsible-toggle" onclick="toggleCollapse(this)" aria-expanded={ fmt.Sprintf("%t", open) }>
 			<span>{ label }</span>
-			@views.IconChevronDown()
+			@components.IconChevronDown()
 		</button>
 		<div class="collapsible-body">
 			{ children... }
@@ -44,7 +44,7 @@ templ collapsibleCard(id string, open bool, heading templ.Component) {
 		<h3>
 			<button type="button" class="collapsible-toggle" onclick="toggleCollapse(this)" aria-expanded={ fmt.Sprintf("%t", open) }>
 				@heading
-				@views.IconChevronDown()
+				@components.IconChevronDown()
 			</button>
 		</h3>
 		<div class="collapsible-body">

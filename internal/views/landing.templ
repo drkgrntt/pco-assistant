@@ -1,5 +1,7 @@
 package views
 
+import "pco-assistant/internal/views/components"
+
 // Landing is the public marketing page - "/" for anyone not signed in (see
 // RequireAuth's soft-auth case and HomeController.Index). Deliberately its
 // own <html>/<body>, not wrapped in Layout: the app shell's nav
@@ -19,8 +21,8 @@ templ Landing() {
 				<strong class="landing-brand">Resonance</strong>
 				<div class="landing-header-actions">
 					<button type="button" class="theme-toggle" onclick="toggleTheme()" aria-label="Switch between light and dark theme" title="Switch between light and dark theme">
-						@IconSun()
-						@IconMoon()
+						@components.IconSun()
+						@components.IconMoon()
 					</button>
 					<a href="/login">Sign in</a>
 				</div>
