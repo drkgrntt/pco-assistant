@@ -18,6 +18,7 @@ func (s *FiberServer) RegisterCrons() {
 	jobs.NewPCOJobs().Register(scheduler)
 	jobs.NewAuthJobs(s.authStore).Register(scheduler)
 	jobs.NewBillingJobs(s.authStore, s.billingClient).Register(scheduler)
+	jobs.NewBackupJobs().Register(scheduler)
 
 	scheduler.Start()
 

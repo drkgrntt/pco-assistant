@@ -187,7 +187,17 @@ Mobile-first, installable as a PWA, with light/dark theming.
    to skip this - feedback submissions are just logged instead of
    emailed, so local dev never needs real Mailgun credentials.
 
-5. **`.env`**:
+5. **Backups (production only, optional for local dev).** A daily cron
+   (`jobs.BackupJobs`) dumps the database with `pg_dump` and uploads it to
+   a [Cloudflare R2](https://developers.cloudflare.com/r2/) bucket
+   (`R2_ACCOUNT_ID`/`R2_ACCESS_KEY_ID`/`R2_SECRET_ACCESS_KEY`), pruning
+   older backups down to one per week past 30 days and one per month past
+   6 months. The job no-ops unless `APP_ENV=production`, so it's inert in
+   local dev and staging regardless of whether these are set. Requires
+   `pg_dump` on `PATH` (already in the Docker image via
+   `postgresql-client`).
+
+6. **`.env`**:
    ```
    PORT=8080
    APP_ENV=local
@@ -216,6 +226,10 @@ Mobile-first, installable as a PWA, with light/dark theming.
    MG_DOMAIN=...
    MG_KEY=...
    FEEDBACK_RECIPIENT_EMAIL=...
+
+   R2_ACCOUNT_ID=...
+   R2_ACCESS_KEY_ID=...
+   R2_SECRET_ACCESS_KEY=...
    ```
 
 ## Makefile
