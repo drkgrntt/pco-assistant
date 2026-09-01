@@ -722,15 +722,25 @@ func keyTransitionWarnings(rows []mergedRow, arrangementCache map[string]schedul
 		if !ok {
 			continue
 		}
-		if semitoneDistance(prevPitch, curPitch) != 1 {
+		change := semitoneDistance(prevPitch, curPitch)
+		// minor second or tri tone
+		if change != 1 && change != 6 {
 			continue
 		}
 
-		warnings = append(warnings, fmt.Sprintf(
-			"%s (%s) into %s (%s) is a half-step key change with no transition - consider a pad/bridge, or adjusting one song's key.",
-			titleOrID(titles, prev.Song.SongID), prevKey,
-			titleOrID(titles, cur.Song.SongID), curKey,
-		))
+		if change == 1 {
+			warnings = append(warnings, fmt.Sprintf(
+				"%s (%s) into %s (%s) is a half-step key change with no transition - consider a pad/bridge, or adjusting one song's key.",
+				titleOrID(titles, prev.Song.SongID), prevKey,
+				titleOrID(titles, cur.Song.SongID), curKey,
+			))
+		} else if change == 6 {
+			warnings = append(warnings, fmt.Sprintf(
+				"%s (%s) into %s (%s) is a tri-tone key change with no transition - consider a pad/bridge, or adjusting one song's key.",
+				titleOrID(titles, prev.Song.SongID), prevKey,
+				titleOrID(titles, cur.Song.SongID), curKey,
+			))
+		}
 	}
 	return warnings
 }
