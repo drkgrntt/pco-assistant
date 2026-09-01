@@ -547,13 +547,6 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 		data.Suggestions = suggestionsForOpenPositions(suggestions, groups, candidatesByGroup, teamNames, names)
 	}
 
-	sort.SliceStable(data.Positions, func(i, j int) bool {
-		if data.Positions[i].TeamName != data.Positions[j].TeamName {
-			return data.Positions[i].TeamName < data.Positions[j].TeamName
-		}
-		return data.Positions[i].TeamPositionName < data.Positions[j].TeamPositionName
-	})
-
 	return data
 }
 
