@@ -11,7 +11,7 @@ system. Everything the app knows about songs, people, plans, teams, and
 positions is read live from your PCO account; this app only stores the
 domain data PCO has no concept of (relationships, roles, draft
 sets/rosters) and syncs it back to real PCO records when you publish.
-Every PCO organization gets a 14-day free trial automatically the first
+Every PCO organization gets a 30-day free trial automatically the first
 time it signs in (a row in `organizations` - name, `status`, `plan`,
 Stripe ids), enforced on every request by `RequireActiveOrganization`.
 Once the trial ends (or any time before that), `/billing` offers the two
