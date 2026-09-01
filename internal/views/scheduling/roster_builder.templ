@@ -24,16 +24,57 @@ func assignedNamesSummary(assigned []AssignmentView) string {
 }
 
 // positionHeading is one position group's collapsibleCard heading - a
-// multi-span title (team/position name, muted fill-count, muted "who's on
-// it" summary) that collapsibleSection's plain string label can't express.
+// multi-span title (position name, muted fill-count, muted "who's on it"
+// summary) that collapsibleSection's plain string label can't express.
+// Just the position's own name, not "Team / Position" - the surrounding
+// team-group heading (RosterBuilderBodyContent) already says which team,
+// so repeating it on every position was both redundant and exactly the
+// kind of per-position bulk groupPositionsByTeam exists to cut down on.
 templ positionHeading(pos PositionGroupView) {
 	<span>
-		{ pos.TeamName } / { pos.TeamPositionName }
+		{ pos.TeamPositionName }
 		<span class="muted">({ strconv.Itoa(len(pos.Assigned)) } of { strconv.Itoa(pos.Quantity) } filled)</span>
 		if len(pos.Assigned) > 0 {
 			<span class="muted">- { assignedNamesSummary(pos.Assigned) }</span>
 		}
 	</span>
+}
+
+// positionGroupItem pairs one PositionGroupView with its original index in
+// RosterBuilderData.Positions - groupPositionsByTeam preserves this so each
+// position's #position-group-<index> id (collapsibleCard, which
+// toggleCollapse - scheduling.js - uses to remember what's open/closed
+// across this page's htmx swaps) stays exactly what it already was,
+// unaffected by which team's group it's now nested under.
+type positionGroupItem struct {
+	Index int
+	Pos   PositionGroupView
+}
+
+// teamPositionGroup is one team's cluster of positions, in display order -
+// see groupPositionsByTeam.
+type teamPositionGroup struct {
+	TeamID    string
+	TeamName  string
+	Positions []positionGroupItem
+}
+
+// groupPositionsByTeam clusters RosterBuilderData.Positions by team for
+// display - buildRosterBuilderData (rosters_builder.go) already sorts
+// Positions by each team's own Planning Center Sequence before this ever
+// runs, so a plain consecutive-run walk is all this needs; it doesn't
+// re-sort anything itself, just splits an already-grouped slice into named
+// groups.
+func groupPositionsByTeam(positions []PositionGroupView) []teamPositionGroup {
+	var groups []teamPositionGroup
+	for i, pos := range positions {
+		if len(groups) == 0 || groups[len(groups)-1].TeamID != pos.TeamID {
+			groups = append(groups, teamPositionGroup{TeamID: pos.TeamID, TeamName: pos.TeamName})
+		}
+		g := &groups[len(groups)-1]
+		g.Positions = append(g.Positions, positionGroupItem{Index: i, Pos: pos})
+	}
+	return groups
 }
 
 // RosterBuilderBody is the htmx swap target (id="roster-builder-body") for
@@ -142,106 +183,120 @@ templ RosterBuilderBodyContent(data RosterBuilderData) {
 				<p class="muted">Nothing needed yet - Planning Center has no open positions configured for this plan.</p>
 			}
 		}
-		for i, pos := range data.Positions {
+		for _, group := range groupPositionsByTeam(data.Positions) {
 			<!--
-				Fully-staffed positions are the low-signal case - collapsed by
-				default so an almost-done roster doesn't look as busy as a
-				mostly-empty one; still-open positions (the ones actually
-				needing a decision) stay expanded (see collapsibleCard).
+				One card per team (see groupPositionsByTeam) so positions from
+				different teams are visually separated instead of running
+				together in one flat stack - individual positions below are
+				compact rows inside it, not their own full cards (see
+				.team-group/.position-group in card.css).
 			-->
-			@collapsibleCard(fmt.Sprintf("position-group-%d", i), len(pos.Assigned) < pos.Quantity, positionHeading(pos)) {
-				if len(pos.Assigned) > 0 {
-						<ul class="assignment-list">
-							for _, a := range pos.Assigned {
-								@components.ListItem("", templ.Attributes{"data-row-id": fmt.Sprintf("%d", a.ID), "onclick": "selectPersonRow(this, event)"}, a.Name) {
-									@components.Badge("", a.Status)
-									if a.Published {
-										@components.Badge("published", "Published")
-									}
-									if a.FrequencyWarning != "" {
-										@components.ConflictBadge(a.FrequencyWarning)
-									}
-									if a.BlockoutWarning != "" {
-										@components.ConflictBadge(a.BlockoutWarning)
-									}
-									if a.CrossTeamWarning != "" {
-										@components.ConflictBadge(a.CrossTeamWarning)
-									}
-									<button
-										type="button"
-										class="danger icon-btn"
-										aria-label="Remove from position"
-										title="Remove from position"
-										hx-delete={ fmt.Sprintf("/scheduling/rosters/%s/%s/assignments/%d", data.ServiceTypeID, data.PlanID, a.ID) }
-										hx-target="#roster-builder-body"
-										hx-swap="outerHTML"
-										hx-confirm="Remove this person from this position?"
-									>
-										@components.IconRemove()
-									</button>
-								}
-							}
-						</ul>
-					}
-					if len(pos.Candidates) > 0 {
-						<ul class="candidate-list">
-							for _, cand := range pos.Candidates {
-								@components.ListItem("candidate-row", nil, cand.Name) {
-									<span class="muted">{ cand.SchedulePreference }</span>
-									if cand.FrequencyWarning != "" {
-										@components.ConflictBadge(cand.FrequencyWarning)
-									}
-									if cand.BlockoutWarning != "" {
-										@components.ConflictBadge(cand.BlockoutWarning)
-									}
-									if cand.CrossTeamWarning != "" {
-										@components.ConflictBadge(cand.CrossTeamWarning)
-									}
-									<form hx-post={ fmt.Sprintf("/scheduling/rosters/%s/%s/assignments", data.ServiceTypeID, data.PlanID) } hx-target="#roster-builder-body" hx-swap="outerHTML">
-										<input type="hidden" name="person_id" value={ cand.PersonID }/>
-										<input type="hidden" name="team_id" value={ pos.TeamID }/>
-										<input type="hidden" name="team_position_name" value={ pos.TeamPositionName }/>
-										<button type="submit" class="icon-btn" aria-label="Add to position" title="Add to position">
-											@components.IconAdd()
-										</button>
-									</form>
-								}
-							}
-						</ul>
-					} else if len(pos.Assigned) == 0 {
-						<p class="muted">No one eligible for this position yet.</p>
-					}
+			<div class="team-group">
+				<h3 class="team-group-heading">{ group.TeamName }</h3>
+				for _, item := range group.Positions {
+					{{ i := item.Index }}
+					{{ pos := item.Pos }}
 					<!--
-						Ad hoc eligibility - the most directly-motivated quick-add on
-						this page (this text used to just dead-end to "add eligibility
-						under Position Preferences" and send the user away). Posts
-						straight at this position (team/position id already known from
-						the card), same underlying operation as
-						PositionPreferencesPage's own form - see
-						QuickAddPositionPreference in rosters.go. Omitted when the
-						position's id lookup failed (best-effort, same as the rest of
-						this page - see PositionGroupView.TeamPositionID) rather than
-						posting to a blank id.
+						Fully-staffed positions are the low-signal case - collapsed by
+						default so an almost-done roster doesn't look as busy as a
+						mostly-empty one; still-open positions (the ones actually
+						needing a decision) stay expanded (see collapsibleCard).
 					-->
-					if pos.TeamPositionID != "" {
-						@collapsibleSection(fmt.Sprintf("quick-add-position-%d", i), "+ Add eligible person", false) {
-							<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/position-preferences", data.ServiceTypeID, data.PlanID) } hx-target="#roster-builder-body" hx-swap="outerHTML">
-								<input type="hidden" name="team_id" value={ pos.TeamID }/>
-								<input type="hidden" name="team_position_id" value={ pos.TeamPositionID }/>
-								@PersonPickerField("Person", "person_id", fmt.Sprintf("qapos%d", i))
-								<label>
-									Schedule preference
-									<select name="schedule_preference">
-										for _, opt := range data.SchedulePreferenceOptions {
-											<option value={ opt.Value }>{ opt.Label }</option>
+					@collapsibleCard(fmt.Sprintf("position-group-%d", i), len(pos.Assigned) < pos.Quantity, positionHeading(pos)) {
+						if len(pos.Assigned) > 0 {
+							<ul class="assignment-list">
+								for _, a := range pos.Assigned {
+									@components.ListItem("", templ.Attributes{"data-row-id": fmt.Sprintf("%d", a.ID), "onclick": "selectPersonRow(this, event)"}, a.Name) {
+										@components.Badge("", a.Status)
+										if a.Published {
+											@components.Badge("published", "Published")
 										}
-									</select>
-								</label>
-								<button type="submit" class="primary">Add eligibility</button>
-							</form>
+										if a.FrequencyWarning != "" {
+											@components.ConflictBadge(a.FrequencyWarning)
+										}
+										if a.BlockoutWarning != "" {
+											@components.ConflictBadge(a.BlockoutWarning)
+										}
+										if a.CrossTeamWarning != "" {
+											@components.ConflictBadge(a.CrossTeamWarning)
+										}
+										<button
+											type="button"
+											class="danger icon-btn"
+											aria-label="Remove from position"
+											title="Remove from position"
+											hx-delete={ fmt.Sprintf("/scheduling/rosters/%s/%s/assignments/%d", data.ServiceTypeID, data.PlanID, a.ID) }
+											hx-target="#roster-builder-body"
+											hx-swap="outerHTML"
+											hx-confirm="Remove this person from this position?"
+										>
+											@components.IconRemove()
+										</button>
+									}
+								}
+							</ul>
+						}
+						if len(pos.Candidates) > 0 {
+							<ul class="candidate-list">
+								for _, cand := range pos.Candidates {
+									@components.ListItem("candidate-row", nil, cand.Name) {
+										<span class="muted">{ cand.SchedulePreference }</span>
+										if cand.FrequencyWarning != "" {
+											@components.ConflictBadge(cand.FrequencyWarning)
+										}
+										if cand.BlockoutWarning != "" {
+											@components.ConflictBadge(cand.BlockoutWarning)
+										}
+										if cand.CrossTeamWarning != "" {
+											@components.ConflictBadge(cand.CrossTeamWarning)
+										}
+										<form hx-post={ fmt.Sprintf("/scheduling/rosters/%s/%s/assignments", data.ServiceTypeID, data.PlanID) } hx-target="#roster-builder-body" hx-swap="outerHTML">
+											<input type="hidden" name="person_id" value={ cand.PersonID }/>
+											<input type="hidden" name="team_id" value={ pos.TeamID }/>
+											<input type="hidden" name="team_position_name" value={ pos.TeamPositionName }/>
+											<button type="submit" class="icon-btn" aria-label="Add to position" title="Add to position">
+												@components.IconAdd()
+											</button>
+										</form>
+									}
+								}
+							</ul>
+						} else if len(pos.Assigned) == 0 {
+							<p class="muted">No one eligible for this position yet.</p>
+						}
+						<!--
+							Ad hoc eligibility - the most directly-motivated quick-add on
+							this page (this text used to just dead-end to "add eligibility
+							under Position Preferences" and send the user away). Posts
+							straight at this position (team/position id already known from
+							the card), same underlying operation as
+							PositionPreferencesPage's own form - see
+							QuickAddPositionPreference in rosters.go. Omitted when the
+							position's id lookup failed (best-effort, same as the rest of
+							this page - see PositionGroupView.TeamPositionID) rather than
+							posting to a blank id.
+						-->
+						if pos.TeamPositionID != "" {
+							@collapsibleSection(fmt.Sprintf("quick-add-position-%d", i), "+ Add eligible person", false) {
+								<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/position-preferences", data.ServiceTypeID, data.PlanID) } hx-target="#roster-builder-body" hx-swap="outerHTML">
+									<input type="hidden" name="team_id" value={ pos.TeamID }/>
+									<input type="hidden" name="team_position_id" value={ pos.TeamPositionID }/>
+									@PersonPickerField("Person", "person_id", fmt.Sprintf("qapos%d", i))
+									<label>
+										Schedule preference
+										<select name="schedule_preference">
+											for _, opt := range data.SchedulePreferenceOptions {
+												<option value={ opt.Value }>{ opt.Label }</option>
+											}
+										</select>
+									</label>
+									<button type="submit" class="primary">Add eligibility</button>
+								</form>
+							}
 						}
 					}
-			}
+				}
+			</div>
 		}
 		<!--
 			See SetBuilderBodyContent's matching comment - the publish/discard

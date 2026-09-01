@@ -1,17 +1,42 @@
 /* Backs internal/views/card.templ's Card, and (combined with .collapsible)
    scheduling/collapsible.templ's collapsibleCard. */
 
-/* Each position on the roster builder gets its own card - previously an
-   unstyled div, so positions ran together with nothing but an <h3> to tell
-   them apart. */
-.position-group {
+/* One card per team on the roster builder (see groupPositionsByTeam,
+   roster_builder.templ) - groups a team's positions together so it's
+   visually clear where one team ends and the next begins, instead of a
+   flat stack of same-looking position cards with only repeated "Team /
+   Position" text to tell them apart. */
+.team-group {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: var(--space-4) var(--space-5);
-  margin-block: var(--space-4);
+  margin-block: var(--space-6);
 }
 
-.position-group h3 {
-  margin-top: 0;
+.team-group-heading {
+  margin: 0 0 var(--space-1);
+}
+
+/* Positions nested inside a team-group are compact rows, not their own
+   cards - the .team-group above already supplies the border/background/
+   radius once per team, so each position just needs a divider from its
+   neighbor and far less of its own padding than the old standalone
+   .position-group card had (previously var(--space-4) var(--space-5) of
+   padding *plus* a var(--space-4) margin between every single position -
+   the "each position takes up too much space" this replaces). */
+.team-group .position-group {
+  background: none;
+  border: none;
+  border-radius: 0;
+  padding: var(--space-2) 0;
+  margin-block: 0;
+}
+
+.team-group .position-group + .position-group {
+  border-top: 1px solid var(--border);
+}
+
+.team-group .position-group h3 {
+  margin: 0;
 }

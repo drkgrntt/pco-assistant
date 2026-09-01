@@ -112,6 +112,24 @@ main:has(.build-layout) {
   font-weight: var(--font-medium);
 }
 
+/* TeamGlanceList's per-team sub-heading - lighter than the card's own
+   uppercase h3 ("Team, at a glance"), since this is one level down from
+   that, not a second card title. Each team gets its own .build-glance-list
+   right after, so the list's own bottom margin already separates one
+   team's positions from the next heading - this only needs a small top
+   margin, zeroed on the first one so it sits flush under the status
+   chips instead of floating an extra gap below them. */
+.build-glance-team-heading {
+  margin: var(--space-2) 0 var(--space-1);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--muted);
+}
+
+.build-glance-team-heading:first-child {
+  margin-top: 0;
+}
+
 @media (min-width: 900px) {
   .build-layout {
     flex-direction: row;
