@@ -445,6 +445,60 @@ document.addEventListener("htmx:afterSettle", function () {
   document.addEventListener("htmx:timeout", requestSettled);
 })();
 
+// Plain <a href> full-page navigation (e.g. the plan links in
+// build.templ's plan list) isn't htmx-driven, so none of the
+// htmx:beforeRequest/afterRequest machinery above ever runs for it - the
+// browser's own loading chrome is all that shows, and that's often subtle
+// or invisible on mobile, leaving nothing on screen between the tap and
+// the next page's paint. Reuses the same #htmx-progress-bar for that case:
+// any plain, same-origin, unmodified left-click on a link starts it
+// sweeping right away. There's deliberately no matching "stop" here - the
+// page is about to be replaced by the browser's own navigation, the same
+// way its native loading indicator just runs until that happens.
+document.addEventListener("click", function (event) {
+  // Anything other than a plain left-click - the middle button, or a
+  // held modifier that opens the link in a new tab/window/download
+  // instead of navigating this one away - isn't really "this page is
+  // about to navigate," so there's nothing here to show a cue for.
+  if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+    return;
+  }
+
+  var link = event.target.closest("a[href]");
+  if (!link || link.closest("[hx-boost]") || link.hasAttribute("hx-get") || link.hasAttribute("hx-post")) {
+    return;
+  }
+  // target="_blank" (or any non-default target) opens elsewhere rather
+  // than navigating this tab away; download links save a file instead of
+  // navigating at all - neither leaves this page loading.
+  if ((link.target && link.target !== "_self") || link.hasAttribute("download")) {
+    return;
+  }
+
+  var url;
+  try {
+    url = new URL(link.href, window.location.href);
+  } catch (e) {
+    return;
+  }
+  // Cross-origin links (including mailto:/tel:, whose "origin" never
+  // matches) navigate away from the app entirely - nothing here to show
+  // a same-app loading cue for.
+  if (url.origin !== window.location.origin) {
+    return;
+  }
+  // A same-page fragment link (#section on the current URL) doesn't
+  // trigger a real navigation/reload either.
+  if (url.pathname === window.location.pathname && url.search === window.location.search && url.hash) {
+    return;
+  }
+
+  var bar = document.getElementById("htmx-progress-bar");
+  if (bar) {
+    bar.classList.add("active");
+  }
+});
+
 // selectPerson fills a person picker's hidden person_id input and visible
 // search box from a clicked search result's data attributes (see
 // PersonSearchResults in internal/views/scheduling/person_picker.templ),
@@ -562,11 +616,63 @@ function cancelSetupEdit(button) {
 // toggle-plus-aria-expanded idiom as toggleNavDropdown above, just without
 // the floating-menu positioning since these sit inline in the page rather
 // than popping over it.
+//
+// Every explicit toggle here is also remembered in localStorage, keyed by
+// the section's own stable id (find-songs-candidates, position-group-N,
+// etc. - see collapsible.templ) so a person who collapses sections they
+// don't need doesn't have to redo that on every reload - see
+// applyStoredCollapsibleState below for the read-back half of this. This
+// is the reload equivalent of openCollapsibleIDs further down, which only
+// covers state surviving an htmx swap within the same page load; the two
+// don't conflict since a swap's restore just reapplies whatever's already
+// live in the DOM (itself already reconciled with localStorage by the
+// time any swap can happen).
+//
+// filterCandidates()/toggleRoleFilter() below force a section open by
+// touching its classList/aria-expanded directly rather than calling this
+// function, specifically so that force-open never gets recorded here as
+// an explicit "open" choice - and, symmetrically, a stored "closed" state
+// never overrides one of those force-opens, since applyStoredCollapsibleState
+// only ever runs once, on initial page load, well before either of those
+// can fire.
+function collapsibleStorageKey(id) {
+  return "collapsible-" + id;
+}
+
 function toggleCollapse(button) {
   var section = button.closest(".collapsible");
   var open = section.classList.toggle("open");
   button.setAttribute("aria-expanded", open ? "true" : "false");
+  if (section.id) {
+    localStorage.setItem(collapsibleStorageKey(section.id), open ? "open" : "closed");
+  }
 }
+
+// Read-back half of the above: applies whichever open/closed state was
+// last explicitly chosen for each collapsible section, once, on initial
+// page load - a section with no stored state (never toggled, or a newer
+// section id nothing's been saved for yet) just keeps whatever the
+// server rendered it as (see collapsibleSection/collapsibleCard's own
+// `open` param). Deliberately DOMContentLoaded only, not also wired to
+// htmx:afterSwap the way wireSortableTables is - the swap-time restore
+// below (openCollapsibleIDs) already carries the live, currently-correct
+// open/closed set forward across swaps, so re-reading localStorage there
+// would be redundant at best.
+function applyStoredCollapsibleState() {
+  document.querySelectorAll(".collapsible[id]").forEach(function (section) {
+    var stored = localStorage.getItem(collapsibleStorageKey(section.id));
+    if (stored !== "open" && stored !== "closed") {
+      return;
+    }
+    var open = stored === "open";
+    section.classList.toggle("open", open);
+    var toggle = section.querySelector(".collapsible-toggle");
+    if (toggle) {
+      toggle.setAttribute("aria-expanded", open ? "true" : "false");
+    }
+  });
+}
+document.addEventListener("DOMContentLoaded", applyStoredCollapsibleState);
 
 // Every mutation on the set/roster builders re-renders the whole
 // #set-builder-body/#roster-builder-body (see the htmx attributes
