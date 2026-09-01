@@ -161,6 +161,17 @@ templ BuildPlansResults(plans []PlanRow, serviceTypeID, search string, page, tot
 // rendered server-side so a direct link to ?tab=team lands there with no
 // JS flash of the Songs tab first, rather than relying entirely on
 // toggleBuildTab (scheduling.js) to sort it out after the page loads.
+//
+// Only activeTab's own data is actually built by BuildPlanPage - see
+// pco-api-risks.md's mitigation #3. The *other* tab's SetBuilderData/
+// RosterBuilderData argument here is a zero value except for
+// ServiceTypeID/PlanID (BuildPlanPage copies those across regardless of
+// which tab built for real, so this header and tabPanelLazyAttrs' fetch
+// URLs always have something to point at). Every place below that reads from
+// the inactive tab's data is guarded by an `if activeTab == ...` check
+// mirroring which one is real - the zero value is never actually
+// rendered, only ever sitting there inert until the lazy fetch below
+// replaces it.
 templ BuildPlan(personName, organizationName string, setData SetBuilderData, rosterData RosterBuilderData, activeTab string) {
 	@views.Layout("Build a Service", personName, organizationName) {
 		<h1>
@@ -186,11 +197,39 @@ templ BuildPlan(personName, organizationName string, setData SetBuilderData, ros
 			Songs and Team are two independently-interactive builders (each
 			with its own htmx swap target, see SetBuilderBody/RosterBuilderBody)
 			that used to just stack on one long page. Splitting them into tabs
-			cuts what's on screen at once roughly in half without changing
-			either builder's markup or behavior at all - switching is a plain
-			client-side hidden toggle (toggleBuildTab, scheduling.js), so both
-			panels still fully server-render on every page load exactly as
-			before.
+			cuts what's on screen at once roughly in half - switching is a
+			plain client-side hidden toggle (toggleBuildTab, scheduling.js).
+
+			Only the active tab's builder actually server-rendered above (see
+			pco-api-risks.md's mitigation #3) - the inactive one shows a
+			loading placeholder here instead, and fetches its real content
+			starting as soon as this page itself has rendered (a "load"
+			hx-trigger, not gated on the user hovering/clicking its tab button
+			first - see tabPanelLazyAttrs/lazyTabTrigger below), so it's got as
+			much of a head start as possible by the time the user actually
+			looks at it. hx-get/hx-trigger live on the tab panel itself, not
+			the tab button - see tabPanelLazyAttrs' own doc comment for why
+			that's not just a style choice (a real bug: scheduling.js's
+			app-wide htmx-request feedback disables whatever element a
+			request is attached to, and it can't tell this "load" from a real
+			click - putting it on the button left the button unclickable for
+			as long as the background fetch was still running). Its own tab
+			panel and its sidebar glance card below both fill in together
+			once that fetch resolves (SetBuilderBodyLazy/RosterBuilderBodyLazy,
+			set_builder.templ/roster_builder.templ).
+
+			That fetch can still be in flight when the user switches tabs by
+			hand (the whole reason it's deferred at all is that it's usually
+			the slower tab) - its own out-of-band fragments only know
+			whether this tab was still inactive when the *request* went out,
+			so landing after a manual switch would otherwise stamp that
+			stale hidden state right back over whatever toggleBuildTab just
+			set. scheduling.js's syncBuildTabVisibility/currentBuildTab
+			closes that race by re-deriving every tab-scoped element's
+			hidden state from whichever tab is actually aria-selected right
+			now, after every htmx swap settles - not just after a click - so
+			hidden state stays correct regardless of which of the two
+			(click vs. background fetch) finishes last.
 
 			The sidebar (.build-glance) is the one thing that isn't just "the
 			inactive tab, hidden" - it's a standing glance at whichever tab
@@ -204,7 +243,9 @@ templ BuildPlan(personName, organizationName string, setData SetBuilderData, ros
 			since the counts alone don't say *what's* in the lineup or *who's*
 			on it. Only one of the two cards is ever visible at a time
 			(toggleBuildTab shows whichever one belongs to the tab that just
-			went hidden).
+			went hidden) - and since it's the *other* tab's data it always
+			needs, it carries the same loading-placeholder treatment as that
+			tab's own main panel until the lazy fetch above fills it in too.
 		-->
 		<!--
 			normalizedTab mirrors activeTab's own "anything but 'team' means
@@ -219,11 +260,19 @@ templ BuildPlan(personName, organizationName string, setData SetBuilderData, ros
 		<div class="build-layout">
 			<div class="build-main">
 				@buildTabs([]BuildTab{{ID: "songs", Label: "Songs"}, {ID: "team", Label: "Team"}}, normalizedTab)
-				<div class="build-tab-panel" id="build-tab-songs" role="tabpanel" hidden?={ activeTab == "team" }>
-					@SetBuilderBodyContent(setData)
+				<div class="build-tab-panel" id="build-tab-songs" role="tabpanel" hidden?={ activeTab == "team" } { tabPanelLazyAttrs(lazyTabURL(activeTab != "team", setData.ServiceTypeID, setData.PlanID, "songs"))... }>
+					if activeTab == "team" {
+						@buildTabLoadingSkeleton()
+					} else {
+						@SetBuilderBodyContent(setData)
+					}
 				</div>
-				<div class="build-tab-panel" id="build-tab-team" role="tabpanel" hidden?={ activeTab != "team" }>
-					@RosterBuilderBodyContent(rosterData)
+				<div class="build-tab-panel" id="build-tab-team" role="tabpanel" hidden?={ activeTab != "team" } { tabPanelLazyAttrs(lazyTabURL(activeTab == "team", rosterData.ServiceTypeID, rosterData.PlanID, "team"))... }>
+					if activeTab != "team" {
+						@buildTabLoadingSkeleton()
+					} else {
+						@RosterBuilderBodyContent(rosterData)
+					}
 				</div>
 			</div>
 			<!--
@@ -240,19 +289,75 @@ templ BuildPlan(personName, organizationName string, setData SetBuilderData, ros
 				@SongDetailCards(setData, activeTab == "team")
 				@RosterPublishPanel(rosterData, activeTab != "team")
 				@PersonDetailCards(rosterData, activeTab != "team")
-				<div class="build-glance-card" id="build-glance-team" hidden?={ activeTab == "team" }>
-					<h3>Team, at a glance</h3>
-					@RosterStatusSummary(rosterData)
-					@TeamGlanceList(rosterData.Positions)
-					<button type="button" onclick="toggleBuildTab('team')">Switch to Team</button>
-				</div>
-				<div class="build-glance-card" id="build-glance-songs" hidden?={ activeTab != "team" }>
-					<h3>Songs, at a glance</h3>
-					@SongStatusSummary(setData)
-					@SongGlanceList(setData.ServiceOrder)
-					<button type="button" onclick="toggleBuildTab('songs')">Switch to Songs</button>
-				</div>
+				@glanceCardShell("build-glance-team", activeTab == "team") {
+					if activeTab == "team" {
+						@rosterGlanceContent(rosterData)
+					} else {
+						<h3>Team, at a glance</h3>
+						@buildTabLoadingSkeleton()
+					}
+				}
+				@glanceCardShell("build-glance-songs", activeTab != "team") {
+					if activeTab != "team" {
+						@songGlanceContent(setData)
+					} else {
+						<h3>Songs, at a glance</h3>
+						@buildTabLoadingSkeleton()
+					}
+				}
 			</aside>
 		</div>
+	}
+}
+
+// buildTabLoadingSkeleton is the placeholder shown in a tab panel or
+// glance card whose data hasn't been fetched yet - see BuildPlan's own
+// comment on the lazy-load flow above.
+templ buildTabLoadingSkeleton() {
+	<p class="muted">Loading…</p>
+}
+
+// lazyTabURL returns the URL a deferred tab's panel should lazy-fetch
+// from, or "" (no fetch) when eager is true - eager means this tab's data
+// was already built server-side (it's the active tab), so there's nothing
+// to fetch. Small wrapper around fmt.Sprintf so BuildPlan's panel divs
+// stay readable with two of these side by side.
+func lazyTabURL(eager bool, serviceTypeID, planID, tab string) string {
+	if eager {
+		return ""
+	}
+	return fmt.Sprintf("/scheduling/build/%s/%s/%s-tab", serviceTypeID, planID, tab)
+}
+
+// tabPanelLazyAttrs returns the hx-get/hx-trigger/hx-swap a deferred tab's
+// panel div needs to fetch its own real content, or nil when lazyURL == ""
+// (this tab is already active/eager). Deliberately attached to the panel
+// div, not the tab button, even though the button is what tabButtonAttrs
+// keeps ownership of onclick for: scheduling.js's app-wide htmx-request
+// feedback (see its own doc comment) disables whatever element
+// event.detail.elt points at for the duration of any htmx request,
+// entirely by matching it against "button, input[type=submit]" - it has
+// no way to distinguish a genuine user click from an automatic "load"
+// trigger firing on page render. Putting hx-get on the tab button meant
+// the very first load-triggered fetch (the whole point of
+// lazyTabTrigger's "load" clause) disabled that button for as long as the
+// fetch was in flight - unclickable, not even dimmed, for exactly the
+// window this deferred fetch exists to cover, since that's usually the
+// slower of the two tabs. The panel div is never a <button>, and (at
+// fetch time) never contains one either - it's still just
+// buildTabLoadingSkeleton's <p> - so scheduling.js's check never matches
+// it. No explicit hx-target: the default (the element hx-get lives on) is
+// already the right one now that it's on the panel itself, and
+// hx-swap="innerHTML" leaves this div's own id/hidden/role attributes -
+// which toggleBuildTab/syncBuildTabVisibility still toggle by id,
+// independent of this fetch - untouched.
+func tabPanelLazyAttrs(lazyURL string) templ.Attributes {
+	if lazyURL == "" {
+		return nil
+	}
+	return templ.Attributes{
+		"hx-get":     lazyURL,
+		"hx-trigger": lazyTabTrigger,
+		"hx-swap":    "innerHTML",
 	}
 }

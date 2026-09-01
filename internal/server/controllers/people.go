@@ -114,16 +114,35 @@ func relationshipPersonIDs(relationships []scheduling.PersonRelationship) []stri
 	return ids
 }
 
+// personIDBatchSize caps how many ids personNameMapForIDs puts in one
+// `where[id]=...` call - PCO's People#index accepts a comma-joined id list
+// (confirmed live; `can_query_by` includes "id") but still paginates like
+// any other request, so PerPage is set to match each chunk and results
+// beyond PCO's own per-page ceiling would otherwise silently truncate.
+// 100 matches PCO's documented per_page maximum across its APIs.
+const personIDBatchSize = 100
+
 // personNameMapForIDs resolves a specific set of PCO person ids to display
 // names - like personNameMap in scheduling.go, but for callers (person
 // relationships, rosters) that already know exactly which ids they need
-// rather than deriving them from a preferences list. An id that fails to
-// resolve is simply left out; callers fall back to showing the raw id.
+// rather than deriving them from a preferences list. Batches ids into one
+// `where[id]=...` call per personIDBatchSize ids rather than one GetPerson
+// round trip per id (see pco-api-risks.md's mitigation #2 - this was the
+// single biggest source of PCO calls on the Team Builder page). An id that
+// fails to resolve is simply left out; callers fall back to showing the raw
+// id.
 func personNameMapForIDs(ctx context.Context, ids []string) map[string]string {
 	names := make(map[string]string, len(ids))
-	for _, id := range ids {
-		if person, err := pco.GetPerson(ctx, id); err == nil {
-			names[id] = person.Data.Attributes.Name
+	for start := 0; start < len(ids); start += personIDBatchSize {
+		end := min(start+personIDBatchSize, len(ids))
+		batch := ids[start:end]
+
+		people, err := pco.GetPeople(ctx, &pco.PeopleParams{IDs: batch, PerPage: len(batch)})
+		if err != nil {
+			continue // best-effort, same as every other lookup here - callers fall back to raw ids
+		}
+		for _, person := range people.Data {
+			names[person.ID] = person.Attributes.Name
 		}
 	}
 	return names

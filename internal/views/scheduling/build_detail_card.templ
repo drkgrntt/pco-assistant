@@ -33,8 +33,12 @@ templ buildDetailGroupShell(id string, hidden bool) {
 	</div>
 }
 
-templ buildDetailGroupShellOOB(id string) {
-	<div class="build-detail-group" id={ id } hx-swap-oob="true">
+// hidden mirrors publishCardShellOOB's own param - see its doc comment for
+// why every existing caller passes false (own tab already active) and the
+// lazy-load callers (songDetailCardsLazyOOB/personDetailCardsLazyOOB) pass
+// true instead.
+templ buildDetailGroupShellOOB(id string, hidden bool) {
+	<div class="build-detail-group" id={ id } hidden?={ hidden } hx-swap-oob="true">
 		{ children... }
 	</div>
 }

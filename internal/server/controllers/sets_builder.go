@@ -774,21 +774,37 @@ func buildSongNoteViews(ctx context.Context, serviceTypeID, planID, itemID strin
 // buildSongNoteViews) - a service type has few of these, so one shared
 // fetch instead of a category lookup per song.
 func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizationID, serviceTypeID, planID string, arrangementCache map[string]scheduling.SongArrangementInfo, noteCategories []pco.ItemNoteCategoryData, rows []mergedRow, titles map[string]string, rolesBySong map[string][]scheduling.SongRole, roleTypeLabels map[string]string) []views.ServiceOrderRow {
-	out := make([]views.ServiceOrderRow, 0, len(rows))
+	// Each row is independent of every other - a foreign item is pure local
+	// data, and a song row's PCO calls (resolveArrangementCacheInfo,
+	// buildSongNoteViews) only read arrangementCache/noteCategories, never
+	// write them (resolveArrangementCacheInfo's cache-miss path upserts to
+	// Postgres, not this in-memory map - see its own doc comment), so
+	// there's nothing here for concurrent rows to race on. out is pre-sized
+	// and each goroutine only ever writes its own index, so no lock is
+	// needed for that either. See pco-api-risks.md's concurrency
+	// mitigation - this replaces a sequential per-row loop that paid every
+	// song's GetItemNotes/GetArrangements/GetKeys latency one at a time.
+	out := make([]views.ServiceOrderRow, len(rows))
 
-	for _, row := range rows {
+	indexes := make([]int, len(rows))
+	for i := range rows {
+		indexes[i] = i
+	}
+
+	runConcurrently(indexes, func(i int) {
+		row := rows[i]
 		if row.Item != nil {
 			label := row.Item.Attributes.Title
 			if label == "" {
 				label = row.Item.Attributes.ItemType
 			}
-			out = append(out, views.ServiceOrderRow{
+			out[i] = views.ServiceOrderRow{
 				IsSong:    false,
 				ItemID:    row.Item.ID,
 				ItemTitle: label,
 				ItemType:  row.Item.Attributes.ItemType,
-			})
-			continue
+			}
+			return
 		}
 
 		ss := row.Song
@@ -810,7 +826,7 @@ func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizati
 		// no per-occurrence override to reflect.
 		displayInfo := arrangementInfo
 		displayInfo.Key = key
-		out = append(out, views.ServiceOrderRow{
+		out[i] = views.ServiceOrderRow{
 			IsSong: true,
 			Song: views.SetSongView{
 				ID:              ss.ID,
@@ -828,8 +844,8 @@ func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizati
 				PCOItemID:       ss.PCOItemID,
 				Notes:           buildSongNoteViews(ctx, serviceTypeID, planID, ss.PCOItemID, noteCategories),
 			},
-		})
-	}
+		}
+	})
 
 	return out
 }

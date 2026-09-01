@@ -51,8 +51,14 @@ templ publishCardShell(id string, hidden bool) {
 	</div>
 }
 
-templ publishCardShellOOB(id string) {
-	<div class="build-publish-card" id={ id } hx-swap-oob="true">
+// hidden here (unlike publishCardShell's own required param) exists only
+// for the lazy-load OOB variants below (songPublishPanelLazyOOB/
+// rosterPublishPanelLazyOOB): every other caller fires while its own tab
+// is already the active one (see songPublishPanelOOB's doc comment) and
+// passes false, matching the pre-existing behavior of never setting
+// hidden at all.
+templ publishCardShellOOB(id string, hidden bool) {
+	<div class="build-publish-card" id={ id } hidden?={ hidden } hx-swap-oob="true">
 		{ children... }
 	</div>
 }
@@ -83,7 +89,22 @@ templ SongPublishPanel(data SetBuilderData, hidden bool) {
 }
 
 templ songPublishPanelOOB(data SetBuilderData) {
-	@publishCardShellOOB("build-publish-songs") {
+	@publishCardShellOOB("build-publish-songs", false) {
+		@songPublishPanelContent(data)
+	}
+}
+
+// songPublishPanelLazyOOB is songPublishPanelOOB's counterpart for
+// BuildSongsTabLazy (build.go) - fired while the Songs tab is the
+// *inactive*, just-fetched one (see pco-api-risks.md's mitigation #3), so
+// unlike songPublishPanelOOB it must stay hidden: without this, hovering
+// the Songs tab button while on Team would make the Songs publish/discard
+// controls pop into view in the sidebar before the user ever switches.
+// Still needed at all (not skippable) so that switching to Songs later,
+// via toggleBuildTab, reveals this card with real data instead of the
+// empty one rendered at initial page load.
+templ songPublishPanelLazyOOB(data SetBuilderData) {
+	@publishCardShellOOB("build-publish-songs", true) {
 		@songPublishPanelContent(data)
 	}
 }
@@ -175,7 +196,15 @@ templ RosterPublishPanel(data RosterBuilderData, hidden bool) {
 }
 
 templ rosterPublishPanelOOB(data RosterBuilderData) {
-	@publishCardShellOOB("build-publish-team") {
+	@publishCardShellOOB("build-publish-team", false) {
+		@rosterPublishPanelContent(data)
+	}
+}
+
+// rosterPublishPanelLazyOOB is songPublishPanelLazyOOB's people
+// equivalent - see its doc comment, which this mirrors in full.
+templ rosterPublishPanelLazyOOB(data RosterBuilderData) {
+	@publishCardShellOOB("build-publish-team", true) {
 		@rosterPublishPanelContent(data)
 	}
 }

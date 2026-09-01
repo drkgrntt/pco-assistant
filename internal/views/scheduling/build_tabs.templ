@@ -10,6 +10,40 @@ type BuildTab struct {
 	Label string
 }
 
+// tabButtonAttrs builds one tab button's full attribute set - just the
+// plain client-side toggleBuildTab onclick every tab gets. A plain Go
+// func rather than an inline templ attribute since scheduling.js's onclick
+// string is built the same way every tab, and keeping this as its own
+// small function leaves room for tabPanelLazyAttrs' doc comment to explain
+// why the lazy-fetch attributes deliberately do *not* live here too (see
+// build.templ).
+func tabButtonAttrs(t BuildTab) templ.Attributes {
+	return templ.Attributes{"onclick": fmt.Sprintf("toggleBuildTab('%s')", t.ID)}
+}
+
+// lazyTabTrigger is the hx-trigger a deferred tab's panel (see
+// tabPanelLazyAttrs, build.templ) fires its fetch on - just "load", firing
+// immediately once the page itself has rendered, the earliest possible
+// head start since the deferred tab (Team, in practice - see
+// pco-api-risks.md's mitigation #3) is usually the more expensive one.
+//
+// Deliberately just one trigger, not "load once, click once" - htmx's
+// "once" is tracked per trigger clause, not shared across them, so a
+// second clause doesn't mean "only if the first one didn't already fire":
+// it fires on its own regardless, which made every first click of a
+// deferred tab re-run the fetch even when "load" had already finished.
+// Worse, that redundant response's out-of-band fragments
+// (rosterPublishPanelLazyOOB etc.) still carry the "this tab is still
+// inactive" hidden state that was true when the request went out, so
+// landing it after toggleBuildTab already switched tabs stamped the wrong
+// hidden/visible state right back on top of what the click had just set
+// correctly. See scheduling.js's syncBuildTabVisibility/currentBuildTab
+// for the actual, ordering-independent fix to that (it can still happen
+// with only "load" firing, if that fetch is still in flight at the moment
+// of a click - the trigger fix here only stops making it worse with a
+// second, needless fetch on every click).
+const lazyTabTrigger = "load once"
+
 // buildTabs renders the Build page's tab-button row - factored out so the
 // tab/aria-selected/aria-controls/active-class quartet can't drift out of
 // sync with each other by hand if a third tab is ever added. activeTab
@@ -19,7 +53,7 @@ type BuildTab struct {
 templ buildTabs(tabs []BuildTab, activeTab string) {
 	<div class="build-tabs" role="tablist">
 		for _, t := range tabs {
-			<button type="button" class={ "build-tab", templ.KV("active", t.ID == activeTab) } role="tab" aria-selected={ fmt.Sprintf("%t", t.ID == activeTab) } aria-controls={ "build-tab-" + t.ID } { templ.Attributes{"onclick": fmt.Sprintf("toggleBuildTab('%s')", t.ID)}... }>{ t.Label }</button>
+			<button type="button" id={ "build-tab-button-" + t.ID } class={ "build-tab", templ.KV("active", t.ID == activeTab) } role="tab" aria-selected={ fmt.Sprintf("%t", t.ID == activeTab) } aria-controls={ "build-tab-" + t.ID } { tabButtonAttrs(t)... }>{ t.Label }</button>
 		}
 	</div>
 }

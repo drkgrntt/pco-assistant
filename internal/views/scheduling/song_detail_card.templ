@@ -33,7 +33,21 @@ templ SongDetailCards(data SetBuilderData, hidden bool) {
 }
 
 templ songDetailCardsOOB(data SetBuilderData) {
-	@buildDetailGroupShellOOB("build-detail-songs") {
+	@buildDetailGroupShellOOB("build-detail-songs", false) {
+		for _, row := range data.ServiceOrder {
+			if row.IsSong {
+				@songDetailCard(data, row.Song)
+			}
+		}
+	}
+}
+
+// songDetailCardsLazyOOB is songPublishPanelLazyOOB's detail-card
+// equivalent (see its doc comment) - BuildSongsTabLazy's counterpart to
+// songDetailCardsOOB, rendered hidden since the Songs tab is the inactive
+// one being fetched here, not the open one.
+templ songDetailCardsLazyOOB(data SetBuilderData) {
+	@buildDetailGroupShellOOB("build-detail-songs", true) {
 		for _, row := range data.ServiceOrder {
 			if row.IsSong {
 				@songDetailCard(data, row.Song)

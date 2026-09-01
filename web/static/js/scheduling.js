@@ -281,6 +281,36 @@ function toggleBuildTab(tabName) {
     tab.classList.toggle("active", active);
     tab.setAttribute("aria-selected", active ? "true" : "false");
   });
+  syncBuildTabVisibility(tabName);
+  // Keeps the address bar (and anything copied from it) pointing at
+  // whichever tab is actually open - see BuildPlanPage's ?tab= query param.
+  // replaceState, not pushState: switching tabs is a view change, not a
+  // new place to land on with the back button, same as htmx's own default
+  // history behavior elsewhere on this page.
+  var url = new URL(window.location.href);
+  url.searchParams.set("tab", tabName);
+  window.history.replaceState(null, "", url);
+}
+
+// syncBuildTabVisibility applies tabName's hidden/shown state to every
+// tab-scoped element on the Build page - the panels, and the sidebar's
+// glance/publish/detail-card groups. Split out of toggleBuildTab so it can
+// also re-run after any htmx swap settles (see the htmx:afterSettle
+// listener below), independent of an actual click on a tab button: the
+// deferred tab's data is fetched lazily and can still be in flight when
+// the user switches to it by hand (see pco-api-risks.md's mitigation #3 -
+// it's usually the slower tab, which is exactly why it's deferred at
+// all). That fetch's own out-of-band fragments (rosterPublishPanelLazyOOB
+// etc., build.templ) only know whether this tab was still inactive when
+// the *request* went out - if the response lands after the user already
+// clicked over, applying that stale hidden state would silently undo what
+// the click just set: hiding this tab's own publish/detail cards and
+// showing its glance card, exactly backwards from what should be visible
+// now that it's the open tab. Re-running this after every swap makes
+// "whichever tab's button is currently aria-selected" the one source of
+// truth for hidden state, no matter which of the two (the click, or the
+// background fetch) actually finishes last.
+function syncBuildTabVisibility(tabName) {
   document.querySelectorAll(".build-tab-panel").forEach(function (panel) {
     panel.hidden = panel.id !== "build-tab-" + tabName;
   });
@@ -305,15 +335,35 @@ function toggleBuildTab(tabName) {
     var groupTab = group.id.replace("build-detail-", "");
     group.hidden = groupTab !== tabName;
   });
-  // Keeps the address bar (and anything copied from it) pointing at
-  // whichever tab is actually open - see BuildPlanPage's ?tab= query param.
-  // replaceState, not pushState: switching tabs is a view change, not a
-  // new place to land on with the back button, same as htmx's own default
-  // history behavior elsewhere on this page.
-  var url = new URL(window.location.href);
-  url.searchParams.set("tab", tabName);
-  window.history.replaceState(null, "", url);
 }
+
+// currentBuildTab reads back whichever tab is actually open right now, by
+// finding the tab button toggleBuildTab last marked aria-selected - its
+// own bookkeeping, read back rather than tracked in a second place. ""
+// (no Build page tabs on this view) is a safe no-op for
+// syncBuildTabVisibility's caller below.
+function currentBuildTab() {
+  var active = document.querySelector('.build-tab[aria-selected="true"]');
+  if (!active) {
+    return "";
+  }
+  return active.getAttribute("aria-controls").replace("build-tab-", "");
+}
+
+// Re-syncs Build tab visibility after every htmx swap settles, not just
+// after an explicit toggleBuildTab click - see syncBuildTabVisibility's
+// own doc comment for the race this closes. afterSettle (not afterSwap)
+// so this runs once both the primary swap target and every out-of-band
+// fragment in the same response have already landed - running any earlier
+// would just get overwritten by whichever OOB fragment hadn't applied
+// yet. A no-op on every page without Build tabs, since currentBuildTab()
+// returns "" there.
+document.addEventListener("htmx:afterSettle", function () {
+  var tab = currentBuildTab();
+  if (tab) {
+    syncBuildTabVisibility(tab);
+  }
+});
 
 // App-wide "your click registered" feedback for every htmx-driven action.
 // Several of this app's own endpoints are themselves several sequential PCO

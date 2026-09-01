@@ -23,7 +23,19 @@ templ PersonDetailCards(data RosterBuilderData, hidden bool) {
 }
 
 templ personDetailCardsOOB(data RosterBuilderData) {
-	@buildDetailGroupShellOOB("build-detail-team") {
+	@buildDetailGroupShellOOB("build-detail-team", false) {
+		for _, pos := range data.Positions {
+			for _, a := range pos.Assigned {
+				@personDetailCard(data, a)
+			}
+		}
+	}
+}
+
+// personDetailCardsLazyOOB is songDetailCardsLazyOOB's people equivalent -
+// see its doc comment, which this mirrors in full.
+templ personDetailCardsLazyOOB(data RosterBuilderData) {
+	@buildDetailGroupShellOOB("build-detail-team", true) {
 		for _, pos := range data.Positions {
 			for _, a := range pos.Assigned {
 				@personDetailCard(data, a)
