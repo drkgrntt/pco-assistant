@@ -78,12 +78,30 @@ tr.song-row.selected {
   border-color: var(--accent);
 }
 
-/* The set builder's per-row action cluster (duplicate/remove/replace). */
+/* The set builder's per-row action cluster (duplicate/remove/replace),
+   plus the dot menu. This outer row never wraps - flex-wrap's line-break
+   decision is computed from each item's *hypothetical* (pre-shrink) width,
+   not its shrunk width, so a wide .set-song-actions-wrap could still push
+   the dot menu onto a second line even with order/flex-shrink on the dot
+   menu alone (confirmed live - that was the previous, insufficient fix).
+   Isolating the dot menu as a sibling of the sub-container that actually
+   wraps is what makes it structurally impossible for the dot menu to
+   participate in that wrap decision at all. */
 .set-song-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+/* Everything except the dot menu - free to wrap/shrink on a narrow row. */
+.set-song-actions-wrap {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.3rem;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .set-song-actions button {
@@ -116,15 +134,14 @@ tr.song-row.selected {
   padding: 0.3rem var(--space-2);
 }
 
-/* Keeps the row's "more actions" dot menu from getting caught up in the
-   replace-form's own wrapping/shrinking on a narrow viewport - flex-shrink:0
-   stops its own box (and the icon inside it) from squishing, and order
-   pins it after every other action regardless of DOM position, so on a
-   narrow row it's the replace-form that wraps/shrinks first while the dot
-   menu stays put on the right. */
-.set-song-actions .row-menu {
+/* The dot menu is already a DOM sibling of .set-song-actions-wrap (not
+   nested inside it), so it's structurally excluded from that
+   sub-container's own wrap/shrink behavior. flex-shrink:0 here is just a
+   safety net against its own box (and the icon inside it) squishing when
+   the outer, non-wrapping .set-song-actions row runs genuinely out of
+   room. */
+.set-song-actions > .row-menu {
   flex-shrink: 0;
-  order: 1;
 }
 
 .foreign-row {

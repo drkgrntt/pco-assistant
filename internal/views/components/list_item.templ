@@ -13,12 +13,15 @@ package components
 // title, with everything else (badges, muted meta, forms) following it.
 // This component makes that first-span-is-the-title rule structural
 // instead of a convention every call site has to remember to follow by
-// hand. list-item.css gives that title span flex-basis:100%, so it always
-// takes the row's first line by itself and every sibling after it wraps
-// onto the line(s) below - title-then-meta-underneath, the same shape
-// set_builder.templ's .song-meta uses for a set song's own row, rather
-// than badges/forms crowding the title on one line. class carries the
-// optional "candidate-row" modifier (suggestion/
+// hand. list-item.css gives that title span flex:1 1 auto, so it grows to
+// fill whatever width its trailing siblings (badges, forms) don't need,
+// keeping title + trailing content together on the row's first line with
+// the trailing content shrink-to-content and right-aligned - the one
+// exception is a span with the "arrangement-info" class (meter/bpm/key -
+// set_builder.templ's songCandidateMeta), which list-item.css forces onto
+// its own full-width line below, the same title-then-meta-underneath
+// shape set_builder.templ's own .song-meta uses for a set song's own row.
+// class carries the optional "candidate-row" modifier (suggestion/
 // assignment rows leave it ""); attrs carries whatever data-*/onclick
 // attributes that particular row needs (candidate rows' data-title/
 // data-roles/data-tags for filterCandidates(), assignment rows'
