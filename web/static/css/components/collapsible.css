@@ -31,7 +31,39 @@
   transition: transform var(--duration-base) var(--ease-standard);
 }
 
-.collapsible.open .collapsible-toggle .icon {
+/*
+   Both rules below use a CHILD combinator (>), not a descendant one, and
+   deliberately - roster_builder.templ nests one collapsibleSection (the
+   per-position "+ Add eligible person" quick-add) inside a collapsibleCard
+   (the position-group card itself), so an open position card's own
+   .collapsible-body is an ancestor of the nested section's .collapsible-
+   body/.collapsible-toggle too. A descendant selector (` ` instead of `>`)
+   matches ANY such ancestor, not just the nearest one - so with a plain
+   `.collapsible.open .collapsible-body` rule, the nested "+ Add eligible
+   person" section rendered pre-expanded (body visible, chevron rotated)
+   any time the position card around it happened to be open, regardless of
+   its own `open` prop (always false) or its own toggle ever being
+   clicked - closest(".collapsible") in scheduling.js's toggleCollapse
+   correctly flips the nested section's own "open" class, but that had no
+   visual effect, since the outer ancestor's "open" class alone was enough
+   to satisfy the descendant selector either way. Root-caused by
+   reproducing it live (rendering the real components + real CSS) rather
+   than from static reading, which didn't turn up anything conclusive - see
+   issues.md.
+
+   The child combinator scopes each rule to only the *directly* enclosing
+   collapsible, which .collapsible-body always is (both collapsibleSection
+   and collapsibleCard render it as their own div's last direct child).
+   .collapsible-toggle needs two forms since its own direct parent differs
+   between the two components: collapsibleSection's toggle is a direct
+   child of the collapsible div itself, while collapsibleCard's is one
+   level deeper, inside its own <h3> (see collapsible.templ) - both direct
+   descendants of *their own* collapsible, just at different depths, so
+   two explicit selectors cover both instead of a slower/broader :has()
+   trick.
+*/
+.collapsible.open > .collapsible-toggle .icon,
+.collapsible.open > h3 > .collapsible-toggle .icon {
   transform: rotate(180deg);
 }
 
@@ -39,7 +71,7 @@
   display: none;
 }
 
-.collapsible.open .collapsible-body {
+.collapsible.open > .collapsible-body {
   display: block;
 }
 

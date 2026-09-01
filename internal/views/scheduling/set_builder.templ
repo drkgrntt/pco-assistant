@@ -169,7 +169,14 @@ templ songCandidateMeta(cand CandidateSongView) {
 		@components.BadgeTitled("status-pending", cand.NewSongLabel, "New to the church - a repeat helps it stick")
 	}
 	if cand.ArrangementInfo != "" {
-		<span class="muted">{ cand.ArrangementInfo }</span>
+		<!--
+			arrangement-info is a distinguishing class, not just styling -
+			list-item.css singles it out to force its own full-width line
+			below the title, while every other sibling here (badges, the
+			add form) shares the title's own first line instead. See
+			list-item.css's comment on that rule for why.
+		-->
+		<span class="muted arrangement-info">{ cand.ArrangementInfo }</span>
 	}
 	for _, role := range cand.Roles {
 		@components.Badge("", role.Label)
@@ -316,49 +323,69 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 								-->
 								<td>
 									if !data.ReadOnly {
+										<!--
+											The dot menu must never wrap onto its own line, even
+											when duplicate/remove/replace-form together are too
+											wide for the row - and flex-wrap can't be trusted to
+											honor that via order/flex-shrink alone, because wrap
+											placement is computed from each item's *hypothetical*
+											(pre-shrink) width, not its shrunk width, so a wide
+											.replace-form can still push the dot menu to a second
+											line regardless of order (confirmed live: the previous
+											order:1/flex-shrink:0-only fix looked right on paper
+											but didn't hold up at narrow widths). Structural fix
+											instead: only the duplicate/remove/replace-form cluster
+											lives in its own wrapping sub-container
+											(.set-song-actions-wrap); the dot menu is a sibling
+											outside it, so it's never a participant in that
+											sub-container's wrap calculation at all. The outer
+											.set-song-actions row itself never wraps.
+										-->
 										<div class="set-song-actions">
-											<button
-												type="button"
-												class="icon-btn"
-												aria-label="Duplicate song (e.g. reprise as the response)"
-												title="Duplicate song (e.g. reprise as the response)"
-												hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/duplicate", data.ServiceTypeID, data.PlanID, row.Song.ID) }
-												hx-target="#set-builder-body"
-												hx-swap="outerHTML"
-											>
-												@components.IconCopy()
-											</button>
-											<button
-												type="button"
-												class="danger icon-btn"
-												aria-label="Remove from set"
-												title="Remove from set"
-												hx-delete={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d", data.ServiceTypeID, data.PlanID, row.Song.ID) }
-												hx-target="#set-builder-body"
-												hx-swap="outerHTML"
-												hx-confirm="Remove this song from the set?"
-											>
-												@components.IconRemove()
-											</button>
-											if len(data.Candidates) > 0 {
-												<form
-													class="replace-form"
-													hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/replace", data.ServiceTypeID, data.PlanID, row.Song.ID) }
+											<div class="set-song-actions-wrap">
+												<button
+													type="button"
+													class="icon-btn"
+													aria-label="Duplicate song (e.g. reprise as the response)"
+													title="Duplicate song (e.g. reprise as the response)"
+													hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/duplicate", data.ServiceTypeID, data.PlanID, row.Song.ID) }
 													hx-target="#set-builder-body"
 													hx-swap="outerHTML"
-													hx-confirm={ fmt.Sprintf("Replace %q with the selected song?", row.Song.Title) }
 												>
-													<select name="song_id" required>
-														<option value="" selected disabled>Replace with...</option>
-														for _, cand := range data.Candidates {
-															<option value={ cand.SongID }>{ cand.Title }</option>
-														}
-													</select>
-													<button type="submit" class="icon-btn" aria-label="Replace song" title="Replace song">
-														@components.IconEdit()
-													</button>
-												</form>
-											}
+													@components.IconCopy()
+												</button>
+												<button
+													type="button"
+													class="danger icon-btn"
+													aria-label="Remove from set"
+													title="Remove from set"
+													hx-delete={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d", data.ServiceTypeID, data.PlanID, row.Song.ID) }
+													hx-target="#set-builder-body"
+													hx-swap="outerHTML"
+													hx-confirm="Remove this song from the set?"
+												>
+													@components.IconRemove()
+												</button>
+												if len(data.Candidates) > 0 {
+													<form
+														class="replace-form"
+														hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/replace", data.ServiceTypeID, data.PlanID, row.Song.ID) }
+														hx-target="#set-builder-body"
+														hx-swap="outerHTML"
+														hx-confirm={ fmt.Sprintf("Replace %q with the selected song?", row.Song.Title) }
+													>
+														<select name="song_id" required>
+															<option value="" selected disabled>Replace with...</option>
+															for _, cand := range data.Candidates {
+																<option value={ cand.SongID }>{ cand.Title }</option>
+															}
+														</select>
+														<button type="submit" class="icon-btn" aria-label="Replace song" title="Replace song">
+															@components.IconEdit()
+														</button>
+													</form>
+												}
+											</div>
 											<!--
 												Row-scoped access to the same 3 actions the Quick add
 												panel below offers generically - see quick-action-row

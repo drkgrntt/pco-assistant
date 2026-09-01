@@ -43,18 +43,35 @@
   background: var(--surface-hover);
 }
 
-/* flex-basis 100% (in the row-wrap container above) makes the title take
-   the whole first line by itself, pushing every sibling that follows it -
-   badges, muted meta text, the row's own form - onto the next line(s),
-   where they wrap and pack left just like set_builder.templ's .song-meta
-   sits under its row's title. A row with no siblings (title-only, e.g. a
-   song_tag_suggestions.templ entry that isn't AlreadyTagged) just renders
-   as the one line, unaffected. */
+/* The title (the li's first child, always a <span> - see ListItem's own
+   doc comment) grows to fill whatever width its trailing siblings (badges,
+   muted meta text, the row's own add/remove form) don't need, so those
+   siblings end up right-aligned on the title's own first line instead of
+   getting pushed below it - a row with no arrangement-info span (most
+   rows: assignment/candidate/suggestion rows on the Team tab, a
+   song_tag_suggestions.templ entry, etc.) renders as that one line only,
+   wrapping further only if the browser genuinely runs out of horizontal
+   space. */
 .suggestion-list li > span:first-child,
 .candidate-row > span:first-child,
 .assignment-list li > span:first-child {
-  flex: 1 1 100%;
+  flex: 1 1 auto;
   font-weight: var(--font-semibold);
+}
+
+/* The one exception: arrangement-info (meter/bpm/key - set_builder.templ's
+   songCandidateMeta) is deliberately forced onto its own full-width line
+   below the title+trailing-content line, the same title-then-meta-
+   underneath shape set_builder.templ's own .song-meta uses for a set
+   song's row. flex-basis:100% forces the wrap regardless of available
+   width; order:1 (every other sibling here is the default order:0) makes
+   it come after every other sibling in layout even though it's not
+   necessarily last in DOM order, so it's the trailing badges/form - not
+   this - that share the title's line. */
+.suggestion-list li > .arrangement-info,
+.candidate-row > .arrangement-info {
+  flex-basis: 100%;
+  order: 1;
 }
 
 .suggestion-list form,
