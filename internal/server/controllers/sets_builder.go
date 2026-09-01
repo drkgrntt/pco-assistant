@@ -251,18 +251,11 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 		}
 	}
 
-	suggestions, err := sc.store.Recommendations(ctx, organizationID, set.ID)
-	if err != nil {
-		data.ErrMsg = appendErr(data.ErrMsg, err.Error())
-	}
-	for _, sug := range suggestions {
-		data.Suggestions = append(data.Suggestions, views.SuggestionView{
-			SongID:            sug.SongID,
-			Title:             titleOrID(titles, sug.SongID),
-			RelationshipLabel: strings.Join(sug.RelationshipTypes, ", "),
-		})
-	}
-
+	// candidateConflicts/existing and repeated (below) are fetched up front,
+	// ahead of both the Suggestions loop and the main Candidates loop, since
+	// "Recommended next"/"Could use one more sing" (see SuggestionView,
+	// set_types.go) show the same conflict/repeat/arrangement/role/tag
+	// metadata the candidate list does, not just title + reason.
 	candidateConflicts, existing, err := sc.store.AvoidPairings(ctx, organizationID, set.ID)
 	if err != nil {
 		data.ErrMsg = appendErr(data.ErrMsg, err.Error())
@@ -290,26 +283,52 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 		}
 	}
 
+	suggestions, err := sc.store.Recommendations(ctx, organizationID, set.ID)
+	if err != nil {
+		data.ErrMsg = appendErr(data.ErrMsg, err.Error())
+	}
+	for _, sug := range suggestions {
+		roleViews, rolesAttr := songRoleViews(rolesBySong, roleTypeLabels, sug.SongID)
+		tagViews, tagsAttr := songTagViews(tagsBySong, tagCategoryLabels, sug.SongID)
+
+		var conflictTitles []string
+		for _, conflictSongID := range candidateConflicts[sug.SongID] {
+			conflictTitles = append(conflictTitles, titleOrID(titles, conflictSongID))
+		}
+
+		var arrangementInfo string
+		if info, ok := arrangementCache[sug.SongID]; ok {
+			arrangementInfo = formatArrangementInfo(info)
+		}
+
+		data.Suggestions = append(data.Suggestions, views.SuggestionView{
+			CandidateSongView: views.CandidateSongView{
+				SongID:           sug.SongID,
+				Title:            titleOrID(titles, sug.SongID),
+				ConflictTitles:   conflictTitles,
+				RecentlyRepeated: repeated[sug.SongID],
+				NewSongLabel:     reinforcementLabel(trackedNew, appearanceCounts, sug.SongID),
+				ArrangementInfo:  arrangementInfo,
+				Roles:            roleViews,
+				RolesAttr:        rolesAttr,
+				Tags:             tagViews,
+				TagsAttr:         tagsAttr,
+			},
+			RelationshipLabel: strings.Join(sug.RelationshipTypes, ", "),
+		})
+	}
+
 	for _, song := range songs {
 		if inSet[song.ID] {
 			continue
 		}
 
 		roleViews, rolesAttr := songRoleViews(rolesBySong, roleTypeLabels, song.ID)
+		tagViews, tagsAttr := songTagViews(tagsBySong, tagCategoryLabels, song.ID)
 
 		var conflictTitles []string
 		for _, conflictSongID := range candidateConflicts[song.ID] {
 			conflictTitles = append(conflictTitles, titleOrID(titles, conflictSongID))
-		}
-
-		var tagViews []views.SongTagView
-		var tagValues []string
-		for _, tag := range tagsBySong[song.ID] {
-			tagViews = append(tagViews, views.SongTagView{
-				Category: titleOrID(tagCategoryLabels, tag.Category),
-				Value:    tag.Value,
-			})
-			tagValues = append(tagValues, strings.ToLower(tag.Value))
 		}
 
 		newSongLabel := reinforcementLabel(trackedNew, appearanceCounts, song.ID)
@@ -326,7 +345,7 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 			arrangementInfo = formatArrangementInfo(info)
 		}
 
-		data.Candidates = append(data.Candidates, views.CandidateSongView{
+		candidate := views.CandidateSongView{
 			SongID:           song.ID,
 			Title:            song.Attributes.Title,
 			ConflictTitles:   conflictTitles,
@@ -336,24 +355,26 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 			Roles:            roleViews,
 			RolesAttr:        rolesAttr,
 			Tags:             tagViews,
-			TagsAttr:         strings.Join(tagValues, " "),
-		})
+			TagsAttr:         tagsAttr,
+		}
+		data.Candidates = append(data.Candidates, candidate)
 
 		// SongsToReinforce is its own list, not merged into data.Suggestions:
 		// Suggestions is anchored to the last song in the set and would stay
 		// empty on an empty set, but a still-new song deserves a nudge
-		// regardless of what's already in the set - see set_types.go.
+		// regardless of what's already in the set - see set_types.go. Reuses
+		// this same iteration's already-resolved candidate metadata (see
+		// SuggestionView's doc comment) rather than looking any of it up
+		// again.
 		switch newSongLabel {
 		case "Sung once":
 			data.SongsToReinforce = append(data.SongsToReinforce, views.SuggestionView{
-				SongID:            song.ID,
-				Title:             song.Attributes.Title,
+				CandidateSongView: candidate,
 				RelationshipLabel: "Sung once - one more to make it stick",
 			})
 		case "Sung twice":
 			data.SongsToReinforce = append(data.SongsToReinforce, views.SuggestionView{
-				SongID:            song.ID,
-				Title:             song.Attributes.Title,
+				CandidateSongView: candidate,
 				RelationshipLabel: "Sung twice - almost there",
 			})
 		}
@@ -889,6 +910,28 @@ func songRoleViews(rolesBySong map[string][]scheduling.SongRole, roleTypeLabels 
 		codes = append(codes, r.Role)
 	}
 	return roleViews, strings.Join(codes, " ")
+}
+
+// songTagViews resolves songID's tags (via tagsBySong, see songTagsBySong)
+// to display view models (see views.SongTagView) plus their space-joined,
+// lowercased values for the candidate list's client-side search (TagsAttr -
+// see filterCandidates in scheduling.js) - the tag equivalent of
+// songRoleViews above. Shared by every not-yet-added-song list that shows
+// tag badges: the candidate list and the suggestion lists (see
+// SuggestionView, set_types.go) alike.
+func songTagViews(tagsBySong map[string][]scheduling.SongTag, tagCategoryLabels map[string]string, songID string) ([]views.SongTagView, string) {
+	tags := tagsBySong[songID]
+	if len(tags) == 0 {
+		return nil, ""
+	}
+
+	tagViews := make([]views.SongTagView, 0, len(tags))
+	values := make([]string, 0, len(tags))
+	for _, t := range tags {
+		tagViews = append(tagViews, views.SongTagView{Category: titleOrID(tagCategoryLabels, t.Category), Value: t.Value})
+		values = append(values, strings.ToLower(t.Value))
+	}
+	return tagViews, strings.Join(values, " ")
 }
 
 // titleOrID looks up id in a string->string map, falling back to id itself

@@ -156,6 +156,35 @@ templ rowMenuItems() {
 	</button>
 }
 
+// songCandidateMeta is the badge/meta cluster for one not-yet-added song -
+// shared by the candidate list ("Browse all songs") and, since both
+// reuse CandidateSongView (see SuggestionView, set_types.go), the
+// "Recommended next"/"Could use one more sing" suggestion lists too. Lives
+// inside ListItem's own layout (see list-item.css): the title takes the
+// li's first line by itself, and everything this renders wraps onto the
+// line(s) below it, the same title-then-meta-underneath shape
+// set_builder.templ's own .song-meta already uses for a set song's row.
+templ songCandidateMeta(cand CandidateSongView) {
+	if cand.NewSongLabel != "" {
+		@components.BadgeTitled("status-pending", cand.NewSongLabel, "New to the church - a repeat helps it stick")
+	}
+	if cand.ArrangementInfo != "" {
+		<span class="muted">{ cand.ArrangementInfo }</span>
+	}
+	for _, role := range cand.Roles {
+		@components.Badge("", role.Label)
+	}
+	for _, tag := range cand.Tags {
+		@components.BadgeTitled("tag-badge", tag.Value, tag.Category)
+	}
+	if len(cand.ConflictTitles) > 0 {
+		@components.ConflictBadge(fmt.Sprintf("avoid pairing with %s", strings.Join(cand.ConflictTitles, ", ")))
+	}
+	if cand.RecentlyRepeated {
+		@components.ConflictBadge("sung in each of the last two plans")
+	}
+}
+
 // SetBuilderBodyContent is the actual content - split out from
 // SetBuilderBody so the Build page's initial full-page render
 // (build.templ) can embed just this, without also embedding
@@ -405,7 +434,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 							<tr class="foreign-row" data-token={ "item:" + row.ItemID }>
 								<td></td>
 								<td>{ row.ItemTitle }</td>
-								<td><span class="muted">{ row.ItemType }</span></td>
+								<td></td>
 								<td></td>
 							</tr>
 						}
@@ -431,6 +460,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 					for _, sug := range data.Suggestions {
 						@components.ListItem("", nil, sug.Title) {
 							<span class="muted">{ sug.RelationshipLabel }</span>
+							@songCandidateMeta(sug.CandidateSongView)
 							<form hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/songs", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
 								<input type="hidden" name="song_id" value={ sug.SongID }/>
 								<button type="submit" class="icon-btn" aria-label="Add to set" title="Add to set">
@@ -449,6 +479,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 					for _, sug := range data.SongsToReinforce {
 						@components.ListItem("", nil, sug.Title) {
 							<span class="muted">{ sug.RelationshipLabel }</span>
+							@songCandidateMeta(sug.CandidateSongView)
 							<form hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/songs", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
 								<input type="hidden" name="song_id" value={ sug.SongID }/>
 								<button type="submit" class="icon-btn" aria-label="Add to set" title="Add to set">
@@ -495,24 +526,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 			<ul id="set-candidates" class="candidate-list">
 				for _, cand := range data.Candidates {
 					@components.ListItem("candidate-row", templ.Attributes{"data-title": cand.Title, "data-roles": cand.RolesAttr, "data-tags": cand.TagsAttr}, cand.Title) {
-						if cand.NewSongLabel != "" {
-							@components.BadgeTitled("status-pending", cand.NewSongLabel, "New to the church - a repeat helps it stick")
-						}
-						if cand.ArrangementInfo != "" {
-							<span class="muted">{ cand.ArrangementInfo }</span>
-						}
-						for _, role := range cand.Roles {
-							@components.Badge("", role.Label)
-						}
-						for _, tag := range cand.Tags {
-							@components.BadgeTitled("tag-badge", tag.Value, tag.Category)
-						}
-						if len(cand.ConflictTitles) > 0 {
-							@components.ConflictBadge(fmt.Sprintf("avoid pairing with %s", strings.Join(cand.ConflictTitles, ", ")))
-						}
-						if cand.RecentlyRepeated {
-							@components.ConflictBadge("sung in each of the last two plans")
-						}
+						@songCandidateMeta(cand)
 						<form hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/songs", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
 							<input type="hidden" name="song_id" value={ cand.SongID }/>
 							<button type="submit" class="icon-btn" aria-label="Add to set" title="Add to set">

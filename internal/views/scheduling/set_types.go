@@ -319,9 +319,16 @@ type SongRoleView struct {
 	Label string
 }
 
+// SuggestionView is a not-yet-added song recommended for a specific reason
+// (RelationshipLabel) - "Recommended next" (SetBuilderData.Suggestions) and
+// "Could use one more sing" (SetBuilderData.SongsToReinforce). Embeds
+// CandidateSongView so both lists can show the same arrangement/role/tag
+// metadata the plain candidate list does (see set_builder.templ's
+// songCandidateMeta, the block shared by all three lists) instead of just a
+// bare title + reason - SongID/Title come along with the embed, so callers
+// keep writing sug.SongID/sug.Title exactly as before.
 type SuggestionView struct {
-	SongID string
-	Title  string
+	CandidateSongView
 	// RelationshipLabel is every reason this song is suggested, already
 	// joined for display (e.g. "flows_well, same_theme") - a song related
 	// to the anchor song by more than one relationship type is one
