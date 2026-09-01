@@ -1,4 +1,4 @@
-package controllers
+package scheduling
 
 import (
 	"sync"
@@ -11,7 +11,7 @@ func TestRunConcurrentlyCallsFnForEveryItem(t *testing.T) {
 
 	var mu sync.Mutex
 	var seen []int
-	runConcurrently(items, func(i int) {
+	RunConcurrently(items, func(i int) {
 		mu.Lock()
 		seen = append(seen, i)
 		mu.Unlock()
@@ -35,7 +35,7 @@ func TestRunConcurrentlyCallsFnForEveryItem(t *testing.T) {
 }
 
 func TestRunConcurrentlyRespectsFanOutLimit(t *testing.T) {
-	items := make([]int, pcoFanOutLimit*3)
+	items := make([]int, PCOFanOutLimit*3)
 	for i := range items {
 		items[i] = i
 	}
@@ -47,7 +47,7 @@ func TestRunConcurrentlyRespectsFanOutLimit(t *testing.T) {
 
 	runConcurrentlyDone := make(chan struct{})
 	go func() {
-		runConcurrently(items, func(i int) {
+		RunConcurrently(items, func(i int) {
 			n := atomic.AddInt64(&current, 1)
 			for {
 				old := atomic.LoadInt64(&max)
@@ -66,14 +66,14 @@ func TestRunConcurrentlyRespectsFanOutLimit(t *testing.T) {
 	close(release)
 	<-runConcurrentlyDone
 
-	if max > pcoFanOutLimit {
-		t.Errorf("expected at most %d concurrent calls, saw %d", pcoFanOutLimit, max)
+	if max > PCOFanOutLimit {
+		t.Errorf("expected at most %d concurrent calls, saw %d", PCOFanOutLimit, max)
 	}
 }
 
 func TestRunConcurrentlyEmptyItemsNoOp(t *testing.T) {
 	called := false
-	runConcurrently([]int{}, func(int) { called = true })
+	RunConcurrently([]int{}, func(int) { called = true })
 	if called {
 		t.Error("expected fn not to be called for an empty items slice")
 	}

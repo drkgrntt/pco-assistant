@@ -831,7 +831,7 @@ func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizati
 		indexes[i] = i
 	}
 
-	runConcurrently(indexes, func(i int) {
+	scheduling.RunConcurrently(indexes, func(i int) {
 		row := rows[i]
 		if row.Item != nil {
 			label := row.Item.Attributes.Title

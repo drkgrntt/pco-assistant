@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"pco-assistant/internal/scheduling"
 	views "pco-assistant/internal/views/scheduling"
 
 	pco "github.com/drkgrntt/go-pco"
@@ -146,7 +147,7 @@ func (sc *SchedulingController) buildRosterPositionGroupData(ctx context.Context
 
 	blockoutsByPerson := map[string][]pco.BlockoutData{}
 	var blockoutsMu sync.Mutex
-	runConcurrently(relevantIDs, func(id string) {
+	scheduling.RunConcurrently(relevantIDs, func(id string) {
 		bo, err := pco.GetBlockouts(ctx, id, &pco.BlockoutsParams{Filter: "future"})
 		if err != nil {
 			return
@@ -169,7 +170,7 @@ func (sc *SchedulingController) buildRosterPositionGroupData(ctx context.Context
 	otherDatesCache := map[string][]time.Time{}
 	if !planDate.IsZero() {
 		var crossTeamMu sync.Mutex
-		runConcurrently(relevantIDs, func(personID string) {
+		scheduling.RunConcurrently(relevantIDs, func(personID string) {
 			labels := crossTeamAssignmentsThisWeek(ctx, personID, planDate, planID)
 			crossTeamMu.Lock()
 			crossTeamCache[personID] = labels
@@ -177,7 +178,7 @@ func (sc *SchedulingController) buildRosterPositionGroupData(ctx context.Context
 		})
 
 		var otherDatesMu sync.Mutex
-		runConcurrently(relevantIDs, func(personID string) {
+		scheduling.RunConcurrently(relevantIDs, func(personID string) {
 			if schedulePreferenceFor(personID) == "" {
 				return
 			}
