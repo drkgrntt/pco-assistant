@@ -27,13 +27,16 @@ type BuildTab struct {
 // earliest possible head start, since the deferred tab (Team, in
 // practice - see pco-api-risks.md's mitigation #3) is usually the more
 // expensive one, and a hover/focus-triggered fetch alone often didn't
-// have time to finish before the user actually clicked over. mouseenter/
-// focus/click stay as fallback triggers, each with its own independent
-// "once": if the load-triggered fetch somehow failed (a network hiccup),
-// a later hover/focus/click is still a fresh, working attempt rather than
-// silently never retrying - not just redundant insurance for the normal
-// case, which "load" alone would already cover.
-const lazyTabTrigger = "load once, mouseenter once, focus once, click once"
+// have time to finish before the user actually clicked over. Now that
+// "load" always fires the fetch immediately, hover/focus have nothing
+// left to buy - by the time either could fire, "load" has already started
+// the same request, so they were only ever adding a second, redundant GET
+// on a normal click, never actually helping. "click" stays as a same-tab
+// safety net: if the load-triggered fetch somehow failed (a network
+// hiccup), clicking the tab is still a fresh, working attempt rather than
+// getting stuck on the loading skeleton with no way to retry short of a
+// full page reload.
+const lazyTabTrigger = "load once, click once"
 
 // tabButtonAttrs builds one tab button's full attribute set: the plain
 // client-side toggleBuildTab onclick every tab gets, plus - only when

@@ -102,19 +102,26 @@ actually PCO just cut the app off partway through.
    comment) renders a loading placeholder that fetches from a new
    `BuildSongsTabLazy`/`BuildTeamTabLazy` endpoint (`build.go`).
    `BuildTab.LazyURL`/`tabButtonAttrs`/`lazyTabTrigger` (`build_tabs.templ`)
-   originally fired that fetch on `mouseenter once, focus once, click
-   once` (hover/focus-triggered, click as a touch-device fallback) - moved
-   to `load once, mouseenter once, focus once, click once` after real
-   usage showed the Team tab (the usual bulk of this page's total load
-   cost) still had an awkward wait on hover, since the fetch often didn't
-   have time to finish between a hover and the click right after it.
-   `load` fires immediately once the page itself has rendered, so the
-   deferred tab gets the earliest possible head start instead of only
-   starting once the user shows intent to switch - it's still not blocking
-   the *active* tab's own first paint, just no longer waiting on
-   hover/click either. The other three triggers stay as independent
-   fallback retriggers (each has its own "once") in case the load-time
-   fetch failed. Required threading a `hidden bool` through every
+   went through two iterations on *when* that fetch fires:
+     1. `mouseenter once, focus once, click once` (hover/focus-triggered,
+        click as a touch-device fallback) - real usage showed the Team tab
+        (the usual bulk of this page's total load cost) still had an
+        awkward wait on hover, since the fetch often didn't have time to
+        finish between a hover and the click right after it.
+     2. `load once, mouseenter once, focus once, click once` - `load`
+        fires immediately once the page itself has rendered, giving the
+        deferred tab the earliest possible head start instead of only
+        starting once the user shows intent to switch. Still not blocking
+        the *active* tab's own first paint - a separate request right
+        after, not something `BuildPlanPage` waits on.
+     3. **Settled on `load once, click once`** - once `load` always fires
+        the fetch immediately, `mouseenter`/`focus` never get a chance to
+        do anything `load` hasn't already started; they'd only ever add a
+        second, redundant GET on top of it. `click` stays as a same-tab
+        retry in case the `load`-triggered fetch failed (a network
+        hiccup) - without it, that failure mode had no recovery short of
+        a full page reload.
+   Required threading a `hidden bool` through every
    `*ShellOOB` component this page already had
    (`glanceCardShellOOB`, `publishCardShellOOB`, `buildDetailGroupShellOOB`)
    so the new `*LazyOOB` variants (`songGlanceLazyOOB`,

@@ -46,13 +46,19 @@ func TestTabButtonAttrsAddsLazyFetchWhenLazyURLSet(t *testing.T) {
 	}
 	// load fires the fetch immediately on page render, giving the deferred
 	// tab the earliest possible head start (see lazyTabTrigger's doc
-	// comment); mouseenter/focus/click stay as independent fallback
-	// triggers in case that first attempt failed, so all four must be
-	// present, not just "load" alone.
+	// comment); click stays as a same-tab retry in case that first attempt
+	// failed. mouseenter/focus are deliberately absent - once "load" always
+	// fires the fetch immediately, they never get a chance to do anything
+	// load hasn't already started, so they'd only ever add a redundant GET.
 	trigger, _ := attrs["hx-trigger"].(string)
-	for _, want := range []string{"load once", "mouseenter once", "focus once", "click once"} {
+	for _, want := range []string{"load once", "click once"} {
 		if !strings.Contains(trigger, want) {
 			t.Errorf("expected hx-trigger %q to contain %q", trigger, want)
+		}
+	}
+	for _, unwanted := range []string{"mouseenter", "focus"} {
+		if strings.Contains(trigger, unwanted) {
+			t.Errorf("expected hx-trigger %q not to contain %q - load already covers it", trigger, unwanted)
 		}
 	}
 }
