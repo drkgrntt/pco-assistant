@@ -317,7 +317,21 @@ function syncBuildTabVisibility(tabName) {
   // The sidebar "at a glance" card (see build.templ) always shows whichever
   // tab just went hidden, never the one that's now open - no point glancing
   // at a summary of the tab you're already looking at.
-  document.querySelectorAll(".build-glance-card").forEach(function (card) {
+  //
+  // :not(.build-detail-card) matters here: every song/person detail card
+  // (buildDetailCardShell, build_detail_card.templ) also carries the
+  // "build-glance-card" class - purely to inherit its shared card-shell
+  // CSS (see build-detail-card.css's own comment), not because it's one of
+  // these tab-summary cards. Without this exclusion, this loop's `card.id`
+  // read hits those cards too - they have no id (only data-row-id), so
+  // cardTab comes out "" and "" === tabName is always false, which forced
+  // every single one hidden=false regardless of tabName, undoing
+  // selectSongRow/selectPersonRow's "only the clicked row's card is open"
+  // state as soon as this ran (on every htmx:afterSettle, including the
+  // very first one - the deferred tab's own initial "load once" fetch -
+  // which is why every song/person looked selected from page load with no
+  // click at all).
+  document.querySelectorAll(".build-glance-card:not(.build-detail-card)").forEach(function (card) {
     var cardTab = card.id.replace("build-glance-", "");
     card.hidden = cardTab === tabName;
   });
