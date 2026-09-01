@@ -188,12 +188,28 @@ actually PCO just cut the app off partway through.
    so one hung call can't hang the whole render. This is a `go-pco` change,
    not just this app. Declined explicitly - revisit only if a future
    symptom (real 429s in practice, a hung render) points back at it.
-5. **A short-lived in-process cache** (or reuse the existing DB-cache
-   pattern from `song_arrangement_cache`) for things that don't change
-   mid-session - team/position lists, team member names - so repeated
-   add/remove renders on the same plan don't refetch identical data every
-   time. Not started - mostly helps *repeat* renders on an already-open
-   plan (the add/remove churn noted above), not first page load.
+5. ~~**A short-lived in-process cache**~~ - implemented, scoped specifically
+   to the full song list (the concrete case that turned out to matter: a
+   worship pastor's ~900-song PCO library, most of it archived, being
+   pulled live/uncached/unfiltered on every page view and htmx add/remove
+   - see the "Fix PCO song-list performance" plan). `internal/scheduling/
+   pco_songs.go`'s `FetchActiveSongs(ctx, organizationID)` replaced the old
+   unfiltered, uncapped-only-by-a-silent-20-page-cap `FetchAllSongs`:
+   filters out archived (`Attributes.Hidden`) songs client-side
+   (`filterActiveSongs` - the real correctness guarantee, always applied)
+   and, since PCO's Songs#index confirmed live to actually support
+   server-side `where[hidden]` filtering (`can_query_by` includes
+   `hidden`; `where[hidden]=true` vs. `=false` return different, correct
+   `total_count`s), also passes `Hidden: false` server-side for a smaller
+   page count on top of that. Caches the result per organization for 60s
+   (`songCacheTTL`, matching `middleware.navStateTTL`'s reasoning), with
+   the same fail-safe convention as nav.go's cache: a transient fetch
+   failure is never cached, so it can't pin a stale/empty result in for
+   the rest of the window. `pcoreset` gets its own uncached, unfiltered
+   `FetchAllSongsIncludingArchived`, since a full org reset needs to see
+   (and delete) archived songs too. Team/position lists and team member
+   names (this item's other original examples) remain uncached - the song
+   list was the one with an actual reported symptom.
 6. ~~**Bounded concurrency for independent PCO calls**~~ - not on the
    original list; added once #1/#2 landed and first-load time was still
    ~9s. #1 and #2 cut call *count*; neither touched the fact that every
@@ -202,9 +218,13 @@ actually PCO just cut the app off partway through.
    `http.Client.Do` - no batching, no concurrency), so a ~100-200-call
    chain at 100-400ms each stays a multi-second wait regardless of how
    many of those calls are duplicates. Added `runConcurrently` (bounded to
-   `pcoFanOutLimit` = 10 goroutines at once, `internal/server/controllers/
-   concurrency.go`) and fanned out every independent per-item PCO loop
-   through it: `rosters_builder.go`'s per-group candidate-pool fetch, its
+   `pcoFanOutLimit` = 10 goroutines at once, originally
+   `internal/server/controllers/concurrency.go`, later relocated to
+   `internal/scheduling/concurrency.go` as `RunConcurrently`/
+   `PCOFanOutLimit` so `fetchSongsFromPCO`'s own concurrent page fan-out,
+   #5 above, could use it too) and fanned out every independent per-item
+   PCO loop through it: `rosters_builder.go`'s per-group candidate-pool
+   fetch, its
    per-person `GetBlockouts` fetch (confirmed live this endpoint has no
    batch/`where[id]` option - `services/v2/people/{id}/blockouts`'
    `can_query_by` is just `group_identifier` - so concurrency is the only
@@ -223,10 +243,9 @@ already inside one window either way, so fanning it out doesn't add new
 rate-limit exposure; if anything, finishing sooner narrows the chance of
 overlapping with the *next* request's own calls.
 
-With #1, #2, #3, and #6 all landed, the only open item is **#5** (short-lived
-in-process cache) - lower priority since it mainly helps repeat edits on an
-already-open plan, not first load. #4 is explicitly off the table for now
-(see above). If first load is *still* materially slow after #3/#6, that's a
-signal worth re-measuring rather than guessing at a #7: confirm with real
-timing (not just "still feels slow") before picking the next lever, since
-the two easy, well-understood wins are both already in.
+With #1, #2, #3, #5, and #6 all landed, #4 is explicitly off the table for
+now (see above) and nothing else is currently open. If first load is
+*still* materially slow after all of these, that's a signal worth
+re-measuring rather than guessing at a #7: confirm with real timing (not
+just "still feels slow") before picking the next lever, since several
+easy, well-understood wins are already in.
