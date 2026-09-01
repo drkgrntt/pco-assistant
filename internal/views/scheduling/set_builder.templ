@@ -174,7 +174,10 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 		}
 		@SongStatusSummary(data)
 		@songWarnings(data)
-		if data.ImportableSongCount > 0 {
+		if data.ReadOnly {
+			<p class="muted">This plan has already happened - shown read-only for reference.</p>
+		}
+		if !data.ReadOnly && data.ImportableSongCount > 0 {
 			@components.ImportBanner(fmt.Sprintf("Looks like this service is already planned in Planning Center - it has %d song(s). Want to import them here so you can reorder, replace, or tag them?", data.ImportableSongCount), false) {
 				<form
 					hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/revert", data.ServiceTypeID, data.PlanID) }
@@ -196,7 +199,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 			which stays around for relating songs that *aren't* adjacent, or
 			after the fact.
 		-->
-		if data.SongPairPrompt != nil {
+		if !data.ReadOnly && data.SongPairPrompt != nil {
 			@components.ImportBanner(fmt.Sprintf("Added %q right after %q - want to remember how these two relate?", data.SongPairPrompt.NewSongTitle, data.SongPairPrompt.PreviousSongTitle), true) {
 				<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/song-relationships", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
 					<input type="hidden" name="song_id_a" value={ data.SongPairPrompt.PreviousSongID }/>
@@ -244,9 +247,11 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 								onclick="selectSongRow(this, event)"
 							>
 								<td>
-									<span class="drag-handle" title="Drag to reorder">
-										@components.IconDrag()
-									</span>
+									if !data.ReadOnly {
+										<span class="drag-handle" title="Drag to reorder">
+											@components.IconDrag()
+										</span>
+									}
 								</td>
 								<td>
 									{ row.Song.Title }
@@ -281,121 +286,125 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 									carries the flex layout for its own children.
 								-->
 								<td>
-									<div class="set-song-actions">
-										<button
-											type="button"
-											class="icon-btn"
-											aria-label="Duplicate song (e.g. reprise as the response)"
-											title="Duplicate song (e.g. reprise as the response)"
-											hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/duplicate", data.ServiceTypeID, data.PlanID, row.Song.ID) }
-											hx-target="#set-builder-body"
-											hx-swap="outerHTML"
-										>
-											@components.IconCopy()
-										</button>
-										<button
-											type="button"
-											class="danger icon-btn"
-											aria-label="Remove from set"
-											title="Remove from set"
-											hx-delete={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d", data.ServiceTypeID, data.PlanID, row.Song.ID) }
-											hx-target="#set-builder-body"
-											hx-swap="outerHTML"
-											hx-confirm="Remove this song from the set?"
-										>
-											@components.IconRemove()
-										</button>
-										if len(data.Candidates) > 0 {
-											<form
-												class="replace-form"
-												hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/replace", data.ServiceTypeID, data.PlanID, row.Song.ID) }
+									if !data.ReadOnly {
+										<div class="set-song-actions">
+											<button
+												type="button"
+												class="icon-btn"
+												aria-label="Duplicate song (e.g. reprise as the response)"
+												title="Duplicate song (e.g. reprise as the response)"
+												hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/duplicate", data.ServiceTypeID, data.PlanID, row.Song.ID) }
 												hx-target="#set-builder-body"
 												hx-swap="outerHTML"
-												hx-confirm={ fmt.Sprintf("Replace %q with the selected song?", row.Song.Title) }
 											>
-												<select name="song_id" required>
-													<option value="" selected disabled>Replace with...</option>
-													for _, cand := range data.Candidates {
-														<option value={ cand.SongID }>{ cand.Title }</option>
-													}
-												</select>
-												<button type="submit" class="icon-btn" aria-label="Replace song" title="Replace song">
-													@components.IconEdit()
-												</button>
-											</form>
-										}
-										<!--
-											Row-scoped access to the same 3 actions the Quick add
-											panel below offers generically - see quick-action-row
-											just below and openQuickAction/toggleRowMenu
-											(scheduling.js). The song is already this row's, so
-											unlike the panel's forms there's no song picker to fill
-											in - just the category/relationship/role fields that
-											actually vary. The panel itself stays, since it's still
-											the only way to tag/relate/role a song that isn't in
-											this order of service yet.
-										-->
-										@components.Disclosure("row-menu", "icon-btn row-menu-toggle", "toggleRowMenu(this)", "More actions for this song", "More actions", rowMenuToggle(), rowMenuItems())
-									</div>
+												@components.IconCopy()
+											</button>
+											<button
+												type="button"
+												class="danger icon-btn"
+												aria-label="Remove from set"
+												title="Remove from set"
+												hx-delete={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d", data.ServiceTypeID, data.PlanID, row.Song.ID) }
+												hx-target="#set-builder-body"
+												hx-swap="outerHTML"
+												hx-confirm="Remove this song from the set?"
+											>
+												@components.IconRemove()
+											</button>
+											if len(data.Candidates) > 0 {
+												<form
+													class="replace-form"
+													hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/replace", data.ServiceTypeID, data.PlanID, row.Song.ID) }
+													hx-target="#set-builder-body"
+													hx-swap="outerHTML"
+													hx-confirm={ fmt.Sprintf("Replace %q with the selected song?", row.Song.Title) }
+												>
+													<select name="song_id" required>
+														<option value="" selected disabled>Replace with...</option>
+														for _, cand := range data.Candidates {
+															<option value={ cand.SongID }>{ cand.Title }</option>
+														}
+													</select>
+													<button type="submit" class="icon-btn" aria-label="Replace song" title="Replace song">
+														@components.IconEdit()
+													</button>
+												</form>
+											}
+											<!--
+												Row-scoped access to the same 3 actions the Quick add
+												panel below offers generically - see quick-action-row
+												just below and openQuickAction/toggleRowMenu
+												(scheduling.js). The song is already this row's, so
+												unlike the panel's forms there's no song picker to fill
+												in - just the category/relationship/role fields that
+												actually vary. The panel itself stays, since it's still
+												the only way to tag/relate/role a song that isn't in
+												this order of service yet.
+											-->
+											@components.Disclosure("row-menu", "icon-btn row-menu-toggle", "toggleRowMenu(this)", "More actions for this song", "More actions", rowMenuToggle(), rowMenuItems())
+										</div>
+									}
 								</td>
 							</tr>
-							@quickActionRow(fmt.Sprintf("%d", row.Song.ID), "tag", fmt.Sprintf("Tag %q", row.Song.Title), 4) {
-								<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/song-tags", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
-									<input type="hidden" name="song_id" value={ row.Song.SongID }/>
-									<label>
-										Category
-										<select name="category">
-											for _, cat := range data.TagCategories {
-												<option value={ cat.Code }>{ cat.Label }</option>
-											}
-										</select>
-									</label>
-									<label>
-										Value
-										<input type="text" name="value" placeholder="e.g. Grace, Romans 8:1, New beginnings" required/>
-									</label>
-									<button type="submit" class="primary">Add tag</button>
-								</form>
-							}
-							@quickActionRow(fmt.Sprintf("%d", row.Song.ID), "relate", fmt.Sprintf("Relate %q to...", row.Song.Title), 4) {
-								<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/song-relationships", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
-									<input type="hidden" name="song_id_a" value={ row.Song.SongID }/>
-									<label>
-										Song
-										<!-- Defaults to the next song in the order (see nextSongID). -->
-										<select name="song_id_b" required>
-											<option value="" disabled selected?={ nextSongID(data.ServiceOrder, i) == "" }>Choose a song</option>
-											for _, song := range data.AllSongs {
-												if song.ID != row.Song.SongID {
-													<option value={ song.ID } selected?={ song.ID == nextSongID(data.ServiceOrder, i) }>{ song.Attributes.Title }</option>
+							if !data.ReadOnly {
+								@quickActionRow(fmt.Sprintf("%d", row.Song.ID), "tag", fmt.Sprintf("Tag %q", row.Song.Title), 4) {
+									<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/song-tags", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
+										<input type="hidden" name="song_id" value={ row.Song.SongID }/>
+										<label>
+											Category
+											<select name="category">
+												for _, cat := range data.TagCategories {
+													<option value={ cat.Code }>{ cat.Label }</option>
 												}
-											}
-										</select>
-									</label>
-									<label>
-										Relationship
-										<select name="relationship_type">
-											for _, t := range data.RelationshipTypes {
-												<option value={ t.Code }>{ t.Label }</option>
-											}
-										</select>
-									</label>
-									<button type="submit" class="primary">Relate songs</button>
-								</form>
-							}
-							@quickActionRow(fmt.Sprintf("%d", row.Song.ID), "role", fmt.Sprintf("Mark a role for %q", row.Song.Title), 4) {
-								<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/song-roles", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
-									<input type="hidden" name="song_id" value={ row.Song.SongID }/>
-									<label>
-										Role
-										<select name="role">
-											for _, t := range data.RoleTypes {
-												<option value={ t.Code }>{ t.Label }</option>
-											}
-										</select>
-									</label>
-									<button type="submit" class="primary">Mark role</button>
-								</form>
+											</select>
+										</label>
+										<label>
+											Value
+											<input type="text" name="value" placeholder="e.g. Grace, Romans 8:1, New beginnings" required/>
+										</label>
+										<button type="submit" class="primary">Add tag</button>
+									</form>
+								}
+								@quickActionRow(fmt.Sprintf("%d", row.Song.ID), "relate", fmt.Sprintf("Relate %q to...", row.Song.Title), 4) {
+									<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/song-relationships", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
+										<input type="hidden" name="song_id_a" value={ row.Song.SongID }/>
+										<label>
+											Song
+											<!-- Defaults to the next song in the order (see nextSongID). -->
+											<select name="song_id_b" required>
+												<option value="" disabled selected?={ nextSongID(data.ServiceOrder, i) == "" }>Choose a song</option>
+												for _, song := range data.AllSongs {
+													if song.ID != row.Song.SongID {
+														<option value={ song.ID } selected?={ song.ID == nextSongID(data.ServiceOrder, i) }>{ song.Attributes.Title }</option>
+													}
+												}
+											</select>
+										</label>
+										<label>
+											Relationship
+											<select name="relationship_type">
+												for _, t := range data.RelationshipTypes {
+													<option value={ t.Code }>{ t.Label }</option>
+												}
+											</select>
+										</label>
+										<button type="submit" class="primary">Relate songs</button>
+									</form>
+								}
+								@quickActionRow(fmt.Sprintf("%d", row.Song.ID), "role", fmt.Sprintf("Mark a role for %q", row.Song.Title), 4) {
+									<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/song-roles", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
+										<input type="hidden" name="song_id" value={ row.Song.SongID }/>
+										<label>
+											Role
+											<select name="role">
+												for _, t := range data.RoleTypes {
+													<option value={ t.Code }>{ t.Label }</option>
+												}
+											</select>
+										</label>
+										<button type="submit" class="primary">Mark role</button>
+									</form>
+								}
 							}
 						} else if row.ItemType == pco.ItemTypeHeader {
 							<tr class="section-row" data-token={ "item:" + row.ItemID }>
@@ -424,7 +433,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 			via songPublishPanelOOB, for every htmx response this content is
 			part of.
 		-->
-		if len(data.Suggestions) > 0 {
+		if !data.ReadOnly && len(data.Suggestions) > 0 {
 			@collapsibleSection("recommended-next-songs", "Recommended next", true) {
 				<p class="muted">Based on the last song in the set.</p>
 				<ul class="suggestion-list">
@@ -442,7 +451,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 				</ul>
 			}
 		}
-		if len(data.SongsToReinforce) > 0 {
+		if !data.ReadOnly && len(data.SongsToReinforce) > 0 {
 			@collapsibleSection("songs-to-reinforce", "Could use one more sing", false) {
 				<p class="muted">New to the church - a repeat helps it stick.</p>
 				<ul class="suggestion-list">
@@ -460,6 +469,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 				</ul>
 			}
 		}
+		if !data.ReadOnly {
 		<h2>Find songs to add</h2>
 		<!--
 			Generated straight from data.RoleTypes (song_role_types) rather
@@ -628,6 +638,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 					</form>
 				}
 			</div>
+		}
 		}
 	</div>
 }

@@ -139,85 +139,107 @@ templ songDetailCard(data SetBuilderData, song SetSongView) {
 			}
 		</div>
 		<div class="build-detail-notes-group">
-			@keyForm(data, song, "")
-			@descriptionForm(data, song, "")
-			<!--
-				Song.Notes - one Planning Center ItemNote per note category
-				(Audio/Visual, Band, Vocals, etc. - configured per service
-				type) already on this song's plan item, plus an empty slot
-				for any category that doesn't have one yet. Each saves
-				straight to Planning Center immediately (see UpdateSongNote),
-				same "ad hoc, not part of the draft/publish cycle" shape as
-				the Tag/Relate/Mark role actions below - these are real,
-				existing PCO records, not local state to publish later.
-				Only populated for a published song (nil otherwise, since
-				there's no plan item yet to attach a note to).
-			-->
-			for _, note := range song.Notes {
-				@songNoteForm(data, song, note, "")
-			}
-			if len(song.Notes) == 0 {
-				if song.Published {
-					<p class="muted">No note categories are configured for this service type yet - add some in Planning Center.</p>
-				} else {
-					<p class="muted">Publish this song first to add notes here (Audio/Visual, Band, Vocals, etc.).</p>
+			if data.ReadOnly {
+				<!--
+					No forms for a past plan - see SetBuilderData.ReadOnly.
+					Key/note are shown as plain text instead of editable
+					fields, same info keyForm/descriptionForm/songNoteForm
+					would otherwise carry.
+				-->
+				if song.Key != "" {
+					<p><strong>Key (that week):</strong> { song.Key }</p>
+				}
+				if song.Description != "" {
+					<p><strong>Note:</strong> { song.Description }</p>
+				}
+				for _, note := range song.Notes {
+					if note.Content != "" {
+						<p><strong>{ note.CategoryName }:</strong> { note.Content }</p>
+					}
+				}
+			} else {
+				@keyForm(data, song, "")
+				@descriptionForm(data, song, "")
+				<!--
+					Song.Notes - one Planning Center ItemNote per note category
+					(Audio/Visual, Band, Vocals, etc. - configured per service
+					type) already on this song's plan item, plus an empty slot
+					for any category that doesn't have one yet. Each saves
+					straight to Planning Center immediately (see UpdateSongNote),
+					same "ad hoc, not part of the draft/publish cycle" shape as
+					the Tag/Relate/Mark role actions below - these are real,
+					existing PCO records, not local state to publish later.
+					Only populated for a published song (nil otherwise, since
+					there's no plan item yet to attach a note to).
+				-->
+				for _, note := range song.Notes {
+					@songNoteForm(data, song, note, "")
+				}
+				if len(song.Notes) == 0 {
+					if song.Published {
+						<p class="muted">No note categories are configured for this service type yet - add some in Planning Center.</p>
+					} else {
+						<p class="muted">Publish this song first to add notes here (Audio/Visual, Band, Vocals, etc.).</p>
+					}
 				}
 			}
 		</div>
-		<div class="build-detail-actions">
-			<button
-				type="button"
-				hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/duplicate", data.ServiceTypeID, data.PlanID, song.ID) }
-				hx-target="#set-builder-body"
-				hx-swap="outerHTML"
-			>
-				@components.IconCopy()
-				Duplicate
-			</button>
-			<button
-				type="button"
-				class="danger"
-				hx-delete={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d", data.ServiceTypeID, data.PlanID, song.ID) }
-				hx-target="#set-builder-body"
-				hx-swap="outerHTML"
-				hx-confirm="Remove this song from the set?"
-			>
-				@components.IconRemove()
-				Remove
-			</button>
-			if len(data.Candidates) > 0 {
-				<form
-					class="replace-form"
-					hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/replace", data.ServiceTypeID, data.PlanID, song.ID) }
+		if !data.ReadOnly {
+			<div class="build-detail-actions">
+				<button
+					type="button"
+					hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/duplicate", data.ServiceTypeID, data.PlanID, song.ID) }
 					hx-target="#set-builder-body"
 					hx-swap="outerHTML"
-					hx-confirm={ fmt.Sprintf("Replace %q with the selected song?", song.Title) }
 				>
-					<select name="song_id" required>
-						<option value="" selected disabled>Replace with...</option>
-						for _, cand := range data.Candidates {
-							<option value={ cand.SongID }>{ cand.Title }</option>
-						}
-					</select>
-					<button type="submit">
-						@components.IconEdit()
-						Replace
-					</button>
-				</form>
-			}
-			<button type="button" data-row-id={ fmt.Sprintf("%d", song.ID) } onclick="openQuickAction(this, 'tag')">
-				@components.IconTag()
-				Tag this song
-			</button>
-			<button type="button" data-row-id={ fmt.Sprintf("%d", song.ID) } onclick="openQuickAction(this, 'relate')">
-				@components.IconRelate()
-				Relate to another song
-			</button>
-			<button type="button" data-row-id={ fmt.Sprintf("%d", song.ID) } onclick="openQuickAction(this, 'role')">
-				@components.IconRole()
-				Mark a role
-			</button>
-		</div>
+					@components.IconCopy()
+					Duplicate
+				</button>
+				<button
+					type="button"
+					class="danger"
+					hx-delete={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d", data.ServiceTypeID, data.PlanID, song.ID) }
+					hx-target="#set-builder-body"
+					hx-swap="outerHTML"
+					hx-confirm="Remove this song from the set?"
+				>
+					@components.IconRemove()
+					Remove
+				</button>
+				if len(data.Candidates) > 0 {
+					<form
+						class="replace-form"
+						hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/replace", data.ServiceTypeID, data.PlanID, song.ID) }
+						hx-target="#set-builder-body"
+						hx-swap="outerHTML"
+						hx-confirm={ fmt.Sprintf("Replace %q with the selected song?", song.Title) }
+					>
+						<select name="song_id" required>
+							<option value="" selected disabled>Replace with...</option>
+							for _, cand := range data.Candidates {
+								<option value={ cand.SongID }>{ cand.Title }</option>
+							}
+						</select>
+						<button type="submit">
+							@components.IconEdit()
+							Replace
+						</button>
+					</form>
+				}
+				<button type="button" data-row-id={ fmt.Sprintf("%d", song.ID) } onclick="openQuickAction(this, 'tag')">
+					@components.IconTag()
+					Tag this song
+				</button>
+				<button type="button" data-row-id={ fmt.Sprintf("%d", song.ID) } onclick="openQuickAction(this, 'relate')">
+					@components.IconRelate()
+					Relate to another song
+				</button>
+				<button type="button" data-row-id={ fmt.Sprintf("%d", song.ID) } onclick="openQuickAction(this, 'role')">
+					@components.IconRole()
+					Mark a role
+				</button>
+			</div>
+		}
 	}
 }
 

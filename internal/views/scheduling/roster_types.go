@@ -11,6 +11,8 @@ type RosterBuilderData struct {
 	PlanTitle     string
 	PlanDates     string
 	ErrMsg        string
+	// ReadOnly - see SetBuilderData.ReadOnly, which this mirrors exactly.
+	ReadOnly bool
 	// PublishMsg is a status line for the last "Publish to Planning Center"
 	// attempt, separate from ErrMsg so a partial publish can show both what
 	// succeeded and what didn't - see SetBuilderData.PublishMsg.

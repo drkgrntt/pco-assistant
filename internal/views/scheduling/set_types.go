@@ -19,6 +19,15 @@ type SetBuilderData struct {
 	PlanTitle     string
 	PlanDates     string
 	ErrMsg        string
+	// ReadOnly is true once this plan's own sort_date has already passed
+	// (see buildSetBuilderData) - the past-plans archive (BuildPlansList's
+	// past tab) reuses this same builder rendering, just with every
+	// add/remove/move/tag/relate/publish/discard action gated off, since a
+	// plan that's already happened has nothing left to build toward.
+	// Server-derived from the plan's own PCO date, never a client-supplied
+	// flag, so it can't be bypassed and stays correct even for a plan that
+	// was still upcoming when first opened here.
+	ReadOnly bool
 	// PublishMsg is a status line for the last "Publish to Planning Center"
 	// attempt (e.g. "Published 3 song(s)."), separate from ErrMsg so a
 	// partial publish can show both what succeeded and what didn't.
@@ -247,9 +256,14 @@ type ServiceOrderRow struct {
 // exists and is fully synced) - see the scheduling controller's
 // planStatus/rosterStatus.
 type PlanRow struct {
-	ID           string
-	Title        string
-	Dates        string
+	ID    string
+	Title string
+	Dates string
+	// Note is this plan's purely-local at-a-glance note (see
+	// plan_notes/GetPlanNote) - "" means nothing's been saved for it yet.
+	// Shown (and editable) in the plan list, and matched by the picker's
+	// search box alongside Title/Dates - see filterUpcomingPlans.
+	Note         string
 	SetStatus    string
 	RosterStatus string
 }

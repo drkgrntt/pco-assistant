@@ -71,18 +71,20 @@ templ personDetailCard(data RosterBuilderData, a AssignmentView) {
 		if a.Notes != "" {
 			<p class="build-detail-notes">{ a.Notes }</p>
 		}
-		<div class="build-detail-actions">
-			<button
-				type="button"
-				class="danger"
-				hx-delete={ fmt.Sprintf("/scheduling/rosters/%s/%s/assignments/%d", data.ServiceTypeID, data.PlanID, a.ID) }
-				hx-target="#roster-builder-body"
-				hx-swap="outerHTML"
-				hx-confirm="Remove this person from this position?"
-			>
-				@components.IconRemove()
-				Remove from position
-			</button>
-		</div>
+		if !data.ReadOnly {
+			<div class="build-detail-actions">
+				<button
+					type="button"
+					class="danger"
+					hx-delete={ fmt.Sprintf("/scheduling/rosters/%s/%s/assignments/%d", data.ServiceTypeID, data.PlanID, a.ID) }
+					hx-target="#roster-builder-body"
+					hx-swap="outerHTML"
+					hx-confirm="Remove this person from this position?"
+				>
+					@components.IconRemove()
+					Remove from position
+				</button>
+			</div>
+		}
 	}
 }
