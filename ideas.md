@@ -195,6 +195,16 @@ pattern as `song_tags`/`song_relationships`:**
   tagged "hard") gets added to a plan less than N days before the service
   date, warn that the team may not have time to learn it. Reuses the table
   added for reinforcement.
+- **Rehearsal complexity budget** - a step past the lead-time warning above:
+  instead of flagging one new/hard song added too close to the date, score
+  a whole set's rehearsal load (count of `tracked_new_songs`/hard-tagged
+  songs, key changes, first-time lead/pairing on a song) against how much
+  rehearsal time is actually available, and flag when the set is asking for
+  more than the slot has - "~85 min of rehearsal load for a 60 min slot."
+  Every input already exists somewhere in this file's data (hard tag,
+  tracked_new_songs, key/tempo); the actual gap is a rehearsal-length field
+  to check against (service type? set-level?) and a scoring formula, which
+  is a calibration problem, not a plumbing one.
 - **CCLI/reporting completeness** - flag a song missing CCLI number/author
   before publish, so licensing reports don't silently have gaps. Needs
   checking what `pco.SongData` actually exposes for CCLI fields before
@@ -213,7 +223,14 @@ pattern as `song_tags`/`song_relationships`:**
   key). Nearly free: `song_person_preferences` already carries a `Notes`
   field alongside its dynamic `preference` type (`song_preference_types`,
   migration 00015) - a new preference code (e.g. `key_note`) gets the
-  free-text note for free, no schema change.
+  free-text note for free, no schema change. The payoff needs one more
+  piece to actually fire when it matters, though: surface that note right
+  next to the arrangement's key the moment someone gets dragged onto lead
+  for a song, not just on their profile somewhere. Free text alone can only
+  ever be *shown*, not checked - flagging an actual mismatch ("Sarah leads,
+  arrangement's in C, her note says A") needs the note to be a structured
+  key rather than prose, worth doing only if surfacing alone doesn't feel
+  like enough once that ships.
 - **Occasion reservation** (Christmas Eve only, baptism/communion-specific) -
   largely already possible today: `song_roles` already has `communion`/
   `baptism` roles (migration 00020), and `song_tag_categories` already
@@ -252,10 +269,14 @@ pattern as `song_tags`/`song_relationships`:**
   pool has shrunk to 1-2 people, as an early flight-risk signal rather than
   discovering it the week nobody's available.
 - **Admin-only pastoral/season-of-life flag** - "go easy on scheduling this
-  month," recently had a baby, walking through something hard. Needs new
-  local storage and, more importantly, real thought on visibility - this
-  has to be scoped strictly to scheduling admins, unlike everything else
-  here that mirrors PCO's more broadly-visible notes.
+  month," recently had a baby, walking through something hard. Worth being
+  more than a go-easy binary: a specific soft-capacity restriction ("BGVs
+  only through October") the app can actually act on - a gentle nudge when
+  someone carrying that flag gets dragged onto a lead role, not just a note
+  someone has to remember to go read. Needs new local storage and, more
+  importantly, real thought on visibility - this has to be scoped strictly
+  to scheduling admins, unlike everything else here that mirrors PCO's more
+  broadly-visible notes.
 - **Ranked "call first" sub list per position** - separate from formal PCO
   eligibility, which says who *can* fill a position, not who to try *first*
   when someone cancels Saturday night. Not a person-to-person relationship
@@ -287,6 +308,18 @@ pattern as `song_tags`/`song_relationships`:**
   in-ear mix quirks, anything that changes room-to-room. Matters most for
   the multi-campus tier the pricing model already targets. New local
   storage, no existing table to extend.
+- **Stage density / band-balance check** - PCO shows a position as filled,
+  not what filling it *means* musically: three electric guitarists on a
+  week meant to be a stripped-back acoustic set, or two rhythm-only players
+  assigned when the arrangement needs someone who can carry a lead line.
+  A different axis than the instrumentation/gear tag idea above (Planning
+  annotations) - that's "what the song needs," this is "what the roster
+  actually adds up to." Needs two new things neither PCO nor this app
+  currently model: a per-position/per-person capability tag (lead-capable
+  vs. rhythm-only, or similar) and a density/style profile per service type
+  or arrangement to check the roster against. More build than most items
+  here - it's a new axis on both sides of the check, not a warning layered
+  on data that already exists.
 
 ## Run sheet (day-of output)
 
@@ -311,6 +344,17 @@ were.
   this is throwaway-after-Sunday info that currently lives in a text
   thread or nowhere. Smallest new storage in this file: one note field
   tied to the local `sets` row.
+- **Post-service debrief log** - distinct from the ephemeral note above,
+  which is throwaway; this is meant to be found again. A 60-second
+  post-Sunday note ("the bridge in Gratitude ran long," "transition out of
+  communion felt abrupt") tagged to a song or a specific song-to-song
+  transition, that resurfaces automatically the next time that song (or
+  that pairing back-to-back) shows up in a draft set - so the same mistake
+  doesn't get repeated three months later because nobody remembered the
+  conversation. Needs a new table (note text plus what it's keyed to - a
+  song id, or a song-pair for transition-specific notes) and, for the
+  pairing case, matching logic that recognizes "these two songs are
+  adjacent again" while building a set.
 
 ## Rough leverage-to-cost read
 
@@ -338,3 +382,17 @@ on the People side added above (pastoral flag, call-first list, flexibility
 inventory, growth notes) is genuinely new local storage with no existing
 table to lean on, and the pastoral flag specifically needs a visibility
 decision before it needs any code.
+
+A later round of additions splits the same way. **Surfacing per-person key
+fit at assignment time** is nearly free, same as the preference row it
+extends - it's UI over data described above, not new plumbing, unless
+auto-flagging a mismatch turns out to matter enough to warrant a
+structured key field over free text. **Rehearsal complexity budget** sits
+in the middle: every input it'd sum from already exists elsewhere in this
+file, so the real cost is designing the scoring formula and adding a
+rehearsal-length field, not fetching new data. **Stage density/band-balance
+checking** and the **post-service debrief log** are the priciest of the
+group - density needs a genuinely new capability/profile axis on both
+people and services with nothing to extend, and the debrief log needs new
+storage plus adjacency-matching logic to resurface a note at the right
+moment, not just store it.
