@@ -249,3 +249,37 @@ now (see above) and nothing else is currently open. If first load is
 re-measuring rather than guessing at a #7: confirm with real timing (not
 just "still feels slow") before picking the next lever, since several
 easy, well-understood wins are already in.
+
+## Addendum: Song Info's bulk sync was a separate, sharper risk
+
+Found after the above was written "nothing else is currently open" -
+`SyncSongInfo` (`internal/server/controllers/song_arrangement_cache.go`)
+walks every active song needing a cache backfill and live-fetches its
+arrangement + key (2 calls/song), **fully sequentially, inside the HTTP
+request**. Unlike the Plan page's ~100-200 calls (bad but survivable,
+see #6's rate-limit note above), a first sync for a ~100-song library
+alone needs up to ~200 calls - double PCO's 100-req/20s budget in a
+*single* request, and the more songs, the worse. Simply wrapping the loop
+in `RunConcurrently` (like #6 above) would make it faster but strictly
+*more* likely to trip a 429, not less, since it crams the same total call
+count into a much shorter window instead of the accidental self-throttling
+sequential latency provided.
+
+Fixed by detaching the sync from the request entirely: `SyncSongInfo`
+launches a background goroutine (`runSongInfoSync`, given a
+`context.Background()`-derived context carrying the user's PCO access
+token via `middleware.AccessToken` - independent of the fiber request's
+own context, which is cancelled once the handler returns) and responds
+immediately. The goroutine paces itself: songs needing a sync are batched
+(`songInfoSyncBatchSize` = `PCOFanOutLimit`, 10 songs/batch = up to 20
+calls/batch), each batch run concurrently via `RunConcurrently`, with a
+`songInfoSyncBatchPause` (10s) pause between batches - capping the
+sustained rate at ~60 calls per any 20-second window (60% of budget,
+comfortable headroom left for the rest of the app's ordinary traffic)
+regardless of how large the library is. An in-memory `songSyncInProgress`
+guard (mutex + map, same pattern as `nav.go`'s cache) stops a second
+concurrent pass for the same org. No new progress-tracking table was
+needed: `buildSongInfoData`'s `CachedCount`/`TotalCount` already recompute
+live from the DB on every render, so reloading the Song Info page shows
+the sync's progress for free, and `nav.go`'s existing `songInfoNeedsSync`
+badge already clears itself within a minute of the cache filling in.
