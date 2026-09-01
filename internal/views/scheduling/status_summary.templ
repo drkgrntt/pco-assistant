@@ -38,7 +38,7 @@ templ SongStatusSummary(data SetBuilderData) {
 		if data.ReorderPending {
 			@statusChip("Order changed", true)
 		}
-		if warnCount := len(data.ExistingConflicts) + len(data.RepeatWarnings); warnCount > 0 {
+		if warnCount := len(data.ExistingConflicts) + len(data.RepeatWarnings) + len(data.PlanWarnings); warnCount > 0 {
 			@statusChip(fmt.Sprintf("Warnings: %d", warnCount), true)
 		}
 	</div>

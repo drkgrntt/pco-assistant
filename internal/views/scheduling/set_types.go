@@ -50,9 +50,19 @@ type SetBuilderData struct {
 
 	// RepeatWarnings flags songs already in this set that were also sung in
 	// each of the last two past plans for this service type - see the
-	// controller's recentlyRepeatedSongs. Rendered the same way as
+	// controller's fetchRecentPlanHistory. Rendered the same way as
 	// ExistingConflicts, just a different reason.
 	RepeatWarnings []string
+
+	// PlanWarnings covers the whole plan rather than any one song or
+	// pairing: today, a total length that's noticeably longer/shorter than
+	// this service type's recent average (serviceLengthWarning), and a
+	// half-step key change between two back-to-back songs with nothing
+	// between them (keyTransitionWarnings). Rendered the same way as
+	// RepeatWarnings/ExistingConflicts, just a different reason - kept as
+	// its own field rather than folded into RepeatWarnings since neither
+	// check is actually about repetition.
+	PlanWarnings []string
 
 	// UnpublishedCount is how many SetSongs still need a "Publish" push -
 	// creates and reordering. PendingDeleteCount is how many

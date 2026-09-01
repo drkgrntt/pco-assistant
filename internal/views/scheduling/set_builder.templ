@@ -125,6 +125,9 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 		for _, msg := range data.RepeatWarnings {
 			<div class="warning">{ msg }</div>
 		}
+		for _, msg := range data.PlanWarnings {
+			<div class="warning">{ msg }</div>
+		}
 		if data.ImportableSongCount > 0 {
 			@components.ImportBanner(fmt.Sprintf("Looks like this service is already planned in Planning Center - it has %d song(s). Want to import them here so you can reorder, replace, or tag them?", data.ImportableSongCount), false) {
 				<form

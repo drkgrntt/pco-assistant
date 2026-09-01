@@ -172,16 +172,23 @@ pattern as `song_tags`/`song_relationships`:**
 
 ## Songs
 
-- **Service length warning** - every plan item already carries a `Length`
-  (see `pco.ItemAttributes.Length`, fetched for free alongside everything
-  else in `ServiceOrder`). Sum it per plan and flag when a service runs
-  noticeably longer/shorter than that service type's recent average, before
-  publish rather than after rehearsal runs long.
-- **Key-transition awkwardness** - items also carry `KeyName`
-  (`pco.ItemAttributes.KeyName`). Flag two adjacent songs a jarring interval
-  apart (a cold key change with no transition), or a set that's all one
-  key/tempo family and could use contrast. Same "free, already-fetched"
-  shape as the reinforcement feature.
+- ~~Service length warning~~ - **shipped.** Sums the draft's total length
+  (`serviceOrderLengthSeconds` - a foreign item's own `Length`, or a set
+  song's cached arrangement length) against the average of the service
+  type's last two past plans (`fetchRecentPlanHistory`, which now also
+  backs the existing repeat-warning check - one PCO history fetch serves
+  both), and flags a difference past 15%/3 minutes as a `PlanWarnings`
+  entry. See `serviceLengthWarning` in `sets_builder.go`.
+- ~~Key-transition awkwardness~~ - **shipped, the "jarring interval" half.**
+  Flags a half-step key change between two songs that are truly
+  back-to-back (nothing between them - a header/announcement in between
+  means a transition already exists there) as a `PlanWarnings` entry -
+  see `keyTransitionWarnings`/`parseKeyPitchClass`. Compares the draft's own
+  *effective* key (local override, falling back to the arrangement's
+  cached default - same value `SetSongView.Key` already shows), not the
+  raw published `KeyName`, so it reacts to an in-progress edit immediately.
+  The "all one key/tempo family, needs contrast" half of this idea isn't
+  built.
 - **Visual flow/energy curve** - a step further than the key-transition
   warning above: plot each song's tempo (already cached - see Song Info)
   as a simple curve across the set, so a jarring energy drop (e.g. a fast
@@ -362,9 +369,8 @@ Item notes and arrangement notes (Planning annotations, above) were the
 cheapest ideas in this whole file, and are now shipped - both fields
 already existed and were already writable in the SDK, so it was
 display/edit UI, not new plumbing. Service length + key transitions are
-next (zero new PCO calls, same items already fetched for `ServiceOrder`)
-and are the closest cousins to the reinforcement feature already shipped.
-First-time-position pairing is
+now shipped too, same zero-new-PCO-calls shape as the reinforcement
+feature they're cousins of. First-time-position pairing is
 probably the most valuable of the rest but costs a PCO call per
 assignment, same tier as today's serving-frequency check.
 

@@ -161,6 +161,15 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 		data.PendingChanges = append(data.PendingChanges, fmt.Sprintf("Removed: %s", titleOrID(titles, ss.SongID)))
 	}
 
+	// history covers both the repeat-warning check further down and the
+	// service-length warning below - one GetPlans/GetItems round trip
+	// against this service type's two most recent past plans serves both,
+	// rather than fetching the same history twice. Moved up here (rather
+	// than fetched right where RepeatWarnings gets built) so
+	// history.AverageLength is already in hand by the time the
+	// ServiceOrder block below needs it.
+	history := fetchRecentPlanHistory(ctx, serviceTypeID)
+
 	// ServiceOrder: the plan's full order, with this set's own songs
 	// interleaved at their anchored position (see mergeServiceOrder) -
 	// replaces the old song-only "current set" list, since seeing (and
@@ -177,6 +186,17 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 		// own doc comment on noteCategories.
 		noteCategories, _ := pco.GetItemNoteCategories(ctx, serviceTypeID, nil)
 		data.ServiceOrder = renderServiceOrder(ctx, sc.store, organizationID, serviceTypeID, planID, arrangementCache, noteCategories.Data, merged, titles, rolesBySong, roleTypeLabels)
+
+		// PlanWarnings: whole-plan concerns, as opposed to the per-song/
+		// per-pairing warnings below - see serviceLengthWarning and
+		// keyTransitionWarnings for what each actually checks. Both work
+		// off merged/arrangementCache, already in hand here, and
+		// history.AverageLength, already fetched above - zero new PCO
+		// calls for either.
+		if warning := serviceLengthWarning(serviceOrderLengthSeconds(merged, arrangementCache), history.AverageLength); warning != "" {
+			data.PlanWarnings = append(data.PlanWarnings, warning)
+		}
+		data.PlanWarnings = append(data.PlanWarnings, keyTransitionWarnings(merged, arrangementCache, titles)...)
 
 		// Keep this service type's "where does the first song usually go"
 		// memory (see PreferredFirstSongAnchorTitle, and firstSongFallbackAnchor
@@ -256,11 +276,11 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 
 	// repeated: songs sung in both of the last two past plans for this
 	// service type, straight from Planning Center's own history rather than
-	// this tool's local sets - see recentlyRepeatedSongs. Surfaced both
+	// this tool's local sets - see fetchRecentPlanHistory. Surfaced both
 	// against songs already in this set (a banner, alongside the same-set
 	// avoid-pairing conflicts above) and against not-yet-added candidates
 	// (a badge, so it's visible before adding rather than only after).
-	repeated := recentlyRepeatedSongs(ctx, serviceTypeID)
+	repeated := history.RepeatedSongs
 	for _, ss := range data.SetSongs {
 		if repeated[ss.SongID] {
 			data.RepeatWarnings = append(data.RepeatWarnings, fmt.Sprintf(
@@ -363,39 +383,69 @@ func reinforcementLabel(tracked map[string]bool, counts map[string]int, songID s
 }
 
 // recentTwoPlanLookback is how many of the most recent past plans
-// recentlyRepeatedSongs compares - "the two sets before it", per the
-// feature's own description.
+// fetchRecentPlanHistory compares - "the two sets before it", per the
+// repeat-warning feature's own description.
 const recentTwoPlanLookback = 2
 
-// recentlyRepeatedSongs returns the song IDs sung in *both* of the two most
-// recent past plans for a service type, straight from Planning Center's own
-// item data - not this tool's local sets, since the point is to flag a song
-// repeating in what actually got sung regardless of whether it was built
-// here. Fewer than two past plans, or any lookup failure along the way,
-// yields an empty set rather than an error: this is an advisory nicety for
-// the builder, not something that should block it. The actual overlap
-// computation lives in songsInBoth so it can be unit tested without hitting
-// Planning Center.
-func recentlyRepeatedSongs(ctx context.Context, serviceTypeID string) map[string]bool {
+// recentPlanHistory bundles what buildSetBuilderData needs from a service
+// type's two most recent past plans: which songs repeated across both of
+// them (RepeatedSongs - what recentlyRepeatedSongs used to return on its
+// own) and their average total length (AverageLength), for the
+// service-length warning below. One GetPlans/GetItems round trip covers
+// both, rather than fetching the same two plans' items twice.
+type recentPlanHistory struct {
+	RepeatedSongs map[string]bool
+	// AverageLength is the mean total item length (seconds) across the two
+	// plans compared - 0 when there weren't two past plans to compare,
+	// which serviceLengthWarning treats as "nothing to compare against"
+	// rather than "this plan is infinitely long."
+	AverageLength int
+}
+
+// fetchRecentPlanHistory returns serviceTypeID's recent-plan history,
+// straight from Planning Center's own item data - not this tool's local
+// sets, since the point of both signals it backs is to compare against
+// what actually got sung/ran, regardless of whether it was built here.
+// Fewer than two past plans, or any lookup failure along the way, yields a
+// zero-value recentPlanHistory rather than an error: this is an advisory
+// nicety for the builder, not something that should block it. The actual
+// overlap computation lives in songsInBoth so it can be unit tested
+// without hitting Planning Center.
+func fetchRecentPlanHistory(ctx context.Context, serviceTypeID string) recentPlanHistory {
 	plans, err := pco.GetPlans(ctx, serviceTypeID, &pco.PlansParams{
 		Filter:  "past",
 		OrderBy: "-sort_date",
 		PerPage: recentTwoPlanLookback,
 	})
 	if err != nil || len(plans.Data) < recentTwoPlanLookback {
-		return nil
+		return recentPlanHistory{}
 	}
 
 	items, err := pco.GetItems(ctx, serviceTypeID, plans.Data[0].ID, nil)
 	if err != nil {
-		return nil
+		return recentPlanHistory{}
 	}
 	prevItems, err := pco.GetItems(ctx, serviceTypeID, plans.Data[1].ID, nil)
 	if err != nil {
-		return nil
+		return recentPlanHistory{}
 	}
 
-	return songsInBoth(items.Data, prevItems.Data)
+	return recentPlanHistory{
+		RepeatedSongs: songsInBoth(items.Data, prevItems.Data),
+		AverageLength: (totalItemLength(items.Data) + totalItemLength(prevItems.Data)) / recentTwoPlanLookback,
+	}
+}
+
+// totalItemLength sums Length (seconds, PCO's own unit for the attribute)
+// across a plan's raw items - the past-plan side of the service-length
+// comparison; see serviceOrderLengthSeconds for the current draft's side of
+// the same comparison.
+func totalItemLength(items []pco.ItemData) int {
+	total := 0
+	for _, item := range items {
+		total += item.Attributes.Length
+	}
+	return total
 }
 
 // songsInBoth returns the song IDs that appear (via a song-linked item) in
@@ -517,6 +567,172 @@ func mergeServiceOrder(items []pco.ItemData, setSongs []scheduling.SetSong) []me
 	}
 
 	return rows
+}
+
+// serviceLengthWarnRatio and serviceLengthWarnFloorSeconds together decide
+// how far a draft's total length has to differ from this service type's
+// recent average before it's "noticeably" long/short rather than normal
+// week-to-week variance: 15% of the average, or 3 minutes, whichever is
+// larger - the floor exists so a service type with a small average (a short
+// midweek gathering, say) doesn't flag on a variance of a minute or two
+// that 15% alone would call "noticeable."
+const (
+	serviceLengthWarnRatio        = 0.15
+	serviceLengthWarnFloorSeconds = 180
+)
+
+// serviceOrderLengthSeconds sums this draft's total length: a foreign
+// item's own Length attribute (PCO tracks this for any item type, not just
+// songs - a sermon or video counts too), or a set song's cached arrangement
+// length (song_arrangement_cache.LengthSeconds, the same figure
+// ArrangementInfo's summary line already displays as "3:45"). An uncached
+// song contributes 0 - same best-effort convention as ArrangementInfo
+// elsewhere on this page: the total undercounts until Song Info is synced,
+// rather than the page breaking.
+func serviceOrderLengthSeconds(rows []mergedRow, arrangementCache map[string]scheduling.SongArrangementInfo) int {
+	total := 0
+	for _, row := range rows {
+		if row.Item != nil {
+			total += row.Item.Attributes.Length
+			continue
+		}
+		total += arrangementCache[row.Song.SongID].LengthSeconds
+	}
+	return total
+}
+
+// serviceLengthWarning compares this draft's total length against this
+// service type's recent average (see fetchRecentPlanHistory) and returns an
+// advisory message when they differ by more than serviceLengthWarnRatio/
+// serviceLengthWarnFloorSeconds - "" when there's no history to compare
+// against yet, or the difference is within normal variance.
+func serviceLengthWarning(currentSeconds, averageSeconds int) string {
+	if averageSeconds <= 0 {
+		return ""
+	}
+
+	diff := currentSeconds - averageSeconds
+	if diff < 0 {
+		diff = -diff
+	}
+	threshold := int(float64(averageSeconds) * serviceLengthWarnRatio)
+	if threshold < serviceLengthWarnFloorSeconds {
+		threshold = serviceLengthWarnFloorSeconds
+	}
+	if diff <= threshold {
+		return ""
+	}
+
+	direction := "longer"
+	if currentSeconds < averageSeconds {
+		direction = "shorter"
+	}
+	return fmt.Sprintf(
+		"This plan runs about %s, %s than the recent average of %s for this service type - double check before publishing.",
+		formatTotalDuration(currentSeconds), direction, formatTotalDuration(averageSeconds),
+	)
+}
+
+// formatTotalDuration renders a whole-service length ("1h 15m", "48 min") -
+// deliberately not the "3:45" m:ss format formatArrangementInfo uses for a
+// single song, which stops being readable once the total runs past an
+// hour.
+func formatTotalDuration(seconds int) string {
+	minutes := seconds / 60
+	if minutes < 60 {
+		return fmt.Sprintf("%d min", minutes)
+	}
+	return fmt.Sprintf("%dh %dm", minutes/60, minutes%60)
+}
+
+// keyPitchClasses maps a note letter to its pitch class (C=0 .. B=11) -
+// keyTransitionWarnings' only music-theory lookup table.
+var keyPitchClasses = map[string]int{
+	"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11,
+}
+
+// parseKeyPitchClass parses a key string ("Bb", "F#m", "G") into a 0-11
+// pitch class, ignoring major/minor quality entirely - a trailing "m"
+// (minor - see resolveKeyID's own comment on this convention) is accepted
+// but doesn't change the result, since this warning is about root
+// movement, not mode. Returns ok=false for anything that isn't a bare note
+// letter A-G optionally followed by a single "#"/"♯" or "b"/"♭" - good
+// enough for what this app and Planning Center's own key picker actually
+// produce, not a general music-notation parser.
+func parseKeyPitchClass(key string) (int, bool) {
+	key = strings.TrimSpace(key)
+	key = strings.TrimSuffix(key, "m")
+	if key == "" {
+		return 0, false
+	}
+
+	root, ok := keyPitchClasses[strings.ToUpper(key[:1])]
+	if !ok {
+		return 0, false
+	}
+	switch key[1:] {
+	case "":
+	case "#", "♯":
+		root++
+	case "b", "♭":
+		root--
+	default:
+		return 0, false
+	}
+	return ((root % 12) + 12) % 12, true
+}
+
+// semitoneDistance is the minimal circular distance (0-6) between two pitch
+// classes - 1 either direction (e.g. E to F, or B to C) is a half step, the
+// interval keyTransitionWarnings actually flags.
+func semitoneDistance(a, b int) int {
+	d := a - b
+	if d < 0 {
+		d = -d
+	}
+	if d > 6 {
+		d = 12 - d
+	}
+	return d
+}
+
+// keyTransitionWarnings flags two songs that are truly back-to-back in the
+// order - nothing else between them in rows, see mergeServiceOrder - whose
+// keys are a half-step apart: the single interval most likely to sound like
+// a mistake rather than an intentional change, and the hardest for a
+// guitarist to prepare for (a full re-fret, not a capo move). A song with
+// no key set, or a key string that doesn't parse (see
+// parseKeyPitchClass), is silently skipped - same best-effort convention as
+// fetchRecentPlanHistory above.
+func keyTransitionWarnings(rows []mergedRow, arrangementCache map[string]scheduling.SongArrangementInfo, titles map[string]string) []string {
+	var warnings []string
+	for i := 1; i < len(rows); i++ {
+		prev, cur := rows[i-1], rows[i]
+		if prev.Song == nil || cur.Song == nil {
+			continue
+		}
+
+		prevKey := effectiveKey(*prev.Song, arrangementCache[prev.Song.SongID])
+		curKey := effectiveKey(*cur.Song, arrangementCache[cur.Song.SongID])
+		prevPitch, ok := parseKeyPitchClass(prevKey)
+		if !ok {
+			continue
+		}
+		curPitch, ok := parseKeyPitchClass(curKey)
+		if !ok {
+			continue
+		}
+		if semitoneDistance(prevPitch, curPitch) != 1 {
+			continue
+		}
+
+		warnings = append(warnings, fmt.Sprintf(
+			"%s (%s) into %s (%s) is a half-step key change with no transition - consider a pad/bridge, or adjusting one song's key.",
+			titleOrID(titles, prev.Song.SongID), prevKey,
+			titleOrID(titles, cur.Song.SongID), curKey,
+		))
+	}
+	return warnings
 }
 
 // buildSongNoteViews resolves one views.SongNoteView per available note

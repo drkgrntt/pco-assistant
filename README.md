@@ -77,7 +77,10 @@ count into Stripe as that subscription's line-item quantity.
   a blank slate). Drag-and-drop reordering, recommendations based on song
   relationships, avoid-pairing warnings, duplicate-song support (e.g. a
   song reprised as the response), a repeated-song warning if a song was
-  sung in each of the last two plans, and each song's key/tempo/meter/length
+  sung in each of the last two plans, a plan-length warning when the draft
+  runs noticeably longer/shorter than that service type's recent average,
+  a key-change warning when two back-to-back songs (nothing else between
+  them) are a jarring half step apart, and each song's key/tempo/meter/length
   shown right on the row (see Song Info above). The opposite nudge also runs
   automatically: a song genuinely new to the church (Planning Center has no
   prior scheduling date for it the first time it's seen) gets a "Sung
