@@ -221,6 +221,28 @@ func (sc *SchedulingController) SyncSongInfo(c *fiber.Ctx) error {
 	return render(c, views.SongInfoBody(data))
 }
 
+// runPacedBatches runs fn once for every item across batches, one batch at
+// a time: each batch's items run concurrently via scheduling.RunConcurrently
+// (bounded to scheduling.PCOFanOutLimit at once), with a pause of
+// batchPause between the end of one batch and the start of the next - see
+// songInfoSyncBatchPause's doc comment for the call-volume-per-20-seconds
+// math this pacing is built around. Extracted from runSongInfoSync's own
+// loop, unchanged, so the pacing mechanism itself (batch size, concurrency
+// bound, inter-batch pause) is testable on its own with a lightweight fn -
+// no database/PCO dependency required - independent of the DB-backed work
+// runSongInfoSync's fn actually does; see
+// TestRunPacedBatchesWaitsBetweenBatches in song_arrangement_cache_test.go,
+// the one test in this task the user most needed confidence in.
+func runPacedBatches[T any](batches [][]T, batchPause time.Duration, fn func(T)) {
+	for i, batch := range batches {
+		scheduling.RunConcurrently(batch, fn)
+
+		if i < len(batches)-1 {
+			time.Sleep(batchPause)
+		}
+	}
+}
+
 // runSongInfoSync is SyncSongInfo's actual work, run in a background
 // goroutine outside the request/response cycle so an org needing hundreds
 // of PCO calls to backfill its song library doesn't block an HTTP
@@ -236,9 +258,9 @@ func (sc *SchedulingController) SyncSongInfo(c *fiber.Ctx) error {
 // likely, not less - PCO's rate limit is 100 requests/20s per user token,
 // and a large library's first sync alone can need double that budget.
 // Songs needing a sync are instead split into small batches
-// (songInfoSyncBatchSize), each batch run concurrently via
-// scheduling.RunConcurrently, with a deliberate pause
-// (songInfoSyncBatchPause) between batches - see that constant's doc
+// (songInfoSyncBatchSize) and run via runPacedBatches, which fans each
+// batch out concurrently via scheduling.RunConcurrently with a deliberate
+// pause (songInfoSyncBatchPause) between batches - see that constant's doc
 // comment for the call-volume-per-20-seconds math. This trades wall-clock
 // time (a big first sync can take minutes) for staying comfortably under
 // PCO's rate limit regardless of library size - an acceptable trade now
@@ -285,20 +307,14 @@ func runSongInfoSync(ctx context.Context, store *scheduling.Store, organizationI
 	// (via scheduling.RunConcurrently) - atomic rather than plain ints
 	// since multiple songs in the same batch finish at once.
 	var applied, failed atomic.Int64
-	for i, batch := range batches {
-		scheduling.RunConcurrently(batch, func(songID string) {
-			if _, err := fetchAndCacheArrangementInfo(ctx, store, organizationID, songID); err != nil {
-				logger.Error("background song info sync: caching arrangement failed", "organization_id", organizationID, "song_id", songID, "error", err)
-				failed.Add(1)
-				return
-			}
-			applied.Add(1)
-		})
-
-		if i < len(batches)-1 {
-			time.Sleep(songInfoSyncBatchPause)
+	runPacedBatches(batches, songInfoSyncBatchPause, func(songID string) {
+		if _, err := fetchAndCacheArrangementInfo(ctx, store, organizationID, songID); err != nil {
+			logger.Error("background song info sync: caching arrangement failed", "organization_id", organizationID, "song_id", songID, "error", err)
+			failed.Add(1)
+			return
 		}
-	}
+		applied.Add(1)
+	})
 
 	logger.Info("background song info sync complete",
 		"organization_id", organizationID,
