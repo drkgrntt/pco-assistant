@@ -96,8 +96,22 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 	var failures []string
 	deleted, created, updated := 0, 0, 0
 
-	songs, _ := fetchAllSongs(middleware.RequestContext(c))
+	songs, _ := fetchActiveSongs(middleware.RequestContext(c), orgID)
 	titles := songTitleMap(songs)
+	// Backfill titles for any already-scheduled song (setSongs or
+	// pendingDeletions) the active-only fetch above excluded because it's
+	// since been archived in PCO - see resolveMissingTitles' doc comment.
+	// Titles here feed real writes (CreateItem's title on first publish),
+	// not just display, so this matters more than the read-only builder
+	// page's own version of the same backfill.
+	scheduledSongIDs := make([]string, 0, len(setSongs)+len(pendingDeletions))
+	for _, ss := range setSongs {
+		scheduledSongIDs = append(scheduledSongIDs, ss.SongID)
+	}
+	for _, pd := range pendingDeletions {
+		scheduledSongIDs = append(scheduledSongIDs, pd.SongID)
+	}
+	resolveMissingTitles(ctx, titles, scheduledSongIDs)
 	// Best-effort, same tolerance as everywhere else this cache is read -
 	// a miss here just means a newly-created item skips the Description/
 	// Length/ArrangementID defaults below rather than blocking the
@@ -336,8 +350,15 @@ func (sc *SchedulingController) RefreshSongInfo(c *fiber.Ctx) error {
 		return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(ctx, orgID, serviceTypeID, planID, err.Error())))
 	}
 
-	songs, _ := fetchAllSongs(ctx)
+	songs, _ := fetchActiveSongs(ctx, orgID)
 	titles := songTitleMap(songs)
+	// See PublishSet's identical backfill for why - setSongs here can
+	// equally reference a song that's since been archived in PCO.
+	setSongIDs := make([]string, 0, len(setSongs))
+	for _, ss := range setSongs {
+		setSongIDs = append(setSongIDs, ss.SongID)
+	}
+	resolveMissingTitles(ctx, titles, setSongIDs)
 	arrangementCache, _ := sc.store.SongArrangementInfo(ctx, orgID)
 
 	var failures []string
