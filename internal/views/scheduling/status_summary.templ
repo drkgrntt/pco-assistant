@@ -113,21 +113,31 @@ templ SongGlanceList(order []ServiceOrderRow) {
 
 // TeamGlanceList is the Team glance card's content (see build.templ) - one
 // line per position, naming who's actually filling it (or "Open" when
-// nobody is yet), the roster equivalent of SongGlanceList.
+// nobody is yet), the roster equivalent of SongGlanceList. Grouped by team
+// (groupPositionsByTeam, roster_builder.templ - the same grouping the
+// Team tab's own Positions section uses) with a small heading per team,
+// rather than one flat list - a glance card with two or three teams on it
+// read as one undifferentiated pile of positions otherwise.
 templ TeamGlanceList(positions []PositionGroupView) {
-	<ul class="build-glance-list">
-		for _, pos := range positions {
-			<li>
-				<span>{ pos.TeamPositionName }</span>
-				if len(pos.Assigned) > 0 {
-					<span class="muted">{ strings.Join(assignedNames(pos.Assigned), ", ") }</span>
-				} else {
-					<span class="muted">Open</span>
-				}
-			</li>
-		}
-		if len(positions) == 0 {
+	if len(positions) == 0 {
+		<ul class="build-glance-list">
 			<li class="muted">No positions yet.</li>
-		}
-	</ul>
+		</ul>
+	}
+	for _, group := range groupPositionsByTeam(positions) {
+		<p class="build-glance-team-heading">{ group.TeamName }</p>
+		<ul class="build-glance-list">
+			for _, item := range group.Positions {
+				{{ pos := item.Pos }}
+				<li>
+					<span>{ pos.TeamPositionName }</span>
+					if len(pos.Assigned) > 0 {
+						<span class="muted">{ strings.Join(assignedNames(pos.Assigned), ", ") }</span>
+					} else {
+						<span class="muted">Open</span>
+					}
+				</li>
+			}
+		</ul>
+	}
 }
