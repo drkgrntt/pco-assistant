@@ -44,6 +44,35 @@ templ personDetailCardsLazyOOB(data RosterBuilderData) {
 	}
 }
 
+// personDetailCardInsertOOB appends one newly-assigned person's detail card
+// into the sidebar's existing #build-detail-team group via htmx's
+// "beforeend" out-of-band insert - the narrow-mutation counterpart to
+// personDetailCardsOOB's full-group replace (see rosters_detail.go's
+// per-group handlers, which use this after AddRosterAssignment instead of
+// recomputing every other already-assigned person's card just to add one
+// more). #build-detail-team already exists in the DOM from the page's own
+// initial render (PersonDetailCards/personDetailCardsOOB), so this never
+// needs to render that shell itself - only the one new card, which starts
+// hidden like every other (selectPersonRow, scheduling.js, reveals it on
+// click), exactly as if it had been there since the last full render.
+templ personDetailCardInsertOOB(data RosterBuilderData, a AssignmentView) {
+	<div hx-swap-oob="beforeend:#build-detail-team">
+		@personDetailCard(data, a)
+	</div>
+}
+
+// personDetailCardRemoveOOB deletes one assignment's detail card from the
+// sidebar - the narrow-mutation counterpart for a removal (see
+// RemoveRosterAssignment, rosters_detail.go). personDetailCard's own root
+// element (buildDetailCardShell) carries no id, only data-row-id - so
+// unlike a plain "delete" OOB (which matches by an element's own id), this
+// targets an explicit CSS selector instead; the div's own content and
+// (lack of) id are otherwise irrelevant, since a "delete" swap never uses
+// either.
+templ personDetailCardRemoveOOB(assignmentID int64) {
+	<div hx-swap-oob={ fmt.Sprintf("delete:[data-row-id='%d']", assignmentID) }></div>
+}
+
 // personDetailCard is one assigned person's detail card - hidden until
 // selectPersonRow (scheduling.js) reveals it, in response to clicking that
 // person's own row in a position's assignment list (roster_builder.templ).
@@ -77,7 +106,7 @@ templ personDetailCard(data RosterBuilderData, a AssignmentView) {
 					type="button"
 					class="danger"
 					hx-delete={ fmt.Sprintf("/scheduling/rosters/%s/%s/assignments/%d", data.ServiceTypeID, data.PlanID, a.ID) }
-					hx-target="#roster-builder-body"
+					hx-target={ "#" + PositionGroupElementID(a.TeamID, a.TeamPositionName) }
 					hx-swap="outerHTML"
 					hx-confirm="Remove this person from this position?"
 				>

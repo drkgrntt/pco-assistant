@@ -674,24 +674,41 @@ function applyStoredCollapsibleState() {
 }
 document.addEventListener("DOMContentLoaded", applyStoredCollapsibleState);
 
-// Every mutation on the set/roster builders re-renders the whole
-// #set-builder-body/#roster-builder-body (see the htmx attributes
-// throughout set_builder.templ/roster_builder.templ), which would
+// Most mutations on the set builder re-render the whole #set-builder-body
+// (see the htmx attributes throughout set_builder.templ), which would
 // otherwise snap every .collapsible back to its default open/closed state
-// on every single add/remove/publish click. Recorded right before whichever
-// body is about to swap, and reapplied right after - scoped by id so a
-// roster action never touches state remembered for the set builder and
-// vice versa (they never swap at the same time anyway, but this keeps the
-// two independent regardless).
+// on every single add/remove/publish click. The roster builder mostly
+// avoids that same full-body reload - its own mutations (roster_builder.templ)
+// instead swap just one #position-group-<id> card at a time (falling back
+// to a full #roster-builder-body swap only for Publish/Discard, which can
+// touch every position at once) - but that narrower target still needs the
+// same memory trick, since a position-group card can itself contain a
+// nested .collapsible (its own "+ Add eligible person" panel) whose open
+// state would otherwise reset on every add/remove for that position.
+// Recorded right before whichever target - full body or single card - is
+// about to swap, and reapplied right after - scoped by id so one target's
+// remembered state is never applied to a different swap that happens to
+// follow it.
 var openCollapsibleIDs = null;
+
+function isCollapsibleMemoryTarget(target) {
+  return !!target && (target.id === "set-builder-body" || target.id === "roster-builder-body" || target.id.indexOf("position-group-") === 0);
+}
 
 document.addEventListener("htmx:beforeSwap", function (event) {
   var target = event.detail.target;
-  if (!target || (target.id !== "set-builder-body" && target.id !== "roster-builder-body")) {
+  if (!isCollapsibleMemoryTarget(target)) {
     return;
   }
 
   openCollapsibleIDs = [];
+  // Include the target itself, not just its descendants - a
+  // #position-group-<id> card is itself the .collapsible.open element
+  // being swapped (unlike #set-builder-body/#roster-builder-body, which
+  // only ever *contain* collapsibles, never are one).
+  if (target.matches(".collapsible.open[id]")) {
+    openCollapsibleIDs.push(target.id);
+  }
   target.querySelectorAll(".collapsible.open[id]").forEach(function (el) {
     openCollapsibleIDs.push(el.id);
   });
