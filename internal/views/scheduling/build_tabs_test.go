@@ -19,46 +19,62 @@ func TestLazyTabURLDeferredBuildsURL(t *testing.T) {
 	}
 }
 
-func TestTabButtonAttrsAlwaysSetsOnclick(t *testing.T) {
+func TestTabButtonAttrsOnlySetsOnclick(t *testing.T) {
 	attrs := tabButtonAttrs(BuildTab{ID: "songs"})
 	if attrs["onclick"] != "toggleBuildTab('songs')" {
 		t.Errorf("expected onclick to toggle the songs tab, got %v", attrs["onclick"])
 	}
-}
-
-func TestTabButtonAttrsOmitsLazyFetchWhenLazyURLEmpty(t *testing.T) {
-	attrs := tabButtonAttrs(BuildTab{ID: "songs"})
+	// The tab button must never carry hx-get/hx-trigger itself - see
+	// tabPanelLazyAttrs' doc comment for the bug that caused (the app-wide
+	// htmx-request feedback disabling the button for as long as the
+	// load-triggered fetch was in flight, since it can't tell that "load"
+	// apart from a real click).
 	for _, key := range []string{"hx-get", "hx-trigger", "hx-target", "hx-swap"} {
 		if _, ok := attrs[key]; ok {
-			t.Errorf("expected no %s attribute for a tab with no LazyURL, got %v", key, attrs[key])
+			t.Errorf("expected no %s attribute on the tab button, got %v", key, attrs[key])
 		}
 	}
 }
 
-func TestTabButtonAttrsAddsLazyFetchWhenLazyURLSet(t *testing.T) {
-	attrs := tabButtonAttrs(BuildTab{ID: "team", LazyURL: "/scheduling/build/st1/pl1/team-tab"})
+func TestTabPanelLazyAttrsNilWhenURLEmpty(t *testing.T) {
+	attrs := tabPanelLazyAttrs("", "team")
+	if attrs != nil {
+		t.Errorf("expected nil attrs for an empty lazyURL, got %v", attrs)
+	}
+}
+
+func TestTabPanelLazyAttrsSetWhenURLPresent(t *testing.T) {
+	attrs := tabPanelLazyAttrs("/scheduling/build/st1/pl1/team-tab", "team")
 
 	if attrs["hx-get"] != "/scheduling/build/st1/pl1/team-tab" {
-		t.Errorf("expected hx-get to be the LazyURL, got %v", attrs["hx-get"])
+		t.Errorf("expected hx-get to be the lazyURL, got %v", attrs["hx-get"])
 	}
-	if attrs["hx-target"] != "#build-tab-team" {
-		t.Errorf("expected hx-target to point at the team tab panel, got %v", attrs["hx-target"])
+	if attrs["hx-swap"] != "innerHTML" {
+		t.Errorf("expected hx-swap innerHTML, got %v", attrs["hx-swap"])
 	}
-	// load fires the fetch immediately on page render, giving the deferred
-	// tab the earliest possible head start (see lazyTabTrigger's doc
-	// comment); click stays as a same-tab retry in case that first attempt
-	// failed. mouseenter/focus are deliberately absent - once "load" always
-	// fires the fetch immediately, they never get a chance to do anything
-	// load hasn't already started, so they'd only ever add a redundant GET.
+	// No hx-target: the panel div hosts hx-get itself now, so the default
+	// target (itself) is already correct - see tabPanelLazyAttrs' doc
+	// comment.
+	if _, ok := attrs["hx-target"]; ok {
+		t.Errorf("expected no hx-target now that hx-get lives on the panel itself, got %v", attrs["hx-target"])
+	}
+
 	trigger, _ := attrs["hx-trigger"].(string)
-	for _, want := range []string{"load once", "click once"} {
+	for _, want := range []string{"load once", "click once from:#build-tab-button-team"} {
 		if !strings.Contains(trigger, want) {
 			t.Errorf("expected hx-trigger %q to contain %q", trigger, want)
 		}
 	}
-	for _, unwanted := range []string{"mouseenter", "focus"} {
-		if strings.Contains(trigger, unwanted) {
-			t.Errorf("expected hx-trigger %q not to contain %q - load already covers it", trigger, unwanted)
-		}
+}
+
+func TestLazyTabTriggerScopesClickToItsOwnButton(t *testing.T) {
+	songs := lazyTabTrigger("songs")
+	team := lazyTabTrigger("team")
+
+	if !strings.Contains(songs, "from:#build-tab-button-songs") {
+		t.Errorf("expected songs' trigger to scope click to its own button, got %q", songs)
+	}
+	if !strings.Contains(team, "from:#build-tab-button-team") {
+		t.Errorf("expected team's trigger to scope click to its own button, got %q", team)
 	}
 }
