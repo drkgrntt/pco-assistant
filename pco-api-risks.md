@@ -96,20 +96,26 @@ actually PCO just cut the app off partway through.
    This repo's `go.mod` now pins that real tag - fully shipped, not just
    locally tested.
 3. ~~**Only build the active tab's data**, lazy-loading the other via htmx
-   instead of both on every `BuildPlanPage` hit~~ - done, and on hover/
-   focus rather than plain click: `BuildPlanPage` now builds only
-   `activeTab`'s data; the other tab (and its "at a glance" sidebar card,
-   which reads the same data - see build.templ's own comment) renders a
-   loading placeholder that fetches from a new `BuildSongsTabLazy`/
-   `BuildTeamTabLazy` endpoint (`build.go`) the first time the user shows
-   real intent to look at it. `BuildTab.LazyURL`/`tabButtonAttrs`
-   (`build_tabs.templ`) fire that fetch on `mouseenter once, focus once,
-   click once` - for a real mouse click, `mouseenter` always fires first
-   (the cursor has to enter the button before clicking it), and keyboard
-   activation is always preceded by `focus`, so the switch feels instant
-   in practice; `click` stays as the fallback for touch devices, which
-   don't reliably fire hover/focus first. Required threading a `hidden
-   bool` through every `*ShellOOB` component this page already had
+   instead of both on every `BuildPlanPage` hit~~ - done: `BuildPlanPage`
+   now builds only `activeTab`'s data; the other tab (and its "at a
+   glance" sidebar card, which reads the same data - see build.templ's own
+   comment) renders a loading placeholder that fetches from a new
+   `BuildSongsTabLazy`/`BuildTeamTabLazy` endpoint (`build.go`).
+   `BuildTab.LazyURL`/`tabButtonAttrs`/`lazyTabTrigger` (`build_tabs.templ`)
+   originally fired that fetch on `mouseenter once, focus once, click
+   once` (hover/focus-triggered, click as a touch-device fallback) - moved
+   to `load once, mouseenter once, focus once, click once` after real
+   usage showed the Team tab (the usual bulk of this page's total load
+   cost) still had an awkward wait on hover, since the fetch often didn't
+   have time to finish between a hover and the click right after it.
+   `load` fires immediately once the page itself has rendered, so the
+   deferred tab gets the earliest possible head start instead of only
+   starting once the user shows intent to switch - it's still not blocking
+   the *active* tab's own first paint, just no longer waiting on
+   hover/click either. The other three triggers stay as independent
+   fallback retriggers (each has its own "once") in case the load-time
+   fetch failed. Required threading a `hidden bool` through every
+   `*ShellOOB` component this page already had
    (`glanceCardShellOOB`, `publishCardShellOOB`, `buildDetailGroupShellOOB`)
    so the new `*LazyOOB` variants (`songGlanceLazyOOB`,
    `songPublishPanelLazyOOB`, `songDetailCardsLazyOOB`, and their Team

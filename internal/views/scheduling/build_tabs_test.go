@@ -44,12 +44,13 @@ func TestTabButtonAttrsAddsLazyFetchWhenLazyURLSet(t *testing.T) {
 	if attrs["hx-target"] != "#build-tab-team" {
 		t.Errorf("expected hx-target to point at the team tab panel, got %v", attrs["hx-target"])
 	}
-	// mouseenter/focus fire before a real click ever would (see
-	// tabButtonAttrs' own doc comment) - click stays only as a fallback for
-	// devices with no reliable hover/focus-before-click, so it must be
-	// present alongside the other two, not instead of them.
+	// load fires the fetch immediately on page render, giving the deferred
+	// tab the earliest possible head start (see lazyTabTrigger's doc
+	// comment); mouseenter/focus/click stay as independent fallback
+	// triggers in case that first attempt failed, so all four must be
+	// present, not just "load" alone.
 	trigger, _ := attrs["hx-trigger"].(string)
-	for _, want := range []string{"mouseenter once", "focus once", "click once"} {
+	for _, want := range []string{"load once", "mouseenter once", "focus once", "click once"} {
 		if !strings.Contains(trigger, want) {
 			t.Errorf("expected hx-trigger %q to contain %q", trigger, want)
 		}

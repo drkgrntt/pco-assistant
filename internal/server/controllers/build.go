@@ -211,10 +211,12 @@ func (sc *SchedulingController) combinedPlansForServiceType(ctx context.Context,
 //
 // Only activeTab's own data is actually built here - see pco-api-risks.md's
 // mitigation #3. The other tab's data (a real PCO-heavy build - roughly
-// half this page's total load cost, per that doc) is deferred until the
-// user shows real intent to look at it (BuildSongsTabLazy/BuildTeamTabLazy
-// below, hover/focus/click-triggered - see BuildTab.LazyURL,
-// build_tabs.templ). Both structs still need ServiceTypeID/PlanID/
+// half this page's total load cost, per that doc) is fetched separately
+// (BuildSongsTabLazy/BuildTeamTabLazy below), starting as soon as the page
+// itself has rendered rather than blocking this response on it - see
+// lazyTabTrigger's doc comment (build_tabs.templ) for why "as soon as
+// possible" beats waiting for the user to actually hover/focus/click that
+// tab. Both structs still need ServiceTypeID/PlanID/
 // PlanTitle/PlanDates set regardless of which one was skipped: the page
 // header and nav links read setData's copies unconditionally (BuildPlan,
 // build.templ), and the deferred tab's own lazy-fetch URL needs its
@@ -254,11 +256,11 @@ func (sc *SchedulingController) BuildPlanPage(c *fiber.Ctx) error {
 }
 
 // BuildSongsTabLazy renders the Songs tab's real content - both its main
-// panel and its "Songs, at a glance" sidebar card - the first time it's
-// actually requested: BuildPlanPage's initial response only ever renders a
-// loading placeholder for it (see that handler's own doc comment), and
-// build_tabs.templ's tabButtonAttrs points its tab button's hx-get here,
-// firing on hover/focus/click. views.SetBuilderBodyLazy is
+// panel and its "Songs, at a glance" sidebar card: BuildPlanPage's initial
+// response only ever renders a loading placeholder for it (see that
+// handler's own doc comment), and build_tabs.templ's tabButtonAttrs points
+// its tab button's hx-get here, firing on page load (plus hover/focus/click
+// as fallback retriggers - see lazyTabTrigger). views.SetBuilderBodyLazy is
 // SetBuilderBody's counterpart for this - same content, but its OOB
 // fragments render hidden (the Team tab is the one actually open right
 // now) instead of visible.

@@ -8,15 +8,32 @@ import "fmt"
 //
 // LazyURL, when non-empty, marks this tab's content as not yet fetched
 // (see pco-api-risks.md's mitigation #3) - its button fetches from this
-// URL and swaps the result into "#build-tab-<ID>" the first time the user
-// shows real intent to look at it, rather than that data having already
-// been built server-side for every page load. Left "" for whichever tab
-// is already active, since its content is already in the DOM.
+// URL and swaps the result into "#build-tab-<ID>", starting as soon as
+// the page itself has rendered (see lazyTabTrigger) rather than that data
+// having already been built server-side for this same response. The
+// point isn't to avoid the fetch, just to not block the active tab's own
+// first paint on it - by the time the user actually looks at this tab, it
+// has as much of a head start as the page can give it. Left "" for
+// whichever tab is already active, since its content is already in the
+// DOM.
 type BuildTab struct {
 	ID      string
 	Label   string
 	LazyURL string
 }
+
+// lazyTabTrigger is the hx-trigger every lazy tab button fires its fetch
+// on. "load" fires immediately once the page itself has rendered - the
+// earliest possible head start, since the deferred tab (Team, in
+// practice - see pco-api-risks.md's mitigation #3) is usually the more
+// expensive one, and a hover/focus-triggered fetch alone often didn't
+// have time to finish before the user actually clicked over. mouseenter/
+// focus/click stay as fallback triggers, each with its own independent
+// "once": if the load-triggered fetch somehow failed (a network hiccup),
+// a later hover/focus/click is still a fresh, working attempt rather than
+// silently never retrying - not just redundant insurance for the normal
+// case, which "load" alone would already cover.
+const lazyTabTrigger = "load once, mouseenter once, focus once, click once"
 
 // tabButtonAttrs builds one tab button's full attribute set: the plain
 // client-side toggleBuildTab onclick every tab gets, plus - only when
@@ -24,24 +41,11 @@ type BuildTab struct {
 // its real content once. A plain Go func rather than inline templ
 // conditionals since templ can't attach some attributes to an element
 // conditionally and others unconditionally within one tag.
-//
-// hx-trigger fires on mouseenter/focus, not click: for a real mouse
-// click, mouseenter always fires first (the cursor has to enter the
-// button before clicking it) and for keyboard activation, focus always
-// precedes the keypress that triggers it - so by the time an actual click
-// happens, the fetch has almost always already started, making the
-// switch feel instant. click stays in the trigger list too as a fallback
-// for touch devices, which don't reliably fire hover/focus events before
-// a tap - each trigger's own "once" means a normal hover-then-click on a
-// mouse only ever fires one request in practice (mouseenter's already
-// used its "once" by the time click would); a request from a device that
-// truly has neither hover nor prior focus is the rare case this is a
-// deliberate, harmless duplicate for.
 func tabButtonAttrs(t BuildTab) templ.Attributes {
 	attrs := templ.Attributes{"onclick": fmt.Sprintf("toggleBuildTab('%s')", t.ID)}
 	if t.LazyURL != "" {
 		attrs["hx-get"] = t.LazyURL
-		attrs["hx-trigger"] = "mouseenter once, focus once, click once"
+		attrs["hx-trigger"] = lazyTabTrigger
 		attrs["hx-target"] = "#build-tab-" + t.ID
 		attrs["hx-swap"] = "innerHTML"
 	}

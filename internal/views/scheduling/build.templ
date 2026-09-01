@@ -202,12 +202,14 @@ templ BuildPlan(personName, organizationName string, setData SetBuilderData, ros
 
 			Only the active tab's builder actually server-rendered above (see
 			pco-api-risks.md's mitigation #3) - the inactive one shows a
-			loading placeholder here instead, and fetches its real content the
-			first time the user shows real intent to look at it (hovering,
-			keyboard-focusing, or clicking its tab button - see BuildTab.LazyURL/
-			tabButtonAttrs, build_tabs.templ). Its own tab panel and its
-			sidebar glance card below both fill in together once that fetch
-			resolves (SetBuilderBodyLazy/RosterBuilderBodyLazy, set_builder.templ/
+			loading placeholder here instead, and fetches its real content
+			starting as soon as this page itself has rendered (a "load"
+			hx-trigger, not gated on the user hovering/clicking its tab button
+			first - see lazyTabTrigger/tabButtonAttrs, build_tabs.templ), so
+			it's got as much of a head start as possible by the time the user
+			actually looks at it. Its own tab panel and its sidebar glance card
+			below both fill in together once that fetch resolves
+			(SetBuilderBodyLazy/RosterBuilderBodyLazy, set_builder.templ/
 			roster_builder.templ) - toggleBuildTab itself needs no changes for
 			any of this, since it only ever toggles `hidden` by id and doesn't
 			care whether what's inside is real content or still the skeleton.
