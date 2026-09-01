@@ -2,9 +2,13 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 
+	"pco-assistant/internal/logger"
+	"pco-assistant/internal/scheduling"
 	"pco-assistant/internal/server/middleware"
 	views "pco-assistant/internal/views/scheduling"
 
@@ -14,13 +18,18 @@ import (
 
 // --- Build (the combined song/team workflow) ---------------------------------
 
-// buildPlansFetchPageSize/MaxPages bound fetchUpcomingPlans' PCO paging,
-// same reasoning as pcoSongPickerPageSize/MaxPages. buildPlansPageSize is
-// this app's own display page size for the plan picker.
+// buildPlansFetchPageSize is PCO's max per_page.
+// buildPlansFetchSanityMaxPages is a runaway/bug guard, not a real cap -
+// same reasoning and value as scheduling.pcoSongSanityMaxPages:
+// fetchPlansByFilter always fans out exactly as many pages as
+// pco.Meta.TotalCount says it needs (see below), so a real service type
+// only ever exceeds this if TotalCount itself is implausible - covers
+// ~20,000 plans, far beyond any real church's history. buildPlansPageSize
+// is this app's own display page size for the plan picker.
 const (
-	buildPlansFetchPageSize = 100
-	buildPlansFetchMaxPages = 20
-	buildPlansPageSize      = 10
+	buildPlansFetchPageSize       = 100
+	buildPlansFetchSanityMaxPages = 200
+	buildPlansPageSize            = 10
 )
 
 // planTab reads the plan picker's "tab" query param - "past" or anything
@@ -134,33 +143,89 @@ func (sc *SchedulingController) UpdatePlanNote(c *fiber.Ctx) error {
 // deliberately computed separately, only for whichever page is actually
 // being displayed, since that's the expensive part - see
 // combinedPlansForServiceType), for the Build page's plan picker to
-// search/paginate over locally. Same "return whatever was fetched so far"
-// tolerance as fetchAllSongs, and fixes a latent bug this replaces: a
-// single unpaginated GetPlans call would otherwise silently rely on PCO's
-// default per_page, so a service type with many plans (recurring templates
-// scheduled well ahead, or a long-running church's full past history)
-// could be quietly truncated. Shared by fetchUpcomingPlans/fetchPastPlans
-// below - the only thing that differs between the two tabs is which filter
-// and sort order makes sense to browse by.
+// search/paginate over locally.
+//
+// Same shape as scheduling.fetchSongsFromPCO (see that function's doc
+// comment for the full reasoning): fetches page 0 first (synchronously) to
+// learn Meta.TotalCount, then fans the remaining pages out concurrently
+// via scheduling.RunConcurrently, bounded by buildPlansFetchSanityMaxPages
+// as a runaway/bug guard rather than a real cap - offset-based pagination
+// (not Links.Next-driven) is what makes this safe to fan out, and
+// PlansParams is offset-based the same way SongsParams is. Fixes the bug
+// this replaces: a single unpaginated GetPlans call would otherwise
+// silently rely on PCO's default per_page, so a service type with many
+// plans (recurring templates scheduled well ahead, or a long-running
+// church's full past history) could be quietly truncated. Unlike the old
+// version, a failed page now returns a real error (no partial slice) -
+// same reasoning as fetchSongsFromPCO's own error-handling note. Shared by
+// fetchUpcomingPlans/fetchPastPlans below - the only thing that differs
+// between the two tabs is which filter and sort order makes sense to
+// browse by.
 func fetchPlansByFilter(ctx context.Context, serviceTypeID, filter, orderBy string) ([]pco.PlanData, error) {
-	var plans []pco.PlanData
+	first, err := pco.GetPlans(ctx, serviceTypeID, &pco.PlansParams{
+		Filter:  filter,
+		OrderBy: orderBy,
+		PerPage: buildPlansFetchPageSize,
+		Offset:  0,
+	})
+	if err != nil {
+		return nil, err
+	}
 
-	for page := 0; page < buildPlansFetchMaxPages; page++ {
-		resp, err := pco.GetPlans(ctx, serviceTypeID, &pco.PlansParams{
-			Filter:  filter,
-			OrderBy: orderBy,
-			PerPage: buildPlansFetchPageSize,
-			Offset:  page * buildPlansFetchPageSize,
+	totalCount := first.Meta.TotalCount
+	totalPages := (totalCount + buildPlansFetchPageSize - 1) / buildPlansFetchPageSize
+	if totalPages < 1 {
+		totalPages = 1
+	}
+
+	if totalPages > buildPlansFetchSanityMaxPages {
+		logger.Error("PCO plan list page count exceeds sanity ceiling - aborting fetch",
+			"service_type_id", serviceTypeID, "filter", filter, "total_count", totalCount,
+			"total_pages", totalPages, "sanity_max_pages", buildPlansFetchSanityMaxPages)
+		return nil, fmt.Errorf("PCO reports %d plans (%d pages) for service type %s filter %q - exceeds sanity ceiling of %d pages, aborting", totalCount, totalPages, serviceTypeID, filter, buildPlansFetchSanityMaxPages)
+	}
+
+	pages := make([][]pco.PlanData, totalPages)
+	pages[0] = first.Data
+
+	if totalPages > 1 {
+		pageIndexes := make([]int, totalPages-1)
+		for i := range pageIndexes {
+			pageIndexes[i] = i + 1
+		}
+
+		var fetchErr error
+		var errMu sync.Mutex
+
+		scheduling.RunConcurrently(pageIndexes, func(page int) {
+			resp, err := pco.GetPlans(ctx, serviceTypeID, &pco.PlansParams{
+				Filter:  filter,
+				OrderBy: orderBy,
+				PerPage: buildPlansFetchPageSize,
+				Offset:  page * buildPlansFetchPageSize,
+			})
+			if err != nil {
+				errMu.Lock()
+				if fetchErr == nil {
+					fetchErr = err
+				}
+				errMu.Unlock()
+				return
+			}
+			// pages[page] is this goroutine's own, exclusive index into a
+			// pre-sized slice - no lock needed (see RunConcurrently's doc
+			// comment).
+			pages[page] = resp.Data
 		})
-		if err != nil {
-			return plans, err
-		}
 
-		plans = append(plans, resp.Data...)
-
-		if len(resp.Data) < buildPlansFetchPageSize || len(plans) >= resp.Meta.TotalCount {
-			break
+		if fetchErr != nil {
+			return nil, fetchErr
 		}
+	}
+
+	plans := make([]pco.PlanData, 0, totalCount)
+	for _, page := range pages {
+		plans = append(plans, page...)
 	}
 
 	return plans, nil
