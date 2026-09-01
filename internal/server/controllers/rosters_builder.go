@@ -314,6 +314,34 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 		return ""
 	}
 
+	// crossTeamAssignmentsThisWeek(personID, planDate) is identical
+	// everywhere a person appears, regardless of which group is asking,
+	// so it's memoized once per person here rather than recomputed per
+	// (person, group) pair - a person eligible for several positions
+	// otherwise triggers the same PCO call once per position. See
+	// pco-api-risks.md's mitigation #1. otherAssignmentDates is scoped to
+	// a specific (team, position) slot, so it's keyed on that instead.
+	crossTeamCache := map[string][]string{}
+	crossTeamWarningsFor := func(personID string) []string {
+		if labels, ok := crossTeamCache[personID]; ok {
+			return labels
+		}
+		labels := crossTeamAssignmentsThisWeek(ctx, personID, planDate, planID)
+		crossTeamCache[personID] = labels
+		return labels
+	}
+
+	otherDatesCache := map[string][]time.Time{}
+	otherAssignmentDatesFor := func(personID, teamID, teamPositionName string) []time.Time {
+		key := personID + "|" + teamID + "|" + teamPositionName
+		if dates, ok := otherDatesCache[key]; ok {
+			return dates
+		}
+		dates := otherAssignmentDates(ctx, personID, teamID, teamPositionName, planID)
+		otherDatesCache[key] = dates
+		return dates
+	}
+
 	for i, g := range groups {
 		pg := views.PositionGroupView{
 			TeamID:           g.TeamID,
@@ -332,9 +360,9 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 			var crossWarn string
 			if !planDate.IsZero() {
 				if pref != "" {
-					freqWarn = frequencyWarning(pref, planDate, otherAssignmentDates(ctx, ra.PersonID, g.TeamID, g.TeamPositionName, planID))
+					freqWarn = frequencyWarning(pref, planDate, otherAssignmentDatesFor(ra.PersonID, g.TeamID, g.TeamPositionName))
 				}
-				crossWarn = crossTeamWarning(crossTeamAssignmentsThisWeek(ctx, ra.PersonID, planDate, planID))
+				crossWarn = crossTeamWarning(crossTeamWarningsFor(ra.PersonID))
 			}
 
 			pg.Assigned = append(pg.Assigned, views.AssignmentView{
@@ -365,9 +393,9 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 			var crossWarn string
 			if !planDate.IsZero() {
 				if pa.Attributes.SchedulePreference != "" {
-					freqWarn = frequencyWarning(pa.Attributes.SchedulePreference, planDate, otherAssignmentDates(ctx, personID, g.TeamID, g.TeamPositionName, planID))
+					freqWarn = frequencyWarning(pa.Attributes.SchedulePreference, planDate, otherAssignmentDatesFor(personID, g.TeamID, g.TeamPositionName))
 				}
-				crossWarn = crossTeamWarning(crossTeamAssignmentsThisWeek(ctx, personID, planDate, planID))
+				crossWarn = crossTeamWarning(crossTeamWarningsFor(personID))
 			}
 
 			pg.Candidates = append(pg.Candidates, views.CandidatePersonView{
