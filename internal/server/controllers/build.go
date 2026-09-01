@@ -104,12 +104,11 @@ func (sc *SchedulingController) BuildPlansSearch(c *fiber.Ctx) error {
 }
 
 // UpdatePlanNote saves one plan's purely-local at-a-glance note (see
-// plan_notes/GetPlanNote) from the plan picker's inline planNoteForm
+// plan_notes/GetPlanNote) from the plan builder page's own planNoteSection
 // (build.templ) - re-rendering just that one form on success/failure
-// (hx-target="this" on the form itself), never the whole plan list, so
-// saving a note never disturbs search/pagination/scroll position elsewhere
-// on the page. Deliberately its own route/handler rather than folding into
-// BuildPlansSearch: it only ever touches one row, not the whole result set.
+// (hx-target="this" on the form itself), never the whole page. Deliberately
+// its own route/handler rather than folding into BuildPlanPage: it only
+// ever touches this one field, not the whole builder.
 func (sc *SchedulingController) UpdatePlanNote(c *fiber.Ctx) error {
 	orgID := middleware.CurrentOrganizationID(c)
 	serviceTypeID := c.Params("service_type_id")
@@ -122,10 +121,10 @@ func (sc *SchedulingController) UpdatePlanNote(c *fiber.Ctx) error {
 		// failed save), not the attempted value, since UpsertPlanNote
 		// failing means the attempted value never actually landed.
 		saved, _ := sc.store.GetPlanNote(c.Context(), orgID, serviceTypeID, planID)
-		return render(c, views.PlanNoteFormFragment(serviceTypeID, views.PlanRow{ID: planID, Note: saved}))
+		return render(c, views.PlanNoteFormFragment(serviceTypeID, planID, saved))
 	}
 
-	return render(c, views.PlanNoteFormFragment(serviceTypeID, views.PlanRow{ID: planID, Note: note}))
+	return render(c, views.PlanNoteFormFragment(serviceTypeID, planID, note))
 }
 
 // fetchPlansByFilter pages through a service type's plans matching PCO's
@@ -338,7 +337,11 @@ func (sc *SchedulingController) BuildPlanPage(c *fiber.Ctx) error {
 		rosterData.ReadOnly = setData.ReadOnly
 	}
 
-	return render(c, views.BuildPlan(personName, orgName, setData, rosterData, activeTab))
+	// Best-effort: a failed note lookup just means the page renders with
+	// no note pre-filled, same as if nothing had ever been saved.
+	note, _ := sc.store.GetPlanNote(ctx, orgID, serviceTypeID, planID)
+
+	return render(c, views.BuildPlan(personName, orgName, setData, rosterData, activeTab, note))
 }
 
 // BuildSongsTabLazy renders the Songs tab's real content - both its main

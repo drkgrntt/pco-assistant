@@ -38,3 +38,44 @@
 .build-tab-panel[hidden] {
   display: none;
 }
+
+/* buildPlansTabBar (build.templ) - the plan picker's Upcoming/Past
+   switch. Deliberately NOT .build-tabs/.build-tab above: those two
+   switchers used to look almost identical (same underlined-text style),
+   which made this one - the plan picker's own primary "which plans am I
+   browsing" control - read as some minor sibling of the unrelated
+   Songs/Team split on a single plan's builder page, easy to miss
+   entirely. A filled segmented-control pill instead, so it reads as its
+   own distinct affordance. */
+.plan-picker-tabs {
+  display: inline-flex;
+  gap: var(--space-1);
+  margin-block: var(--space-3);
+  padding: var(--space-1);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+}
+
+.plan-picker-tab {
+  background: none;
+  border: none;
+  border-radius: var(--radius-full);
+  min-height: 0;
+  padding: var(--space-2) var(--space-4);
+  font: inherit;
+  font-weight: var(--font-medium);
+  font-size: var(--text-sm);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.plan-picker-tab:hover {
+  background: none;
+  color: var(--text);
+}
+
+.plan-picker-tab.active {
+  background: var(--accent-solid);
+  color: white;
+}
