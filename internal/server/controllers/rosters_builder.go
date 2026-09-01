@@ -468,6 +468,7 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 				PersonID:         ra.PersonID,
 				Name:             titleOrID(names, ra.PersonID),
 				Status:           ra.Status,
+				TeamID:           pg.TeamID,
 				TeamName:         pg.TeamName,
 				TeamPositionName: pg.TeamPositionName,
 				Published:        ra.PCOPlanPersonID != "",
