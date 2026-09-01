@@ -14,15 +14,17 @@ import (
 // add/remove/move action below - the whole thing re-renders each time
 // since adding or removing a song can change the current set, the
 // recommendations (based on the last song added), and the candidate
-// list's conflict warnings all at once. Bundles songPublishPanelOOB
-// alongside SetBuilderBodyContent so every one of those actions also keeps
-// the sidebar's publish card in sync (see its own doc comment) - every
-// htmx handler that used to just render SetBuilderBody keeps doing exactly
-// that, unchanged, and gets the sync for free.
+// list's conflict warnings all at once. Bundles songPublishPanelOOB/
+// songDetailCardsOOB/songGlanceOOB alongside SetBuilderBodyContent so
+// every one of those actions also keeps the sidebar's publish card, detail
+// cards, and "Songs, at a glance" card in sync (see each one's own doc
+// comment) - every htmx handler that used to just render SetBuilderBody
+// keeps doing exactly that, unchanged, and gets the sync for free.
 templ SetBuilderBody(data SetBuilderData) {
 	@SetBuilderBodyContent(data)
 	@songPublishPanelOOB(data)
 	@songDetailCardsOOB(data)
+	@songGlanceOOB(data)
 }
 
 // nextSongID returns the SongID of the next song in order after index i -

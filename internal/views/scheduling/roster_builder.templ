@@ -38,12 +38,14 @@ templ positionHeading(pos PositionGroupView) {
 
 // RosterBuilderBody is the htmx swap target (id="roster-builder-body") for
 // every add/remove action below - see SetBuilderBody, which this mirrors,
-// including bundling rosterPublishPanelOOB alongside RosterBuilderBodyContent
-// to keep the sidebar's Team publish card in sync.
+// including bundling rosterPublishPanelOOB/personDetailCardsOOB/
+// rosterGlanceOOB alongside RosterBuilderBodyContent to keep the sidebar's
+// Team publish card, detail cards, and "Team, at a glance" card in sync.
 templ RosterBuilderBody(data RosterBuilderData) {
 	@RosterBuilderBodyContent(data)
 	@rosterPublishPanelOOB(data)
 	@personDetailCardsOOB(data)
+	@rosterGlanceOOB(data)
 }
 
 // RosterBuilderBodyContent is the actual content - see
