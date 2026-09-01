@@ -388,6 +388,20 @@ templ positionGroupCard(serviceTypeID, planID string, schedulePreferenceOptions 
 		-->
 		if pos.TeamPositionID != "" {
 			@collapsibleSection("quick-add-"+PositionGroupElementID(pos.TeamID, pos.TeamPositionName), "+ Add eligible person", false) {
+				<!--
+					"Eligible" was reported confusing on its own - clarified inline
+					(not a tooltip; nothing in this app renders one on a
+					collapsibleSection's own toggle) rather than renaming the
+					trigger label, and scoped explicitly to *this* position, since
+					the other reported confusion was mistaking this for a
+					general "add someone to the roster" action.
+				-->
+				<p class="muted">
+					"Eligible" means Planning Center already has this person cleared to
+					serve as { pos.TeamPositionName } - not that they're suggested or
+					preferred, and not a way to add someone to the roster in general.
+					This adds them to this one position only.
+				</p>
 				<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/position-preferences", serviceTypeID, planID) } hx-target={ "#" + PositionGroupElementID(pos.TeamID, pos.TeamPositionName) } hx-swap="outerHTML">
 					<input type="hidden" name="team_id" value={ pos.TeamID }/>
 					<input type="hidden" name="team_position_id" value={ pos.TeamPositionID }/>
