@@ -90,6 +90,23 @@ func groupNeededPositions(needed []pco.NeededPositionData, assignments []schedul
 	return out
 }
 
+// unknownTeamSequence is the sort key positionTeamSequence returns for a
+// team id with no entry in teamSequence (its Planning Center lookup
+// failed) - deliberately larger than any real Team.Sequence rather than
+// the zero value, so a lookup failure sorts that team's positions to the
+// end of the roster instead of jumping them to the front.
+const unknownTeamSequence = 1 << 30
+
+// positionTeamSequence looks up teamID's PCO Team.Sequence for the
+// team-group sort in buildRosterBuilderData - see unknownTeamSequence for
+// the fallback.
+func positionTeamSequence(teamSequence map[string]int, teamID string) int {
+	if seq, ok := teamSequence[teamID]; ok {
+		return seq
+	}
+	return unknownTeamSequence
+}
+
 // includedPlan is the shape this app reads back out of a JSON:API
 // "included" array's raw entries (see planSortDatesFromIncluded) - just
 // enough of Plan's shape to get each included plan's sort_date, since
@@ -236,11 +253,17 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 	groups := groupNeededPositions(needed.Data, assignments)
 
 	teamNames := map[string]string{}
+	// teamSequence backs the team-group ordering below (see
+	// unknownTeamSequence's own comment) - PCO's own Team.Sequence, the
+	// order a director already arranged their teams in within Planning
+	// Center itself, rather than an arbitrary or alphabetical order.
+	teamSequence := map[string]int{}
 	if teams, err := pco.GetTeams(ctx, serviceTypeID, nil); err != nil {
 		data.ErrMsg = appendErr(data.ErrMsg, "loading teams from Planning Center: "+err.Error())
 	} else {
 		for _, t := range teams.Data {
 			teamNames[t.ID] = t.Attributes.Name
+			teamSequence[t.ID] = t.Attributes.Sequence
 		}
 	}
 
@@ -385,6 +408,16 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 		}
 		data.Positions = append(data.Positions, pg)
 	}
+
+	// Grouped by team for display (see views.groupPositionsByTeam) - sorted
+	// here, not there, since the view layer just walks contiguous runs
+	// rather than re-sorting. Stable so within a team, positions keep
+	// whatever order groupNeededPositions already gave them; across teams,
+	// unknownTeamSequence pushes anything whose team lookup failed to the
+	// end rather than letting it default to 0 and jump to the front.
+	sort.SliceStable(data.Positions, func(i, j int) bool {
+		return positionTeamSequence(teamSequence, data.Positions[i].TeamID) < positionTeamSequence(teamSequence, data.Positions[j].TeamID)
+	})
 
 	// PersonRelationshipTypes/SchedulePreferenceOptions back the "Quick add
 	// a relationship" and per-position "+ Add eligible person" panels (see

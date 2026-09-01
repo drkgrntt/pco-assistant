@@ -110,3 +110,24 @@ func TestPlanSortDatesFromIncludedParsesPlanEntries(t *testing.T) {
 		t.Errorf("expected p1 -> %v, got %v", want, got["p1"])
 	}
 }
+
+func TestPositionTeamSequenceKnownTeam(t *testing.T) {
+	seq := map[string]int{"t1": 2}
+
+	if got := positionTeamSequence(seq, "t1"); got != 2 {
+		t.Errorf("expected 2, got %d", got)
+	}
+}
+
+// TestPositionTeamSequenceUnknownTeamSortsLast confirms a team id with no
+// entry (its Planning Center lookup failed) gets a sequence larger than
+// any real team's, not the zero value - a zero-value default would sort a
+// lookup failure to the *front* of the roster instead of the back.
+func TestPositionTeamSequenceUnknownTeamSortsLast(t *testing.T) {
+	seq := map[string]int{"t1": 0, "t2": 5}
+
+	got := positionTeamSequence(seq, "unknown")
+	if got <= seq["t1"] || got <= seq["t2"] {
+		t.Errorf("expected the unknown team's sequence (%d) to sort after every known team (%v)", got, seq)
+	}
+}
