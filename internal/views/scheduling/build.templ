@@ -161,6 +161,17 @@ templ BuildPlansResults(plans []PlanRow, serviceTypeID, search string, page, tot
 // rendered server-side so a direct link to ?tab=team lands there with no
 // JS flash of the Songs tab first, rather than relying entirely on
 // toggleBuildTab (scheduling.js) to sort it out after the page loads.
+//
+// Only activeTab's own data is actually built by BuildPlanPage - see
+// pco-api-risks.md's mitigation #3. The *other* tab's SetBuilderData/
+// RosterBuilderData argument here is a zero value except for
+// ServiceTypeID/PlanID (BuildPlanPage copies those across regardless of
+// which tab built for real, so this header and the tab buttons' LazyURLs
+// always have something to point at). Every place below that reads from
+// the inactive tab's data is guarded by an `if activeTab == ...` check
+// mirroring which one is real - the zero value is never actually
+// rendered, only ever sitting there inert until the lazy fetch below
+// replaces it.
 templ BuildPlan(personName, organizationName string, setData SetBuilderData, rosterData RosterBuilderData, activeTab string) {
 	@views.Layout("Build a Service", personName, organizationName) {
 		<h1>
@@ -186,11 +197,20 @@ templ BuildPlan(personName, organizationName string, setData SetBuilderData, ros
 			Songs and Team are two independently-interactive builders (each
 			with its own htmx swap target, see SetBuilderBody/RosterBuilderBody)
 			that used to just stack on one long page. Splitting them into tabs
-			cuts what's on screen at once roughly in half without changing
-			either builder's markup or behavior at all - switching is a plain
-			client-side hidden toggle (toggleBuildTab, scheduling.js), so both
-			panels still fully server-render on every page load exactly as
-			before.
+			cuts what's on screen at once roughly in half - switching is a
+			plain client-side hidden toggle (toggleBuildTab, scheduling.js).
+
+			Only the active tab's builder actually server-rendered above (see
+			pco-api-risks.md's mitigation #3) - the inactive one shows a
+			loading placeholder here instead, and fetches its real content the
+			first time the user shows real intent to look at it (hovering,
+			keyboard-focusing, or clicking its tab button - see BuildTab.LazyURL/
+			tabButtonAttrs, build_tabs.templ). Its own tab panel and its
+			sidebar glance card below both fill in together once that fetch
+			resolves (SetBuilderBodyLazy/RosterBuilderBodyLazy, set_builder.templ/
+			roster_builder.templ) - toggleBuildTab itself needs no changes for
+			any of this, since it only ever toggles `hidden` by id and doesn't
+			care whether what's inside is real content or still the skeleton.
 
 			The sidebar (.build-glance) is the one thing that isn't just "the
 			inactive tab, hidden" - it's a standing glance at whichever tab
@@ -204,7 +224,9 @@ templ BuildPlan(personName, organizationName string, setData SetBuilderData, ros
 			since the counts alone don't say *what's* in the lineup or *who's*
 			on it. Only one of the two cards is ever visible at a time
 			(toggleBuildTab shows whichever one belongs to the tab that just
-			went hidden).
+			went hidden) - and since it's the *other* tab's data it always
+			needs, it carries the same loading-placeholder treatment as that
+			tab's own main panel until the lazy fetch above fills it in too.
 		-->
 		<!--
 			normalizedTab mirrors activeTab's own "anything but 'team' means
@@ -218,12 +240,23 @@ templ BuildPlan(personName, organizationName string, setData SetBuilderData, ros
 		}
 		<div class="build-layout">
 			<div class="build-main">
-				@buildTabs([]BuildTab{{ID: "songs", Label: "Songs"}, {ID: "team", Label: "Team"}}, normalizedTab)
+				@buildTabs([]BuildTab{
+					{ID: "songs", Label: "Songs", LazyURL: lazyTabURL(activeTab != "team", setData.ServiceTypeID, setData.PlanID, "songs")},
+					{ID: "team", Label: "Team", LazyURL: lazyTabURL(activeTab == "team", rosterData.ServiceTypeID, rosterData.PlanID, "team")},
+				}, normalizedTab)
 				<div class="build-tab-panel" id="build-tab-songs" role="tabpanel" hidden?={ activeTab == "team" }>
-					@SetBuilderBodyContent(setData)
+					if activeTab == "team" {
+						@buildTabLoadingSkeleton()
+					} else {
+						@SetBuilderBodyContent(setData)
+					}
 				</div>
 				<div class="build-tab-panel" id="build-tab-team" role="tabpanel" hidden?={ activeTab != "team" }>
-					@RosterBuilderBodyContent(rosterData)
+					if activeTab != "team" {
+						@buildTabLoadingSkeleton()
+					} else {
+						@RosterBuilderBodyContent(rosterData)
+					}
 				</div>
 			</div>
 			<!--
@@ -241,18 +274,41 @@ templ BuildPlan(personName, organizationName string, setData SetBuilderData, ros
 				@RosterPublishPanel(rosterData, activeTab != "team")
 				@PersonDetailCards(rosterData, activeTab != "team")
 				@glanceCardShell("build-glance-team", activeTab == "team") {
-					<h3>Team, at a glance</h3>
-					@RosterStatusSummary(rosterData)
-					@TeamGlanceList(rosterData.Positions)
-					<button type="button" onclick="toggleBuildTab('team')">Switch to Team</button>
+					if activeTab == "team" {
+						@rosterGlanceContent(rosterData)
+					} else {
+						<h3>Team, at a glance</h3>
+						@buildTabLoadingSkeleton()
+					}
 				}
 				@glanceCardShell("build-glance-songs", activeTab != "team") {
-					<h3>Songs, at a glance</h3>
-					@SongStatusSummary(setData)
-					@SongGlanceList(setData.ServiceOrder)
-					<button type="button" onclick="toggleBuildTab('songs')">Switch to Songs</button>
+					if activeTab != "team" {
+						@songGlanceContent(setData)
+					} else {
+						<h3>Songs, at a glance</h3>
+						@buildTabLoadingSkeleton()
+					}
 				}
 			</aside>
 		</div>
 	}
+}
+
+// buildTabLoadingSkeleton is the placeholder shown in a tab panel or
+// glance card whose data hasn't been fetched yet - see BuildPlan's own
+// comment on the lazy-load flow above.
+templ buildTabLoadingSkeleton() {
+	<p class="muted">Loading…</p>
+}
+
+// lazyTabURL returns the URL a tab's button should lazy-fetch from, or ""
+// (no fetch) when eager is true - eager means this tab's data was already
+// built server-side (it's the active tab), so there's nothing to fetch.
+// Small wrapper around fmt.Sprintf so BuildPlan's buildTabs call stays
+// readable with two of these side by side.
+func lazyTabURL(eager bool, serviceTypeID, planID, tab string) string {
+	if eager {
+		return ""
+	}
+	return fmt.Sprintf("/scheduling/build/%s/%s/%s-tab", serviceTypeID, planID, tab)
 }

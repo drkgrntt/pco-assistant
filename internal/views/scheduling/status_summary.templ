@@ -146,10 +146,29 @@ templ glanceCardShell(id string, hidden bool) {
 	</div>
 }
 
-templ glanceCardShellOOB(id string) {
-	<div class="build-glance-card" id={ id } hidden hx-swap-oob="true">
+// hidden here, unlike every other *ShellOOB in this package, isn't purely
+// "own tab already active vs. not": a glance card shows the *other* tab's
+// summary, so its hidden state is inverted from theirs (see the doc
+// comment above). songGlanceOOB/rosterGlanceOOB pass true (own tab is the
+// one open, so the *other* tab's glance card stays hidden); the lazy-load
+// variants (songGlanceLazyOOB/rosterGlanceLazyOOB) pass false, since they
+// only ever fire while their tab is the inactive, just-fetched one - which
+// is exactly when this card is supposed to be visible.
+templ glanceCardShellOOB(id string, hidden bool) {
+	<div class="build-glance-card" id={ id } hidden?={ hidden } hx-swap-oob="true">
 		{ children... }
 	</div>
+}
+
+// songGlanceContent is the "Songs, at a glance" card's inner markup -
+// shared by build.templ's initial render, songGlanceOOB (mutation
+// refresh), and songGlanceLazyOOB (first real load) so the three can't
+// drift out of sync by hand.
+templ songGlanceContent(data SetBuilderData) {
+	<h3>Songs, at a glance</h3>
+	@SongStatusSummary(data)
+	@SongGlanceList(data.ServiceOrder)
+	<button type="button" onclick="toggleBuildTab('songs')">Switch to Songs</button>
 }
 
 // songGlanceOOB refreshes the "Songs, at a glance" sidebar card
@@ -159,29 +178,52 @@ templ glanceCardShellOOB(id string) {
 // it looked like at the last full page load until a hard refresh, since no
 // Songs-tab response ever touched anything outside #set-builder-body.
 //
-// Always rendered hidden (glanceCardShellOOB), never conditionally: this
-// card only ever shows the *other* tab's summary, so it's only ever
-// supposed to be hidden at the exact moment a Songs-tab mutation is what
-// triggered this render - the Songs tab has to already be the open one for
-// that mutation to have happened at all. Same reasoning
-// songPublishPanelOOB uses in reverse (always visible, since its own tab
-// is the one that must be open for it to fire).
+// Always rendered hidden, never conditionally: this card only ever shows
+// the *other* tab's summary, so it's only ever supposed to be hidden at
+// the exact moment a Songs-tab mutation is what triggered this render -
+// the Songs tab has to already be the open one for that mutation to have
+// happened at all. Same reasoning songPublishPanelOOB uses in reverse
+// (always visible, since its own tab is the one that must be open for it
+// to fire).
 templ songGlanceOOB(data SetBuilderData) {
-	@glanceCardShellOOB("build-glance-songs") {
-		<h3>Songs, at a glance</h3>
-		@SongStatusSummary(data)
-		@SongGlanceList(data.ServiceOrder)
-		<button type="button" onclick="toggleBuildTab('songs')">Switch to Songs</button>
+	@glanceCardShellOOB("build-glance-songs", true) {
+		@songGlanceContent(data)
 	}
+}
+
+// songGlanceLazyOOB refreshes this same card the first time Songs' data is
+// actually fetched (see BuildSongsTabLazy, build.go) - unlike songGlanceOOB
+// above, always rendered *visible*: it only ever fires while Songs is the
+// inactive, deferred tab (see pco-api-risks.md's mitigation #3), which is
+// exactly when this card is supposed to be showing a real summary instead
+// of build.templ's initial loading skeleton.
+templ songGlanceLazyOOB(data SetBuilderData) {
+	@glanceCardShellOOB("build-glance-songs", false) {
+		@songGlanceContent(data)
+	}
+}
+
+// rosterGlanceContent is songGlanceContent's people equivalent - see its
+// doc comment, which this mirrors in full.
+templ rosterGlanceContent(data RosterBuilderData) {
+	<h3>Team, at a glance</h3>
+	@RosterStatusSummary(data)
+	@TeamGlanceList(data.Positions)
+	<button type="button" onclick="toggleBuildTab('team')">Switch to Team</button>
 }
 
 // rosterGlanceOOB is songGlanceOOB's people equivalent - see its doc
 // comment, which this mirrors in full.
 templ rosterGlanceOOB(data RosterBuilderData) {
-	@glanceCardShellOOB("build-glance-team") {
-		<h3>Team, at a glance</h3>
-		@RosterStatusSummary(data)
-		@TeamGlanceList(data.Positions)
-		<button type="button" onclick="toggleBuildTab('team')">Switch to Team</button>
+	@glanceCardShellOOB("build-glance-team", true) {
+		@rosterGlanceContent(data)
+	}
+}
+
+// rosterGlanceLazyOOB is songGlanceLazyOOB's people equivalent - see its
+// doc comment, which this mirrors in full.
+templ rosterGlanceLazyOOB(data RosterBuilderData) {
+	@glanceCardShellOOB("build-glance-team", false) {
+		@rosterGlanceContent(data)
 	}
 }

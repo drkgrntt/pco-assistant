@@ -48,6 +48,15 @@ templ RosterBuilderBody(data RosterBuilderData) {
 	@rosterGlanceOOB(data)
 }
 
+// RosterBuilderBodyLazy is SetBuilderBodyLazy's people equivalent - see its
+// doc comment, which this mirrors in full, for BuildTeamTabLazy (build.go).
+templ RosterBuilderBodyLazy(data RosterBuilderData) {
+	@RosterBuilderBodyContent(data)
+	@rosterPublishPanelLazyOOB(data)
+	@personDetailCardsLazyOOB(data)
+	@rosterGlanceLazyOOB(data)
+}
+
 // RosterBuilderBodyContent is the actual content - see
 // SetBuilderBodyContent, which this mirrors, for why it's split out from
 // RosterBuilderBody.

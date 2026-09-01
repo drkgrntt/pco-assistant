@@ -208,6 +208,18 @@ func (sc *SchedulingController) combinedPlansForServiceType(ctx context.Context,
 // to the existing /scheduling/sets/... and /scheduling/rosters/...
 // endpoints) - this page just displays both at once instead of requiring a
 // separate visit to build each.
+//
+// Only activeTab's own data is actually built here - see pco-api-risks.md's
+// mitigation #3. The other tab's data (a real PCO-heavy build - roughly
+// half this page's total load cost, per that doc) is deferred until the
+// user shows real intent to look at it (BuildSongsTabLazy/BuildTeamTabLazy
+// below, hover/focus/click-triggered - see BuildTab.LazyURL,
+// build_tabs.templ). Both structs still need ServiceTypeID/PlanID/
+// PlanTitle/PlanDates set regardless of which one was skipped: the page
+// header and nav links read setData's copies unconditionally (BuildPlan,
+// build.templ), and the deferred tab's own lazy-fetch URL needs its
+// ServiceTypeID/PlanID too - cheaper to copy the three strings across than
+// to make BuildPlan branch on which struct actually has them.
 func (sc *SchedulingController) BuildPlanPage(c *fiber.Ctx) error {
 	_, personName := middleware.CurrentPerson(c)
 	orgName := middleware.CurrentOrganization(c)
@@ -216,9 +228,6 @@ func (sc *SchedulingController) BuildPlanPage(c *fiber.Ctx) error {
 	ctx := middleware.RequestContext(c)
 	serviceTypeID := c.Params("service_type_id")
 	planID := c.Params("plan_id")
-
-	setData := sc.buildSetBuilderData(ctx, orgID, serviceTypeID, planID)
-	rosterData := sc.buildRosterBuilderData(ctx, orgID, serviceTypeID, planID)
 
 	// ?tab=team makes the Team tab directly linkable/bookmarkable (see
 	// BuildPlan's activeTab doc comment) - anything other than exactly
@@ -229,5 +238,48 @@ func (sc *SchedulingController) BuildPlanPage(c *fiber.Ctx) error {
 		activeTab = "team"
 	}
 
+	var setData views.SetBuilderData
+	var rosterData views.RosterBuilderData
+	if activeTab == "team" {
+		rosterData = sc.buildRosterBuilderData(ctx, orgID, serviceTypeID, planID)
+		setData.ServiceTypeID, setData.PlanID = serviceTypeID, planID
+		setData.PlanTitle, setData.PlanDates = rosterData.PlanTitle, rosterData.PlanDates
+	} else {
+		setData = sc.buildSetBuilderData(ctx, orgID, serviceTypeID, planID)
+		rosterData.ServiceTypeID, rosterData.PlanID = serviceTypeID, planID
+		rosterData.PlanTitle, rosterData.PlanDates = setData.PlanTitle, setData.PlanDates
+	}
+
 	return render(c, views.BuildPlan(personName, orgName, setData, rosterData, activeTab))
+}
+
+// BuildSongsTabLazy renders the Songs tab's real content - both its main
+// panel and its "Songs, at a glance" sidebar card - the first time it's
+// actually requested: BuildPlanPage's initial response only ever renders a
+// loading placeholder for it (see that handler's own doc comment), and
+// build_tabs.templ's tabButtonAttrs points its tab button's hx-get here,
+// firing on hover/focus/click. views.SetBuilderBodyLazy is
+// SetBuilderBody's counterpart for this - same content, but its OOB
+// fragments render hidden (the Team tab is the one actually open right
+// now) instead of visible.
+func (sc *SchedulingController) BuildSongsTabLazy(c *fiber.Ctx) error {
+	orgID := middleware.CurrentOrganizationID(c)
+	ctx := middleware.RequestContext(c)
+	serviceTypeID := c.Params("service_type_id")
+	planID := c.Params("plan_id")
+
+	data := sc.buildSetBuilderData(ctx, orgID, serviceTypeID, planID)
+	return render(c, views.SetBuilderBodyLazy(data))
+}
+
+// BuildTeamTabLazy is BuildSongsTabLazy's Team-tab counterpart - see its
+// doc comment, which this mirrors in full.
+func (sc *SchedulingController) BuildTeamTabLazy(c *fiber.Ctx) error {
+	orgID := middleware.CurrentOrganizationID(c)
+	ctx := middleware.RequestContext(c)
+	serviceTypeID := c.Params("service_type_id")
+	planID := c.Params("plan_id")
+
+	data := sc.buildRosterBuilderData(ctx, orgID, serviceTypeID, planID)
+	return render(c, views.RosterBuilderBodyLazy(data))
 }

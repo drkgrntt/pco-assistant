@@ -27,6 +27,23 @@ templ SetBuilderBody(data SetBuilderData) {
 	@songGlanceOOB(data)
 }
 
+// SetBuilderBodyLazy is BuildSongsTabLazy's (build.go) response: the
+// Songs tab's real content, the first time it's actually fetched, instead
+// of build.templ's initial loading skeleton - see pco-api-risks.md's
+// mitigation #3. SetBuilderBodyContent is the primary swap (hx-target
+// points at #build-tab-songs, replacing its skeleton); the three OOB
+// fragments are the *Lazy variants of SetBuilderBody's own OOB trio,
+// since this always fires while Songs is the *inactive* tab (unlike every
+// other caller of SetBuilderBody, which always fires while Songs is
+// already the open one) - see songPublishPanelLazyOOB's doc comment for
+// why that flips their hidden state.
+templ SetBuilderBodyLazy(data SetBuilderData) {
+	@SetBuilderBodyContent(data)
+	@songPublishPanelLazyOOB(data)
+	@songDetailCardsLazyOOB(data)
+	@songGlanceLazyOOB(data)
+}
+
 // nextSongID returns the SongID of the next song in order after index i -
 // "next" meaning the next row that IsSong, skipping over any header/
 // foreign items in between, not just order[i+1]. Used to default the row

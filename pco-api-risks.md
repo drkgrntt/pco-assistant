@@ -95,10 +95,28 @@ actually PCO just cut the app off partway through.
    matching PCO's per_page ceiling) instead of one `GetPerson` call per id.
    This repo's `go.mod` now pins that real tag - fully shipped, not just
    locally tested.
-3. **Only build the active tab's data**, lazy-loading the other via htmx
-   when the user actually clicks it, instead of both on every
-   `BuildPlanPage` hit - halves the worst case immediately for the common
-   "just checking the songs" visit.
+3. ~~**Only build the active tab's data**, lazy-loading the other via htmx
+   instead of both on every `BuildPlanPage` hit~~ - done, and on hover/
+   focus rather than plain click: `BuildPlanPage` now builds only
+   `activeTab`'s data; the other tab (and its "at a glance" sidebar card,
+   which reads the same data - see build.templ's own comment) renders a
+   loading placeholder that fetches from a new `BuildSongsTabLazy`/
+   `BuildTeamTabLazy` endpoint (`build.go`) the first time the user shows
+   real intent to look at it. `BuildTab.LazyURL`/`tabButtonAttrs`
+   (`build_tabs.templ`) fire that fetch on `mouseenter once, focus once,
+   click once` - for a real mouse click, `mouseenter` always fires first
+   (the cursor has to enter the button before clicking it), and keyboard
+   activation is always preceded by `focus`, so the switch feels instant
+   in practice; `click` stays as the fallback for touch devices, which
+   don't reliably fire hover/focus first. Required threading a `hidden
+   bool` through every `*ShellOOB` component this page already had
+   (`glanceCardShellOOB`, `publishCardShellOOB`, `buildDetailGroupShellOOB`)
+   so the new `*LazyOOB` variants (`songGlanceLazyOOB`,
+   `songPublishPanelLazyOOB`, `songDetailCardsLazyOOB`, and their Team
+   equivalents) can refresh a sidebar card's content while correctly
+   keeping it hidden - the existing OOB siblings all assumed "my own tab
+   is already open" and never set `hidden` at all, which is wrong for a
+   tab being prefetched while it's still inactive.
 4. **Will not do.** Add a client-side rate-limit guard in `go-pco` - read
    `X-PCO-API-Request-Rate-Count`/`-Limit` off responses and self-throttle
    (or at minimum surface `Retry-After` on a 429 as a real, visible error
@@ -141,7 +159,10 @@ already inside one window either way, so fanning it out doesn't add new
 rate-limit exposure; if anything, finishing sooner narrows the chance of
 overlapping with the *next* request's own calls.
 
-Recommended next: **#3** (lazy-load the inactive tab) if first-load time
-is still a concern after #6 lands - #5 mainly helps repeat edits on an
-already-open plan, not first load, so it's lower priority for that specific
-complaint. #4 is explicitly off the table for now (see above).
+With #1, #2, #3, and #6 all landed, the only open item is **#5** (short-lived
+in-process cache) - lower priority since it mainly helps repeat edits on an
+already-open plan, not first load. #4 is explicitly off the table for now
+(see above). If first load is *still* materially slow after #3/#6, that's a
+signal worth re-measuring rather than guessing at a #7: confirm with real
+timing (not just "still feels slow") before picking the next lever, since
+the two easy, well-understood wins are both already in.

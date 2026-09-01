@@ -5,9 +5,47 @@ import "fmt"
 // BuildTab is one tab in buildTabs below - ID both selects the tab
 // (matched against activeTab) and derives its aria-controls/onclick
 // target ("build-tab-<ID>", "toggleBuildTab('<ID>')").
+//
+// LazyURL, when non-empty, marks this tab's content as not yet fetched
+// (see pco-api-risks.md's mitigation #3) - its button fetches from this
+// URL and swaps the result into "#build-tab-<ID>" the first time the user
+// shows real intent to look at it, rather than that data having already
+// been built server-side for every page load. Left "" for whichever tab
+// is already active, since its content is already in the DOM.
 type BuildTab struct {
-	ID    string
-	Label string
+	ID      string
+	Label   string
+	LazyURL string
+}
+
+// tabButtonAttrs builds one tab button's full attribute set: the plain
+// client-side toggleBuildTab onclick every tab gets, plus - only when
+// LazyURL is set - the hx-get/hx-trigger/hx-target/hx-swap that fetches
+// its real content once. A plain Go func rather than inline templ
+// conditionals since templ can't attach some attributes to an element
+// conditionally and others unconditionally within one tag.
+//
+// hx-trigger fires on mouseenter/focus, not click: for a real mouse
+// click, mouseenter always fires first (the cursor has to enter the
+// button before clicking it) and for keyboard activation, focus always
+// precedes the keypress that triggers it - so by the time an actual click
+// happens, the fetch has almost always already started, making the
+// switch feel instant. click stays in the trigger list too as a fallback
+// for touch devices, which don't reliably fire hover/focus events before
+// a tap - each trigger's own "once" means a normal hover-then-click on a
+// mouse only ever fires one request in practice (mouseenter's already
+// used its "once" by the time click would); a request from a device that
+// truly has neither hover nor prior focus is the rare case this is a
+// deliberate, harmless duplicate for.
+func tabButtonAttrs(t BuildTab) templ.Attributes {
+	attrs := templ.Attributes{"onclick": fmt.Sprintf("toggleBuildTab('%s')", t.ID)}
+	if t.LazyURL != "" {
+		attrs["hx-get"] = t.LazyURL
+		attrs["hx-trigger"] = "mouseenter once, focus once, click once"
+		attrs["hx-target"] = "#build-tab-" + t.ID
+		attrs["hx-swap"] = "innerHTML"
+	}
+	return attrs
 }
 
 // buildTabs renders the Build page's tab-button row - factored out so the
@@ -19,7 +57,7 @@ type BuildTab struct {
 templ buildTabs(tabs []BuildTab, activeTab string) {
 	<div class="build-tabs" role="tablist">
 		for _, t := range tabs {
-			<button type="button" class={ "build-tab", templ.KV("active", t.ID == activeTab) } role="tab" aria-selected={ fmt.Sprintf("%t", t.ID == activeTab) } aria-controls={ "build-tab-" + t.ID } { templ.Attributes{"onclick": fmt.Sprintf("toggleBuildTab('%s')", t.ID)}... }>{ t.Label }</button>
+			<button type="button" id={ "build-tab-button-" + t.ID } class={ "build-tab", templ.KV("active", t.ID == activeTab) } role="tab" aria-selected={ fmt.Sprintf("%t", t.ID == activeTab) } aria-controls={ "build-tab-" + t.ID } { tabButtonAttrs(t)... }>{ t.Label }</button>
 		}
 	</div>
 }
