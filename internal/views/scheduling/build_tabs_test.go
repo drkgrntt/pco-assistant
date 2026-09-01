@@ -1,9 +1,6 @@
 package scheduling
 
-import (
-	"strings"
-	"testing"
-)
+import "testing"
 
 func TestLazyTabURLEagerReturnsEmpty(t *testing.T) {
 	if got := lazyTabURL(true, "st1", "pl1", "songs"); got != "" {
@@ -37,14 +34,14 @@ func TestTabButtonAttrsOnlySetsOnclick(t *testing.T) {
 }
 
 func TestTabPanelLazyAttrsNilWhenURLEmpty(t *testing.T) {
-	attrs := tabPanelLazyAttrs("", "team")
+	attrs := tabPanelLazyAttrs("")
 	if attrs != nil {
 		t.Errorf("expected nil attrs for an empty lazyURL, got %v", attrs)
 	}
 }
 
 func TestTabPanelLazyAttrsSetWhenURLPresent(t *testing.T) {
-	attrs := tabPanelLazyAttrs("/scheduling/build/st1/pl1/team-tab", "team")
+	attrs := tabPanelLazyAttrs("/scheduling/build/st1/pl1/team-tab")
 
 	if attrs["hx-get"] != "/scheduling/build/st1/pl1/team-tab" {
 		t.Errorf("expected hx-get to be the lazyURL, got %v", attrs["hx-get"])
@@ -58,23 +55,14 @@ func TestTabPanelLazyAttrsSetWhenURLPresent(t *testing.T) {
 	if _, ok := attrs["hx-target"]; ok {
 		t.Errorf("expected no hx-target now that hx-get lives on the panel itself, got %v", attrs["hx-target"])
 	}
-
-	trigger, _ := attrs["hx-trigger"].(string)
-	for _, want := range []string{"load once", "click once from:#build-tab-button-team"} {
-		if !strings.Contains(trigger, want) {
-			t.Errorf("expected hx-trigger %q to contain %q", trigger, want)
-		}
-	}
-}
-
-func TestLazyTabTriggerScopesClickToItsOwnButton(t *testing.T) {
-	songs := lazyTabTrigger("songs")
-	team := lazyTabTrigger("team")
-
-	if !strings.Contains(songs, "from:#build-tab-button-songs") {
-		t.Errorf("expected songs' trigger to scope click to its own button, got %q", songs)
-	}
-	if !strings.Contains(team, "from:#build-tab-button-team") {
-		t.Errorf("expected team's trigger to scope click to its own button, got %q", team)
+	// Just "load once" - not a second "click" clause. htmx tracks "once"
+	// per trigger clause, not shared across them, so a second clause
+	// doesn't mean "only if load didn't already fire" - it fires on its
+	// own regardless, which used to re-run this fetch on every first
+	// click even after load had already finished. See lazyTabTrigger's own
+	// doc comment for the full story, including the state-corruption bug
+	// that redundant response caused.
+	if attrs["hx-trigger"] != lazyTabTrigger {
+		t.Errorf("expected hx-trigger %q, got %v", lazyTabTrigger, attrs["hx-trigger"])
 	}
 }

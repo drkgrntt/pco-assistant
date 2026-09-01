@@ -215,11 +215,21 @@ templ BuildPlan(personName, organizationName string, setData SetBuilderData, ros
 			click - putting it on the button left the button unclickable for
 			as long as the background fetch was still running). Its own tab
 			panel and its sidebar glance card below both fill in together
-			once that fetch resolves
-			(SetBuilderBodyLazy/RosterBuilderBodyLazy, set_builder.templ/
-			roster_builder.templ) - toggleBuildTab itself needs no changes for
-			any of this, since it only ever toggles `hidden` by id and doesn't
-			care whether what's inside is real content or still the skeleton.
+			once that fetch resolves (SetBuilderBodyLazy/RosterBuilderBodyLazy,
+			set_builder.templ/roster_builder.templ).
+
+			That fetch can still be in flight when the user switches tabs by
+			hand (the whole reason it's deferred at all is that it's usually
+			the slower tab) - its own out-of-band fragments only know
+			whether this tab was still inactive when the *request* went out,
+			so landing after a manual switch would otherwise stamp that
+			stale hidden state right back over whatever toggleBuildTab just
+			set. scheduling.js's syncBuildTabVisibility/currentBuildTab
+			closes that race by re-deriving every tab-scoped element's
+			hidden state from whichever tab is actually aria-selected right
+			now, after every htmx swap settles - not just after a click - so
+			hidden state stays correct regardless of which of the two
+			(click vs. background fetch) finishes last.
 
 			The sidebar (.build-glance) is the one thing that isn't just "the
 			inactive tab, hidden" - it's a standing glance at whichever tab
@@ -250,14 +260,14 @@ templ BuildPlan(personName, organizationName string, setData SetBuilderData, ros
 		<div class="build-layout">
 			<div class="build-main">
 				@buildTabs([]BuildTab{{ID: "songs", Label: "Songs"}, {ID: "team", Label: "Team"}}, normalizedTab)
-				<div class="build-tab-panel" id="build-tab-songs" role="tabpanel" hidden?={ activeTab == "team" } { tabPanelLazyAttrs(lazyTabURL(activeTab != "team", setData.ServiceTypeID, setData.PlanID, "songs"), "songs")... }>
+				<div class="build-tab-panel" id="build-tab-songs" role="tabpanel" hidden?={ activeTab == "team" } { tabPanelLazyAttrs(lazyTabURL(activeTab != "team", setData.ServiceTypeID, setData.PlanID, "songs"))... }>
 					if activeTab == "team" {
 						@buildTabLoadingSkeleton()
 					} else {
 						@SetBuilderBodyContent(setData)
 					}
 				</div>
-				<div class="build-tab-panel" id="build-tab-team" role="tabpanel" hidden?={ activeTab != "team" } { tabPanelLazyAttrs(lazyTabURL(activeTab == "team", rosterData.ServiceTypeID, rosterData.PlanID, "team"), "team")... }>
+				<div class="build-tab-panel" id="build-tab-team" role="tabpanel" hidden?={ activeTab != "team" } { tabPanelLazyAttrs(lazyTabURL(activeTab == "team", rosterData.ServiceTypeID, rosterData.PlanID, "team"))... }>
 					if activeTab != "team" {
 						@buildTabLoadingSkeleton()
 					} else {
@@ -336,19 +346,18 @@ func lazyTabURL(eager bool, serviceTypeID, planID, tab string) string {
 // slower of the two tabs. The panel div is never a <button>, and (at
 // fetch time) never contains one either - it's still just
 // buildTabLoadingSkeleton's <p> - so scheduling.js's check never matches
-// it. hx-trigger's "click ... from:#build-tab-button-<tabID>" (see
-// lazyTabTrigger) still listens for that button's own click without the
-// request being homed on it. No explicit hx-target: the default (the
-// element hx-get lives on) is already the right one now that it's on the
-// panel itself, and hx-swap="innerHTML" leaves this div's own id/hidden/
-// role attributes - which toggleBuildTab still toggles by id - untouched.
-func tabPanelLazyAttrs(lazyURL, tabID string) templ.Attributes {
+// it. No explicit hx-target: the default (the element hx-get lives on) is
+// already the right one now that it's on the panel itself, and
+// hx-swap="innerHTML" leaves this div's own id/hidden/role attributes -
+// which toggleBuildTab/syncBuildTabVisibility still toggle by id,
+// independent of this fetch - untouched.
+func tabPanelLazyAttrs(lazyURL string) templ.Attributes {
 	if lazyURL == "" {
 		return nil
 	}
 	return templ.Attributes{
 		"hx-get":     lazyURL,
-		"hx-trigger": lazyTabTrigger(tabID),
+		"hx-trigger": lazyTabTrigger,
 		"hx-swap":    "innerHTML",
 	}
 }

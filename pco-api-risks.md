@@ -122,11 +122,11 @@ actually PCO just cut the app off partway through.
         retry in case the `load`-triggered fetch failed (a network
         hiccup) - without it, that failure mode had no recovery short of a
         full page reload.
-     4. **Settled: same triggers, moved off the button onto the panel
-        div**, with `click ... from:#build-tab-button-<tabID>` replacing
-        plain `click`. Attaching `hx-get` to the tab button caused a real
-        bug: `scheduling.js`'s app-wide "disable the clicked control while
-        its request is in flight" feedback matches purely on
+     4. Same triggers, moved off the button onto the panel div, with
+        `click ... from:#build-tab-button-<tabID>` replacing plain
+        `click`. Attaching `hx-get` to the tab button caused a real bug:
+        `scheduling.js`'s app-wide "disable the clicked control while its
+        request is in flight" feedback matches purely on
         `event.detail.elt` being a `<button>` - it can't tell a genuine
         click apart from the automatic `load` trigger, so the very first
         load-triggered fetch (the Team tab's, usually the slow one) left
@@ -135,6 +135,43 @@ actually PCO just cut the app off partway through.
         panel div, with `from:` still listening for the button's click,
         keeps the fetch tied to the same interactions without the button
         itself ever being the element a request is attached to.
+     5. **Settled: just `load once`, and a client-side visibility resync
+        added to close the state-corruption bug this whole trigger design
+        was actually causing.** Two compounding problems, both real, found
+        via live use:
+          - htmx's `once` is tracked *per trigger clause*, not shared
+            across them - `load once, click once` doesn't mean "click only
+            if load didn't already fire"; `click` fires on its own
+            regardless, so every first click of a deferred tab re-ran the
+            fetch even after `load` had already finished successfully.
+          - Worse: that redundant response's out-of-band fragments
+            (`rosterPublishPanelLazyOOB` etc.) only know whether the tab
+            was still inactive when the *request* went out. By the time a
+            click-triggered (or even just a still-in-flight load-
+            triggered) response lands, the user may have already switched
+            tabs by hand - `toggleBuildTab` sets the correct hidden state
+            instantly on click, and the late-arriving OOB fragments then
+            silently stamp the *stale* "still inactive" state right back
+            over it: the tab's own publish/detail cards hidden again, its
+            glance card visible again, exactly backwards from what should
+            be showing now that it's the open tab.
+        Fix: dropped `click` entirely (`lazyTabTrigger` is just
+        `"load once"` now) - `load` fires before any human click is
+        physically possible, so there's no legitimate reason left to
+        re-fire on click, only the bug it was causing. That alone doesn't
+        fully close the race (a still-in-flight `load` response can still
+        land after a manual switch), so `scheduling.js` also gained
+        `syncBuildTabVisibility`/`currentBuildTab`, run on every
+        `htmx:afterSettle`: re-derives every tab-scoped element's hidden
+        state from whichever tab is actually `aria-selected` right now,
+        regardless of what hidden value rode along in whatever response
+        just landed. Makes hidden state self-healing rather than
+        order-dependent - correct no matter which of "the click" or "the
+        background fetch" finishes last. Traded away: a failed `load`
+        fetch has no built-in retry any more (previously `click` covered
+        that, at the cost of causing this bug) - acceptable for now, worth
+        revisiting only if failed background fetches turn out to be a real
+        problem in practice.
    Also required threading a `hidden bool` through every
    `*ShellOOB` component this page already had
    (`glanceCardShellOOB`, `publishCardShellOOB`, `buildDetailGroupShellOOB`)
