@@ -115,3 +115,92 @@ func TestFetchPlansByFilterConcurrencyStaysBounded(t *testing.T) {
 		t.Errorf("max concurrent in-flight PCO requests = %d, want <= scheduling.PCOFanOutLimit (%d)", max, scheduling.PCOFanOutLimit)
 	}
 }
+
+// TestBuildPlanRowsConcurrencyStaysBoundedAndRowsStayCorrect covers
+// buildPlanRows - the per-row status fan-out combinedPlansForServiceType
+// delegates to (see its doc comment) - against a fake statusFn standing in
+// for planStatus/rosterStatus's PCO round trips, rather than a real
+// *scheduling.Store + PCO fake server: statusFn is the seam
+// combinedPlansForServiceType itself passes in, so exercising it directly
+// here proves the same concurrency/correctness properties without needing
+// a live database. More rows (25) than scheduling.PCOFanOutLimit (10) means
+// unbounded fan-out would run 25 statusFn calls at once; each fake call
+// sleeps briefly so genuinely-concurrent calls actually overlap in
+// wall-clock time rather than finishing too fast to overlap. Also asserts
+// each row lands with its own plan's status (no cross-row mixup) and that
+// row order still matches pageOfPlans' order despite running concurrently.
+func TestBuildPlanRowsConcurrencyStaysBoundedAndRowsStayCorrect(t *testing.T) {
+	const numPlans = 25
+	const perCallDelay = 20 * time.Millisecond
+
+	pageOfPlans := make([]pco.PlanData, numPlans)
+	for i := range pageOfPlans {
+		id := fmt.Sprintf("plan-%d", i)
+		pageOfPlans[i] = pco.PlanData{
+			ID: id,
+			Attributes: pco.PlanAttributes{
+				Title: fmt.Sprintf("Plan %d", i),
+				Dates: fmt.Sprintf("Date %d", i),
+			},
+		}
+	}
+	notes := map[string]string{"plan-3": "note for plan 3"}
+
+	var (
+		callCount       int32
+		inFlight        int32
+		maxInFlightSeen int32
+	)
+
+	statusFn := func(p pco.PlanData) (setStatus, rosterStatus string) {
+		atomic.AddInt32(&callCount, 1)
+
+		current := atomic.AddInt32(&inFlight, 1)
+		defer atomic.AddInt32(&inFlight, -1)
+		for {
+			seen := atomic.LoadInt32(&maxInFlightSeen)
+			if current <= seen {
+				break
+			}
+			if atomic.CompareAndSwapInt32(&maxInFlightSeen, seen, current) {
+				break
+			}
+		}
+
+		time.Sleep(perCallDelay)
+		// Derived from this row's own plan id, so a cross-row mixup (row i
+		// ending up with row j's status) would fail the per-row assertion
+		// below.
+		return "set-" + p.ID, "roster-" + p.ID
+	}
+
+	rows := buildPlanRows(pageOfPlans, notes, statusFn)
+
+	if len(rows) != numPlans {
+		t.Fatalf("expected %d rows, got %d", numPlans, len(rows))
+	}
+
+	for i, row := range rows {
+		wantID := pageOfPlans[i].ID
+		if row.ID != wantID {
+			t.Errorf("rows[%d].ID = %q, want %q (row order should match pageOfPlans' order)", i, row.ID, wantID)
+		}
+		if want := "set-" + wantID; row.SetStatus != want {
+			t.Errorf("rows[%d].SetStatus = %q, want %q", i, row.SetStatus, want)
+		}
+		if want := "roster-" + wantID; row.RosterStatus != want {
+			t.Errorf("rows[%d].RosterStatus = %q, want %q", i, row.RosterStatus, want)
+		}
+		if row.Note != notes[wantID] {
+			t.Errorf("rows[%d].Note = %q, want %q", i, row.Note, notes[wantID])
+		}
+	}
+
+	if got := atomic.LoadInt32(&callCount); got != int32(numPlans) {
+		t.Errorf("expected statusFn called exactly once per row (%d), got %d calls", numPlans, got)
+	}
+
+	if max := atomic.LoadInt32(&maxInFlightSeen); max > scheduling.PCOFanOutLimit {
+		t.Errorf("max concurrent in-flight statusFn calls = %d, want <= scheduling.PCOFanOutLimit (%d)", max, scheduling.PCOFanOutLimit)
+	}
+}
