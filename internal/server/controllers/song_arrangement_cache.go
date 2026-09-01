@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"pco-assistant/internal/scheduling"
 	"pco-assistant/internal/server/middleware"
 	views "pco-assistant/internal/views/scheduling"
 
@@ -26,7 +27,7 @@ import (
 // a *fiber.Ctx, so callers outside this handler's own request don't need
 // to fake one.
 func (sc *SchedulingController) buildSongInfoData(ctx context.Context, organizationID string) views.SongInfoData {
-	songs, songsErr := fetchAllSongs(ctx)
+	songs, songsErr := fetchActiveSongs(ctx, organizationID)
 	cache, err := sc.store.SongArrangementInfo(ctx, organizationID)
 
 	data := views.SongInfoData{TotalCount: len(songs)}
@@ -66,7 +67,12 @@ func (sc *SchedulingController) SyncSongInfo(c *fiber.Ctx) error {
 	ctx := middleware.RequestContext(c)
 	orgID := middleware.CurrentOrganizationID(c)
 
-	songs, songsErr := fetchAllSongs(ctx)
+	// This is the one place a user explicitly expects a guaranteed-fresh
+	// pull from PCO, not a possibly-60s-stale cached one - invalidate right
+	// before fetching rather than relying on the TTL to happen to have
+	// expired already.
+	scheduling.InvalidateActiveSongsCache(orgID)
+	songs, songsErr := fetchActiveSongs(ctx, orgID)
 	cache, err := sc.store.SongArrangementInfo(ctx, orgID)
 	if err != nil {
 		data := sc.buildSongInfoData(ctx, orgID)

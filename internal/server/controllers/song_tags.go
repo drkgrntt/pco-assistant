@@ -24,7 +24,7 @@ func (sc *SchedulingController) SongTagsPage(c *fiber.Ctx) error {
 	orgName := middleware.CurrentOrganization(c)
 	orgID := middleware.CurrentOrganizationID(c)
 
-	songs, songsErr := fetchAllSongs(middleware.RequestContext(c))
+	songs, songsErr := fetchActiveSongs(middleware.RequestContext(c), orgID)
 
 	categories, err := sc.store.ListSongTagCategories(c.Context())
 	if err != nil {
@@ -66,7 +66,7 @@ func (sc *SchedulingController) CreateSongTag(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
 	}
 
-	songs, _ := fetchAllSongs(middleware.RequestContext(c))
+	songs, _ := fetchActiveSongs(middleware.RequestContext(c), orgID)
 	categories, _ := sc.store.ListSongTagCategories(c.Context())
 
 	return render(c, views.SongTagsTable(tags, songTitleMap(songs), songTagCategoryLabelMap(categories), errMsg))
@@ -88,7 +88,7 @@ func (sc *SchedulingController) DeleteSongTag(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
 	}
 
-	songs, _ := fetchAllSongs(middleware.RequestContext(c))
+	songs, _ := fetchActiveSongs(middleware.RequestContext(c), orgID)
 	categories, _ := sc.store.ListSongTagCategories(c.Context())
 
 	return render(c, views.SongTagsTable(tags, songTitleMap(songs), songTagCategoryLabelMap(categories), errMsg))

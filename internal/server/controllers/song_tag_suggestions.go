@@ -50,7 +50,7 @@ func songTagSuggestions(songs []pco.SongData, existingTags []scheduling.SongTag,
 func (sc *SchedulingController) buildSongTagSuggestionsData(ctx context.Context, organizationID string) views.SongTagSuggestionsData {
 	var data views.SongTagSuggestionsData
 
-	songs, err := fetchAllSongs(ctx)
+	songs, err := fetchActiveSongs(ctx, organizationID)
 	if err != nil {
 		data.ErrMsg = appendErr(data.ErrMsg, "loading songs from Planning Center: "+err.Error())
 	}
