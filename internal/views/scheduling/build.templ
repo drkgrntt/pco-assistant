@@ -41,36 +41,48 @@ templ Build(personName, organizationName string, serviceTypes []pco.ServiceTypeD
 // buildPlansTabBar switches BuildPlansList between its "upcoming" and
 // "past" plans (see planTab, build.go) - a full server round trip via
 // BuildPlans (not per-element client toggling like buildTabs/toggleBuildTab,
-// the Songs/Team tab switcher this reuses the visual .build-tabs/.build-tab
-// styling from), since switching tabs means fetching an entirely different
-// set of plans from Planning Center, not just showing/hiding something
-// already on the page. Deliberately its own two plain buttons rather than
+// the Songs/Team tab switcher on a single plan's own builder page),
+// since switching tabs means fetching an entirely different set of plans
+// from Planning Center, not just showing/hiding something already on the
+// page. Deliberately its own two plain buttons rather than
 // BuildTab/buildTabs itself - that component is wired for the client-side
 // toggle the Songs/Team split uses, not this tab bar's htmx round trip.
 // Past plans are the archive this exists for at all (see the past-plans
 // issue): sets/rosters are kept in local Postgres indefinitely after
 // Publish, so every plan ever drafted here stays browsable, just read-only
 // once it's actually happened - see SetBuilderData.ReadOnly.
+//
+// Styled as its own distinct segmented control (.plan-picker-tabs/
+// .plan-picker-tab, components/build-tabs.css) rather than reusing
+// .build-tabs/.build-tab, the Songs/Team split's underlined-text style: a
+// user reported not noticing this bar existed at all despite it always
+// rendering correctly once a service type is picked (confirmed live -
+// see issues.md) - two small tabs visually near-identical to that other,
+// unrelated tab switcher elsewhere on this same flow read as a lesser
+// sibling of it rather than its own primary "which plans am I browsing"
+// control. A filled pill for the active side plus an explicit aria-label
+// (screen readers don't get the visual weight difference for free) both
+// push in the same direction: more obviously its own thing.
 templ buildPlansTabBar(serviceTypeID, tab string) {
-	<div class="build-tabs" role="tablist">
+	<div class="plan-picker-tabs" role="tablist" aria-label="Upcoming or past plans">
 		<button
 			type="button"
-			class={ "build-tab", templ.KV("active", tab != "past") }
+			class={ "plan-picker-tab", templ.KV("active", tab != "past") }
 			role="tab"
 			aria-selected={ fmt.Sprintf("%t", tab != "past") }
 			hx-get={ fmt.Sprintf("/scheduling/build/plans?service_type_id=%s&tab=upcoming", serviceTypeID) }
 			hx-target="#build-plans"
 			hx-swap="outerHTML"
-		>Upcoming</button>
+		>Upcoming plans</button>
 		<button
 			type="button"
-			class={ "build-tab", templ.KV("active", tab == "past") }
+			class={ "plan-picker-tab", templ.KV("active", tab == "past") }
 			role="tab"
 			aria-selected={ fmt.Sprintf("%t", tab == "past") }
 			hx-get={ fmt.Sprintf("/scheduling/build/plans?service_type_id=%s&tab=past", serviceTypeID) }
 			hx-target="#build-plans"
 			hx-swap="outerHTML"
-		>Past</button>
+		>Past plans</button>
 	</div>
 }
 
@@ -173,7 +185,7 @@ templ BuildPlansResults(plans []PlanRow, serviceTypeID, search string, page, tot
 				@components.PlanStatusBadge(plan.SetStatus)
 				<span class="badge-label">Team</span>
 				@components.PlanStatusBadge(plan.RosterStatus)
-				@PlanNoteFormFragment(serviceTypeID, plan)
+				@planNoteText(plan.Note)
 			</li>
 		}
 		if len(plans) == 0 {
@@ -203,23 +215,34 @@ templ BuildPlansResults(plans []PlanRow, serviceTypeID, search string, page, tot
 	}
 }
 
-// PlanNoteFormFragment is one plan row's small inline editor for its purely-local
-// at-a-glance note (see plan_notes/GetPlanNote) - a plain text input plus a
-// Save button, same "explicit save, not save-on-blur" convention as
-// keyForm/descriptionForm (song_detail_card.templ). hx-target="this" swaps
-// only this form on save (see UpdatePlanNote, build.go), same reasoning as
-// those two forms' own hx-target="this" - saving a note shouldn't disturb
-// the rest of the row, let alone the whole plan list. Available on both the
-// upcoming and past tabs alike: a note is exactly the kind of thing useful
-// for finding a specific service either way, and unlike Publish/Discard/
-// PCO-sync, saving a note never touches Planning Center, so there's no
-// reason to gate it off for a past, otherwise-read-only plan.
-templ PlanNoteFormFragment(serviceTypeID string, plan PlanRow) {
-	<form class="plan-note-form" hx-post={ fmt.Sprintf("/scheduling/build/plans/%s/%s/note", serviceTypeID, plan.ID) } hx-target="this" hx-swap="outerHTML">
+// planNoteText is a plan's local at-a-glance note (see plan_notes/
+// GetPlanNote) rendered as plain, read-only text - used by the plan-list
+// row (BuildPlansResults) and, when the plan builder page itself is
+// read-only, by planNoteSection below. "" renders nothing at all, since a
+// blank note carries no information worth taking up row space for.
+templ planNoteText(note string) {
+	if note != "" {
+		<span class="muted plan-note-text">{ note }</span>
+	}
+}
+
+// PlanNoteFormFragment is the plan builder page's small editor for this
+// plan's purely-local at-a-glance note (see plan_notes/GetPlanNote and
+// planNoteSection below) - a plain text input plus a Save button, same
+// "explicit save, not save-on-blur" convention as keyForm/descriptionForm
+// (song_detail_card.templ). hx-target="this" swaps only this form on save
+// (see UpdatePlanNote, build.go), so saving a note never disturbs the rest
+// of the page. Unlike Publish/Discard/PCO-sync, saving a note never
+// touches Planning Center - the only gate on it is planNoteSection's own
+// readOnly check (a past plan shows the note as plain text instead of
+// rendering this form at all).
+templ PlanNoteFormFragment(serviceTypeID, planID, note string) {
+	<form class="plan-note-form" hx-post={ fmt.Sprintf("/scheduling/build/plans/%s/%s/note", serviceTypeID, planID) } hx-target="this" hx-swap="outerHTML">
 		<input
 			type="text"
+			id="build-plan-note"
 			name="note"
-			value={ plan.Note }
+			value={ note }
 			placeholder="Add a note (e.g. the one with the guest speaker)..."
 			class="plan-note-input"
 			autocomplete="off"
@@ -228,6 +251,30 @@ templ PlanNoteFormFragment(serviceTypeID string, plan PlanRow) {
 			@components.IconEdit()
 		</button>
 	</form>
+}
+
+// planNoteSection is the plan builder page's one spot for this plan's
+// local at-a-glance note (see plan_notes/GetPlanNote) - moved here, once,
+// from the plan-list row it used to render in (see PlanNoteFormFragment's
+// prior doc comment in git history) since there's exactly one note per
+// plan, not one per row-in-a-list-of-many or one per Songs/Team tab.
+// Placed near the top of BuildPlan, above the tab switcher, so it isn't
+// duplicated inside either tab. Gated by readOnly the same way this page's
+// other mutating actions are (see SetBuilderData.ReadOnly) - a past plan
+// shows the note as plain text (planNoteText) instead of an editable form;
+// a blank note on a read-only plan renders nothing, same as the plan-list
+// row's own "nothing if blank" behavior.
+templ planNoteSection(serviceTypeID, planID, note string, readOnly bool) {
+	if readOnly {
+		if note != "" {
+			<p class="plan-note-readonly"><strong>Note:</strong> { note }</p>
+		}
+	} else {
+		<div class="plan-note-section">
+			<label for="build-plan-note">Note</label>
+			@PlanNoteFormFragment(serviceTypeID, planID, note)
+		</div>
+	}
 }
 
 // BuildPlan is one plan's combined builder - the song order of service and
@@ -241,6 +288,12 @@ templ PlanNoteFormFragment(serviceTypeID string, plan PlanRow) {
 // JS flash of the Songs tab first, rather than relying entirely on
 // toggleBuildTab (scheduling.js) to sort it out after the page loads.
 //
+// note is this plan's local at-a-glance note (see plan_notes/GetPlanNote),
+// fetched once by BuildPlanPage regardless of activeTab and rendered by
+// planNoteSection above - a separate parameter rather than a field on
+// SetBuilderData/RosterBuilderData since it's one value per plan, not
+// per-tab data either struct otherwise holds.
+//
 // Only activeTab's own data is actually built by BuildPlanPage - see
 // pco-api-risks.md's mitigation #3. The *other* tab's SetBuilderData/
 // RosterBuilderData argument here is a zero value except for
@@ -251,7 +304,7 @@ templ PlanNoteFormFragment(serviceTypeID string, plan PlanRow) {
 // mirroring which one is real - the zero value is never actually
 // rendered, only ever sitting there inert until the lazy fetch below
 // replaces it.
-templ BuildPlan(personName, organizationName string, setData SetBuilderData, rosterData RosterBuilderData, activeTab string) {
+templ BuildPlan(personName, organizationName string, setData SetBuilderData, rosterData RosterBuilderData, activeTab, note string) {
 	@views.Layout("Build a Service", personName, organizationName) {
 		<h1>
 			if setData.PlanTitle != "" {
@@ -268,6 +321,7 @@ templ BuildPlan(personName, organizationName string, setData SetBuilderData, ros
 		if setData.ReadOnly {
 			<p>@components.BadgeTitled("status-pending", "Past plan - read only", "This plan has already happened - shown for reference, no Publish/Discard/PCO-sync actions available")</p>
 		}
+		@planNoteSection(setData.ServiceTypeID, setData.PlanID, note, setData.ReadOnly)
 		<div class="build-page-nav">
 			<a href="/scheduling/build">&larr; Choose a different plan</a>
 			<div class="build-page-nav-links">
