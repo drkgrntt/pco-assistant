@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"pco-assistant/internal/scheduling"
 	views "pco-assistant/internal/views/scheduling"
@@ -36,6 +37,14 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 	if plan, err := pco.GetPlan(ctx, serviceTypeID, planID); err == nil {
 		data.PlanTitle = plan.Data.Attributes.Title
 		data.PlanDates = plan.Data.Attributes.Dates
+		// ReadOnly mirrors buildRosterBuilderData's own planDate-derived
+		// check (rosters_builder.go) - a plan whose sort_date has already
+		// passed is shown for browsing only, no Publish/Discard/PCO-sync
+		// actions (see SetBuilderData.ReadOnly). Server-derived from the
+		// plan's own date rather than a client-supplied flag, so it can't
+		// be spoofed and stays correct even for a plan that was still
+		// upcoming when this page was first opened.
+		data.ReadOnly = !plan.Data.Attributes.SortDate.IsZero() && plan.Data.Attributes.SortDate.Before(time.Now())
 	} else {
 		data.ErrMsg = "loading plan from Planning Center: " + err.Error()
 	}

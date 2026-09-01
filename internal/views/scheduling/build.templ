@@ -9,10 +9,10 @@ import (
 	"pco-assistant/internal/views/components"
 )
 
-templ Build(personName, organizationName string, serviceTypes []pco.ServiceTypeData, selectedServiceTypeID string, initialPlans []PlanRow, page, totalPages int, errMsg string) {
+templ Build(personName, organizationName string, serviceTypes []pco.ServiceTypeData, selectedServiceTypeID string, initialPlans []PlanRow, page, totalPages int, tab, errMsg string) {
 	@views.Layout("Build a Service", personName, organizationName) {
 		<h1>Build a Service</h1>
-		<p class="muted">Pick a service type, then an upcoming plan, to build its song lineup and fill its team - both on one page.</p>
+		<p class="muted">Pick a service type, then a plan, to build its song lineup and fill its team - both on one page.</p>
 		<form class="inline" hx-get="/scheduling/build/plans" hx-target="#build-plans" hx-swap="outerHTML">
 			<label>
 				Service type
@@ -29,21 +29,57 @@ templ Build(personName, organizationName string, serviceTypes []pco.ServiceTypeD
 					}
 				</select>
 			</label>
-			<button type="submit" class="primary">Show upcoming plans</button>
+			<button type="submit" class="primary">Show plans</button>
 		</form>
 		if errMsg != "" {
 			<p class="error">{ errMsg }</p>
 		}
-		@BuildPlansList(initialPlans, selectedServiceTypeID, "", page, totalPages, "")
+		@BuildPlansList(initialPlans, selectedServiceTypeID, "", page, totalPages, tab, "")
 	}
 }
 
+// buildPlansTabBar switches BuildPlansList between its "upcoming" and
+// "past" plans (see planTab, build.go) - a full server round trip via
+// BuildPlans (not per-element client toggling like buildTabs/toggleBuildTab,
+// the Songs/Team tab switcher this reuses the visual .build-tabs/.build-tab
+// styling from), since switching tabs means fetching an entirely different
+// set of plans from Planning Center, not just showing/hiding something
+// already on the page. Deliberately its own two plain buttons rather than
+// BuildTab/buildTabs itself - that component is wired for the client-side
+// toggle the Songs/Team split uses, not this tab bar's htmx round trip.
+// Past plans are the archive this exists for at all (see the past-plans
+// issue): sets/rosters are kept in local Postgres indefinitely after
+// Publish, so every plan ever drafted here stays browsable, just read-only
+// once it's actually happened - see SetBuilderData.ReadOnly.
+templ buildPlansTabBar(serviceTypeID, tab string) {
+	<div class="build-tabs" role="tablist">
+		<button
+			type="button"
+			class={ "build-tab", templ.KV("active", tab != "past") }
+			role="tab"
+			aria-selected={ fmt.Sprintf("%t", tab != "past") }
+			hx-get={ fmt.Sprintf("/scheduling/build/plans?service_type_id=%s&tab=upcoming", serviceTypeID) }
+			hx-target="#build-plans"
+			hx-swap="outerHTML"
+		>Upcoming</button>
+		<button
+			type="button"
+			class={ "build-tab", templ.KV("active", tab == "past") }
+			role="tab"
+			aria-selected={ fmt.Sprintf("%t", tab == "past") }
+			hx-get={ fmt.Sprintf("/scheduling/build/plans?service_type_id=%s&tab=past", serviceTypeID) }
+			hx-target="#build-plans"
+			hx-swap="outerHTML"
+		>Past</button>
+	</div>
+}
+
 // BuildPlansList is the htmx swap target (id="build-plans") for the service
-// type picker above - it lists that service type's upcoming plans, each
-// linking straight into its combined builder, tagged with its song lineup
-// status and its team status independently (see the scheduling
-// controller's planStatus/rosterStatus) - a plan can be fully planned on
-// one and still todo on the other.
+// type picker above - it lists that service type's plans (upcoming or past,
+// see buildPlansTabBar/tab), each linking straight into its combined
+// builder, tagged with its song lineup status and its team status
+// independently (see the scheduling controller's planStatus/rosterStatus) -
+// a plan can be fully planned on one and still todo on the other.
 //
 // Search and pagination both go through this one <form>'s own hx-get,
 // triggered only by a real submit (Enter, the Search button, or a
@@ -55,12 +91,13 @@ templ Build(personName, organizationName string, serviceTypes []pco.ServiceTypeD
 // fields - including whichever submit button was actually clicked, see
 // BuildPlansResults' page buttons below - are always included, no
 // per-element htmx wiring to get subtly wrong.
-templ BuildPlansList(plans []PlanRow, serviceTypeID, search string, page, totalPages int, errMsg string) {
+templ BuildPlansList(plans []PlanRow, serviceTypeID, search string, page, totalPages int, tab, errMsg string) {
 	<div id="build-plans">
 		if errMsg != "" {
 			<p class="error">{ errMsg }</p>
 		}
 		if serviceTypeID != "" {
+			@buildPlansTabBar(serviceTypeID, tab)
 			<!--
 				Deliberately not class="inline" - that class flex-rows its
 				children (label+input+button, side by side) once the
@@ -78,11 +115,21 @@ templ BuildPlansList(plans []PlanRow, serviceTypeID, search string, page, totalP
 				hx-swap="innerHTML"
 			>
 				<input type="hidden" name="service_type_id" value={ serviceTypeID }/>
+				<!--
+					Carries the currently-active tab forward on every Search/
+					Prev/Next submit from within this same form - see planTab
+					(build.go) and buildPlansTabBar above, which switches tabs
+					via its own separate hx-get (outside this form) rather than
+					a field inside it, since a tab switch is a clean slate
+					(fresh search, page 1), not something this form's own
+					submit should ever carry.
+				-->
+				<input type="hidden" name="tab" value={ tab }/>
 				<div class="search-bar">
 					<input
 						type="text"
 						id="build-plans-search"
-						placeholder="Search by plan title or date..."
+						placeholder="Search by plan title, date, or note..."
 						autocomplete="off"
 						value={ search }
 						name="search"
@@ -90,7 +137,7 @@ templ BuildPlansList(plans []PlanRow, serviceTypeID, search string, page, totalP
 					<button type="submit">Search</button>
 				</div>
 				<div id="build-plans-results">
-					@BuildPlansResults(plans, serviceTypeID, search, page, totalPages, "")
+					@BuildPlansResults(plans, serviceTypeID, search, page, totalPages, tab, "")
 				</div>
 			</form>
 		}
@@ -105,7 +152,7 @@ templ BuildPlansList(plans []PlanRow, serviceTypeID, search string, page, totalP
 // button's own value included alongside every other field, exactly like
 // clicking Search does, just requesting a different page of the same
 // search instead of a fresh one.
-templ BuildPlansResults(plans []PlanRow, serviceTypeID, search string, page, totalPages int, errMsg string) {
+templ BuildPlansResults(plans []PlanRow, serviceTypeID, search string, page, totalPages int, tab, errMsg string) {
 	if errMsg != "" {
 		<p class="error">{ errMsg }</p>
 	}
@@ -126,10 +173,15 @@ templ BuildPlansResults(plans []PlanRow, serviceTypeID, search string, page, tot
 				@components.PlanStatusBadge(plan.SetStatus)
 				<span class="badge-label">Team</span>
 				@components.PlanStatusBadge(plan.RosterStatus)
+				@PlanNoteFormFragment(serviceTypeID, plan)
 			</li>
 		}
 		if len(plans) == 0 {
-			<li class="muted">No upcoming plans found.</li>
+			if tab == "past" {
+				<li class="muted">No past plans found.</li>
+			} else {
+				<li class="muted">No upcoming plans found.</li>
+			}
 		}
 	</ul>
 	if totalPages > 1 {
@@ -149,6 +201,33 @@ templ BuildPlansResults(plans []PlanRow, serviceTypeID, search string, page, tot
 			>Next &rarr;</button>
 		</div>
 	}
+}
+
+// PlanNoteFormFragment is one plan row's small inline editor for its purely-local
+// at-a-glance note (see plan_notes/GetPlanNote) - a plain text input plus a
+// Save button, same "explicit save, not save-on-blur" convention as
+// keyForm/descriptionForm (song_detail_card.templ). hx-target="this" swaps
+// only this form on save (see UpdatePlanNote, build.go), same reasoning as
+// those two forms' own hx-target="this" - saving a note shouldn't disturb
+// the rest of the row, let alone the whole plan list. Available on both the
+// upcoming and past tabs alike: a note is exactly the kind of thing useful
+// for finding a specific service either way, and unlike Publish/Discard/
+// PCO-sync, saving a note never touches Planning Center, so there's no
+// reason to gate it off for a past, otherwise-read-only plan.
+templ PlanNoteFormFragment(serviceTypeID string, plan PlanRow) {
+	<form class="plan-note-form" hx-post={ fmt.Sprintf("/scheduling/build/plans/%s/%s/note", serviceTypeID, plan.ID) } hx-target="this" hx-swap="outerHTML">
+		<input
+			type="text"
+			name="note"
+			value={ plan.Note }
+			placeholder="Add a note (e.g. the one with the guest speaker)..."
+			class="plan-note-input"
+			autocomplete="off"
+		/>
+		<button type="submit" class="icon-btn" aria-label="Save note" title="Save note">
+			@components.IconEdit()
+		</button>
+	</form>
 }
 
 // BuildPlan is one plan's combined builder - the song order of service and
@@ -185,6 +264,9 @@ templ BuildPlan(personName, organizationName string, setData SetBuilderData, ros
 		</h1>
 		if setData.PlanTitle != "" && setData.PlanDates != "" {
 			<p class="muted">{ setData.PlanDates }</p>
+		}
+		if setData.ReadOnly {
+			<p>@components.BadgeTitled("status-pending", "Past plan - read only", "This plan has already happened - shown for reference, no Publish/Discard/PCO-sync actions available")</p>
 		}
 		<div class="build-page-nav">
 			<a href="/scheduling/build">&larr; Choose a different plan</a>

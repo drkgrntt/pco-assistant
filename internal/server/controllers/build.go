@@ -23,6 +23,17 @@ const (
 	buildPlansPageSize      = 10
 )
 
+// planTab reads the plan picker's "tab" query param - "past" or anything
+// else (missing, "upcoming", a typo) defaults to "upcoming", the same
+// behavior every existing link/bookmark that predates the past-plans
+// archive already gets since none of them carry this param at all.
+func planTab(c *fiber.Ctx) string {
+	if c.Query("tab") == "past" {
+		return "past"
+	}
+	return "upcoming"
+}
+
 // BuildPage renders the service-type picker. With only one service type,
 // there's nothing to actually pick, so its plans are loaded immediately
 // instead of waiting for a submit that would only ever have one option.
@@ -34,74 +45,111 @@ func (sc *SchedulingController) BuildPage(c *fiber.Ctx) error {
 	ctx := middleware.RequestContext(c)
 	serviceTypes, err := pco.GetServiceTypes(ctx, nil)
 	if err != nil {
-		return render(c, views.Build(personName, orgName, nil, "", nil, 1, 1, err.Error()))
+		return render(c, views.Build(personName, orgName, nil, "", nil, 1, 1, "upcoming", err.Error()))
 	}
 
 	if len(serviceTypes.Data) == 1 {
 		serviceTypeID := serviceTypes.Data[0].ID
-		rows, page, totalPages, errMsg := sc.combinedPlansForServiceType(ctx, orgID, serviceTypeID, "", 1)
-		return render(c, views.Build(personName, orgName, serviceTypes.Data, serviceTypeID, rows, page, totalPages, errMsg))
+		rows, page, totalPages, errMsg := sc.combinedPlansForServiceType(ctx, orgID, serviceTypeID, "", 1, false)
+		return render(c, views.Build(personName, orgName, serviceTypes.Data, serviceTypeID, rows, page, totalPages, "upcoming", errMsg))
 	}
 
-	return render(c, views.Build(personName, orgName, serviceTypes.Data, "", nil, 1, 1, ""))
+	return render(c, views.Build(personName, orgName, serviceTypes.Data, "", nil, 1, 1, "upcoming", ""))
 }
 
-// BuildPlans lists a freshly-chosen service type's upcoming plans (search
-// blank, page 1) - the htmx target for the service-type picker on the
+// BuildPlans lists a freshly-chosen service type's plans (search blank,
+// page 1, whichever tab is requested - see planTab) - the htmx target for
+// both the service-type picker and the past/upcoming tab switcher on the
 // Build page. Unlike BuildPlansSearch below, this re-renders the whole
-// picker block (search box included), since switching service types is a
-// clean slate.
+// picker block (search box and tab bar included), since switching service
+// types or tabs is a clean slate.
 func (sc *SchedulingController) BuildPlans(c *fiber.Ctx) error {
 	serviceTypeID := c.Query("service_type_id")
+	tab := planTab(c)
 	if serviceTypeID == "" {
-		return render(c, views.BuildPlansList(nil, "", "", 1, 1, ""))
+		return render(c, views.BuildPlansList(nil, "", "", 1, 1, tab, ""))
 	}
 
-	rows, page, totalPages, errMsg := sc.combinedPlansForServiceType(middleware.RequestContext(c), middleware.CurrentOrganizationID(c), serviceTypeID, "", 1)
-	return render(c, views.BuildPlansList(rows, serviceTypeID, "", page, totalPages, errMsg))
+	rows, page, totalPages, errMsg := sc.combinedPlansForServiceType(middleware.RequestContext(c), middleware.CurrentOrganizationID(c), serviceTypeID, "", 1, tab == "past")
+	return render(c, views.BuildPlansList(rows, serviceTypeID, "", page, totalPages, tab, errMsg))
 }
 
 // BuildPlansSearch backs the plan picker's search box and pagination links -
 // unlike BuildPlans above, it renders only the inner results fragment
-// (views.BuildPlansResults), never the search box itself, so typing a
-// search term never replaces the input the user is typing into (which
-// would drop focus/cursor position mid-keystroke - see the person-search
-// picker's own form-reset bug for what this class of mistake looks like).
-// page defaults to 1 when absent (e.g. every request the search box itself
-// fires, since it doesn't carry a page field) - a new search term should
-// always restart from the first page of matches.
+// (views.BuildPlansResults), never the search box or tab bar themselves, so
+// typing a search term never replaces the input the user is typing into
+// (which would drop focus/cursor position mid-keystroke - see the
+// person-search picker's own form-reset bug for what this class of mistake
+// looks like). page defaults to 1 when absent (e.g. every request the
+// search box itself fires, since it doesn't carry a page field) - a new
+// search term should always restart from the first page of matches. tab
+// comes from BuildPlansList's own hidden field (see that templ), carried
+// forward on every Search/Prev/Next submit from within the same form so
+// searching or paginating never silently drops back to the upcoming tab.
 func (sc *SchedulingController) BuildPlansSearch(c *fiber.Ctx) error {
 	serviceTypeID := c.Query("service_type_id")
 	search := c.Query("search")
+	tab := planTab(c)
 	page, _ := strconv.Atoi(c.Query("page"))
 	if page < 1 {
 		page = 1
 	}
 
 	if serviceTypeID == "" {
-		return render(c, views.BuildPlansResults(nil, "", "", 1, 1, ""))
+		return render(c, views.BuildPlansResults(nil, "", "", 1, 1, tab, ""))
 	}
 
-	rows, page, totalPages, errMsg := sc.combinedPlansForServiceType(middleware.RequestContext(c), middleware.CurrentOrganizationID(c), serviceTypeID, search, page)
-	return render(c, views.BuildPlansResults(rows, serviceTypeID, search, page, totalPages, errMsg))
+	rows, page, totalPages, errMsg := sc.combinedPlansForServiceType(middleware.RequestContext(c), middleware.CurrentOrganizationID(c), serviceTypeID, search, page, tab == "past")
+	return render(c, views.BuildPlansResults(rows, serviceTypeID, search, page, totalPages, tab, errMsg))
 }
 
-// fetchUpcomingPlans pages through a service type's future plans (id,
-// title, dates only - status is deliberately computed separately, only for
-// whichever page is actually being displayed, since that's the expensive
-// part - see combinedPlansForServiceType), for the Build page's plan picker
-// to search/paginate over locally. Same "return whatever was fetched so
-// far" tolerance as fetchAllSongs, and fixes a latent bug this replaces:
-// the previous single unpaginated GetPlans call silently relied on PCO's
-// default per_page, so a service type with many upcoming plans (recurring
-// templates scheduled well ahead) could have been quietly truncated.
-func fetchUpcomingPlans(ctx context.Context, serviceTypeID string) ([]pco.PlanData, error) {
+// UpdatePlanNote saves one plan's purely-local at-a-glance note (see
+// plan_notes/GetPlanNote) from the plan picker's inline planNoteForm
+// (build.templ) - re-rendering just that one form on success/failure
+// (hx-target="this" on the form itself), never the whole plan list, so
+// saving a note never disturbs search/pagination/scroll position elsewhere
+// on the page. Deliberately its own route/handler rather than folding into
+// BuildPlansSearch: it only ever touches one row, not the whole result set.
+func (sc *SchedulingController) UpdatePlanNote(c *fiber.Ctx) error {
+	orgID := middleware.CurrentOrganizationID(c)
+	serviceTypeID := c.Params("service_type_id")
+	planID := c.Params("plan_id")
+	note := c.FormValue("note")
+
+	if err := sc.store.UpsertPlanNote(c.Context(), orgID, serviceTypeID, planID, note); err != nil {
+		// Best-effort feedback: re-render the form with whatever was
+		// actually saved (i.e. still whatever the field held before this
+		// failed save), not the attempted value, since UpsertPlanNote
+		// failing means the attempted value never actually landed.
+		saved, _ := sc.store.GetPlanNote(c.Context(), orgID, serviceTypeID, planID)
+		return render(c, views.PlanNoteFormFragment(serviceTypeID, views.PlanRow{ID: planID, Note: saved}))
+	}
+
+	return render(c, views.PlanNoteFormFragment(serviceTypeID, views.PlanRow{ID: planID, Note: note}))
+}
+
+// fetchPlansByFilter pages through a service type's plans matching PCO's
+// own named filter ("future" or "past" - confirmed live against the
+// signed-in dev org's PCO API; go-pco's PlansParams.Filter doc comment
+// names both), ordered by orderBy (id/title/dates only - status is
+// deliberately computed separately, only for whichever page is actually
+// being displayed, since that's the expensive part - see
+// combinedPlansForServiceType), for the Build page's plan picker to
+// search/paginate over locally. Same "return whatever was fetched so far"
+// tolerance as fetchAllSongs, and fixes a latent bug this replaces: a
+// single unpaginated GetPlans call would otherwise silently rely on PCO's
+// default per_page, so a service type with many plans (recurring templates
+// scheduled well ahead, or a long-running church's full past history)
+// could be quietly truncated. Shared by fetchUpcomingPlans/fetchPastPlans
+// below - the only thing that differs between the two tabs is which filter
+// and sort order makes sense to browse by.
+func fetchPlansByFilter(ctx context.Context, serviceTypeID, filter, orderBy string) ([]pco.PlanData, error) {
 	var plans []pco.PlanData
 
 	for page := 0; page < buildPlansFetchMaxPages; page++ {
 		resp, err := pco.GetPlans(ctx, serviceTypeID, &pco.PlansParams{
-			Filter:  "future",
-			OrderBy: "sort_date",
+			Filter:  filter,
+			OrderBy: orderBy,
 			PerPage: buildPlansFetchPageSize,
 			Offset:  page * buildPlansFetchPageSize,
 		})
@@ -119,12 +167,33 @@ func fetchUpcomingPlans(ctx context.Context, serviceTypeID string) ([]pco.PlanDa
 	return plans, nil
 }
 
-// filterUpcomingPlans keeps plans whose title or dates contain search
-// (case-insensitive); "" matches everything. Dates is included in the
-// haystack because a plan without a custom title - common, PCO defaults to
-// just showing the date - would otherwise be unsearchable by the only text
-// actually visible for it in the list.
-func filterUpcomingPlans(plans []pco.PlanData, search string) []pco.PlanData {
+// fetchUpcomingPlans is fetchPlansByFilter for the "upcoming" tab - soonest
+// first, so the very next service is always at the top of page 1.
+func fetchUpcomingPlans(ctx context.Context, serviceTypeID string) ([]pco.PlanData, error) {
+	return fetchPlansByFilter(ctx, serviceTypeID, "future", "sort_date")
+}
+
+// fetchPastPlans is fetchPlansByFilter for the "past" tab - most recent
+// first ("-sort_date"), since browsing backward from "what just happened"
+// is the far more common way to look for a specific past service than
+// starting from the oldest plan this org has ever had.
+func fetchPastPlans(ctx context.Context, serviceTypeID string) ([]pco.PlanData, error) {
+	return fetchPlansByFilter(ctx, serviceTypeID, "past", "-sort_date")
+}
+
+// filterUpcomingPlans keeps plans whose title, dates, or local at-a-glance
+// note (see plan_notes/GetPlanNote) contain search (case-insensitive); ""
+// matches everything. Dates is included in the haystack because a plan
+// without a custom title - common, PCO defaults to just showing the date -
+// would otherwise be unsearchable by the only text actually visible for it
+// in the list. notes maps plan id -> note text (see
+// scheduling.Store.ListPlanNotesForServiceType); a nil/empty map (no notes
+// saved for this service type, or the lookup failed) just means nothing
+// extra matches beyond title/dates, same as before notes existed - this is
+// shared by both the upcoming and past tabs (see combinedPlansForServiceType),
+// since a note is exactly the kind of thing useful for finding a specific
+// service either way, past or future.
+func filterUpcomingPlans(plans []pco.PlanData, search string, notes map[string]string) []pco.PlanData {
 	search = strings.ToLower(strings.TrimSpace(search))
 	if search == "" {
 		return plans
@@ -132,7 +201,7 @@ func filterUpcomingPlans(plans []pco.PlanData, search string) []pco.PlanData {
 
 	filtered := make([]pco.PlanData, 0, len(plans))
 	for _, plan := range plans {
-		haystack := strings.ToLower(plan.Attributes.Title + " " + plan.Attributes.Dates)
+		haystack := strings.ToLower(plan.Attributes.Title + " " + plan.Attributes.Dates + " " + notes[plan.ID])
 		if strings.Contains(haystack, search) {
 			filtered = append(filtered, plan)
 		}
@@ -171,21 +240,35 @@ func paginateUpcomingPlans(filtered []pco.PlanData, page int) (pageOfPlans []pco
 }
 
 // combinedPlansForServiceType is the Build page's plan-picker source: fetch
-// once, filter by search, paginate, and only then compute each shown row's
-// song-lineup status (planStatus, in sets.go) and team status (rosterStatus,
-// in rosters.go) - each of those is its own local/PCO lookup, so doing it
-// per-row only for the up-to-buildPlansPageSize rows actually on screen
-// (instead of for every upcoming plan, as the previous unpaginated version
-// did) is the whole point of paginating server-side rather than just
-// hiding rows client-side. Returns the clamped page actually shown
-// alongside the total page count.
-func (sc *SchedulingController) combinedPlansForServiceType(ctx context.Context, organizationID, serviceTypeID, search string, page int) (rows []views.PlanRow, currentPage int, totalPages int, errMsg string) {
-	plans, err := fetchUpcomingPlans(ctx, serviceTypeID)
+// once (past's own filter/order when past is true - see fetchPastPlans -
+// otherwise the existing upcoming behavior, unchanged), filter by search,
+// paginate, and only then compute each shown row's song-lineup status
+// (planStatus, in sets.go), team status (rosterStatus, in rosters.go), and
+// local note (see plan_notes/GetPlanNote) - each of those is its own
+// local/PCO lookup, so doing it per-row only for the up-to-
+// buildPlansPageSize rows actually on screen (instead of for every plan,
+// as the previous unpaginated version did) is the whole point of
+// paginating server-side rather than just hiding rows client-side. Notes
+// are the one exception - fetched in bulk for the whole service type
+// (ListPlanNotesForServiceType) up front, before paginating, since search
+// needs to match against every plan's note, not just the page actually
+// shown. Returns the clamped page actually shown alongside the total page
+// count.
+func (sc *SchedulingController) combinedPlansForServiceType(ctx context.Context, organizationID, serviceTypeID, search string, page int, past bool) (rows []views.PlanRow, currentPage int, totalPages int, errMsg string) {
+	fetch := fetchUpcomingPlans
+	if past {
+		fetch = fetchPastPlans
+	}
+	plans, err := fetch(ctx, serviceTypeID)
 	if err != nil {
 		return nil, 1, 1, err.Error()
 	}
 
-	filtered := filterUpcomingPlans(plans, search)
+	// Best-effort: a failed notes lookup just means search/display fall
+	// back to no notes for this render, not a broken plan picker.
+	notes, _ := sc.store.ListPlanNotesForServiceType(ctx, organizationID, serviceTypeID)
+
+	filtered := filterUpcomingPlans(plans, search, notes)
 	pageOfPlans, page, totalPages := paginateUpcomingPlans(filtered, page)
 
 	rows = make([]views.PlanRow, len(pageOfPlans))
@@ -194,6 +277,7 @@ func (sc *SchedulingController) combinedPlansForServiceType(ctx context.Context,
 			ID:           plan.ID,
 			Title:        plan.Attributes.Title,
 			Dates:        plan.Attributes.Dates,
+			Note:         notes[plan.ID],
 			SetStatus:    sc.planStatus(ctx, organizationID, serviceTypeID, plan.ID),
 			RosterStatus: sc.rosterStatus(ctx, organizationID, serviceTypeID, plan.ID),
 		}
@@ -246,10 +330,12 @@ func (sc *SchedulingController) BuildPlanPage(c *fiber.Ctx) error {
 		rosterData = sc.buildRosterBuilderData(ctx, orgID, serviceTypeID, planID)
 		setData.ServiceTypeID, setData.PlanID = serviceTypeID, planID
 		setData.PlanTitle, setData.PlanDates = rosterData.PlanTitle, rosterData.PlanDates
+		setData.ReadOnly = rosterData.ReadOnly
 	} else {
 		setData = sc.buildSetBuilderData(ctx, orgID, serviceTypeID, planID)
 		rosterData.ServiceTypeID, rosterData.PlanID = serviceTypeID, planID
 		rosterData.PlanTitle, rosterData.PlanDates = setData.PlanTitle, setData.PlanDates
+		rosterData.ReadOnly = setData.ReadOnly
 	}
 
 	return render(c, views.BuildPlan(personName, orgName, setData, rosterData, activeTab))

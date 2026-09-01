@@ -111,7 +111,9 @@ templ songPublishPanelLazyOOB(data SetBuilderData) {
 
 templ songPublishPanelContent(data SetBuilderData) {
 	<h3>Publish Songs</h3>
-	if len(data.SetSongs) > 0 || data.PendingDeleteCount > 0 {
+	if data.ReadOnly {
+		<p class="muted">This plan has already happened - shown read-only, no Publish/Discard actions.</p>
+	} else if len(data.SetSongs) > 0 || data.PendingDeleteCount > 0 {
 		if data.PendingDeleteCount > 0 {
 			<div class="warning">
 				{ fmt.Sprintf("%d song(s) removed/replaced here are still live in Planning Center - publishing will delete them there too.", data.PendingDeleteCount) }
@@ -211,7 +213,9 @@ templ rosterPublishPanelLazyOOB(data RosterBuilderData) {
 
 templ rosterPublishPanelContent(data RosterBuilderData) {
 	<h3>Publish Team</h3>
-	if data.UnpublishedCount > 0 || data.PendingDeleteCount > 0 || len(data.Positions) > 0 {
+	if data.ReadOnly {
+		<p class="muted">This plan has already happened - shown read-only, no Publish/Discard actions.</p>
+	} else if data.UnpublishedCount > 0 || data.PendingDeleteCount > 0 || len(data.Positions) > 0 {
 		if data.PendingDeleteCount > 0 {
 			<div class="warning">
 				{ fmt.Sprintf("%d assignment(s) removed here are still live in Planning Center - publishing will remove them there too.", data.PendingDeleteCount) }
