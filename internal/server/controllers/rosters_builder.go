@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"pco-assistant/internal/scheduling"
@@ -268,24 +269,43 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 	// kept alongside it - PositionGroupView.TeamPositionID needs this same
 	// resolved id so the roster tab's "+ Add eligible person" quick-add can
 	// post straight at a position without asking the user to pick it again.
-	candidatesByGroup := make([][]pco.PersonTeamPositionAssignmentData, len(groups))
+	//
+	// positionIDs is resolved first, sequentially - positionID's lazy
+	// per-team cache (positionIDsByTeam) isn't safe for concurrent map
+	// writes, and it's normally a cache hit anyway (a handful of distinct
+	// teams). The actual per-group PCO fetch is independent of every other
+	// group, so it fans out via runConcurrently instead of paying each
+	// group's round trip serially - see pco-api-risks.md's concurrency
+	// mitigation. candidatesByGroup[i] is each goroutine's own slice index,
+	// so no lock is needed for these writes.
 	positionIDs := make([]string, len(groups))
+	for i, g := range groups {
+		positionIDs[i] = positionID(g.TeamID, g.TeamPositionName)
+	}
+
+	candidatesByGroup := make([][]pco.PersonTeamPositionAssignmentData, len(groups))
+	groupIndexes := make([]int, len(groups))
+	for i := range groups {
+		groupIndexes[i] = i
+	}
+	runConcurrently(groupIndexes, func(i int) {
+		posID := positionIDs[i]
+		if posID == "" {
+			return
+		}
+		people, err := pco.GetPersonTeamPositionAssignments(ctx, groups[i].TeamID, posID, nil)
+		if err != nil {
+			return // best-effort - one position's candidate pool failing doesn't sink the page
+		}
+		candidatesByGroup[i] = people.Data
+	})
+
 	relevantPersonIDs := map[string]bool{}
 	for _, ra := range assignments {
 		relevantPersonIDs[ra.PersonID] = true
 	}
-	for i, g := range groups {
-		posID := positionID(g.TeamID, g.TeamPositionName)
-		positionIDs[i] = posID
-		if posID == "" {
-			continue
-		}
-		people, err := pco.GetPersonTeamPositionAssignments(ctx, g.TeamID, posID, nil)
-		if err != nil {
-			continue // best-effort - one position's candidate pool failing doesn't sink the page
-		}
-		candidatesByGroup[i] = people.Data
-		for _, pa := range people.Data {
+	for _, candidates := range candidatesByGroup {
+		for _, pa := range candidates {
 			if pa.Relationships.Person.Data != nil {
 				relevantPersonIDs[pa.Relationships.Person.Data.ID] = true
 			}
@@ -298,12 +318,23 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 	}
 	names := personNameMapForIDs(ctx, relevantIDs)
 
+	// One GetBlockouts call per relevant person, with no PCO-side batch
+	// option: confirmed live that this endpoint (services/v2/people/{id}/
+	// blockouts) is nested per-person with can_query_by limited to
+	// group_identifier, unlike People#index's where[id]. Fanned out
+	// concurrently instead, guarded by blockoutsMu since every goroutine
+	// writes into the same map.
 	blockoutsByPerson := map[string][]pco.BlockoutData{}
-	for id := range relevantPersonIDs {
-		if bo, err := pco.GetBlockouts(ctx, id, &pco.BlockoutsParams{Filter: "future"}); err == nil {
-			blockoutsByPerson[id] = bo.Data
+	var blockoutsMu sync.Mutex
+	runConcurrently(relevantIDs, func(id string) {
+		bo, err := pco.GetBlockouts(ctx, id, &pco.BlockoutsParams{Filter: "future"})
+		if err != nil {
+			return
 		}
-	}
+		blockoutsMu.Lock()
+		blockoutsByPerson[id] = bo.Data
+		blockoutsMu.Unlock()
+	})
 
 	schedulePreferenceFor := func(candidates []pco.PersonTeamPositionAssignmentData, personID string) string {
 		for _, pa := range candidates {
@@ -315,31 +346,75 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 	}
 
 	// crossTeamAssignmentsThisWeek(personID, planDate) is identical
-	// everywhere a person appears, regardless of which group is asking,
-	// so it's memoized once per person here rather than recomputed per
-	// (person, group) pair - a person eligible for several positions
-	// otherwise triggers the same PCO call once per position. See
-	// pco-api-risks.md's mitigation #1. otherAssignmentDates is scoped to
-	// a specific (team, position) slot, so it's keyed on that instead.
-	crossTeamCache := map[string][]string{}
-	crossTeamWarningsFor := func(personID string) []string {
-		if labels, ok := crossTeamCache[personID]; ok {
-			return labels
+	// everywhere a person appears, regardless of which group is asking, so
+	// it's fetched once per person rather than recomputed per (person,
+	// group) pair - a person eligible for several positions otherwise
+	// triggers the same PCO call once per position. otherAssignmentDates is
+	// scoped to a specific (team, position) slot, so it's keyed on that
+	// instead. See pco-api-risks.md's mitigation #1 (the dedup) and its
+	// concurrency mitigation (the fan-out below).
+	//
+	// Every key either loop needs is collected up front in this pass -
+	// mirroring the assigned/candidates walk below, minus the "already
+	// assigned in this group" skip (a candidate who turns out to be
+	// assigned just means one warmed-but-unread cache entry, harmless) -
+	// so both caches can be filled by a bounded concurrent fetch instead of
+	// a live PCO call on every miss inside the sequential view-building
+	// loop that follows. That loop below only ever reads these two maps.
+	type otherDatesKey struct{ personID, teamID, teamPositionName string }
+	crossTeamPersonIDs := map[string]bool{}
+	otherDatesKeys := map[otherDatesKey]bool{}
+	if !planDate.IsZero() {
+		for i, g := range groups {
+			for _, ra := range g.Assignments {
+				crossTeamPersonIDs[ra.PersonID] = true
+				if schedulePreferenceFor(candidatesByGroup[i], ra.PersonID) != "" {
+					otherDatesKeys[otherDatesKey{ra.PersonID, g.TeamID, g.TeamPositionName}] = true
+				}
+			}
+			for _, pa := range candidatesByGroup[i] {
+				if pa.Relationships.Person.Data == nil {
+					continue
+				}
+				personID := pa.Relationships.Person.Data.ID
+				crossTeamPersonIDs[personID] = true
+				if pa.Attributes.SchedulePreference != "" {
+					otherDatesKeys[otherDatesKey{personID, g.TeamID, g.TeamPositionName}] = true
+				}
+			}
 		}
-		labels := crossTeamAssignmentsThisWeek(ctx, personID, planDate, planID)
-		crossTeamCache[personID] = labels
-		return labels
 	}
 
+	crossTeamPersonIDList := make([]string, 0, len(crossTeamPersonIDs))
+	for id := range crossTeamPersonIDs {
+		crossTeamPersonIDList = append(crossTeamPersonIDList, id)
+	}
+	crossTeamCache := map[string][]string{}
+	var crossTeamMu sync.Mutex
+	runConcurrently(crossTeamPersonIDList, func(personID string) {
+		labels := crossTeamAssignmentsThisWeek(ctx, personID, planDate, planID)
+		crossTeamMu.Lock()
+		crossTeamCache[personID] = labels
+		crossTeamMu.Unlock()
+	})
+	crossTeamWarningsFor := func(personID string) []string {
+		return crossTeamCache[personID]
+	}
+
+	otherDatesKeyList := make([]otherDatesKey, 0, len(otherDatesKeys))
+	for k := range otherDatesKeys {
+		otherDatesKeyList = append(otherDatesKeyList, k)
+	}
 	otherDatesCache := map[string][]time.Time{}
+	var otherDatesMu sync.Mutex
+	runConcurrently(otherDatesKeyList, func(k otherDatesKey) {
+		dates := otherAssignmentDates(ctx, k.personID, k.teamID, k.teamPositionName, planID)
+		otherDatesMu.Lock()
+		otherDatesCache[k.personID+"|"+k.teamID+"|"+k.teamPositionName] = dates
+		otherDatesMu.Unlock()
+	})
 	otherAssignmentDatesFor := func(personID, teamID, teamPositionName string) []time.Time {
-		key := personID + "|" + teamID + "|" + teamPositionName
-		if dates, ok := otherDatesCache[key]; ok {
-			return dates
-		}
-		dates := otherAssignmentDates(ctx, personID, teamID, teamPositionName, planID)
-		otherDatesCache[key] = dates
-		return dates
+		return otherDatesCache[personID+"|"+teamID+"|"+teamPositionName]
 	}
 
 	for i, g := range groups {

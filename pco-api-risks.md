@@ -80,16 +80,12 @@ actually PCO just cut the app off partway through.
 
 1. ~~**Dedupe cross-team/frequency checks per person, not per (person, group)
    pair**~~ - done in `rosters_builder.go`'s `buildRosterBuilderData`:
-   `crossTeamAssignmentsThisWeek` is now memoized per personID
-   (`crossTeamWarningsFor`) and `otherAssignmentDates` per
-   `(personID, teamID, teamPositionName)` (`otherAssignmentDatesFor`), both
-   as lazily-filled maps scoped to one `buildRosterBuilderData` call -
-   cheapest fix, directly attacks the worst multiplier.
-   `crossTeamAssignmentsThisWeek(personID, planDate)`'s result is identical
-   everywhere a person appears; memoize it once per `buildRosterBuilderData`
-   call (a `map[string][]string` keyed by personID, filled lazily) instead
-   of recomputing per group. `otherAssignmentDates` is per-position so needs
-   `(personID, teamID, positionName)` as the key, same idea.
+   `crossTeamAssignmentsThisWeek` is now fetched once per personID and
+   `otherAssignmentDates` once per `(personID, teamID, teamPositionName)`
+   instead of recomputing per group - cheapest fix, directly attacks the
+   worst multiplier. (Originally landed as lazily-filled memoization maps;
+   superseded by the concurrency mitigation below, which needed every key
+   collected up front anyway to fan the fetch out.)
 2. ~~**Batch `personNameMapForIDs`**~~ - confirmed live against the signed-in
    dev PCO account that People#index's `can_query_by` includes `id` and a
    comma-joined `where[id]=1,2,3` returns exactly those people in one call.
@@ -103,18 +99,49 @@ actually PCO just cut the app off partway through.
    when the user actually clicks it, instead of both on every
    `BuildPlanPage` hit - halves the worst case immediately for the common
    "just checking the songs" visit.
-4. **Add a client-side rate-limit guard in `go-pco`** - read
+4. **Will not do.** Add a client-side rate-limit guard in `go-pco` - read
    `X-PCO-API-Request-Rate-Count`/`-Limit` off responses and self-throttle
    (or at minimum surface `Retry-After` on a 429 as a real, visible error
    instead of silently degrading), plus a sane `http.Client{Timeout: ...}`
    so one hung call can't hang the whole render. This is a `go-pco` change,
-   not just this app.
+   not just this app. Declined explicitly - revisit only if a future
+   symptom (real 429s in practice, a hung render) points back at it.
 5. **A short-lived in-process cache** (or reuse the existing DB-cache
    pattern from `song_arrangement_cache`) for things that don't change
    mid-session - team/position lists, team member names - so repeated
    add/remove renders on the same plan don't refetch identical data every
-   time.
+   time. Not started - mostly helps *repeat* renders on an already-open
+   plan (the add/remove churn noted above), not first page load.
+6. ~~**Bounded concurrency for independent PCO calls**~~ - not on the
+   original list; added once #1/#2 landed and first-load time was still
+   ~9s. #1 and #2 cut call *count*; neither touched the fact that every
+   loop in `build.go`/`sets_builder.go`/`rosters_builder.go` calls PCO
+   **sequentially** (`go-pco`'s `NewRequest` is a plain synchronous
+   `http.Client.Do` - no batching, no concurrency), so a ~100-200-call
+   chain at 100-400ms each stays a multi-second wait regardless of how
+   many of those calls are duplicates. Added `runConcurrently` (bounded to
+   `pcoFanOutLimit` = 10 goroutines at once, `internal/server/controllers/
+   concurrency.go`) and fanned out every independent per-item PCO loop
+   through it: `rosters_builder.go`'s per-group candidate-pool fetch, its
+   per-person `GetBlockouts` fetch (confirmed live this endpoint has no
+   batch/`where[id]` option - `services/v2/people/{id}/blockouts`'
+   `can_query_by` is just `group_identifier` - so concurrency is the only
+   lever available here, unlike #2's fix for `personNameMapForIDs`), its
+   cross-team/other-dates warm-up (now a prefetch-then-fan-out pass instead
+   of lazy per-call memoization), and `sets_builder.go`'s
+   `renderServiceOrder` (per-song `GetItemNotes`/arrangement resolve).
+   Doesn't reduce PCO's own rate-limit exposure (same call count within
+   the same ~20s window, just compressed in time) but directly attacks
+   wall-clock load time, which #1/#2 didn't.
 
-Recommended starting point: **#1** - a small, contained diff in
-`rosters_builder.go`/`rosters_warnings.go`, no new infra, removes the
-largest share of redundant calls, should visibly cut load time on its own.
+Rate-limit note on #6: PCO's 100-req/20s ceiling counts calls within a
+rolling window regardless of how bunched-up they are - a page load that
+already finished (sequentially or concurrently) within under ~9s was
+already inside one window either way, so fanning it out doesn't add new
+rate-limit exposure; if anything, finishing sooner narrows the chance of
+overlapping with the *next* request's own calls.
+
+Recommended next: **#3** (lazy-load the inactive tab) if first-load time
+is still a concern after #6 lands - #5 mainly helps repeat edits on an
+already-open plan, not first load, so it's lower priority for that specific
+complaint. #4 is explicitly off the table for now (see above).
