@@ -127,6 +127,15 @@ which one is open, plus an at-a-glance card for whichever tab *isn't* open -
 the other tab's actual song order or who's filling each position, not just
 a count.
 
+**Past plans & notes** - the Build page's plan picker has an Upcoming/Past
+tab: since every set/roster ever drafted stays in this app's own database
+indefinitely (nothing deletes it after Publish), a plan that's already
+happened is still browsable here, just read-only (no Publish/Discard/
+PCO-sync actions) once opened. Every plan in the list, past or upcoming,
+can also carry a small local-only note ("the one with the guest speaker")
+editable right in the list - purely for finding a specific service at a
+glance, matched by the picker's own search box alongside title and date.
+
 **Run sheet** - a one-click printable page (a Print button using the
 browser's own print-to-PDF, no separate PDF library) combining the full
 order of service, each song's key/tempo/length and item notes, and the
