@@ -22,6 +22,34 @@ func hasAnyNoteContent(notes []SongNoteView) bool {
 	return false
 }
 
+// teamGroupHasAssignments reports whether at least one position in a
+// team's group (see groupPositionsByTeam, roster_builder.templ) has
+// anyone assigned - RunSheet uses this to skip a whole team heading when
+// every one of its positions is unassigned, the same "no gaps" treatment
+// it gives individual positions below.
+func teamGroupHasAssignments(group teamPositionGroup) bool {
+	for _, item := range group.Positions {
+		if len(item.Pos.Assigned) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// anyPositionAssigned reports whether any position in the roster has at
+// least one person assigned - RunSheet uses this to tell "no positions
+// configured" apart from "positions configured, but nobody's on any of
+// them yet" once unassigned positions are filtered out of the printed
+// roster.
+func anyPositionAssigned(positions []PositionGroupView) bool {
+	for _, pos := range positions {
+		if len(pos.Assigned) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // RunSheet is the single-page, print-first "day-of" run sheet - see
 // RunSheetPage (controllers/run_sheet.go) for the feature's framing. Pure
 // view over SetBuilderData/RosterBuilderData, the same data
@@ -128,26 +156,41 @@ templ RunSheet(setData SetBuilderData, rosterData RosterBuilderData) {
 					<h2>Roster</h2>
 					if len(rosterData.Positions) == 0 {
 						<p class="muted">No positions configured for this plan.</p>
+					} else if !anyPositionAssigned(rosterData.Positions) {
+						<p class="muted">No one assigned yet.</p>
 					} else {
-						<div class="run-sheet-roster">
-							for _, pos := range rosterData.Positions {
-								<div class="run-sheet-position">
-									<h3>{ pos.TeamName } / { pos.TeamPositionName }</h3>
-									if len(pos.Assigned) > 0 {
-										<ul class="run-sheet-assigned">
-											for _, a := range pos.Assigned {
-												<li>{ a.Name }</li>
+						<!--
+							Grouped by team like the roster builder page (see
+							groupPositionsByTeam, roster_builder.templ) instead of a flat
+							list of "Team / Position" headings - and, unlike the builder,
+							unassigned positions are left off entirely: the run sheet is
+							meant to show who's actually serving, not the gaps.
+						-->
+						for _, group := range groupPositionsByTeam(rosterData.Positions) {
+							if teamGroupHasAssignments(group) {
+								<div class="run-sheet-team-group">
+									<h3 class="run-sheet-team-heading">{ group.TeamName }</h3>
+									<div class="run-sheet-roster">
+										for _, item := range group.Positions {
+											{{ pos := item.Pos }}
+											if len(pos.Assigned) > 0 {
+												<div class="run-sheet-position">
+													<h4>{ pos.TeamPositionName }</h4>
+													<ul class="run-sheet-assigned">
+														for _, a := range pos.Assigned {
+															<li>{ a.Name }</li>
+														}
+													</ul>
+													if open := pos.Quantity - len(pos.Assigned); open > 0 {
+														<p class="run-sheet-short-handed">{ fmt.Sprintf("%d more needed", open) }</p>
+													}
+												</div>
 											}
-										</ul>
-									} else {
-										<p class="muted">Unassigned</p>
-									}
-									if open := pos.Quantity - len(pos.Assigned); open > 0 {
-										<p class="run-sheet-short-handed">{ fmt.Sprintf("%d more needed", open) }</p>
-									}
+										}
+									</div>
 								</div>
 							}
-						</div>
+						}
 					}
 				</section>
 			</div>
