@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"strings"
+	"sync"
 
 	"pco-assistant/internal/scheduling"
 	"pco-assistant/internal/server/middleware"
@@ -180,6 +181,23 @@ func (sc *SchedulingController) PositionPreferencesPage(c *fiber.Ctx) error {
 // an error. Like fetchAllSongs, it returns whatever it managed to fetch even
 // after a mid-walk error on one team, since a partial list beats an empty
 // one.
+//
+// Each team's GetTeamPositions call is independent of every other team's, so
+// they're fanned out via scheduling.RunConcurrently instead of paying every
+// team's round trip one at a time - same reasoning as build.go's
+// combinedPlansForServiceType. results is pre-sized and index-matched to
+// teams.Data (one slot per team, written only by that team's own goroutine,
+// so no lock is needed for the writes themselves), which is what keeps the
+// final group order matching teams.Data's own OrderBy: "name" order despite
+// running concurrently; a nil slot means that team's lookup failed and is
+// dropped when results is flattened into groups below, same as the old
+// sequential loop's `continue`. "first" error is no longer well-defined once
+// teams are queried concurrently, so firstErr here is really just "an" error
+// - whichever team's failure is first to reach errOnce.Do - not necessarily
+// the one that would have failed first in teams.Data's own order; that's a
+// fine trade for a caller that only ever surfaces it as a single generic
+// "loading teams from Planning Center" message anyway (see
+// PositionPreferencesPage).
 func fetchTeamPositions(ctx context.Context, serviceTypeID string) ([]views.PositionGroup, error) {
 	if serviceTypeID == "" {
 		return nil, nil
@@ -190,15 +208,21 @@ func fetchTeamPositions(ctx context.Context, serviceTypeID string) ([]views.Posi
 		return nil, err
 	}
 
-	var groups []views.PositionGroup
+	results := make([]*views.PositionGroup, len(teams.Data))
 	var firstErr error
-	for _, team := range teams.Data {
+	var errOnce sync.Once
+
+	indexes := make([]int, len(teams.Data))
+	for i := range teams.Data {
+		indexes[i] = i
+	}
+
+	scheduling.RunConcurrently(indexes, func(i int) {
+		team := teams.Data[i]
 		positions, err := pco.GetTeamPositions(ctx, team.ID, &pco.TeamPositionsParams{OrderBy: "name"})
 		if err != nil {
-			if firstErr == nil {
-				firstErr = err
-			}
-			continue
+			errOnce.Do(func() { firstErr = err })
+			return
 		}
 
 		group := views.PositionGroup{TeamID: team.ID, TeamName: team.Attributes.Name}
@@ -209,7 +233,17 @@ func fetchTeamPositions(ctx context.Context, serviceTypeID string) ([]views.Posi
 				TeamPositionName: pos.Attributes.Name,
 			})
 		}
-		groups = append(groups, group)
+		// results[i] is this goroutine's own, exclusive index into a
+		// pre-sized slice - no lock needed (see RunConcurrently's doc
+		// comment).
+		results[i] = &group
+	})
+
+	var groups []views.PositionGroup
+	for _, g := range results {
+		if g != nil {
+			groups = append(groups, *g)
+		}
 	}
 
 	return groups, firstErr
