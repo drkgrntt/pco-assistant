@@ -87,6 +87,19 @@
   width: 100%;
 }
 
+/* .replace-form select's own max-width:8rem (builder-rows.css) exists for
+   the cramped table-row context, where the row-menu next to it needs the
+   room. In here the form is already the full sidebar width (see
+   .build-detail-actions .replace-form above) and the replace button
+   (.replace-form button, builder-rows.css) is flex-shrink:0/shrink-to-
+   content, so without this override the select stayed pinned at 8rem and
+   left a dead gap between it and the button instead of filling the
+   space its own flex:1 1 auto already asks for. Table row's own 8rem cap
+   is untouched - this only overrides it inside .build-detail-actions. */
+.build-detail-actions .replace-form select {
+  max-width: none;
+}
+
 .build-detail-actions button {
   display: flex;
   align-items: center;
