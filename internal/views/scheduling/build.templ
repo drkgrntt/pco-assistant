@@ -240,18 +240,18 @@ templ BuildPlan(personName, organizationName string, setData SetBuilderData, ros
 				@SongDetailCards(setData, activeTab == "team")
 				@RosterPublishPanel(rosterData, activeTab != "team")
 				@PersonDetailCards(rosterData, activeTab != "team")
-				<div class="build-glance-card" id="build-glance-team" hidden?={ activeTab == "team" }>
+				@glanceCardShell("build-glance-team", activeTab == "team") {
 					<h3>Team, at a glance</h3>
 					@RosterStatusSummary(rosterData)
 					@TeamGlanceList(rosterData.Positions)
 					<button type="button" onclick="toggleBuildTab('team')">Switch to Team</button>
-				</div>
-				<div class="build-glance-card" id="build-glance-songs" hidden?={ activeTab != "team" }>
+				}
+				@glanceCardShell("build-glance-songs", activeTab != "team") {
 					<h3>Songs, at a glance</h3>
 					@SongStatusSummary(setData)
 					@SongGlanceList(setData.ServiceOrder)
 					<button type="button" onclick="toggleBuildTab('songs')">Switch to Songs</button>
-				</div>
+				}
 			</aside>
 		</div>
 	}
