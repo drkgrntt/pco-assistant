@@ -31,10 +31,10 @@ func TestGroupPositionsByTeamGroupsContiguousRuns(t *testing.T) {
 }
 
 // TestGroupPositionsByTeamPreservesOriginalIndex confirms each position
-// keeps its index into the original slice - collapsibleCard's
-// #position-group-<index> id (and the open/closed memory keyed off it,
-// see toggleCollapse in scheduling.js) has to stay stable regardless of
-// which team group a position ends up nested under.
+// keeps its index into the original slice - positionGroupItem.Index, kept
+// for callers that care about original ordering (each position's own card
+// id is content-derived instead, see PositionGroupElementID, so it no
+// longer depends on this index staying stable across a re-render).
 func TestGroupPositionsByTeamPreservesOriginalIndex(t *testing.T) {
 	positions := []PositionGroupView{
 		positionGroupView("band", "Band", "Drums"),

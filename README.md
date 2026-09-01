@@ -11,7 +11,7 @@ system. Everything the app knows about songs, people, plans, teams, and
 positions is read live from your PCO account; this app only stores the
 domain data PCO has no concept of (relationships, roles, draft
 sets/rosters) and syncs it back to real PCO records when you publish.
-Every PCO organization gets a 14-day free trial automatically the first
+Every PCO organization gets a 30-day free trial automatically the first
 time it signs in (a row in `organizations` - name, `status`, `plan`,
 Stripe ids), enforced on every request by `RequireActiveOrganization`.
 Once the trial ends (or any time before that), `/billing` offers the two
@@ -126,6 +126,15 @@ but a sidebar keeps both tabs' Publish/Discard controls available no matter
 which one is open, plus an at-a-glance card for whichever tab *isn't* open -
 the other tab's actual song order or who's filling each position, not just
 a count.
+
+**Past plans & notes** - the Build page's plan picker has an Upcoming/Past
+tab: since every set/roster ever drafted stays in this app's own database
+indefinitely (nothing deletes it after Publish), a plan that's already
+happened is still browsable here, just read-only (no Publish/Discard/
+PCO-sync actions) once opened. Every plan in the list, past or upcoming,
+can also carry a small local-only note ("the one with the guest speaker")
+editable right in the list - purely for finding a specific service at a
+glance, matched by the picker's own search box alongside title and date.
 
 **Run sheet** - a one-click printable page (a Print button using the
 browser's own print-to-PDF, no separate PDF library) combining the full

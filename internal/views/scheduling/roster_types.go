@@ -11,6 +11,8 @@ type RosterBuilderData struct {
 	PlanTitle     string
 	PlanDates     string
 	ErrMsg        string
+	// ReadOnly - see SetBuilderData.ReadOnly, which this mirrors exactly.
+	ReadOnly bool
 	// PublishMsg is a status line for the last "Publish to Planning Center"
 	// attempt, separate from ErrMsg so a partial publish can show both what
 	// succeeded and what didn't - see SetBuilderData.PublishMsg.
@@ -59,7 +61,7 @@ type RosterBuilderData struct {
 	// SetBuilderData.SongPairPrompt. Rosters have no song-order-style
 	// "chained after" concept, so "previous" here means whoever was most
 	// recently added to this roster (by creation order) before this add -
-	// see AddRosterAssignment (rosters.go), the only handler that ever
+	// see AddRosterAssignment (rosters_detail.go), the only handler that ever
 	// sets this.
 	PersonPairPrompt *PersonPairPromptView
 }
@@ -100,10 +102,13 @@ type AssignmentView struct {
 	PersonID string
 	Name     string
 	Status   string
-	// TeamName/TeamPositionName repeat the values already on this
+	// TeamID/TeamName/TeamPositionName repeat the values already on this
 	// assignment's own PositionGroupView - carried here too so the person
 	// detail sidebar card (person_detail_card.templ) can say which position
-	// it's showing without needing the group it came from.
+	// it's showing, and target that exact group's own card
+	// (PositionGroupElementID) on Remove, without needing the group it
+	// came from.
+	TeamID           string
 	TeamName         string
 	TeamPositionName string
 	// Published is true once this assignment has been pushed to Planning

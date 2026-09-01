@@ -13,6 +13,12 @@ available where noted, and deleted once it's actually being built.
 
 ## Vision / positioning
 
+**Naming**: "PCO Assistant" is a placeholder/working title, not a final
+product name. "Resonance" is the current front-runner if/when it's time
+to name the product for real, with "Preflight" and "Cadence" as other
+candidates under consideration. Not decided - just noted so it isn't
+re-litigated from scratch later.
+
 PCO Assistant is a **supplement** to Planning Center Services, not a
 replacement - it only exists because of the gaps PCO leaves for worship
 scheduling: song relationships, avoid-pairing/mentorship-aware team
@@ -237,7 +243,53 @@ pattern as `song_tags`/`song_relationships`:**
   ever be *shown*, not checked - flagging an actual mismatch ("Sarah leads,
   arrangement's in C, her note says A") needs the note to be a structured
   key rather than prose, worth doing only if surfacing alone doesn't feel
-  like enough once that ships.
+  like enough once that ships. See **Song vocal range (relative to key)**
+  below - it's the structured version of this same idea, one axis wider
+  (a range, not a single key) and paired with an actual per-person range
+  to check against instead of a free-text note.
+- **Song vocal range (relative to key)** - the natural next step past the
+  per-person key fit idea above: instead of a free-text note about
+  whether a key works for someone, actually know the song's sung range
+  and compare it against a person's own vocal range (see People, below)
+  to flag a real mismatch automatically, not just show a note someone has
+  to read. Two real design pieces, not one:
+  - **A key engine.** A song's range only means something relative to the
+    key it was measured in, so it has to be stored as an interval
+    (semitone offsets from a reference key), then transposed using the
+    same pitch-class math the key-transition warning already has
+    (`parseKeyPitchClass` in `sets_builder.go`) to get the effective
+    range for whatever key the arrangement is actually in right now.
+    That reuses existing logic rather than inventing new music-theory
+    code, but it's currently inlined for one warning check - a second
+    consumer is a real reason to factor it into an actual shared "key
+    engine" (canonical pitch-class representation + transposition
+    helper) rather than copy-pasting the parser again.
+  - **Crowdsourced default.** Most directors won't know a song's range
+    offhand and won't want to work it out by ear, so most songs would sit
+    blank forever without some way to pre-fill a guess. If it could be
+    seeded from what *other* organizations have already set for the same
+    song, it could arrive pre-filled instead - not attributed ("Grace
+    Church set this"), just an aggregate suggestion ("this looks like the
+    range" - e.g. the most common range across every org that's set one,
+    normalized through the key engine above so it transposes into
+    whatever key this org's arrangement is in). This is a genuinely new
+    pattern for the app: everything today is org-scoped (see CLAUDE.md's
+    Organization scoping), aside from a couple of deliberately shared
+    vocabulary tables. Doing this for real needs a reliable cross-org
+    join key (CCLI number, not title/artist text, which collides and
+    varies) and a real consent story (opt-in to contribute, never expose
+    which org set what) before it's just "share the data" - the framing
+    that matters here is "is this the range?", not "church X does this,"
+    so the design has to actually earn that framing, not just claim it.
+
+  Together, per-person range and per-song range are the prerequisite for
+  the bigger payoff this keeps pointing at: a **preferred-key** suggestion
+  per person/song pair, and eventually a **vocal range/key matrix** view
+  across a whole team - "who can actually sing this song in this key" at
+  a glance. Worth sequencing as: person range first (small, standalone,
+  useful immediately for "can Mike hit this note" conversations even with
+  zero song data - see People, below), then song range + key engine, then
+  the matrix as a presentation layer over both once they both exist.
 - **Occasion reservation** (Christmas Eve only, baptism/communion-specific) -
   largely already possible today: `song_roles` already has `communion`/
   `baptism` roles (migration 00020), and `song_tag_categories` already
@@ -248,6 +300,25 @@ pattern as `song_tags`/`song_relationships`:**
 
 ## People
 
+- **Vocal range per vocalist** - lets the app know what someone can
+  actually sing, not just whether PCO says they're eligible for a
+  position. Simplest as a person-level field, not position-level: PCO's
+  position eligibility already answers *who can serve* a position, this
+  is a separate axis of *what range they're comfortable in*, and a
+  vocalist's range doesn't change depending on which team/service
+  they're on, so storing it once per person covers it - no need to scope
+  it per-position or re-enter it per team. New local storage: a
+  lowest/highest comfortable note is enough for a first pass, but it
+  needs to be stored as something transposable (a pitch-class/semitone
+  pair, not a display label) from day one so it can actually be compared
+  against a song's range once that exists - see **Song vocal range**
+  below, which this is a direct prerequisite for. Step 2, later:
+  reference sound bytes per note, so a director unsure what a "G4" sounds
+  like can just tap and hear it. This doesn't need to be per-org data at
+  all - a single shared static audio sample set (one recorded note per
+  semitone) covers every organization, so it's a one-time asset addition
+  to the app, not a feature that scales with usage or needs its own
+  storage/upload machinery.
 - **First-time-in-this-position pairing** - mirrors the new-song bootstrap
   trick: the first time someone's assigned to a position with no prior
   history there (via the same PCO history call `servingFrequency` already
@@ -327,6 +398,20 @@ pattern as `song_tags`/`song_relationships`:**
   or arrangement to check the roster against. More build than most items
   here - it's a new axis on both sides of the check, not a warning layered
   on data that already exists.
+- **History/analytics dashboard** - a step past the plain browsable
+  past-plans archive (~~shipped~~ as an Upcoming/Past tab in the Build
+  page's plan picker, read-only rendering of existing local sets/rosters -
+  see `issue-plan-archive-and-notes`): an aggregate view over that same
+  history - most-played songs, who's served how often, repetition/serving-
+  frequency trends over a season rather than just per-draft warnings. The
+  underlying computation already exists (the `scheduling` package's
+  repetition/serving-frequency logic already computes per-song/per-person
+  history internally to power the existing warnings), so this is mostly a
+  presentation-layer build - a new page aggregating data that's already
+  being calculated - rather than new tracking. Deliberately deferred out of
+  the past-plans archive build (user chose the smaller browsable-list scope
+  first); worth reconsidering once the archive's been used for a while and
+  there's a concrete sense of what's actually worth aggregating.
 
 ## Run sheet (day-of output)
 
@@ -402,3 +487,14 @@ group - density needs a genuinely new capability/profile axis on both
 people and services with nothing to extend, and the debrief log needs new
 storage plus adjacency-matching logic to resurface a note at the right
 moment, not just store it.
+
+**Vocal range** splits the same way its own writeup does. Per-person range
+is cheap and standalone - one small new table, useful on its own before
+anything else here exists. Per-song range costs more: it needs a real key
+engine factored out of the one-off pitch-class parser the key-transition
+warning already has, and the crowdsourced-default piece is the priciest
+single thing in this file to do properly - the first genuinely cross-org
+data pattern the app would have, needing a reliable join key and an actual
+consent story before it's shippable, not just a schema addition. The
+eventual key matrix is presentation only once both exist, so its cost is
+whatever's left after the two range ideas actually ship.

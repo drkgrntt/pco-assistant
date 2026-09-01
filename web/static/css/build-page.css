@@ -144,3 +144,51 @@ main:has(.build-layout) {
     flex: 0 0 15rem;
   }
 }
+
+/* Backs planNoteSection/PlanNoteFormFragment (build.templ) - the plan
+   builder page's one editable spot for its local at-a-glance note (see
+   plan_notes/GetPlanNote), placed once near the top of the page rather
+   than repeated per row in the plan list or per Songs/Team tab. */
+.plan-note-section {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-block: var(--space-2);
+}
+
+.plan-note-section label {
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--muted);
+}
+
+.plan-note-form {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 1 1 20rem;
+  margin: 0;
+}
+
+.plan-note-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* planNoteSection's read-only rendering (a past plan) - plain text, no
+   input/button, same spot the editable form would otherwise occupy. */
+.plan-note-readonly {
+  margin-block: var(--space-2);
+}
+
+/* planNoteText's rendering in the plan-list row (BuildPlansResults) - the
+   note used to be an inline editable form here (flex: 1 1 100%, pushed
+   onto its own line below the title/badges - the row itself is
+   display:flex; flex-wrap:wrap, see .plan-list li, components/
+   list-item.css); it's plain text now, but keeps the same "own line"
+   placement since a note can still run longer than the space left on the
+   first line. */
+.plan-note-text {
+  flex: 1 1 100%;
+}

@@ -199,6 +199,9 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 		data.PlanTitle = plan.Data.Attributes.Title
 		data.PlanDates = plan.Data.Attributes.Dates
 		planDate = plan.Data.Attributes.SortDate
+		// ReadOnly - see SetBuilderData.ReadOnly (sets_builder.go), which
+		// this mirrors exactly.
+		data.ReadOnly = !planDate.IsZero() && planDate.Before(time.Now())
 	} else {
 		data.ErrMsg = "loading plan from Planning Center: " + err.Error()
 	}
@@ -468,6 +471,7 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 				PersonID:         ra.PersonID,
 				Name:             titleOrID(names, ra.PersonID),
 				Status:           ra.Status,
+				TeamID:           pg.TeamID,
 				TeamName:         pg.TeamName,
 				TeamPositionName: pg.TeamPositionName,
 				Published:        ra.PCOPlanPersonID != "",

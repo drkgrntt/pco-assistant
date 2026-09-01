@@ -2,12 +2,30 @@ package scheduling
 
 import (
 	"fmt"
+	"hash/fnv"
 	"strconv"
 	"strings"
 
 	"pco-assistant/internal/scheduling"
 	"pco-assistant/internal/views/components"
 )
+
+// PositionGroupElementID is the stable HTML id for one position group's
+// card (collapsibleCard, positionGroupCard below) - derived from the
+// group's own (team_id, team_position_name) rather than its index in a
+// full Positions slice, so a single group's card can be targeted by a
+// narrow htmx mutation (rosters_detail.go) without the server having to
+// recompute the *whole* team-sorted Positions list just to learn where
+// this one group would have landed in it. Exported so the controller
+// layer can compute the exact same id its own hx-target attributes (baked
+// into the page at render time) already point at. fnv32a, not a
+// cryptographic hash - this only needs to be stable and collision-free
+// across one plan's small handful of positions, not adversarially safe.
+func PositionGroupElementID(teamID, teamPositionName string) string {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(teamID + "\x00" + teamPositionName))
+	return fmt.Sprintf("position-group-%08x", h.Sum32())
+}
 
 // assignedNamesSummary joins every assigned person's name for display right
 // in a position's own collapsible header - see positionHeading below.
@@ -41,11 +59,12 @@ templ positionHeading(pos PositionGroupView) {
 }
 
 // positionGroupItem pairs one PositionGroupView with its original index in
-// RosterBuilderData.Positions - groupPositionsByTeam preserves this so each
-// position's #position-group-<index> id (collapsibleCard, which
-// toggleCollapse - scheduling.js - uses to remember what's open/closed
-// across this page's htmx swaps) stays exactly what it already was,
-// unaffected by which team's group it's now nested under.
+// RosterBuilderData.Positions - kept for callers/tests that care about
+// original ordering (see groupPositionsByTeam's own tests). Each position's
+// own card id no longer derives from this (see PositionGroupElementID
+// above, which is content-derived instead - stable across a narrow
+// single-group re-render that never recomputes the full, team-sorted
+// Positions list this index is relative to).
 type positionGroupItem struct {
 	Index int
 	Pos   PositionGroupView
@@ -98,82 +117,131 @@ templ RosterBuilderBodyLazy(data RosterBuilderData) {
 	@rosterGlanceLazyOOB(data)
 }
 
+// rosterTop is the roster builder's shared banner block - status chips,
+// existing-conflicts warnings, the "import from Planning Center" banner,
+// and the one-shot pair-relate prompt - broken out into its own
+// addressable fragment (id="roster-top") so a mutation that doesn't touch
+// any specific position (QuickAddPersonRelationship - creating a
+// relationship changes none of Positions' Assigned/Candidates data) can
+// still refresh this without a full #roster-builder-body re-render, the
+// same way songWarnings/songBadges (set_builder.templ) let a narrower
+// set-builder response still push a fresh copy of just their own slice of
+// the page. This is the primary (non-OOB) response for
+// QuickAddPersonRelationship and its own pair-prompt form; every
+// position-scoped mutation (AddRosterAssignment, RemoveRosterAssignment,
+// QuickAddPositionPreference - rosters_detail.go) instead includes it as
+// an out-of-band update via rosterTopOOB below, since their own primary
+// response is a single position group's card.
+templ rosterTop(data RosterBuilderData) {
+	<div id="roster-top">
+		@rosterTopContent(data)
+	</div>
+}
+
+templ rosterTopOOB(data RosterBuilderData) {
+	<div id="roster-top" hx-swap-oob="true">
+		@rosterTopContent(data)
+	</div>
+}
+
+templ rosterTopContent(data RosterBuilderData) {
+	if data.ErrMsg != "" {
+		<p class="error">{ data.ErrMsg }</p>
+	}
+	if data.PublishMsg != "" {
+		<p class="success">{ data.PublishMsg }</p>
+	}
+	@RosterStatusSummary(data)
+	for _, msg := range data.ExistingConflicts {
+		<div class="warning">{ msg }</div>
+	}
+	if data.ReadOnly {
+		<p class="muted">This plan has already happened - shown read-only for reference.</p>
+	}
+	if !data.ReadOnly && data.ImportableAssignmentCount > 0 {
+		@components.ImportBanner(fmt.Sprintf("Looks like this service is already planned in Planning Center - it has %d position(s) filled. Want to import them here so you can reassign or remove people?", data.ImportableAssignmentCount), false) {
+			<form
+				hx-post={ fmt.Sprintf("/scheduling/rosters/%s/%s/revert", data.ServiceTypeID, data.PlanID) }
+				hx-target="#roster-builder-body"
+				hx-swap="outerHTML"
+			>
+				<button type="submit" class="primary">Import from Planning Center</button>
+			</form>
+		}
+	}
+	<!--
+		A one-shot nudge, not a permanent fixture - only ever appears
+		right after AddRosterAssignment finds someone else already on
+		this roster (see views.PersonPairPromptView, and
+		SetBuilderData.SongPairPrompt which this mirrors), and disappears
+		again the moment you do anything else. Lets "just put A and B on
+		the same team, and by the way they work well together" get
+		captured right where it happens, instead of re-picking both
+		people from scratch in the Quick add panel below - which stays
+		around for relating people who aren't both freshly added, or
+		after the fact.
+	-->
+	if !data.ReadOnly && data.PersonPairPrompt != nil {
+		@components.ImportBanner(fmt.Sprintf("Added %q to the team, right after %q - want to remember how these two work together?", data.PersonPairPrompt.NewPersonName, data.PersonPairPrompt.PreviousPersonName), true) {
+			<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/person-relationships", data.ServiceTypeID, data.PlanID) } hx-target="#roster-top" hx-swap="outerHTML">
+				<input type="hidden" name="person_id_a" value={ data.PersonPairPrompt.PreviousPersonID }/>
+				<input type="hidden" name="person_id_b" value={ data.PersonPairPrompt.NewPersonID }/>
+				<label>
+					Relationship
+					<select name="relationship_type">
+						for _, t := range data.PersonRelationshipTypes {
+							<option value={ t.Code } selected?={ t.Code == scheduling.PersonRelationshipWorksWell }>{ t.Label }</option>
+						}
+					</select>
+				</label>
+				<button type="submit" class="primary">Remember this</button>
+			</form>
+		}
+	}
+}
+
 // RosterBuilderBodyContent is the actual content - see
 // SetBuilderBodyContent, which this mirrors, for why it's split out from
 // RosterBuilderBody.
 templ RosterBuilderBodyContent(data RosterBuilderData) {
 	<div id="roster-builder-body">
-		if data.ErrMsg != "" {
-			<p class="error">{ data.ErrMsg }</p>
-		}
-		if data.PublishMsg != "" {
-			<p class="success">{ data.PublishMsg }</p>
-		}
-		@RosterStatusSummary(data)
-		for _, msg := range data.ExistingConflicts {
-			<div class="warning">{ msg }</div>
-		}
-		if data.ImportableAssignmentCount > 0 {
-			@components.ImportBanner(fmt.Sprintf("Looks like this service is already planned in Planning Center - it has %d position(s) filled. Want to import them here so you can reassign or remove people?", data.ImportableAssignmentCount), false) {
-				<form
-					hx-post={ fmt.Sprintf("/scheduling/rosters/%s/%s/revert", data.ServiceTypeID, data.PlanID) }
-					hx-target="#roster-builder-body"
-					hx-swap="outerHTML"
-				>
-					<button type="submit" class="primary">Import from Planning Center</button>
-				</form>
-			}
-		}
+		@rosterTop(data)
 		<!--
-			A one-shot nudge, not a permanent fixture - only ever appears
-			right after AddRosterAssignment finds someone else already on
-			this roster (see views.PersonPairPromptView, and
-			SetBuilderData.SongPairPrompt which this mirrors), and disappears
-			again the moment you do anything else. Lets "just put A and B on
-			the same team, and by the way they work well together" get
-			captured right where it happens, instead of re-picking both
-			people from scratch in the Quick add panel below - which stays
-			around for relating people who aren't both freshly added, or
-			after the fact.
+			Ad hoc creation of the setup-level entity this page's "Recommended
+			next" suggestions are built from (works-well-with/mentorship
+			relationships) - see QuickAddPersonRelationship in rosters_detail.go. Same
+			fields, same Store method as person_relationships.templ's own
+			create form, just reachable without leaving this page.
 		-->
-		if data.PersonPairPrompt != nil {
-			@components.ImportBanner(fmt.Sprintf("Added %q to the team, right after %q - want to remember how these two work together?", data.PersonPairPrompt.NewPersonName, data.PersonPairPrompt.PreviousPersonName), true) {
-				<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/person-relationships", data.ServiceTypeID, data.PlanID) } hx-target="#roster-builder-body" hx-swap="outerHTML">
-					<input type="hidden" name="person_id_a" value={ data.PersonPairPrompt.PreviousPersonID }/>
-					<input type="hidden" name="person_id_b" value={ data.PersonPairPrompt.NewPersonID }/>
+		if !data.ReadOnly {
+			@collapsibleSection("quick-add-relationship-team", "+ Quick add a relationship", false) {
+				<!--
+					Unlike this page's other quick-add forms, this one's own
+					hx-target (#roster-top) never includes the form itself - a
+					relationship touches no position, so its response is scoped to
+					the shared banner block, not this panel (see
+					RosterTopMutationResponse's doc comment, rosters_detail.go). A
+					plain outerHTML swap therefore can't reset these fields back to
+					blank the way it does for every position-scoped quick-add form
+					on this page (whose own response *is* the card containing them,
+					freshly re-rendered empty) - so this resets explicitly instead,
+					same as every setup-page create form (person_relationships.templ
+					etc.) already does for the same reason.
+				-->
+				<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/person-relationships", data.ServiceTypeID, data.PlanID) } hx-target="#roster-top" hx-swap="outerHTML" hx-on::after-request="if(event.detail.successful && event.detail.elt === this) resetSetupForm(this)">
+					@PersonPickerField("Person A", "person_id_a", "qa-a")
+					@PersonPickerField("Person B", "person_id_b", "qa-b")
 					<label>
 						Relationship
 						<select name="relationship_type">
 							for _, t := range data.PersonRelationshipTypes {
-								<option value={ t.Code } selected?={ t.Code == scheduling.PersonRelationshipWorksWell }>{ t.Label }</option>
+								<option value={ t.Code }>{ t.Label }</option>
 							}
 						</select>
 					</label>
-					<button type="submit" class="primary">Remember this</button>
+					<button type="submit" class="primary">Relate people</button>
 				</form>
 			}
-		}
-		<!--
-			Ad hoc creation of the setup-level entity this page's "Recommended
-			next" suggestions are built from (works-well-with/mentorship
-			relationships) - see QuickAddPersonRelationship in rosters.go. Same
-			fields, same Store method as person_relationships.templ's own
-			create form, just reachable without leaving this page.
-		-->
-		@collapsibleSection("quick-add-relationship-team", "+ Quick add a relationship", false) {
-			<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/person-relationships", data.ServiceTypeID, data.PlanID) } hx-target="#roster-builder-body" hx-swap="outerHTML">
-				@PersonPickerField("Person A", "person_id_a", "qa-a")
-				@PersonPickerField("Person B", "person_id_b", "qa-b")
-				<label>
-					Relationship
-					<select name="relationship_type">
-						for _, t := range data.PersonRelationshipTypes {
-							<option value={ t.Code }>{ t.Label }</option>
-						}
-					</select>
-				</label>
-				<button type="submit" class="primary">Relate people</button>
-			</form>
 		}
 		<h2>Positions</h2>
 		if len(data.Positions) == 0 {
@@ -194,107 +262,7 @@ templ RosterBuilderBodyContent(data RosterBuilderData) {
 			<div class="team-group">
 				<h3 class="team-group-heading">{ group.TeamName }</h3>
 				for _, item := range group.Positions {
-					{{ i := item.Index }}
-					{{ pos := item.Pos }}
-					<!--
-						Fully-staffed positions are the low-signal case - collapsed by
-						default so an almost-done roster doesn't look as busy as a
-						mostly-empty one; still-open positions (the ones actually
-						needing a decision) stay expanded (see collapsibleCard).
-					-->
-					@collapsibleCard(fmt.Sprintf("position-group-%d", i), len(pos.Assigned) < pos.Quantity, positionHeading(pos)) {
-						if len(pos.Assigned) > 0 {
-							<ul class="assignment-list">
-								for _, a := range pos.Assigned {
-									@components.ListItem("", templ.Attributes{"data-row-id": fmt.Sprintf("%d", a.ID), "onclick": "selectPersonRow(this, event)"}, a.Name) {
-										@components.Badge("", a.Status)
-										if a.Published {
-											@components.Badge("published", "Published")
-										}
-										if a.FrequencyWarning != "" {
-											@components.ConflictBadge(a.FrequencyWarning)
-										}
-										if a.BlockoutWarning != "" {
-											@components.ConflictBadge(a.BlockoutWarning)
-										}
-										if a.CrossTeamWarning != "" {
-											@components.ConflictBadge(a.CrossTeamWarning)
-										}
-										<button
-											type="button"
-											class="danger icon-btn"
-											aria-label="Remove from position"
-											title="Remove from position"
-											hx-delete={ fmt.Sprintf("/scheduling/rosters/%s/%s/assignments/%d", data.ServiceTypeID, data.PlanID, a.ID) }
-											hx-target="#roster-builder-body"
-											hx-swap="outerHTML"
-											hx-confirm="Remove this person from this position?"
-										>
-											@components.IconRemove()
-										</button>
-									}
-								}
-							</ul>
-						}
-						if len(pos.Candidates) > 0 {
-							<ul class="candidate-list">
-								for _, cand := range pos.Candidates {
-									@components.ListItem("candidate-row", nil, cand.Name) {
-										<span class="muted">{ cand.SchedulePreference }</span>
-										if cand.FrequencyWarning != "" {
-											@components.ConflictBadge(cand.FrequencyWarning)
-										}
-										if cand.BlockoutWarning != "" {
-											@components.ConflictBadge(cand.BlockoutWarning)
-										}
-										if cand.CrossTeamWarning != "" {
-											@components.ConflictBadge(cand.CrossTeamWarning)
-										}
-										<form hx-post={ fmt.Sprintf("/scheduling/rosters/%s/%s/assignments", data.ServiceTypeID, data.PlanID) } hx-target="#roster-builder-body" hx-swap="outerHTML">
-											<input type="hidden" name="person_id" value={ cand.PersonID }/>
-											<input type="hidden" name="team_id" value={ pos.TeamID }/>
-											<input type="hidden" name="team_position_name" value={ pos.TeamPositionName }/>
-											<button type="submit" class="icon-btn" aria-label="Add to position" title="Add to position">
-												@components.IconAdd()
-											</button>
-										</form>
-									}
-								}
-							</ul>
-						} else if len(pos.Assigned) == 0 {
-							<p class="muted">No one eligible for this position yet.</p>
-						}
-						<!--
-							Ad hoc eligibility - the most directly-motivated quick-add on
-							this page (this text used to just dead-end to "add eligibility
-							under Position Preferences" and send the user away). Posts
-							straight at this position (team/position id already known from
-							the card), same underlying operation as
-							PositionPreferencesPage's own form - see
-							QuickAddPositionPreference in rosters.go. Omitted when the
-							position's id lookup failed (best-effort, same as the rest of
-							this page - see PositionGroupView.TeamPositionID) rather than
-							posting to a blank id.
-						-->
-						if pos.TeamPositionID != "" {
-							@collapsibleSection(fmt.Sprintf("quick-add-position-%d", i), "+ Add eligible person", false) {
-								<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/position-preferences", data.ServiceTypeID, data.PlanID) } hx-target="#roster-builder-body" hx-swap="outerHTML">
-									<input type="hidden" name="team_id" value={ pos.TeamID }/>
-									<input type="hidden" name="team_position_id" value={ pos.TeamPositionID }/>
-									@PersonPickerField("Person", "person_id", fmt.Sprintf("qapos%d", i))
-									<label>
-										Schedule preference
-										<select name="schedule_preference">
-											for _, opt := range data.SchedulePreferenceOptions {
-												<option value={ opt.Value }>{ opt.Label }</option>
-											}
-										</select>
-									</label>
-									<button type="submit" class="primary">Add eligibility</button>
-								</form>
-							}
-						}
-					}
+					@positionGroupCard(data.ServiceTypeID, data.PlanID, data.SchedulePreferenceOptions, item.Pos, data.ReadOnly)
 				}
 			</div>
 		}
@@ -304,14 +272,14 @@ templ RosterBuilderBodyContent(data RosterBuilderData) {
 			RosterBuilderBody (not this, RosterBuilderBodyContent) is what
 			keeps that card's out-of-band copy in sync.
 		-->
-		if len(data.Suggestions) > 0 {
+		if !data.ReadOnly && len(data.Suggestions) > 0 {
 			@collapsibleSection("recommended-next-team", "Recommended next", false) {
 				<p class="muted">Based on works-well-with and mentorship relationships with people already on this roster.</p>
 				<ul class="suggestion-list">
 					for _, sug := range data.Suggestions {
 						@components.ListItem("", nil, sug.Name) {
 							<span class="muted">{ sug.TeamPositionName } &middot; { sug.RelationshipLabel }</span>
-							<form hx-post={ fmt.Sprintf("/scheduling/rosters/%s/%s/assignments", data.ServiceTypeID, data.PlanID) } hx-target="#roster-builder-body" hx-swap="outerHTML">
+							<form hx-post={ fmt.Sprintf("/scheduling/rosters/%s/%s/assignments", data.ServiceTypeID, data.PlanID) } hx-target={ "#" + PositionGroupElementID(sug.TeamID, sug.TeamPositionName) } hx-swap="outerHTML">
 								<input type="hidden" name="person_id" value={ sug.PersonID }/>
 								<input type="hidden" name="team_id" value={ sug.TeamID }/>
 								<input type="hidden" name="team_position_name" value={ sug.TeamPositionName }/>
@@ -325,4 +293,203 @@ templ RosterBuilderBodyContent(data RosterBuilderData) {
 			}
 		}
 	</div>
+}
+
+// positionGroupCard is one position group's own card - the collapsibleCard
+// (assigned list, candidate list, "+ Add eligible person" quick-add) every
+// position on the Team tab renders. Factored out of
+// RosterBuilderBodyContent's team-group loop so the exact same markup can
+// also be the primary (non-OOB) response for a mutation scoped to just
+// this one group (AddRosterAssignment, RemoveRosterAssignment,
+// QuickAddPositionPreference - rosters_detail.go), targeted via
+// PositionGroupElementID rather than a full #roster-builder-body
+// re-render. serviceTypeID/planID/schedulePreferenceOptions are passed
+// separately rather than folding this into RosterBuilderData, since a
+// scoped mutation's own response only ever has one PositionGroupView on
+// hand, not a full RosterBuilderData to pull them from. readOnly hides
+// every mutating control (remove/add/quick-add-eligible-person) the same
+// way RosterBuilderBodyContent's top-level ReadOnly gating does elsewhere
+// on this page - a scoped mutation response only ever renders for a plan
+// that's still open to editing (the forms that reach these handlers are
+// themselves gated off on a read-only plan), but this stays defensive
+// rather than assuming that holds.
+templ positionGroupCard(serviceTypeID, planID string, schedulePreferenceOptions []SchedulePreferenceOption, pos PositionGroupView, readOnly bool) {
+	<!--
+		Fully-staffed positions are the low-signal case - collapsed by
+		default so an almost-done roster doesn't look as busy as a
+		mostly-empty one; still-open positions (the ones actually
+		needing a decision) stay expanded (see collapsibleCard).
+	-->
+	@collapsibleCard(PositionGroupElementID(pos.TeamID, pos.TeamPositionName), len(pos.Assigned) < pos.Quantity, positionHeading(pos)) {
+		if len(pos.Assigned) > 0 {
+			<ul class="assignment-list">
+				for _, a := range pos.Assigned {
+					@components.ListItem("", templ.Attributes{"data-row-id": fmt.Sprintf("%d", a.ID), "onclick": "selectPersonRow(this, event)"}, a.Name) {
+						@components.Badge("", a.Status)
+						if a.Published {
+							@components.Badge("published", "Published")
+						}
+						if a.FrequencyWarning != "" {
+							@components.ConflictBadge(a.FrequencyWarning)
+						}
+						if a.BlockoutWarning != "" {
+							@components.ConflictBadge(a.BlockoutWarning)
+						}
+						if a.CrossTeamWarning != "" {
+							@components.ConflictBadge(a.CrossTeamWarning)
+						}
+						if !readOnly {
+							<button
+								type="button"
+								class="danger icon-btn"
+								aria-label="Remove from position"
+								title="Remove from position"
+								hx-delete={ fmt.Sprintf("/scheduling/rosters/%s/%s/assignments/%d", serviceTypeID, planID, a.ID) }
+								hx-target={ "#" + PositionGroupElementID(pos.TeamID, pos.TeamPositionName) }
+								hx-swap="outerHTML"
+								hx-confirm="Remove this person from this position?"
+							>
+								@components.IconRemove()
+							</button>
+						}
+					}
+				}
+			</ul>
+		}
+		if !readOnly {
+			if len(pos.Candidates) > 0 {
+				<ul class="candidate-list">
+					for _, cand := range pos.Candidates {
+						@components.ListItem("candidate-row", nil, cand.Name) {
+							<span class="muted">{ cand.SchedulePreference }</span>
+							if cand.FrequencyWarning != "" {
+								@components.ConflictBadge(cand.FrequencyWarning)
+							}
+							if cand.BlockoutWarning != "" {
+								@components.ConflictBadge(cand.BlockoutWarning)
+							}
+							if cand.CrossTeamWarning != "" {
+								@components.ConflictBadge(cand.CrossTeamWarning)
+							}
+							<form hx-post={ fmt.Sprintf("/scheduling/rosters/%s/%s/assignments", serviceTypeID, planID) } hx-target={ "#" + PositionGroupElementID(pos.TeamID, pos.TeamPositionName) } hx-swap="outerHTML">
+								<input type="hidden" name="person_id" value={ cand.PersonID }/>
+								<input type="hidden" name="team_id" value={ pos.TeamID }/>
+								<input type="hidden" name="team_position_name" value={ pos.TeamPositionName }/>
+								<button type="submit" class="icon-btn" aria-label="Add to position" title="Add to position">
+									@components.IconAdd()
+								</button>
+							</form>
+						}
+					}
+				</ul>
+			} else if len(pos.Assigned) == 0 {
+				<p class="muted">No one eligible for this position yet.</p>
+			}
+		}
+		<!--
+			Ad hoc eligibility - the most directly-motivated quick-add on
+			this page (this text used to just dead-end to "add eligibility
+			under Position Preferences" and send the user away). Posts
+			straight at this position (team/position id already known from
+			the card), same underlying operation as
+			PositionPreferencesPage's own form - see
+			QuickAddPositionPreference in rosters_detail.go. Omitted when the
+			position's id lookup failed (best-effort, same as the rest of
+			this page - see PositionGroupView.TeamPositionID) rather than
+			posting to a blank id. team_position_name travels as its own
+			hidden field (not just team_position_id) so the handler can
+			re-resolve this exact group without an extra PCO round trip - see
+			QuickAddPositionPreference's own doc comment.
+		-->
+		if !readOnly && pos.TeamPositionID != "" {
+			@collapsibleSection("quick-add-"+PositionGroupElementID(pos.TeamID, pos.TeamPositionName), "+ Add eligible person", false) {
+				<!--
+					"Eligible" was reported confusing on its own - clarified inline
+					(not a tooltip; nothing in this app renders one on a
+					collapsibleSection's own toggle) rather than renaming the
+					trigger label, and scoped explicitly to *this* position, since
+					the other reported confusion was mistaking this for a
+					general "add someone to the roster" action.
+				-->
+				<p class="muted">
+					"Eligible" means Planning Center already has this person cleared to
+					serve as { pos.TeamPositionName } - not that they're suggested or
+					preferred, and not a way to add someone to the roster in general.
+					This adds them to this one position only.
+				</p>
+				<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/position-preferences", serviceTypeID, planID) } hx-target={ "#" + PositionGroupElementID(pos.TeamID, pos.TeamPositionName) } hx-swap="outerHTML">
+					<input type="hidden" name="team_id" value={ pos.TeamID }/>
+					<input type="hidden" name="team_position_id" value={ pos.TeamPositionID }/>
+					<input type="hidden" name="team_position_name" value={ pos.TeamPositionName }/>
+					@PersonPickerField("Person", "person_id", "qapos-"+PositionGroupElementID(pos.TeamID, pos.TeamPositionName))
+					<label>
+						Schedule preference
+						<select name="schedule_preference">
+							for _, opt := range schedulePreferenceOptions {
+								<option value={ opt.Value }>{ opt.Label }</option>
+							}
+						</select>
+					</label>
+					<button type="submit" class="primary">Add eligibility</button>
+				</form>
+			}
+		}
+	}
+}
+
+// RosterAssignmentAddedResponse is AddRosterAssignment's htmx response -
+// the touched position group's own card (the primary, non-OOB swap
+// target) plus the page's shared chrome (rosterTopOOB, the publish panel,
+// the glance card) and the newly-assigned person's own sidebar detail
+// card, all as out-of-band updates - see rosters_detail.go for why this
+// is scoped to just the one group instead of the whole
+// #roster-builder-body every mutation used to re-render. added is nil
+// when the add itself failed (nothing new to insert a detail card for).
+templ RosterAssignmentAddedResponse(serviceTypeID, planID string, group PositionGroupView, top RosterBuilderData, added *AssignmentView) {
+	@positionGroupCard(serviceTypeID, planID, top.SchedulePreferenceOptions, group, top.ReadOnly)
+	@rosterTopOOB(top)
+	@rosterPublishPanelOOB(top)
+	@rosterGlanceOOB(top)
+	if added != nil {
+		@personDetailCardInsertOOB(top, *added)
+	}
+}
+
+// RosterAssignmentRemovedResponse is RemoveRosterAssignment's htmx
+// response - see RosterAssignmentAddedResponse's doc comment, which this
+// mirrors, swapping the detail-card insert for a delete of the removed
+// person's own card.
+templ RosterAssignmentRemovedResponse(serviceTypeID, planID string, group PositionGroupView, top RosterBuilderData, removedAssignmentID int64) {
+	@positionGroupCard(serviceTypeID, planID, top.SchedulePreferenceOptions, group, top.ReadOnly)
+	@rosterTopOOB(top)
+	@rosterPublishPanelOOB(top)
+	@rosterGlanceOOB(top)
+	@personDetailCardRemoveOOB(removedAssignmentID)
+}
+
+// RosterPositionGroupMutationResponse is QuickAddPositionPreference's htmx
+// response - same shape as the assignment responses above, minus any
+// detail-card change: setting a position preference doesn't add or remove
+// anyone from the roster, only this one position's own candidate pool
+// (and, when the person happens to already be assigned here too, their
+// FrequencyWarning), so there's nothing for the sidebar detail-card group
+// to gain or lose.
+templ RosterPositionGroupMutationResponse(serviceTypeID, planID string, group PositionGroupView, top RosterBuilderData) {
+	@positionGroupCard(serviceTypeID, planID, top.SchedulePreferenceOptions, group, top.ReadOnly)
+	@rosterTopOOB(top)
+	@rosterPublishPanelOOB(top)
+	@rosterGlanceOOB(top)
+}
+
+// RosterTopMutationResponse is QuickAddPersonRelationship's htmx response -
+// creating a relationship never touches any specific position's
+// assignments or candidates, only the shared roster-top banners (existing-
+// conflicts can gain/lose a pair, the import banner and pair-prompt can
+// disappear) - see rosters_detail.go. rosterTop (not rosterTopOOB) here:
+// this mutation's own forms target #roster-top directly as their primary
+// swap, not as an out-of-band update alongside some other group's card.
+templ RosterTopMutationResponse(top RosterBuilderData) {
+	@rosterTop(top)
+	@rosterPublishPanelOOB(top)
+	@rosterGlanceOOB(top)
 }

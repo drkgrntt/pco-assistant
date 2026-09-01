@@ -7,6 +7,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"unicode"
 
 	"pco-assistant/internal/scheduling"
 	"pco-assistant/internal/server/middleware"
@@ -230,7 +231,7 @@ func (sc *SchedulingController) UpdateSetSongKey(c *fiber.Ctx) error {
 	errMsg := ""
 	if set, err := sc.store.GetOrCreateSet(ctx, orgID, serviceTypeID, planID); err != nil {
 		errMsg = err.Error()
-	} else if err := sc.store.UpdateSetSongKeyOverride(ctx, set.ID, int64(rowID), c.FormValue("key")); err != nil {
+	} else if err := sc.store.UpdateSetSongKeyOverride(ctx, set.ID, int64(rowID), uppercaseFirst(c.FormValue("key"))); err != nil {
 		errMsg = err.Error()
 	}
 
@@ -241,6 +242,21 @@ func (sc *SchedulingController) UpdateSetSongKey(c *fiber.Ctx) error {
 		return render(c, views.SetBuilderBody(data))
 	}
 	return render(c, views.KeyFormFragment(data, song, errMsg))
+}
+
+// uppercaseFirst uppercases just the key's first letter ("bb" -> "Bb", "f#m"
+// -> "F#m") - normalization only, not validation. The rest of the string is
+// left untouched (and PCO's own key strings aren't a fixed enum this app
+// hardcodes against - see keyForm's doc comment), so this never rejects
+// anything, it just fixes the most common typo of typing a lowercase note
+// letter.
+func uppercaseFirst(key string) string {
+	runes := []rune(key)
+	if len(runes) == 0 {
+		return key
+	}
+	runes[0] = unicode.ToUpper(runes[0])
+	return string(runes)
 }
 
 // UpdateSongNote creates, updates, or deletes one category's Planning

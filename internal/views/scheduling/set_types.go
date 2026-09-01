@@ -19,6 +19,15 @@ type SetBuilderData struct {
 	PlanTitle     string
 	PlanDates     string
 	ErrMsg        string
+	// ReadOnly is true once this plan's own sort_date has already passed
+	// (see buildSetBuilderData) - the past-plans archive (BuildPlansList's
+	// past tab) reuses this same builder rendering, just with every
+	// add/remove/move/tag/relate/publish/discard action gated off, since a
+	// plan that's already happened has nothing left to build toward.
+	// Server-derived from the plan's own PCO date, never a client-supplied
+	// flag, so it can't be bypassed and stays correct even for a plan that
+	// was still upcoming when first opened here.
+	ReadOnly bool
 	// PublishMsg is a status line for the last "Publish to Planning Center"
 	// attempt (e.g. "Published 3 song(s)."), separate from ErrMsg so a
 	// partial publish can show both what succeeded and what didn't.
@@ -247,9 +256,14 @@ type ServiceOrderRow struct {
 // exists and is fully synced) - see the scheduling controller's
 // planStatus/rosterStatus.
 type PlanRow struct {
-	ID           string
-	Title        string
-	Dates        string
+	ID    string
+	Title string
+	Dates string
+	// Note is this plan's purely-local at-a-glance note (see
+	// plan_notes/GetPlanNote) - "" means nothing's been saved for it yet.
+	// Shown (and editable) in the plan list, and matched by the picker's
+	// search box alongside Title/Dates - see filterUpcomingPlans.
+	Note         string
 	SetStatus    string
 	RosterStatus string
 }
@@ -319,9 +333,16 @@ type SongRoleView struct {
 	Label string
 }
 
+// SuggestionView is a not-yet-added song recommended for a specific reason
+// (RelationshipLabel) - "Recommended next" (SetBuilderData.Suggestions) and
+// "Could use one more sing" (SetBuilderData.SongsToReinforce). Embeds
+// CandidateSongView so both lists can show the same arrangement/role/tag
+// metadata the plain candidate list does (see set_builder.templ's
+// songCandidateMeta, the block shared by all three lists) instead of just a
+// bare title + reason - SongID/Title come along with the embed, so callers
+// keep writing sug.SongID/sug.Title exactly as before.
 type SuggestionView struct {
-	SongID string
-	Title  string
+	CandidateSongView
 	// RelationshipLabel is every reason this song is suggested, already
 	// joined for display (e.g. "flows_well, same_theme") - a song related
 	// to the anchor song by more than one relationship type is one

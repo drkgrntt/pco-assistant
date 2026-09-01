@@ -35,7 +35,7 @@ type Organization struct {
 // plan, and every Stripe field are left untouched on conflict, so a
 // routine sign-in never clobbers whatever the trial/billing state
 // actually is. A brand new org gets OrgStatusTrialing and a fresh
-// 14-day trial via the table's own DEFAULTs.
+// 30-day trial via the table's own DEFAULTs.
 func (s *Store) UpsertOrganization(ctx context.Context, id, name string) error {
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO organizations (id, name)

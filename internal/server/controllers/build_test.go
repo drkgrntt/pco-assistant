@@ -17,26 +17,52 @@ func TestFilterUpcomingPlansMatchesTitleOrDatesCaseInsensitive(t *testing.T) {
 		plan("Baptism Service", "May 3, 2026"),
 	}
 
-	got := filterUpcomingPlans(plans, "easter")
+	got := filterUpcomingPlans(plans, "easter", nil)
 	if len(got) != 1 || got[0].Attributes.Title != "Easter Sunday" {
 		t.Fatalf("expected title match to find Easter Sunday, got %+v", got)
 	}
 
 	// A plan with no custom title only has its Dates string visible in the
 	// list, so search has to reach it too.
-	got = filterUpcomingPlans(plans, "april 12")
+	got = filterUpcomingPlans(plans, "april 12", nil)
 	if len(got) != 1 || got[0].Attributes.Dates != "April 12, 2026" {
 		t.Fatalf("expected dates match to find the untitled April 12 plan, got %+v", got)
 	}
 
-	got = filterUpcomingPlans(plans, "")
+	got = filterUpcomingPlans(plans, "", nil)
 	if len(got) != 3 {
 		t.Fatalf("expected blank search to match everything, got %d", len(got))
 	}
 
-	got = filterUpcomingPlans(plans, "nonexistent")
+	got = filterUpcomingPlans(plans, "nonexistent", nil)
 	if len(got) != 0 {
 		t.Fatalf("expected no matches, got %+v", got)
+	}
+}
+
+// TestFilterUpcomingPlansMatchesNoteText confirms the picker's search also
+// reaches each plan's local at-a-glance note (plan_notes/GetPlanNote) - the
+// whole point of the note existing at all ("the one with the guest
+// speaker") - even when the search term appears nowhere in the plan's own
+// title or dates.
+func TestFilterUpcomingPlansMatchesNoteText(t *testing.T) {
+	guestSpeaker := plan("", "June 7, 2026")
+	guestSpeaker.ID = "1"
+	regular := plan("", "June 14, 2026")
+	regular.ID = "2"
+	plans := []pco.PlanData{guestSpeaker, regular}
+	notes := map[string]string{"1": "Guest speaker - Pastor Lee"}
+
+	got := filterUpcomingPlans(plans, "guest speaker", notes)
+	if len(got) != 1 || got[0].ID != "1" {
+		t.Fatalf("expected note match to find plan 1, got %+v", got)
+	}
+
+	// A nil/empty notes map (no notes saved, or the lookup failed) just
+	// means nothing extra matches - same as before notes existed.
+	got = filterUpcomingPlans(plans, "guest speaker", nil)
+	if len(got) != 0 {
+		t.Fatalf("expected no matches with a nil notes map, got %+v", got)
 	}
 }
 
