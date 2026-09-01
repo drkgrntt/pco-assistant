@@ -105,6 +105,24 @@
   margin: 0;
 }
 
+.run-sheet-team-group {
+  margin-bottom: var(--space-5);
+  break-inside: avoid;
+}
+
+.run-sheet-team-group:last-child {
+  margin-bottom: 0;
+}
+
+.run-sheet-team-heading {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin: 0 0 var(--space-2);
+}
+
 .run-sheet-roster {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
@@ -118,7 +136,7 @@
   break-inside: avoid;
 }
 
-.run-sheet-position h3 {
+.run-sheet-position h4 {
   margin: 0 0 var(--space-2);
   font-size: var(--text-base);
 }
