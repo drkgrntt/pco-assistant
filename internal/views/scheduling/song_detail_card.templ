@@ -67,12 +67,17 @@ templ songDetailCardsOOB(data SetBuilderData) {
 // summary line (set_builder.templ's #song-meta-<id>), which shows this
 // song's *effective* key (see renderServiceOrder's own comment on why) -
 // DescriptionFormFragment has no equivalent, since Description isn't
-// shown anywhere else on the row.
+// shown anywhere else on the row. It also re-pushes the warnings banner
+// (songWarningsOOB, set_builder.templ): unlike Description, a key edit can
+// flip keyTransitionWarnings' verdict on this song and its neighbor, and
+// without this the banner stayed stuck showing whatever it said before the
+// edit until some unrelated action happened to re-render the whole page.
 templ KeyFormFragment(data SetBuilderData, song SetSongView, errMsg string) {
 	@keyForm(data, song, errMsg)
 	<div class="muted song-meta" id={ fmt.Sprintf("song-meta-%d", song.ID) } hx-swap-oob="true">{ song.ArrangementInfo }</div>
 	@songBadgesOOB(song)
 	@songPublishPanelOOB(data)
+	@songWarningsOOB(data)
 }
 
 templ DescriptionFormFragment(data SetBuilderData, song SetSongView, errMsg string) {

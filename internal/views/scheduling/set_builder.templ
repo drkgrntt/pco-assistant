@@ -78,6 +78,41 @@ templ songBadgeSpans(song SetSongView) {
 	}
 }
 
+// songWarnings/songWarningsOOB wrap the set builder's warning-message lists
+// (ExistingConflicts, RepeatWarnings, PlanWarnings) in one container with a
+// stable id - the songBadges/songBadgesOOB pattern above, applied here so a
+// narrower fragment response (one that only re-renders a single form, not
+// the whole page) can still push a fresh warnings list via OOB.
+// KeyFormFragment (song_detail_card.templ) is the one form so far whose
+// edit can actually change PlanWarnings - a key override can flip
+// keyTransitionWarnings' verdict on the songs next to it - without going
+// through a full SetBuilderBody re-render, which is what left the banner
+// stuck showing the pre-edit warnings until some other action happened to
+// re-render everything.
+templ songWarnings(data SetBuilderData) {
+	<div id="song-warnings">
+		@songWarningSpans(data)
+	</div>
+}
+
+templ songWarningsOOB(data SetBuilderData) {
+	<div id="song-warnings" hx-swap-oob="true">
+		@songWarningSpans(data)
+	</div>
+}
+
+templ songWarningSpans(data SetBuilderData) {
+	for _, msg := range data.ExistingConflicts {
+		<div class="warning">{ msg }</div>
+	}
+	for _, msg := range data.RepeatWarnings {
+		<div class="warning">{ msg }</div>
+	}
+	for _, msg := range data.PlanWarnings {
+		<div class="warning">{ msg }</div>
+	}
+}
+
 // rowMenuToggle/rowMenuItems are the row-menu Disclosure's toggle-button
 // content and popup contents - the same 3 fixed actions (tag/relate/mark
 // role) for every song row, jumping to (and revealing) that row's own
@@ -119,15 +154,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 			<p class="success">{ data.PublishMsg }</p>
 		}
 		@SongStatusSummary(data)
-		for _, msg := range data.ExistingConflicts {
-			<div class="warning">{ msg }</div>
-		}
-		for _, msg := range data.RepeatWarnings {
-			<div class="warning">{ msg }</div>
-		}
-		for _, msg := range data.PlanWarnings {
-			<div class="warning">{ msg }</div>
-		}
+		@songWarnings(data)
 		if data.ImportableSongCount > 0 {
 			@components.ImportBanner(fmt.Sprintf("Looks like this service is already planned in Planning Center - it has %d song(s). Want to import them here so you can reorder, replace, or tag them?", data.ImportableSongCount), false) {
 				<form
