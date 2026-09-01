@@ -93,19 +93,38 @@ tr.song-row.selected {
 
 .replace-form {
   display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
   gap: 0.3rem;
   margin: 0;
 }
 
 .replace-form select {
   min-height: var(--control-height);
+  min-width: 0;
+  flex: 1 1 auto;
   padding: 0.3rem var(--space-2);
-  max-width: 12rem;
+  max-width: 8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .replace-form button {
   min-height: var(--control-height);
+  flex-shrink: 0;
   padding: 0.3rem var(--space-2);
+}
+
+/* Keeps the row's "more actions" dot menu from getting caught up in the
+   replace-form's own wrapping/shrinking on a narrow viewport - flex-shrink:0
+   stops its own box (and the icon inside it) from squishing, and order
+   pins it after every other action regardless of DOM position, so on a
+   narrow row it's the replace-form that wraps/shrinks first while the dot
+   menu stays put on the right. */
+.set-song-actions .row-menu {
+  flex-shrink: 0;
+  order: 1;
 }
 
 .foreign-row {

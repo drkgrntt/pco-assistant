@@ -43,10 +43,17 @@
   background: var(--surface-hover);
 }
 
+/* flex-basis 100% (in the row-wrap container above) makes the title take
+   the whole first line by itself, pushing every sibling that follows it -
+   badges, muted meta text, the row's own form - onto the next line(s),
+   where they wrap and pack left just like set_builder.templ's .song-meta
+   sits under its row's title. A row with no siblings (title-only, e.g. a
+   song_tag_suggestions.templ entry that isn't AlreadyTagged) just renders
+   as the one line, unaffected. */
 .suggestion-list li > span:first-child,
 .candidate-row > span:first-child,
 .assignment-list li > span:first-child {
-  flex: 1 1 auto;
+  flex: 1 1 100%;
   font-weight: var(--font-semibold);
 }
 
