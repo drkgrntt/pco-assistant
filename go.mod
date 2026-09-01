@@ -2,6 +2,17 @@ module pco-assistant
 
 go 1.26.5
 
+// TEMPORARY, local-only: exercises the unreleased SongsParams.Hidden change
+// (see internal/scheduling/pco_songs.go's fetchSongsFromPCO) against a real
+// local go-pco checkout during implementation of the song-fetch-performance
+// plan. A replace pointing at a local filesystem path breaks the build for
+// anyone else - this MUST be removed, and go.mod pinned back to a real
+// published go-pco tag, before this branch is merged. Not a decision for
+// this session to make on its own (see CLAUDE.md's Deployment section) -
+// leave it to the user's explicit go-ahead once go-pco v0.16.0 (or
+// whatever the next tag ends up being) is actually cut and pushed.
+replace github.com/drkgrntt/go-pco => /home/drkgrntt/projects/go-pco
+
 require (
 	github.com/a-h/templ v0.3.1020
 	github.com/aws/aws-sdk-go-v2 v1.41.4
