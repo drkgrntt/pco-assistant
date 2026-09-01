@@ -10,11 +10,10 @@
 - ~~What even is "add eligible person"?~~
   - **Done**, branch `issue-roster-partial-refresh` (same branch as above). Added inline muted-text copy in the panel clarifying "eligible" means PCO already clears this person for the position (not suggested/preferred) and that it only adds them to this one position.
 
-- When clicking a link (particularly clicking into a plan) can we show the loader until the page comes up (which probably requires nothing as it's not loading by default) to make the mobile experience indicate that it's loading a little better?
-  - Eval: Small-medium. There's already a global `#htmx-progress-bar` (`layout.templ:35,85`) but plan links are plain `<a href>` full-page navigations (`build.templ:115`), not htmx-driven, so that indicator never fires for them - only the browser chrome's own (often invisible on mobile) loading affordance does. Two options: add `hx-boost` to the plan-list links so they go through htmx and get the existing progress bar for free (bigger behavior change, check other boosted-link side effects app-wide), or a lightweight `pagehide`/click-listener JS that shows the progress bar (or a simple spinner) on any same-origin navigating click, no htmx involved. Lean toward the second - smaller blast radius.
+- ~~When clicking a link (particularly clicking into a plan) can we show the loader until the page comes up (which probably requires nothing as it's not loading by default) to make the mobile experience indicate that it's loading a little better?~~
+  - **Done**, branch `issue-client-js-polish`. Same-origin plain-link clicks now trigger the existing `#htmx-progress-bar`.
 
-- What even is "add eligible person"?
-  - Eval: Not a code task as written - it's a UX-clarity question about `roster_builder.templ:280`'s "+ Add eligible person" quick-add panel (per-position, lets you add someone who's eligible for that position - per whatever eligibility means there, check `rosters_builder.go` candidate logic around line 554-574 - but not currently suggested/assigned). Worth asking the user directly what's confusing (the word "eligible", or that it's unclear this is per-position vs. a general add) before guessing at a copy/tooltip fix.
+- ~~What even is "add eligible person"?~~ (duplicate of the same question above - see that entry, answered on branch `issue-roster-partial-refresh`)
 
 - ~~I think we shoudl extend the free trial from 14 days to 30 days.~~ That'll need to be updated in the landing page and anywhere else, but given the weekly cadence of church services and the nature of this app where "the more you use it, the more useful it becomes", I think it makes sense to allow them a free month.
   - **Done**, branch `issue-trial-30-days`. New migration `00031` changes the `trial_ends_at` default to 30 days (existing mid-trial orgs not backfilled, per the decision above); landing page and README copy updated everywhere "14-day"/"14 days" appeared.
@@ -24,11 +23,6 @@
 
 - ~~Worth adding a global service note? I'm not sure if it makes sense to integrate it with anything PCO has or not, but something that can show up at a glance in the services list on our end so that it's easier to pinpoint specific services based on something.~~
   - **Done**, branch `issue-plan-archive-and-notes` (same branch as above). New dedicated `plan_notes` table (migration `00032`, org-scoped, independent of whether a draft exists) instead of hanging it off `sets`; inline note field in the plan list on both tabs; search now matches note text too.
-
-
-
-
-
 
 - Follow up issues:
     - When I open the plan screen, every song gets selected and gets a card in the sidebar. I don't want that. I don't want any songs selected by default.
