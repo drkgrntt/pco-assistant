@@ -146,6 +146,15 @@ roster grouped by team/position, flagging any still-short-handed spots -
 the artifact a worship leader would otherwise assemble by hand every
 week. Linked from the Build page next to "Open in Planning Center."
 
+**Account** - `/account` consolidates account/organization identity,
+billing (the same plan picker/Stripe portal `/billing` itself renders),
+and a "Data & Caches" section with two cache-clear actions (Song Info's
+key/tempo/meter/length cache, and the person-data cache behind roster
+scheduling warnings). Explicitly non-destructive: both only delete this
+app's own locally-cached copy of Planning Center data, which gets
+transparently re-collected from Planning Center the next time it's
+needed - nothing in Planning Center, and no draft set/roster, is touched.
+
 Mobile-first, installable as a PWA, with light/dark theming.
 
 ## Tech stack

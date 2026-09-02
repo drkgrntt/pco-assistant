@@ -117,12 +117,16 @@ templ Layout(title string, personName string, organizationName string) {
 					</button>
 					if personName != "" {
 						<!--
-							The one persistent path to /billing - without it, an
+							The one persistent path to /account - without it, an
 							actively-paying org (home.templ's trial banner only shows
 							while OrgStatus isn't "active") has no way back to plan/
 							seat info or the Stripe portal short of typing the URL.
+							/account embeds the same billing section /billing itself
+							renders (views.BillingBody) alongside identity info and
+							the Data & Caches tools - /billing's own routes/page still
+							work directly, just aren't linked from here anymore.
 						-->
-						<a href="/billing">Billing</a>
+						<a href="/account">Account</a>
 						<a href="/feedback">Feedback</a>
 						<div class="account">
 							if organizationName != "" {

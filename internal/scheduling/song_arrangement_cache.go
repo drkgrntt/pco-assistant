@@ -79,3 +79,15 @@ func (s *Store) SongArrangementInfo(ctx context.Context, organizationID string) 
 
 	return cache, rows.Err()
 }
+
+// ClearSongArrangementCache deletes every cached song arrangement row for
+// organizationID - see AccountController.ClearSongInfoCache (internal/
+// server/controllers/account.go), the Account page's "nuclear" cache-clear
+// action. Non-destructive to real PCO data: the next read
+// (resolveArrangementInfo's cache-miss path, or a Song Info sync) simply
+// re-fetches and re-caches from Planning Center as needed, same as a
+// brand-new org that's never synced yet.
+func (s *Store) ClearSongArrangementCache(ctx context.Context, organizationID string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM song_arrangement_cache WHERE organization_id = $1`, organizationID)
+	return err
+}
