@@ -25,15 +25,14 @@ import (
 // CandidateWarnings computes one candidate's FrequencyWarning/
 // BlockoutWarning/CrossTeamWarning using the exact same pure functions
 // (frequencyWarning/blockoutWarning/crossTeamWarning, rosters_warnings.go)
-// and thin PCO-calling wrappers (otherAssignmentDates/
-// crossTeamAssignmentsThisWeek/pco.GetBlockouts) the old eager path used -
-// just for one person instead of a whole eligibility pool. team_id/
-// team_position_name/schedule_preference travel as query params rather than
-// being re-derived: they're already known to the page (this candidate's own
-// CandidatePersonView.SchedulePreference, and the position group it's
-// rendered under), so there's no need to re-fetch PCO's eligibility list
-// just to look them back up.
+// the old eager path used - just for one person instead of a whole
+// eligibility pool. team_id/team_position_name/schedule_preference travel as
+// query params rather than being re-derived: they're already known to the
+// page (this candidate's own CandidatePersonView.SchedulePreference, and the
+// position group it's rendered under), so there's no need to re-fetch PCO's
+// eligibility list just to look them back up.
 func (sc *SchedulingController) CandidateWarnings(c *fiber.Ctx) error {
+	organizationID := middleware.CurrentOrganizationID(c)
 	serviceTypeID := c.Params("service_type_id")
 	planID := c.Params("plan_id")
 	personID := c.Params("person_id")
@@ -42,19 +41,34 @@ func (sc *SchedulingController) CandidateWarnings(c *fiber.Ctx) error {
 	schedulePreference := c.Query("schedule_preference")
 	ctx := middleware.RequestContext(c)
 
-	view := computeCandidateWarnings(ctx, serviceTypeID, planID, personID, teamID, teamPositionName, schedulePreference)
+	view := sc.computeCandidateWarnings(ctx, organizationID, serviceTypeID, planID, personID, teamID, teamPositionName, schedulePreference)
 
 	return render(c, views.CandidateWarningsFragment(view))
 }
 
 // computeCandidateWarnings is CandidateWarnings' actual computation, factored
-// out from the fiber handler above so it can be exercised directly against a
-// fake PCO server (pco.SetBaseURLForTesting) without needing a real
-// *fiber.Ctx - see rosters_candidate_warnings_httptest_test.go, which proves
+// out from the fiber handler above so it can be exercised directly without a
+// real *fiber.Ctx - see rosters_candidate_warnings_db_test.go, which proves
 // this produces the same values the old eager buildRosterBuilderData/
 // buildRosterPositionGroupData path used to compute for the same fixture
 // data.
-func computeCandidateWarnings(ctx context.Context, serviceTypeID, planID, personID, teamID, teamPositionName, schedulePreference string) views.CandidatePersonView {
+//
+// A director clicking "Check availability" wants this candidate's real,
+// right-now answer, not whatever's already sitting in the person-data cache
+// (which may not exist yet for someone nobody's looked at before) - so
+// rather than reading otherAssignmentDates/crossTeamAssignmentsThisWeek/
+// personBlockouts (rosters_warnings.go) cache-first the way the assigned-
+// roster's own eager warnings now do, this forces a live sync for just this
+// one person first (syncPersonBlockouts/syncPersonPlanHistory/
+// syncPersonTeamPlanHistory, person_data_cache.go - the exact same
+// live-fetch-and-replace functions RefreshPersonData/the background sync
+// batch use), then reads the now-freshly-populated cache. Same "bounded to
+// one item, triggered by an explicit click, live PCO calls are fine"
+// reasoning as RefreshPersonData/RefreshSetSongArrangementInfo - this is
+// just that same reasoning applied to a candidate instead of an assignment.
+// Best-effort throughout: a sync failure just leaves that one warning off,
+// same tolerance every other lookup on this page already has.
+func (sc *SchedulingController) computeCandidateWarnings(ctx context.Context, organizationID, serviceTypeID, planID, personID, teamID, teamPositionName, schedulePreference string) views.CandidatePersonView {
 	var planDate time.Time
 	if plan, err := pco.GetPlan(ctx, serviceTypeID, planID); err == nil {
 		planDate = plan.Data.Attributes.SortDate
@@ -69,17 +83,18 @@ func computeCandidateWarnings(ctx context.Context, serviceTypeID, planID, person
 		return view
 	}
 
+	_ = syncPersonBlockouts(ctx, sc.store, organizationID, personID)
+	view.BlockoutWarning = blockoutWarningIfKnown(planDate, sc.personBlockouts(ctx, organizationID, personID))
+
 	if schedulePreference != "" {
-		otherDates := otherAssignmentDates(ctx, personID, teamID, teamPositionName, planID)
+		_ = syncPersonTeamPlanHistory(ctx, sc.store, organizationID, personID, teamID)
+		otherDates := sc.otherAssignmentDates(ctx, organizationID, personID, teamID, teamPositionName, planID)
 		view.FrequencyWarning = frequencyWarning(schedulePreference, planDate, otherDates)
 	}
 
-	crossTeamLabels := crossTeamAssignmentsThisWeek(ctx, personID, planDate, planID)
+	_ = syncPersonPlanHistory(ctx, sc.store, organizationID, personID)
+	crossTeamLabels := sc.crossTeamAssignmentsThisWeek(ctx, organizationID, personID, planDate, planID)
 	view.CrossTeamWarning = crossTeamWarning(crossTeamLabels)
-
-	if bo, err := pco.GetBlockouts(ctx, personID, &pco.BlockoutsParams{Filter: "future"}); err == nil {
-		view.BlockoutWarning = blockoutWarningIfKnown(planDate, bo.Data)
-	}
 
 	return view
 }

@@ -178,7 +178,14 @@ func TestOtherAssignmentDatesReadPathStaleHitServesStaleAndEnqueuesRefresh(t *te
 	teamID := testScopeID("team")
 	cleanupPersonDataCache(t, store, orgID)
 
-	oldDate := time.Now().AddDate(0, 0, -30)
+	// .Truncate(time.Microsecond): Postgres's timestamptz column only stores
+	// microsecond precision, so a raw time.Now() (nanosecond precision)
+	// would round-trip through the real store with a few hundred
+	// nanoseconds trimmed off - a real, if inconsequential, difference that
+	// makes the exact .Equal() below correctly report a mismatch that has
+	// nothing to do with this test's actual subject (stale-hit serving).
+	// Truncating up front matches what the store will actually persist.
+	oldDate := time.Now().AddDate(0, 0, -30).Truncate(time.Microsecond)
 	entries := []scheduling.PersonTeamPlanHistoryEntry{
 		{PCOPlanPersonID: "pp1", TeamPositionName: "Vocals", PlanID: "plan-old", SortDate: oldDate},
 	}

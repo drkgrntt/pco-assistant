@@ -88,6 +88,16 @@ func (s *Store) PersonBlockoutCache(ctx context.Context, organizationID, personI
 		if err := rows.Scan(&b.PCOBlockoutID, &b.StartsAt, &b.EndsAt, &b.Reason, &b.RepeatFrequency); err != nil {
 			return nil, syncedAt, true, err
 		}
+		// .UTC(): Postgres timestamptz round-trips through database/sql as a
+		// time.Time in the driver/session's local zone, not the UTC location
+		// every one of these values actually arrived in from Planning Center
+		// (see PersonPlanHistoryCache's own comment on the same normalization
+		// - blockoutWarning's own comparisons are location-independent
+		// today, but this keeps "every time.Time handed to business logic is
+		// UTC" a true invariant rather than one that happens to hold only
+		// for callers that don't do calendar-day math).
+		b.StartsAt = b.StartsAt.UTC()
+		b.EndsAt = b.EndsAt.UTC()
 		blockouts = append(blockouts, b)
 	}
 	return blockouts, syncedAt, true, rows.Err()
@@ -153,6 +163,22 @@ func (s *Store) PersonPlanHistoryCache(ctx context.Context, organizationID, pers
 		if err := rows.Scan(&e.PCOPlanPersonID, &e.TeamID, &e.TeamName, &e.TeamPositionName, &e.PlanID, &e.SortDate); err != nil {
 			return nil, syncedAt, true, err
 		}
+		// .UTC(): SortDate feeds crossTeamAssignmentsThisWeek's sameWeek
+		// check (rosters_warnings.go), which computes each side's own
+		// Mon-Sun week boundary via t.Date()/t.Location() - genuinely
+		// location-sensitive, unlike a plain .Before()/.After() comparison.
+		// Postgres timestamptz round-trips through database/sql in the
+		// driver/session's local zone, not the UTC location this value
+		// actually arrived in from Planning Center (planSortDatesFromIncluded
+		// parses an RFC3339 "Z" timestamp, always UTC) - comparing a
+		// UTC-located targetDate (fresh from PCO, e.g. computeCandidateWarnings'
+		// pco.GetPlan call) against a local-located SortDate from this cache
+		// computes each one's calendar week in a different zone, silently
+		// missing a real same-week match when the local zone's offset moves
+		// a date across the Monday boundary relative to UTC. Normalizing
+		// here, once, keeps every SortDate this cache ever hands out in the
+		// same zone every other plan date in this app already is.
+		e.SortDate = e.SortDate.UTC()
 		entries = append(entries, e)
 	}
 	return entries, syncedAt, true, rows.Err()
@@ -218,6 +244,11 @@ func (s *Store) PersonTeamPlanHistoryCache(ctx context.Context, organizationID, 
 		if err := rows.Scan(&e.PCOPlanPersonID, &e.TeamPositionName, &e.PlanID, &e.SortDate); err != nil {
 			return nil, syncedAt, true, err
 		}
+		// .UTC(): see PersonPlanHistoryCache's identical normalization above
+		// - frequencyWarning's own math (.Sub()) is location-independent
+		// today, but this keeps every SortDate this app hands to business
+		// logic in the same zone regardless of which cache it came from.
+		e.SortDate = e.SortDate.UTC()
 		entries = append(entries, e)
 	}
 	return entries, syncedAt, true, rows.Err()
