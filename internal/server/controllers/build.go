@@ -391,9 +391,10 @@ func buildPlanRows(pageOfPlans []pco.PlanData, notes map[string]string, statusFn
 // endpoints) - this page just displays both at once instead of requiring a
 // separate visit to build each.
 //
-// Only activeTab's own data is actually built here - see pco-api-risks.md's
-// mitigation #3. The other tab's data (a real PCO-heavy build - roughly
-// half this page's total load cost, per that doc) is fetched separately
+// Only activeTab's own data is actually built here - see
+// docs/pco-api-risks.md's mitigation #3. The other tab's data (a real
+// PCO-heavy build - roughly half this page's total load cost, per that
+// doc) is fetched separately
 // (BuildSongsTabLazy/BuildTeamTabLazy below), starting as soon as the page
 // itself has rendered rather than blocking this response on it - see
 // lazyTabTrigger's doc comment (build_tabs.templ) for why "as soon as

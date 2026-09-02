@@ -217,7 +217,7 @@ func (sc *SchedulingController) SyncSongInfo(c *fiber.Ctx) error {
 	// Priority 20: an unattended background sync should never delay this
 	// same token's interactive traffic if go-pco's throttle is enabled
 	// (PCO_THROTTLE_ENABLED - off by default, see go-pco's README) - see
-	// pco-api-risks.md's throttle-adoption addendum.
+	// docs/pco-api-risks.md's throttle-adoption addendum.
 	syncCtx := pco.WithPriority(pco.WithAccessToken(context.Background(), accessToken), 20)
 	go runSongInfoSync(syncCtx, store, orgID)
 
@@ -244,7 +244,7 @@ func (sc *SchedulingController) SyncSongInfo(c *fiber.Ctx) error {
 // user-triggered action bounded to one song (the Build page's song detail
 // card - see songDetailCard, song_detail_card.templ), not a hot render
 // path, same reasoning as SyncSongInfo above and the roster builder's
-// on-demand candidate-availability check (pco-api-risks.md's manual-
+// on-demand candidate-availability check (docs/pco-api-risks.md's manual-
 // refresh addendum).
 func (sc *SchedulingController) RefreshSetSongArrangementInfo(c *fiber.Ctx) error {
 	ctx := middleware.RequestContext(c)

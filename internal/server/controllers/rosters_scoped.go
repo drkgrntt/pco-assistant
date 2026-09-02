@@ -184,7 +184,7 @@ func (sc *SchedulingController) buildRosterPositionGroupData(ctx context.Context
 	// relevantPersonIDs is scoped to people actually assigned to this
 	// position, NOT every candidate in PCO's eligibility pool for it - same
 	// principle as buildRosterBuilderData's identical comment (rosters_builder.go)
-	// and pco-api-risks.md's cold-start-eligibility-pool addendum. namedIDs
+	// and docs/pco-api-risks.md's cold-start-eligibility-pool addendum. namedIDs
 	// stays unscoped (candidates' names still render) since only the
 	// PCO-backed warning fetches below narrow.
 	relevantPersonIDs := map[string]bool{}
@@ -293,7 +293,7 @@ func (sc *SchedulingController) buildRosterPositionGroupData(ctx context.Context
 
 	// Candidates deliberately don't get FrequencyWarning/BlockoutWarning/
 	// CrossTeamWarning computed here - see buildRosterBuilderData's identical
-	// comment (rosters_builder.go) and pco-api-risks.md's cold-start
+	// comment (rosters_builder.go) and docs/pco-api-risks.md's cold-start
 	// addendum. Fetched on demand instead via CandidateWarnings
 	// (rosters_candidate_warnings.go).
 	for _, pa := range candidates {

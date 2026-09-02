@@ -128,7 +128,7 @@ const personIDBatchSize = 100
 // relationships, rosters) that already know exactly which ids they need
 // rather than deriving them from a preferences list. Batches ids into one
 // `where[id]=...` call per personIDBatchSize ids rather than one GetPerson
-// round trip per id (see pco-api-risks.md's mitigation #2 - this was the
+// round trip per id (see docs/pco-api-risks.md's mitigation #2 - this was the
 // single biggest source of PCO calls on the Team Builder page). An id that
 // fails to resolve is simply left out; callers fall back to showing the raw
 // id.

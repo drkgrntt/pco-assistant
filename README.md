@@ -242,7 +242,7 @@ Mobile-first, installable as a PWA, with light/dark theming.
    real 100-req/20s ceiling) and `PCO_THROTTLE_DEFAULT_PRIORITY` (defaults
    to 10). This app already tags its two background syncs (Song Info,
    person-data cache) at priority 20 so they never delay interactive
-   traffic once the throttle is enabled - see `pco-api-risks.md`. Leave
+   traffic once the throttle is enabled - see `docs/pco-api-risks.md`. Leave
    unset to skip this entirely; nothing else in this app depends on it
    being on.
 

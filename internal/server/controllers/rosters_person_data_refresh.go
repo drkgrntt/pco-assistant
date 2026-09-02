@@ -8,7 +8,7 @@ package controllers
 // background queue's own turn. Runs the exact same per-kind sync functions
 // (syncPersonBlockouts/syncPersonPlanHistory/syncPersonTeamPlanHistory) the
 // background pass calls per person, just synchronously and immediately for
-// this one person - see pco-api-risks.md's manual-refresh addendum for why
+// this one person - see docs/pco-api-risks.md's manual-refresh addendum for why
 // a live PCO call here (three of them, one per cache) is fine: bounded to
 // one person, triggered by an explicit click, not a hot render path, same
 // reasoning as RefreshSetSongArrangementInfo (song_arrangement_cache.go).

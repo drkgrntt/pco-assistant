@@ -104,7 +104,7 @@ func TestPersonBlockoutsReadPathMissEnqueuesAndDoesNotBlock(t *testing.T) {
 	// Generous bound - a local DB round trip should be single-digit
 	// milliseconds; this just proves nothing resembling a live PCO call
 	// (network round trip to a third party, typically 100-400ms per
-	// pco-api-risks.md) happened inline.
+	// docs/pco-api-risks.md) happened inline.
 	if elapsed > 50*time.Millisecond {
 		t.Errorf("personBlockouts (miss) took %s, want well under 50ms (should never block on a live PCO call)", elapsed)
 	}

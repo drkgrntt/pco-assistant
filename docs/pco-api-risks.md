@@ -646,13 +646,14 @@ a separate, still-open item.
 
 ## Addendum: Team Builder's per-person blockout/cross-team/frequency calls cached in a local Postgres table, backed by a paced background sync
 
-`plan.md`'s follow-up to the two addenda above: `otherAssignmentDates`/
-`crossTeamAssignmentsThisWeek`/the per-person `pco.GetBlockouts` call
+`docs/pco-roster-cold-start-plan.md`'s follow-up to the two addenda
+above: `otherAssignmentDates`/`crossTeamAssignmentsThisWeek`/the
+per-person `pco.GetBlockouts` call
 (`rosters_warnings.go`/`rosters_builder.go`/`rosters_scoped.go`) were still
 live PCO calls on every single Team Builder render, once per relevant
 person - the actual per-call-volume driver the "Team Builder's duplicate
 scoped-fetch calls" addendum above measured at 30-40 calls/click, and the
-reason `pco-api-risks.md` kept listing "team/position lists and
+reason `docs/pco-api-risks.md` kept listing "team/position lists and
 team-member names remain uncached" as a still-open per-person gap. This
 closes the *per-person* half of that gap (blockouts, cross-team history,
 per-team history) - team/position *lists* and team-member *names*
@@ -690,7 +691,8 @@ Each request costs exactly one PCO call (one `GetBlockouts` or
 pacing's sustained rate works out to at most 30% of the 100-requests/20s
 budget - even more headroom than Song Info's already-conservative 60%, see
 `personDataSyncBatchPause`'s doc comment for the arithmetic. Deliberately
-*not* an unattended/nightly sync (`plan.md`'s "unattended-cron question,
+*not* an unattended/nightly sync
+(`docs/pco-roster-cold-start-plan.md`'s "unattended-cron question,
 revisited" explicitly defers that): this only ever runs off a live
 request's own PCO access token (`triggerPersonDataSync`, called from every
 roster-rendering handler right after building its response), so it needs
@@ -718,8 +720,9 @@ never-rendered team. Self-clearing: once any relevant person has a
 true and the notice stops appearing on its own, no dismiss/session state
 needed.
 
-**Unverified-live-check caveat, taken deliberately**: `plan.md` proposed
-merging `crossTeamAssignmentsThisWeek`'s all-teams call and
+**Unverified-live-check caveat, taken deliberately**:
+`docs/pco-roster-cold-start-plan.md` proposed merging
+`crossTeamAssignmentsThisWeek`'s all-teams call and
 `otherAssignmentDates`' per-team call into one shared cached table,
 contingent on live-verifying two things against the real PCO API first -
 (1) whether `GetPersonPlanPeople` accepts a `PerPage` above 25 without
@@ -727,16 +730,18 @@ losing per-team accuracy for a multi-team volunteer, and (2) whether PCO
 exposes a global/batch blockouts listing instead of only the per-person
 nested endpoint this app already uses. **Neither could be live-verified
 this session** (blocked by sandbox tooling policy when attempting to use a
-live session token) - per `plan.md`'s own explicit fallback instruction,
-this shipped as the conservative design instead: two genuinely separate
-tables/sync passes for plan-people history (`person_plan_history` for the
-all-teams cross-team check, `person_team_plan_history` - keyed additionally
-by `team_id` - for the per-team frequency check) rather than one merged
-table filtered two ways, and the per-person nested `GetBlockouts` call
-exactly as it's always been called, not a global endpoint. Both remain
-worth a real live check in a future pass, per `plan.md`'s own framing -
-if `GetPersonPlanPeople` does tolerate a higher `PerPage` without diluting
-per-team accuracy, or PCO does expose a global blockouts listing, either
+live session token) - per `docs/pco-roster-cold-start-plan.md`'s own
+explicit fallback instruction, this shipped as the conservative design
+instead: two genuinely separate tables/sync passes for plan-people
+history (`person_plan_history` for the all-teams cross-team check,
+`person_team_plan_history` - keyed additionally by `team_id` - for the
+per-team frequency check) rather than one merged table filtered two
+ways, and the per-person nested `GetBlockouts` call exactly as it's
+always been called, not a global endpoint. Both remain worth a real live
+check in a future pass, per `docs/pco-roster-cold-start-plan.md`'s own
+framing - if `GetPersonPlanPeople` does tolerate a higher `PerPage`
+without diluting per-team accuracy, or PCO does expose a global
+blockouts listing, either
 would simplify this schema (one table instead of two, or no
 `person_blockout_sync`/`person_blockouts` tables at all) - but risking
 warning accuracy to save a table wasn't worth it without confirming first.
@@ -870,7 +875,7 @@ still signs in.
 
 ## Addendum: priority-aware request throttle shipped in go-pco, adopted here (off by default)
 
-`pco-throttle-plan.md` (written 2026-09-02, prompted by a conversation
+`docs/pco-throttle-plan.md` (written 2026-09-02, prompted by a conversation
 during the roster cold-start fix above) specced a real fix for the gap
 this doc's mitigations above all work around by hand: Song Info's
 background sync, the person-data cache's background sync, and ordinary

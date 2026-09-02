@@ -15,7 +15,8 @@ package controllers
 // triggerPersonDataSync (called from each roster-rendering handler right
 // after building its response data) starts a background pass whenever
 // there's something pending and nothing already running for this org. This
-// is deliberately the "render-triggered" design plan.md settled on, not an
+// is deliberately the "render-triggered" design
+// docs/pco-roster-cold-start-plan.md settled on, not an
 // unattended/nightly sync - see that plan's "unattended-cron question,
 // revisited" section for why: this only ever runs using a live request's
 // own PCO access token (via middleware.AccessToken), so it needs no new
@@ -188,7 +189,7 @@ func (sc *SchedulingController) triggerPersonDataSync(c *fiber.Ctx) {
 	// Priority 20: an unattended background sync should never delay this
 	// same token's interactive traffic if go-pco's throttle is enabled
 	// (PCO_THROTTLE_ENABLED - off by default, see go-pco's README) - see
-	// pco-api-risks.md's throttle-adoption addendum.
+	// docs/pco-api-risks.md's throttle-adoption addendum.
 	syncCtx := pco.WithPriority(pco.WithAccessToken(context.Background(), accessToken), 20)
 	go runPersonDataSync(syncCtx, store, orgID, reqs)
 }

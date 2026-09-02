@@ -81,7 +81,7 @@ func (hc *HomeController) buildHomeData(ctx context.Context, organizationID stri
 		// to 3 sequential PCO round trips each, one after another, on
 		// every single home page load. Fanned out the same way
 		// build.go's buildPlanRows already does for the Build page's own
-		// plan picker (see pco-api-risks.md's concurrency mitigation) -
+		// plan picker (see docs/pco-api-risks.md's concurrency mitigation) -
 		// rows is pre-sized and index-owned per goroutine, with a nil entry
 		// meaning "no upcoming plan/error, leave it out", filtered below to
 		// preserve service-type order regardless of completion order.
