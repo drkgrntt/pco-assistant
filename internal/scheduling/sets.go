@@ -273,6 +273,49 @@ func (s *Store) RevertSet(ctx context.Context, setID int64, importRows []SetSong
 	return tx.Commit()
 }
 
+// ImportNewSongsFromPCO adds importRows as new local set_songs rows -
+// MergeSet's ("pull in from Planning Center") store-side half: additive
+// only, it never deletes or modifies any existing row, unlike RevertSet's
+// full replace. The caller (see the scheduling controller's MergeSet)
+// derives importRows from a live GetItems call via deriveMergeImportRows,
+// already filtered down to song-linked items not already tracked locally -
+// this just inserts them, each keeping the PCOItemID/AnchorItemID the walk
+// already resolved (so a freshly-imported row starts "published," same as
+// RevertSet's rows do - it already exists in Planning Center, there's
+// nothing left to push). Position is computed per row, within the same
+// transaction, as one past whatever's currently the highest position in
+// that row's anchor group - so several new rows sharing an anchor (from
+// this import or already present locally) chain in walk order, the same
+// "append after what's there" rule AddSongToSet's chaining insert uses.
+// Returns how many rows were actually inserted.
+func (s *Store) ImportNewSongsFromPCO(ctx context.Context, setID int64, importRows []SetSong) (int, error) {
+	if len(importRows) == 0 {
+		return 0, nil
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	for _, row := range importRows {
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO set_songs (set_id, song_id, position, pco_item_id, anchor_item_id)
+			SELECT $1, $2, COALESCE(MAX(position), -1) + 1, $3, $4
+			FROM set_songs WHERE set_id = $1 AND anchor_item_id = $4 AND pending_delete = false
+		`, setID, row.SongID, row.PCOItemID, row.AnchorItemID); err != nil {
+			return 0, err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+
+	return len(importRows), nil
+}
+
 // AddSongToSet adds songID right after whichever song was last placed here
 // (see sets.last_touched_set_song_id) - so adding several songs in a row
 // chains them together at wherever you're currently working, rather than

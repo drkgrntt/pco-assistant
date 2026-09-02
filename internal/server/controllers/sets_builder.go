@@ -555,14 +555,56 @@ func deriveImportRows(items []pco.ItemData) []scheduling.SetSong {
 	return rows
 }
 
+// deriveMergeImportRows is MergeSet's core: given a plan's items (already
+// sorted by sequence) and the set of PCO item ids already tracked locally
+// (every existing set_songs row for this set, active or tombstoned, that
+// has a PCOItemID - see MergeSet), it returns just the song-linked items
+// that aren't tracked yet - songs added directly in Planning Center since
+// the local draft was last touched. Each returned row is anchored to
+// whichever tracked or foreign item most recently preceded it in the walk
+// (mirroring deriveImportRows), so mergeServiceOrder can place it
+// correctly relative to what's already there; Position/PCOItemID are left
+// for the caller (Store.ImportNewSongsFromPCO) to fill in, since where a
+// new row actually lands within its anchor group depends on what's already
+// occupying it locally, not just this walk. Unlike deriveImportRows, the
+// anchor is advanced on every item (tracked or not) rather than only on
+// non-song items - a tracked song can sit between two new ones, and the
+// second must anchor to the first, not to whatever foreign item came
+// before both.
+func deriveMergeImportRows(items []pco.ItemData, trackedItemIDs map[string]bool) []scheduling.SetSong {
+	var rows []scheduling.SetSong
+	anchor := ""
+	for _, item := range items {
+		if item.Attributes.ItemType == pco.ItemTypeSong && item.Relationships.Song.Data != nil {
+			if !trackedItemIDs[item.ID] {
+				rows = append(rows, scheduling.SetSong{
+					SongID:       item.Relationships.Song.Data.ID,
+					PCOItemID:    item.ID,
+					AnchorItemID: anchor,
+				})
+			}
+			anchor = item.ID
+			continue
+		}
+		anchor = item.ID
+	}
+	return rows
+}
+
 // mergeServiceOrder interleaves a plan's existing items (already sorted by
 // sequence) with a set's songs, each song placed immediately after its
 // anchor (SetSong.AnchorItemID), grouped there in local position order;
 // songs anchored to "" (top of service) come first, before any existing
-// item. An item that's one of the set's own tracked songs is skipped here
-// (it renders via its song row instead, not twice). A song anchored to an
-// item id that isn't in items - e.g. that item was deleted in PCO since -
-// is appended at the very end rather than silently dropped.
+// item. An item that's one of the set's own tracked songs never gets its
+// own separate row here (it renders via its song row instead, not twice),
+// but its group is still flushed at its position in the walk - normally a
+// no-op (a set song's anchor is never another set song's own PCOItemID, by
+// construction in AddSongToSet/RepositionSongInSet), except for a row
+// MergeSet (sets_publish.go) imported anchored to an already-tracked item,
+// which does rely on this to land right after that item rather than at the
+// very end as a stale anchor. A song anchored to an item id that isn't in
+// items - e.g. that item was deleted in PCO since - is appended at the
+// very end rather than silently dropped.
 func mergeServiceOrder(items []pco.ItemData, setSongs []scheduling.SetSong) []mergedRow {
 	// Keyed by PCO item id, not song id: a song can now appear more than
 	// once in the set (see DuplicateSongInSet), so "this song is tracked"
@@ -597,11 +639,10 @@ func mergeServiceOrder(items []pco.ItemData, setSongs []scheduling.SetSong) []me
 	rows = appendGroup(rows, "")
 
 	for _, item := range items {
-		if trackedItemIDs[item.ID] {
-			continue
+		if !trackedItemIDs[item.ID] {
+			item := item
+			rows = append(rows, mergedRow{Item: &item})
 		}
-		item := item
-		rows = append(rows, mergedRow{Item: &item})
 		rows = appendGroup(rows, item.ID)
 	}
 

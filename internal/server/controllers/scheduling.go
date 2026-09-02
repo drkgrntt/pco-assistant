@@ -385,6 +385,7 @@ func (sc *SchedulingController) RegisterRoutes(router fiber.Router) {
 	group.Post("/sets/:service_type_id/:plan_id/publish", sc.PublishSet)
 	group.Post("/sets/:service_type_id/:plan_id/refresh-info", sc.RefreshSongInfo)
 	group.Post("/sets/:service_type_id/:plan_id/revert", sc.RevertSet)
+	group.Post("/sets/:service_type_id/:plan_id/merge", sc.MergeSet)
 }
 
 func (sc *SchedulingController) RelationshipsPage(c *fiber.Ctx) error {

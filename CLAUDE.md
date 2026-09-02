@@ -269,12 +269,15 @@ similar handlers.
 **Sync model (Publish/Discard)**: draft sets/rosters live only in this
 app's database until Publish pushes them to real PCO plan items/records in
 one sync; Discard reverts the local draft back to whatever's currently
-live in PCO. Changes here (song notes, per-occurrence key, position
-assignments) are two kinds: some (like `PersonTeamPositionAssignment.
-schedule_preference`) write straight to PCO immediately since PCO has no
-"draft" concept for them; others stay purely local until the next
-Publish/Refresh. Check how an existing similar field behaves before adding
-a new one.
+live in PCO. The Songs tab also has a third, non-destructive direction -
+`MergeSet` (`internal/server/controllers/sets_publish.go`) pulls in songs
+added directly in Planning Center since the draft was last touched without
+discarding any local change, unlike Discard's full replace. Changes here
+(song notes, per-occurrence key, position assignments) are two kinds: some
+(like `PersonTeamPositionAssignment.schedule_preference`) write straight
+to PCO immediately since PCO has no "draft" concept for them; others stay
+purely local until the next Publish/Refresh. Check how an existing similar
+field behaves before adding a new one.
 
 **Migrations**: goose, numbered sequentially
 (`internal/database/migrations/NNNNN_description.sql`), embedded at build
