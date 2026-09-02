@@ -235,7 +235,18 @@ Mobile-first, installable as a PWA, with light/dark theming.
    `pg_dump` on `PATH` (already in the Docker image via
    `postgresql-client`).
 
-6. **`.env`**:
+6. **PCO request throttle (optional, off by default).** go-pco's opt-in,
+   priority-aware request throttle (see its README) can be turned on
+   purely via env var, no code change - `PCO_THROTTLE_ENABLED=true`, plus
+   optional `PCO_THROTTLE_RATE_PER_20S` (defaults to 60, i.e. 60% of PCO's
+   real 100-req/20s ceiling) and `PCO_THROTTLE_DEFAULT_PRIORITY` (defaults
+   to 10). This app already tags its two background syncs (Song Info,
+   person-data cache) at priority 20 so they never delay interactive
+   traffic once the throttle is enabled - see `pco-api-risks.md`. Leave
+   unset to skip this entirely; nothing else in this app depends on it
+   being on.
+
+7. **`.env`**:
    ```
    PORT=8080
    APP_ENV=local
@@ -268,6 +279,10 @@ Mobile-first, installable as a PWA, with light/dark theming.
    R2_ACCOUNT_ID=...
    R2_ACCESS_KEY_ID=...
    R2_SECRET_ACCESS_KEY=...
+
+   PCO_THROTTLE_ENABLED=...
+   PCO_THROTTLE_RATE_PER_20S=...
+   PCO_THROTTLE_DEFAULT_PRIORITY=...
    ```
 
 ## Makefile

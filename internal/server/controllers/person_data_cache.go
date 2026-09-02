@@ -185,7 +185,12 @@ func (sc *SchedulingController) triggerPersonDataSync(c *fiber.Ctx) {
 	// carrying the same token is built instead.
 	accessToken := middleware.AccessToken(c)
 	store := sc.store
-	go runPersonDataSync(pco.WithAccessToken(context.Background(), accessToken), store, orgID, reqs)
+	// Priority 20: an unattended background sync should never delay this
+	// same token's interactive traffic if go-pco's throttle is enabled
+	// (PCO_THROTTLE_ENABLED - off by default, see go-pco's README) - see
+	// pco-api-risks.md's throttle-adoption addendum.
+	syncCtx := pco.WithPriority(pco.WithAccessToken(context.Background(), accessToken), 20)
+	go runPersonDataSync(syncCtx, store, orgID, reqs)
 }
 
 // runPersonDataSync is triggerPersonDataSync's actual work, run in a

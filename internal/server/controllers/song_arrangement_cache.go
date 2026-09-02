@@ -214,7 +214,12 @@ func (sc *SchedulingController) SyncSongInfo(c *fiber.Ctx) error {
 	// authenticated context.
 	accessToken := middleware.AccessToken(c)
 	store := sc.store
-	go runSongInfoSync(pco.WithAccessToken(context.Background(), accessToken), store, orgID)
+	// Priority 20: an unattended background sync should never delay this
+	// same token's interactive traffic if go-pco's throttle is enabled
+	// (PCO_THROTTLE_ENABLED - off by default, see go-pco's README) - see
+	// pco-api-risks.md's throttle-adoption addendum.
+	syncCtx := pco.WithPriority(pco.WithAccessToken(context.Background(), accessToken), 20)
+	go runSongInfoSync(syncCtx, store, orgID)
 
 	data := sc.buildSongInfoData(ctx, orgID)
 	data.SyncMsg = "Sync started in the background - refresh this page in a bit to see progress."

@@ -867,3 +867,54 @@ level" field, so this probe can only distinguish "has some Services
 access" from "has none" - it cannot tell PCO's own Viewer/Scheduler/
 Editor/Administrator levels apart. Anyone with at least Viewer access
 still signs in.
+
+## Addendum: priority-aware request throttle shipped in go-pco, adopted here (off by default)
+
+`pco-throttle-plan.md` (written 2026-09-02, prompted by a conversation
+during the roster cold-start fix above) specced a real fix for the gap
+this doc's mitigations above all work around by hand: Song Info's
+background sync, the person-data cache's background sync, and ordinary
+interactive traffic each self-throttle independently, tuned by hand
+against a shared "60% of budget should leave enough headroom" assumption,
+with no shared awareness of each other or of PCO's actual per-token
+budget at any given moment. Full design (public API, correctness
+reasoning for keying per access token rather than one global bucket,
+scheduling semantics, the deliberate no-anti-starvation tradeoff, testing
+plan) is in that doc - not repeated here.
+
+Shipped in `go-pco` `v0.18.0`: `pco.ConfigureThrottle`/`pco.WithPriority`,
+a per-token priority queue gated by a token bucket, off unless opted into
+via `PCO_THROTTLE_ENABLED=true` (or an explicit `ConfigureThrottle` call).
+This repo now pins that tag (`go.mod`) and:
+
+- Tags both background syncs' contexts at priority 20 (admitted after the
+  untagged default of 10) via `pco.WithPriority` -
+  `song_arrangement_cache.go`'s `runSongInfoSync` launch and
+  `person_data_cache.go`'s `runPersonDataSync` launch - so neither ever
+  delays interactive traffic sharing the same token, once the throttle is
+  actually turned on.
+- Leaves interactive/render-path calls untagged (default priority) -
+  no evidence yet that they need elevating above the default, and the
+  plan is explicit not to do this speculatively.
+- Does **not** enable the throttle itself. `PCO_THROTTLE_ENABLED` is
+  documented in `README.md`'s Setup section but left unset - no consumer
+  has hit an actual 429 yet (this doc's own mitigations above already
+  keep call volume well under budget), so this is defense-in-depth ready
+  to flip on, not a response to an observed problem. Turning it on is a
+  separate, later operational decision, not bundled into this adoption
+  step.
+- Default rate, if/when enabled: 60 requests/20s (`PCO_THROTTLE_RATE_PER_20S`,
+  matching this app's own existing 60%-of-ceiling convention above) -
+  deliberately more conservative than PCO's raw 100/20s ceiling or
+  go-pco's own originally-proposed 80/20s default, since raising it later
+  with real production signal is safer than shipping close to the wire
+  and hoping it holds.
+
+**Deliberately not done** (per the plan's own "Adoption in this repo"
+step 5): the existing hand-tuned pacing this addendum's intro calls
+out - `songInfoSyncBatchSize`/`songInfoSyncBatchPause` and the
+person-data cache's equivalent constants - is left exactly as-is. Those
+loops remain the real safety net until the throttle has actually run in
+production for a while with `PCO_THROTTLE_ENABLED=true`; simplifying them
+to a plain bounded fan-out before then would mean removing a working
+safety net before its replacement is even turned on, let alone proven.
