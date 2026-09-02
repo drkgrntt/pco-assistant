@@ -179,7 +179,7 @@ templ songDetailCard(data SetBuilderData, song SetSongView) {
 					@components.IconRemove()
 					Remove
 				</button>
-				if len(data.Candidates) > 0 {
+				if len(data.ReplaceCandidates) > 0 {
 					<form
 						class="replace-form"
 						hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/replace", data.ServiceTypeID, data.PlanID, song.ID) }
@@ -189,7 +189,7 @@ templ songDetailCard(data SetBuilderData, song SetSongView) {
 					>
 						<select name="song_id" required>
 							<option value="" selected disabled>Replace with...</option>
-							for _, cand := range data.Candidates {
+							for _, cand := range data.ReplaceCandidates {
 								<option value={ cand.SongID }>{ cand.Title }</option>
 							}
 						</select>

@@ -9,12 +9,15 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"pco-assistant/internal/scheduling"
+	"pco-assistant/internal/server/middleware"
 	views "pco-assistant/internal/views/scheduling"
 
 	pco "github.com/drkgrntt/go-pco"
+	"github.com/gofiber/fiber/v2"
 )
 
 func (sc *SchedulingController) buildSetBuilderDataWithErr(ctx context.Context, organizationID, serviceTypeID, planID, errMsg string) views.SetBuilderData {
@@ -282,10 +285,11 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 	}
 
 	// candidateConflicts/existing and repeated (below) are fetched up front,
-	// ahead of both the Suggestions loop and the main Candidates loop, since
-	// "Recommended next"/"Could use one more sing" (see SuggestionView,
-	// set_types.go) show the same conflict/repeat/arrangement/role/tag
-	// metadata the candidate list does, not just title + reason.
+	// ahead of both the Suggestions loop and the SongsToReinforce pass
+	// further down, since "Recommended next"/"Could use one more sing" (see
+	// SuggestionView, set_types.go) show the same conflict/repeat/
+	// arrangement/role/tag metadata the "Browse all songs" search list does
+	// (see candidateLookups.candidateSongView), not just title + reason.
 	candidateConflicts, existing, err := sc.store.AvoidPairings(ctx, organizationID, set.ID)
 	if err != nil {
 		data.ErrMsg = appendErr(data.ErrMsg, err.Error())
@@ -348,54 +352,55 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 		})
 	}
 
+	// lookups bundles everything candidateSongView needs to compute one
+	// not-yet-added song's full rich view - built once here and reused by
+	// BuildCandidatesSearch's own fetch of the same underlying data (see
+	// that handler, further down this file) for the "Browse all songs"
+	// search list.
+	lookups := candidateLookups{
+		titles:             titles,
+		rolesBySong:        rolesBySong,
+		roleTypeLabels:     roleTypeLabels,
+		tagsBySong:         tagsBySong,
+		tagCategoryLabels:  tagCategoryLabels,
+		candidateConflicts: candidateConflicts,
+		repeated:           repeated,
+		trackedNew:         trackedNew,
+		appearanceCounts:   appearanceCounts,
+		arrangementCache:   arrangementCache,
+	}
+
 	for _, song := range songs {
 		if inSet[song.ID] {
 			continue
 		}
 
-		roleViews, rolesAttr := songRoleViews(rolesBySong, roleTypeLabels, song.ID)
-		tagViews, tagsAttr := songTagViews(tagsBySong, tagCategoryLabels, song.ID)
+		// ReplaceCandidates is cheap - just id+title - so it's still built
+		// for the whole library on every render, unlike the rich
+		// CandidateSongView computation below (see
+		// views.SetBuilderData.ReplaceCandidates).
+		data.ReplaceCandidates = append(data.ReplaceCandidates, views.SongOptionView{SongID: song.ID, Title: song.Attributes.Title})
 
-		var conflictTitles []string
-		for _, conflictSongID := range candidateConflicts[song.ID] {
-			conflictTitles = append(conflictTitles, titleOrID(titles, conflictSongID))
-		}
-
+		// The rest of this loop - roles/tags/conflicts/arrangement info -
+		// used to run for every song in the library on every single Build
+		// page render, just to populate the "Browse all songs" list (see
+		// BuildCandidatesSearch's doc comment for why that's now a search
+		// endpoint instead, computed only for actual matches). The one
+		// thing left here that still needs it is SongsToReinforce, and only
+		// for a song that's actually reinforcement-eligible - a small
+		// fraction of a real library - so check that cheap map lookup first
+		// and skip the rich computation entirely for everything else.
 		newSongLabel := reinforcementLabel(trackedNew, appearanceCounts, song.ID)
-
-		// Cache-only, deliberately no live-fetch fallback here (unlike
-		// resolveArrangementInfo for ServiceOrder above) - Planning Center
-		// has no bulk "arrangements for every song" call, so doing this for
-		// the whole candidate library would cost one request per song on
-		// every render. An uncached candidate just shows nothing until it's
-		// either added to a set once (which does the live fetch/backfill)
-		// or covered by a Song Info sync.
-		var arrangementInfo string
-		if info, ok := arrangementCache[song.ID]; ok {
-			arrangementInfo = formatArrangementInfo(info)
+		if newSongLabel == "" {
+			continue
 		}
 
-		candidate := views.CandidateSongView{
-			SongID:           song.ID,
-			Title:            song.Attributes.Title,
-			ConflictTitles:   conflictTitles,
-			RecentlyRepeated: repeated[song.ID],
-			NewSongLabel:     newSongLabel,
-			ArrangementInfo:  arrangementInfo,
-			Roles:            roleViews,
-			RolesAttr:        rolesAttr,
-			Tags:             tagViews,
-			TagsAttr:         tagsAttr,
-		}
-		data.Candidates = append(data.Candidates, candidate)
+		candidate := lookups.candidateSongView(song)
 
 		// SongsToReinforce is its own list, not merged into data.Suggestions:
 		// Suggestions is anchored to the last song in the set and would stay
 		// empty on an empty set, but a still-new song deserves a nudge
-		// regardless of what's already in the set - see set_types.go. Reuses
-		// this same iteration's already-resolved candidate metadata (see
-		// SuggestionView's doc comment) rather than looking any of it up
-		// again.
+		// regardless of what's already in the set - see set_types.go.
 		switch newSongLabel {
 		case "Sung once":
 			data.SongsToReinforce = append(data.SongsToReinforce, views.SuggestionView{
@@ -411,6 +416,234 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 	}
 
 	return data
+}
+
+// candidateLookups bundles the per-organization/per-set lookups needed to
+// compute one not-yet-added song's rich CandidateSongView (see
+// candidateSongView below) - shared by buildSetBuilderData's
+// SongsToReinforce pass above and BuildCandidatesSearch's "Browse all
+// songs" search endpoint further down, the only two places that still need
+// this per-song computation now that the full candidate library isn't
+// rendered unconditionally on every page load.
+type candidateLookups struct {
+	titles             map[string]string
+	rolesBySong        map[string][]scheduling.SongRole
+	roleTypeLabels     map[string]string
+	tagsBySong         map[string][]scheduling.SongTag
+	tagCategoryLabels  map[string]string
+	candidateConflicts map[string][]string
+	repeated           map[string]bool
+	trackedNew         map[string]bool
+	appearanceCounts   map[string]int
+	arrangementCache   map[string]scheduling.SongArrangementInfo
+}
+
+// candidateSongView computes song's full CandidateSongView from l's
+// already-fetched lookups - the exact per-song computation
+// buildSetBuilderData's Candidates loop used to run unconditionally for the
+// whole library on every render, factored out so BuildCandidatesSearch can
+// run it too, but only for songs that actually match a search (see that
+// handler's doc comment).
+func (l candidateLookups) candidateSongView(song pco.SongData) views.CandidateSongView {
+	roleViews, rolesAttr := songRoleViews(l.rolesBySong, l.roleTypeLabels, song.ID)
+	tagViews, tagsAttr := songTagViews(l.tagsBySong, l.tagCategoryLabels, song.ID)
+
+	var conflictTitles []string
+	for _, conflictSongID := range l.candidateConflicts[song.ID] {
+		conflictTitles = append(conflictTitles, titleOrID(l.titles, conflictSongID))
+	}
+
+	// Cache-only, deliberately no live-fetch fallback here (unlike
+	// resolveArrangementInfo for ServiceOrder) - Planning Center has no bulk
+	// "arrangements for every song" call, so doing this for the whole
+	// candidate library would cost one request per song. An uncached
+	// candidate just shows nothing until it's either added to a set once
+	// (which does the live fetch/backfill) or covered by a Song Info sync.
+	var arrangementInfo string
+	if info, ok := l.arrangementCache[song.ID]; ok {
+		arrangementInfo = formatArrangementInfo(info)
+	}
+
+	return views.CandidateSongView{
+		SongID:           song.ID,
+		Title:            song.Attributes.Title,
+		ConflictTitles:   conflictTitles,
+		RecentlyRepeated: l.repeated[song.ID],
+		NewSongLabel:     reinforcementLabel(l.trackedNew, l.appearanceCounts, song.ID),
+		ArrangementInfo:  arrangementInfo,
+		Roles:            roleViews,
+		RolesAttr:        rolesAttr,
+		Tags:             tagViews,
+		TagsAttr:         tagsAttr,
+	}
+}
+
+// candidateSearchLimit caps BuildCandidatesSearch's response - a broad or
+// even empty-role/broad-text query still only ever renders this many rich
+// rows, never hundreds, no matter how large the underlying library is (see
+// that handler's own doc comment).
+const candidateSearchLimit = 50
+
+// BuildCandidatesSearch backs the set builder's "Browse all songs" search
+// box and role-filter buttons (set_builder.templ) - the search-driven
+// replacement for what buildSetBuilderData's Candidates loop used to
+// compute unconditionally, for the entire not-yet-added song library, on
+// every single Build page render regardless of whether this collapsible
+// section was even open (a real church library can run to hundreds of
+// songs - see pco-api-risks.md). Same hx-target-a-narrow-fragment shape as
+// BuildPlansSearch (build.go): this renders only
+// views.CandidateSearchResults, the <ul id="set-candidates">'s inner
+// content, never the whole page or even the whole builder body - so typing
+// here never touches (or loses focus in) anything else on the page.
+//
+// q/role come straight from the query string (search text and the
+// currently-active role-filter button's code - see toggleRoleFilter,
+// scheduling.js); "" for either means "no filter on that axis." With
+// neither set, this deliberately returns the empty-prompt state rather
+// than the first candidateSearchLimit songs in the library - not fetching
+// or computing anything until someone actually searches is the entire
+// point of this being server-driven instead of eagerly rendering
+// everything (see CandidateSearchResults' own doc comment for the four
+// states it can render). Matches are capped at candidateSearchLimit; the
+// results view shows a "showing top N of M" hint whenever that cap is
+// actually hit.
+func (sc *SchedulingController) BuildCandidatesSearch(c *fiber.Ctx) error {
+	organizationID := middleware.CurrentOrganizationID(c)
+	ctx := middleware.RequestContext(c)
+	serviceTypeID := c.Params("service_type_id")
+	planID := c.Params("plan_id")
+	query := c.Query("q")
+	role := c.Query("role")
+
+	candidates, totalMatches, capped := sc.searchCandidates(ctx, organizationID, serviceTypeID, planID, query, role)
+	return render(c, views.CandidateSearchResults(serviceTypeID, planID, candidates, query, role, totalMatches, capped))
+}
+
+// searchCandidates is BuildCandidatesSearch's actual work, split out so the
+// pure matching/capping logic below (candidateMatchesSearch/
+// candidateMatchesRole/capCandidates) can be unit tested without a live
+// PCO/DB round trip. Fetches its own copy of the same lookups
+// buildSetBuilderData gathers for its SongsToReinforce pass (roles, tags,
+// avoid-pairing conflicts, arrangement cache, repeat history, reinforcement
+// tracking) - cheaper than it sounds despite the duplication: none of
+// buildSetBuilderData's plan-item/order-of-service fetches (GetPlan,
+// GetItems, note categories) are needed here, fetchActiveSongs itself is
+// the same 60s-cached call every other Build page hit already reuses (see
+// pco-api-risks.md), and - the actual point of this endpoint existing -
+// only the songs that actually match query/role ever get the full
+// candidateSongView treatment, capped at candidateSearchLimit, rather than
+// the whole library. Best-effort throughout, same convention as
+// buildSetBuilderData: a failed lookup just degrades whatever it backs
+// (e.g. no conflict badges) instead of failing the search outright.
+func (sc *SchedulingController) searchCandidates(ctx context.Context, organizationID, serviceTypeID, planID, query, role string) (results []views.CandidateSongView, totalMatches int, capped bool) {
+	set, err := sc.store.GetOrCreateSet(ctx, organizationID, serviceTypeID, planID)
+	if err != nil {
+		return nil, 0, false
+	}
+	setSongs, err := sc.store.ListSetSongs(ctx, set.ID)
+	if err != nil {
+		return nil, 0, false
+	}
+	inSet := make(map[string]bool, len(setSongs))
+	for _, ss := range setSongs {
+		inSet[ss.SongID] = true
+	}
+
+	songs, _ := fetchActiveSongs(ctx, organizationID)
+	titles := songTitleMap(songs)
+
+	roleTypes, _ := sc.store.ListSongRoleTypes(ctx)
+	roleTypeLabels := songRoleTypeLabelMap(roleTypes)
+	allRoles, _ := sc.store.ListSongRoles(ctx, organizationID, "", "")
+	rolesBySong := songRolesBySong(allRoles)
+
+	allTags, _ := sc.store.ListSongTags(ctx, organizationID, "", "")
+	tagCategories, _ := sc.store.ListSongTagCategories(ctx)
+	tagsBySong := songTagsBySong(allTags)
+	tagCategoryLabels := songTagCategoryLabelMap(tagCategories)
+
+	trackedNew, _ := sc.store.TrackedNewSongs(ctx, organizationID)
+	appearanceCounts, _ := sc.store.PublishedSongAppearanceCounts(ctx, organizationID)
+	arrangementCache, _ := sc.store.SongArrangementInfo(ctx, organizationID)
+
+	candidateConflicts, _, _ := sc.store.AvoidPairings(ctx, organizationID, set.ID)
+	history := fetchRecentPlanHistory(ctx, serviceTypeID)
+
+	lookups := candidateLookups{
+		titles:             titles,
+		rolesBySong:        rolesBySong,
+		roleTypeLabels:     roleTypeLabels,
+		tagsBySong:         tagsBySong,
+		tagCategoryLabels:  tagCategoryLabels,
+		candidateConflicts: candidateConflicts,
+		repeated:           history.RepeatedSongs,
+		trackedNew:         trackedNew,
+		appearanceCounts:   appearanceCounts,
+		arrangementCache:   arrangementCache,
+	}
+
+	var matches []views.CandidateSongView
+	for _, song := range songs {
+		if inSet[song.ID] {
+			continue
+		}
+		// Matching happens against the same cheap attrs (rolesAttr/
+		// tagsAttr) the old client-side filterCandidates used - computed
+		// here just to test the filter, and again inside
+		// candidateSongView for the songs that actually pass it (a second,
+		// identical map lookup - simpler than threading them through, and
+		// negligible next to everything else this loop already does per
+		// song).
+		_, rolesAttr := songRoleViews(rolesBySong, roleTypeLabels, song.ID)
+		if !candidateMatchesRole(rolesAttr, role) {
+			continue
+		}
+		_, tagsAttr := songTagViews(tagsBySong, tagCategoryLabels, song.ID)
+		if !candidateMatchesSearch(song.Attributes.Title, tagsAttr, query) {
+			continue
+		}
+		matches = append(matches, lookups.candidateSongView(song))
+	}
+
+	totalMatches = len(matches)
+	results, capped = capCandidates(matches, candidateSearchLimit)
+	return results, totalMatches, capped
+}
+
+// candidateMatchesSearch reports whether a not-yet-added song matches a
+// typed search term against its title or tag values (tagsAttr is already
+// lowercased - see songTagViews), case-insensitive substring - the same two
+// fields the old client-side filterCandidates matched against. "" (nothing
+// typed) matches everything.
+func candidateMatchesSearch(title, tagsAttr, query string) bool {
+	query = strings.ToLower(strings.TrimSpace(query))
+	if query == "" {
+		return true
+	}
+	haystack := strings.ToLower(title) + " " + tagsAttr
+	return strings.Contains(haystack, query)
+}
+
+// candidateMatchesRole reports whether role (the active role-filter
+// button's code, "" when none is active) is one of rolesAttr's
+// space-separated codes - "" matches everything, same as
+// candidateMatchesSearch.
+func candidateMatchesRole(rolesAttr, role string) bool {
+	if role == "" {
+		return true
+	}
+	return strings.Contains(" "+rolesAttr+" ", " "+role+" ")
+}
+
+// capCandidates trims matches down to at most limit rows, reporting
+// whether it actually had to (see views.CandidateSearchResults' "showing
+// top N of M" hint) - split out from searchCandidates so this small but
+// easy-to-get-backwards slicing has its own direct test.
+func capCandidates(matches []views.CandidateSongView, limit int) (capped []views.CandidateSongView, wasCapped bool) {
+	if len(matches) <= limit {
+		return matches, false
+	}
+	return matches[:limit], true
 }
 
 // reinforcementLabel returns the short badge text for a song that's
@@ -453,38 +686,98 @@ type recentPlanHistory struct {
 	AverageLength int
 }
 
+// recentPlanHistoryCacheTTL bounds how stale a cached recentPlanHistory can
+// be - same value and reasoning as scheduling.FetchActiveSongs'
+// songCacheTTL (see pco_songs.go): the two most recent *past* plans for a
+// service type are effectively session-stable (a plan doesn't cross from
+// future to past mid-session in practice), so a minute of staleness costs
+// nothing, and this exists purely to stop re-fetching/re-summing the same
+// two plans' items on every full builder render (add/remove/publish/
+// discard already re-triggers buildSetBuilderData from scratch) and now,
+// since BuildCandidatesSearch also calls this, on every debounced
+// candidate search too - each call was otherwise a live GetPlans + 2x
+// GetItems, uncached, exactly the kind of hot-path PCO call CLAUDE.md's
+// own "PCO API calls" section says to cache when the underlying data is
+// session-stable like this.
+const recentPlanHistoryCacheTTL = 60 * time.Second
+
+// cachedRecentPlanHistory is one service type's last-computed
+// recentPlanHistory, plus when it was computed.
+type cachedRecentPlanHistory struct {
+	history  recentPlanHistory
+	cachedAt time.Time
+}
+
+var (
+	recentPlanHistoryCacheMu sync.Mutex
+	recentPlanHistoryCache   = map[string]cachedRecentPlanHistory{}
+)
+
 // fetchRecentPlanHistory returns serviceTypeID's recent-plan history,
 // straight from Planning Center's own item data - not this tool's local
 // sets, since the point of both signals it backs is to compare against
 // what actually got sung/ran, regardless of whether it was built here.
-// Fewer than two past plans, or any lookup failure along the way, yields a
-// zero-value recentPlanHistory rather than an error: this is an advisory
-// nicety for the builder, not something that should block it. The actual
-// overlap computation lives in songsInBoth so it can be unit tested
-// without hitting Planning Center.
+// Cached per service type (see recentPlanHistoryCacheTTL) - a PCO service
+// type id is already org-scoped (it belongs to exactly one PCO account),
+// so no separate organization key is needed, mirroring FetchActiveSongs'
+// own per-organization cache one level up. A transient PCO failure is
+// never cached (see fetchRecentPlanHistoryFromPCO's ok return) so it can't
+// pin a stale/empty result in for the rest of the window - same fail-safe
+// convention as FetchActiveSongs. The actual overlap computation lives in
+// songsInBoth so it can be unit tested without hitting Planning Center.
 func fetchRecentPlanHistory(ctx context.Context, serviceTypeID string) recentPlanHistory {
+	now := time.Now()
+
+	recentPlanHistoryCacheMu.Lock()
+	entry, ok := recentPlanHistoryCache[serviceTypeID]
+	recentPlanHistoryCacheMu.Unlock()
+	if ok && now.Sub(entry.cachedAt) < recentPlanHistoryCacheTTL {
+		return entry.history
+	}
+
+	history, fetchOK := fetchRecentPlanHistoryFromPCO(ctx, serviceTypeID)
+	if fetchOK {
+		recentPlanHistoryCacheMu.Lock()
+		recentPlanHistoryCache[serviceTypeID] = cachedRecentPlanHistory{history: history, cachedAt: now}
+		recentPlanHistoryCacheMu.Unlock()
+	}
+	return history
+}
+
+// fetchRecentPlanHistoryFromPCO does fetchRecentPlanHistory's actual live
+// work. ok is false only for a genuine PCO call failure (not cache-worthy -
+// might well succeed a moment later); fewer than two past plans to compare
+// is a legitimate, stable answer (ok=true, zero-value recentPlanHistory),
+// same as any other successful-but-empty result - serviceLengthWarning
+// already treats AverageLength==0 as "nothing to compare against" rather
+// than "this plan is infinitely long," so callers see no behavior
+// difference from before this had a cache at all.
+func fetchRecentPlanHistoryFromPCO(ctx context.Context, serviceTypeID string) (history recentPlanHistory, ok bool) {
 	plans, err := pco.GetPlans(ctx, serviceTypeID, &pco.PlansParams{
 		Filter:  "past",
 		OrderBy: "-sort_date",
 		PerPage: recentTwoPlanLookback,
 	})
-	if err != nil || len(plans.Data) < recentTwoPlanLookback {
-		return recentPlanHistory{}
+	if err != nil {
+		return recentPlanHistory{}, false
+	}
+	if len(plans.Data) < recentTwoPlanLookback {
+		return recentPlanHistory{}, true
 	}
 
 	items, err := pco.GetItems(ctx, serviceTypeID, plans.Data[0].ID, nil)
 	if err != nil {
-		return recentPlanHistory{}
+		return recentPlanHistory{}, false
 	}
 	prevItems, err := pco.GetItems(ctx, serviceTypeID, plans.Data[1].ID, nil)
 	if err != nil {
-		return recentPlanHistory{}
+		return recentPlanHistory{}, false
 	}
 
 	return recentPlanHistory{
 		RepeatedSongs: songsInBoth(items.Data, prevItems.Data),
 		AverageLength: (totalItemLength(items.Data) + totalItemLength(prevItems.Data)) / recentTwoPlanLookback,
-	}
+	}, true
 }
 
 // totalItemLength sums Length (seconds, PCO's own unit for the attribute)
@@ -964,10 +1257,10 @@ func songRolesBySong(roles []scheduling.SongRole) map[string][]scheduling.SongRo
 
 // songRoleViews resolves songID's roles (via rolesBySong, see
 // songRolesBySong) to display view models (see views.SongRoleView) plus
-// their space-joined codes for the candidate list's client-side
-// role-filter/search (RolesAttr - see filterCandidates in scheduling.js).
-// Shared by every place a song's roles need to go on screen: set songs,
-// order-of-service rows, and not-yet-added candidates.
+// their space-joined codes (RolesAttr - matched server-side against a
+// role-filter query param by candidateMatchesRole below, for the search
+// endpoint). Shared by every place a song's roles need to go on screen: set
+// songs, order-of-service rows, and not-yet-added candidates.
 func songRoleViews(rolesBySong map[string][]scheduling.SongRole, roleTypeLabels map[string]string, songID string) ([]views.SongRoleView, string) {
 	roles := rolesBySong[songID]
 	if len(roles) == 0 {
@@ -985,10 +1278,10 @@ func songRoleViews(rolesBySong map[string][]scheduling.SongRole, roleTypeLabels 
 
 // songTagViews resolves songID's tags (via tagsBySong, see songTagsBySong)
 // to display view models (see views.SongTagView) plus their space-joined,
-// lowercased values for the candidate list's client-side search (TagsAttr -
-// see filterCandidates in scheduling.js) - the tag equivalent of
+// lowercased values (TagsAttr - matched server-side against a typed search
+// term by candidateMatchesSearch below) - the tag equivalent of
 // songRoleViews above. Shared by every not-yet-added-song list that shows
-// tag badges: the candidate list and the suggestion lists (see
+// tag badges: the candidate search list and the suggestion lists (see
 // SuggestionView, set_types.go) alike.
 func songTagViews(tagsBySong map[string][]scheduling.SongTag, tagCategoryLabels map[string]string, songID string) ([]views.SongTagView, string) {
 	tags := tagsBySong[songID]

@@ -41,8 +41,19 @@ type SetBuilderData struct {
 	SetSongs          []SetSongView
 	ServiceOrder      []ServiceOrderRow
 	Suggestions       []SuggestionView
-	Candidates        []CandidateSongView
 	ExistingConflicts []string
+
+	// ReplaceCandidates is every active, not-yet-in-this-set song's id+
+	// title - just enough to populate the replace-form <select> dropdowns
+	// (this song's own row action in set_builder.templ, and the song
+	// detail card's sidebar action in song_detail_card.templ - both share
+	// this same field). Deliberately the lightweight SongOptionView, not
+	// the richer CandidateSongView the "Browse all songs" list uses (see
+	// CandidateSearchResults/BuildCandidatesSearch) - a plain native
+	// <select> only needs an id and a title to work as a picker, so this
+	// stays cheap to populate for the whole library on every render,
+	// unlike that search-driven list - see buildSetBuilderData.
+	ReplaceCandidates []SongOptionView
 
 	// SongsToReinforce lists candidates that are genuinely new to the
 	// church (see tracked_new_songs/TrackNewSong) and have only been sung
@@ -268,12 +279,25 @@ type PlanRow struct {
 	RosterStatus string
 }
 
+// SongOptionView is a lightweight song option for a plain native <select>
+// picker - just an id and a title, unlike the richer CandidateSongView
+// below. See SetBuilderData.ReplaceCandidates, the only thing that
+// currently uses this.
+type SongOptionView struct {
+	SongID string
+	Title  string
+}
+
 // CandidateSongView is a song not yet in the set, offered for adding via
-// the search/role-filter list. ConflictTitles lists the titles of set songs
-// it has an avoid_pairing relationship with (empty when there's no
-// conflict); RolesAttr is a space-separated role list ("opener response")
-// for the candidate list's client-side filtering - see filterCandidates in
-// web/static/js/scheduling.js.
+// the "Browse all songs" search list (see CandidateSearchResults,
+// BuildCandidatesSearch) - computed only for songs that actually match a
+// search/role-filter request, never for the whole library at once (see
+// that handler's doc comment for why). ConflictTitles lists the titles of
+// set songs it has an avoid_pairing relationship with (empty when there's
+// no conflict); RolesAttr/TagsAttr are space-separated codes/values kept
+// around from when filtering was client-side - now unused by any JS, but
+// left on the view model since songCandidateMeta (set_builder.templ) has
+// no other use for them and removing them buys nothing.
 type CandidateSongView struct {
 	SongID         string
 	Title          string
@@ -291,24 +315,17 @@ type CandidateSongView struct {
 	// reinforcement).
 	NewSongLabel string
 	// ArrangementInfo mirrors SetSongView.ArrangementInfo, but is populated
-	// cache-only (see buildSetBuilderData's Candidates loop) - "" whenever
-	// this song hasn't been cached yet (never added to a set, and not
-	// covered by a Song Info sync), not fetched live for the whole
+	// cache-only (see candidateLookups.candidateSongView, sets_builder.go) -
+	// "" whenever this song hasn't been cached yet (never added to a set,
+	// and not covered by a Song Info sync), not fetched live for the whole
 	// candidate library the way a set song's is.
 	ArrangementInfo string
 	// Roles is this song's assigned roles, for display as badges - see
-	// SetSongView.Roles, which this mirrors. RolesAttr is the same roles'
-	// codes, space-joined, as a data attribute for the candidate list's
-	// client-side role-filter buttons and search - see filterCandidates in
-	// web/static/js/scheduling.js.
+	// SetSongView.Roles, which this mirrors.
 	Roles     []SongRoleView
 	RolesAttr string
 	// Tags is this song's theme/scripture/idea tags (see song_tags.go), for
-	// display as badges. TagsAttr is the same tags' values, space-joined and
-	// lowercased, as a data attribute for the candidate list's client-side
-	// search - see filterCandidates in web/static/js/scheduling.js, which
-	// matches typed text against title or tags the same way RolesAttr
-	// already backs the role-filter buttons.
+	// display as badges.
 	Tags     []SongTagView
 	TagsAttr string
 }

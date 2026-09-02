@@ -192,6 +192,47 @@ templ songCandidateMeta(cand CandidateSongView) {
 	}
 }
 
+// CandidateSearchResults is the "Browse all songs" list's actual content -
+// swapped into #set-candidates' innerHTML by the search box/role filters
+// (see set_builder.templ's candidate-search input) and by the initial page
+// render itself, both going through the exact same component so there's
+// only one place this list's empty/prompt/capped states are ever written.
+// candidates is already the final, possibly-capped set to render (see
+// BuildCandidatesSearch, sets_builder.go) - this component doesn't filter
+// or cap anything itself, just decides which of the four states to show:
+//
+//   - No query and no role filter: a prompt, not an empty list - the whole
+//     point of this being search-driven is that nothing gets fetched or
+//     computed until someone actually asks for it (see that handler's doc
+//     comment).
+//   - A query/filter that matched nothing: says so, rather than looking
+//     identical to "haven't searched yet."
+//   - Normal results.
+//   - Capped results: the same rows, plus a trailing hint that more exist -
+//     see BuildCandidatesSearch's candidateSearchLimit.
+templ CandidateSearchResults(serviceTypeID, planID string, candidates []CandidateSongView, query, roleFilter string, totalMatches int, capped bool) {
+	if query == "" && roleFilter == "" {
+		<li class="muted">Type to search your song library.</li>
+	} else if len(candidates) == 0 {
+		<li class="muted">No matching songs.</li>
+	} else {
+		for _, cand := range candidates {
+			@components.ListItem("candidate-row", nil, cand.Title) {
+				@songCandidateMeta(cand)
+				<form hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/songs", serviceTypeID, planID) } hx-target="#set-builder-body" hx-swap="outerHTML">
+					<input type="hidden" name="song_id" value={ cand.SongID }/>
+					<button type="submit" class="icon-btn" aria-label="Add to set" title="Add to set">
+						@components.IconAdd()
+					</button>
+				</form>
+			}
+		}
+		if capped {
+			<li class="muted">{ fmt.Sprintf("Showing top %d of %d matches - refine your search.", len(candidates), totalMatches) }</li>
+		}
+	}
+}
+
 // SetBuilderBodyContent is the actual content - split out from
 // SetBuilderBody so the Build page's initial full-page render
 // (build.templ) can embed just this, without also embedding
@@ -366,7 +407,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 												>
 													@components.IconRemove()
 												</button>
-												if len(data.Candidates) > 0 {
+												if len(data.ReplaceCandidates) > 0 {
 													<form
 														class="replace-form"
 														hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/replace", data.ServiceTypeID, data.PlanID, row.Song.ID) }
@@ -376,7 +417,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 													>
 														<select name="song_id" required>
 															<option value="" selected disabled>Replace with...</option>
-															for _, cand := range data.Candidates {
+															for _, cand := range data.ReplaceCandidates {
 																<option value={ cand.SongID }>{ cand.Title }</option>
 															}
 														</select>
@@ -533,48 +574,56 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 			Generated straight from data.RoleTypes (song_role_types) rather
 			than two hardcoded opener/response buttons - a role added to that
 			table (Song Roles setup page or the quick-add panel below, no code
-			change needed) is filterable immediately, same "no code change
-			needed" philosophy the table already has for storage. filterCandidates
-			(scheduling.js) already matches generically against whichever
-			data-role was clicked - see CandidateSongView.RolesAttr.
+			change needed) is filterable immediately. toggleRoleFilter
+			(scheduling.js) tracks which one is active in the hidden
+			#candidate-role-filter input below, then re-triggers the search
+			box's own htmx request - see that input's own comment for why.
 		-->
 		<div class="role-filters">
 			for _, rt := range data.RoleTypes {
 				<button type="button" class="role-filter" data-role={ rt.Code } onclick="toggleRoleFilter(this)">{ rt.Label }</button>
 			}
 		</div>
+		<!--
+			The search box and role filters both feed one server-driven
+			search request (BuildCandidatesSearch) rather than filtering an
+			already-rendered list client-side - see that handler's doc
+			comment for why (a library of hundreds of songs otherwise means
+			hundreds of rich rows computed and rendered on every Build page
+			load, whether or not this section is even open). The role filter
+			has no form control of its own to carry its value along with the
+			search box's own request, so it's mirrored into this hidden
+			input (kept in sync by toggleRoleFilter) and pulled in via
+			hx-include; "search" is a synthetic event name (see
+			htmx.trigger in toggleRoleFilter), not a real DOM search event,
+			since this is a plain text input, not type="search".
+		-->
+		<input type="hidden" id="candidate-role-filter" name="role" value=""/>
 		<input
 			type="text"
 			id="candidate-search"
+			name="q"
 			placeholder="Search songs or tags..."
 			autocomplete="off"
-			oninput="filterCandidates()"
+			hx-get={ fmt.Sprintf("/scheduling/build/%s/%s/candidates/search", data.ServiceTypeID, data.PlanID) }
+			hx-trigger="input changed delay:300ms, search"
+			hx-target="#set-candidates"
+			hx-swap="innerHTML"
+			hx-include="#candidate-role-filter"
+			oninput="openCandidatesSection()"
 		/>
 		<!--
 			Open by default (see collapsibleSection's open param) - was
 			collapsed on the reasoning that the full library is "the busiest
 			thing on this page otherwise", but the toggle/swap-memory
 			behavior is unaffected either way: collapsing it still works
-			exactly as before, and filterCandidates()/toggleRoleFilter()
+			exactly as before, and openCandidatesSection()/toggleRoleFilter()
 			(scheduling.js) still force it open the moment a search term or
 			role filter is used, for whoever does collapse it.
 		-->
 		@collapsibleSection("find-songs-candidates", "Browse all songs", true) {
 			<ul id="set-candidates" class="candidate-list">
-				for _, cand := range data.Candidates {
-					@components.ListItem("candidate-row", templ.Attributes{"data-title": cand.Title, "data-roles": cand.RolesAttr, "data-tags": cand.TagsAttr}, cand.Title) {
-						@songCandidateMeta(cand)
-						<form hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/songs", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
-							<input type="hidden" name="song_id" value={ cand.SongID }/>
-							<button type="submit" class="icon-btn" aria-label="Add to set" title="Add to set">
-								@components.IconAdd()
-							</button>
-						</form>
-					}
-				}
-				if len(data.Candidates) == 0 {
-					<li class="muted">No more songs to add.</li>
-				}
+				@CandidateSearchResults(data.ServiceTypeID, data.PlanID, nil, "", "", 0, false)
 			</ul>
 		}
 		<!--
