@@ -3,6 +3,7 @@ package controllers
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"time"
 
 	"pco-assistant/internal/auth"
@@ -92,6 +93,38 @@ func (ac *AuthController) Callback(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadGateway).SendString("looking up your Planning Center organization: " + err.Error())
 	}
 
+	// Gate sign-in on the person actually having some access to the
+	// Services product in PCO - without this, anyone who can complete
+	// PCO's OAuth consent screen for the org gets a session (and a billed
+	// seat, see auth.SeatCounts) even with zero Services access.
+	//
+	// This is deliberately coarse: go-pco (and PCO's API underneath it)
+	// exposes no clean "this person's Services permission level" field,
+	// so the only reliable, buildable signal is whether a live call into
+	// a Services endpoint succeeds or 401/403s. That can't distinguish
+	// PCO's own Viewer/Scheduler/Editor/Administrator levels from each
+	// other - a known, accepted limitation, not a bug - it only filters
+	// out zero-access logins. GetServiceTypes with PerPage: 1 is the
+	// cheapest such probe: one request, smallest page, we only care about
+	// success vs. 401/403, never the actual data.
+	//
+	// Deliberately calls pco.GetServiceTypes directly here rather than
+	// the org-scoped, cached scheduling.FetchServiceTypes wrapper used
+	// elsewhere (build.go/home.go/people.go): that cache is keyed only by
+	// organization id, not by which person's token made the call, so a
+	// cache hit from one admin's earlier session could wrongly let a
+	// different, access-less person's login through this gate.
+	if _, err := pco.GetServiceTypes(pco.WithAccessToken(c.Context(), tokenResult.AccessToken), &pco.ServiceTypesParams{PerPage: 1}); isServicesAccessDenied(err) {
+		return c.Status(fiber.StatusForbidden).SendString("Your Planning Center account doesn't have access to Services, so it can't be used with this app. Ask whoever manages your church's Planning Center account to grant you Services access, then try signing in again.")
+	} else if err != nil {
+		// Any other error (network blip, PCO 5xx, etc.) fails OPEN - log
+		// and let sign-in continue, same tolerance this handler already
+		// gives UpsertOrganization a few lines below. Only a confirmed
+		// 401/403 (definitely no access) should ever block sign-in; an
+		// ambiguous failure shouldn't lock out a legitimate admin.
+		logger.Error("checking Services access failed, allowing sign-in", "error", err)
+	}
+
 	// Best-effort, unlike the org lookup above: this is account-level
 	// bookkeeping (see auth.UpsertOrganization), not something a request
 	// gets scoped by, so a failure here shouldn't block sign-in.
@@ -122,6 +155,19 @@ func (ac *AuthController) Logout(c *fiber.Ctx) error {
 	c.ClearCookie(middleware.SessionCookieName)
 
 	return c.Redirect("/login")
+}
+
+// isServicesAccessDenied reports whether err is a *pco.RequestError with a
+// 401 or 403 status - i.e. PCO confirmed this person has no access, as
+// opposed to an ambiguous failure (network error, PCO 5xx, timeout) that
+// shouldn't block sign-in. Factored out of Callback so the classification
+// itself is unit-testable without exercising the whole OAuth handshake.
+func isServicesAccessDenied(err error) bool {
+	if err == nil {
+		return false
+	}
+	var reqErr *pco.RequestError
+	return errors.As(err, &reqErr) && (reqErr.StatusCode == 401 || reqErr.StatusCode == 403)
 }
 
 func randomState() (string, error) {

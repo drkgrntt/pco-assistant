@@ -824,3 +824,46 @@ library/org size; a bulk reset has no such natural bound and belongs on a
 settings/account-level page this app doesn't have yet, not bolted onto
 either cache's own read path. Out of scope for this change - deferred
 until that page exists.
+
+## Addendum: one new per-login GetServiceTypes probe call, gating sign-in on Services access
+
+Not a hot-render-path risk like the fixes above - a new call, but a small
+and deliberately bounded one, added to `auth.go`'s `Callback` (the OAuth
+sign-in handler) rather than any page render. Before this, anyone who
+could complete PCO's OAuth consent screen for an organization got a
+session (and a billed seat, see `auth.SeatCounts`) regardless of whether
+their PCO account had any access to the Services product at all.
+
+`Callback` now makes exactly one extra live PCO call per login: a
+`pco.GetServiceTypes(ctx, &pco.ServiceTypesParams{PerPage: 1})` probe,
+authenticated as the person signing in, right after the existing
+`GetOrganization` lookup succeeds. `PerPage: 1` keeps it the cheapest
+possible request - the response body is discarded entirely; only whether
+the call succeeded or came back 401/403 is used. A confirmed 401/403
+blocks sign-in (no session created, no cookie set); any other error
+(network blip, PCO 5xx, timeout) fails **open** and lets sign-in proceed,
+matching this handler's existing tolerance for `UpsertOrganization`
+failures a few lines below - an ambiguous failure shouldn't lock out a
+legitimate admin. The 401/403-vs-other classification is factored into
+`isServicesAccessDenied` (`auth.go`), unit-tested directly in
+`auth_service_access_test.go` since `internal/auth`'s OAuth
+token/userinfo calls have no `pco.SetBaseURLForTesting`-style seam to
+drive a full handler-level `httptest` test the way PCO-data-fetching code
+elsewhere in this doc gets tested.
+
+Deliberately calls `pco.GetServiceTypes` directly rather than the
+org-scoped, cached `scheduling.FetchServiceTypes` wrapper (the
+"`GetServiceTypes` cached" addendum above) used by
+`build.go`/`home.go`/`people.go`: that cache is keyed only by
+organization id, not by which person's token made the call, so a cache
+hit warmed by one admin's earlier session could wrongly let a different,
+access-less person's login through this gate. This call is also
+per-login only, not per-render, so there was no meaningful call-volume
+reason to route it through the cache anyway.
+
+Known, accepted ceiling (not something to revisit here): PCO's API, as
+wrapped by `go-pco`, exposes no clean "this person's Services permission
+level" field, so this probe can only distinguish "has some Services
+access" from "has none" - it cannot tell PCO's own Viewer/Scheduler/
+Editor/Administrator levels apart. Anyone with at least Viewer access
+still signs in.
