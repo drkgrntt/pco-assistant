@@ -22,11 +22,14 @@ const refreshBuffer = 5 * time.Minute
 // publicPrefixes never require a session: infra health checks, the sign-in
 // flow itself, static assets, the PWA manifest/service worker (which
 // must be reachable pre-login for install prompts and are root-served, not
-// under /static/, so they need their own entries here), and Stripe's
+// under /static/, so they need their own entries here), Stripe's
 // webhook (which authenticates itself via a signature - see
 // internal/billing.HandleWebhook - not a session cookie, since Stripe's
-// servers have neither).
-var publicPrefixes = []string{"/health", "/login", "/auth/", "/static/", "/sw.js", "/manifest.json", "/billing/webhook"}
+// servers have neither), and the Pricing/HowItWorks marketing pages
+// (MarketingController) - unlike "/" (Landing) these have no signed-in
+// variant at all, so they don't need Landing's soft-auth special case
+// below, just a straight allowlist entry like /login.
+var publicPrefixes = []string{"/health", "/login", "/auth/", "/static/", "/sw.js", "/manifest.json", "/billing/webhook", "/pricing", "/how-it-works"}
 
 // RequireAuth gates every route not covered by publicPrefixes behind a
 // valid, unexpired session. On success it stashes the signed-in person's id
