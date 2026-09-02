@@ -241,6 +241,14 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 		data.PlanTitle = plan.Data.Attributes.Title
 		data.PlanDates = plan.Data.Attributes.Dates
 		planDate = plan.Data.Attributes.SortDate
+		// PreviousPlan/NextPlan - see buildSetBuilderData's identical
+		// block (sets_builder.go), which this mirrors exactly.
+		if rel := plan.Data.Relationships.PreviousPlan.Data; rel != nil {
+			data.PrevPlanID = rel.ID
+		}
+		if rel := plan.Data.Relationships.NextPlan.Data; rel != nil {
+			data.NextPlanID = rel.ID
+		}
 		// ReadOnly - see SetBuilderData.ReadOnly (sets_builder.go), which
 		// this mirrors exactly.
 		data.ReadOnly = !planDate.IsZero() && planDate.Before(time.Now())

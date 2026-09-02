@@ -327,7 +327,15 @@ templ BuildPlan(personName, organizationName string, setData SetBuilderData, ros
 			<p>@components.BadgeTitled("status-pending", "Past plan - read only", "This plan has already happened - shown for reference, no Publish/Discard/PCO-sync actions available")</p>
 		}
 		<div class="build-page-nav">
-			<a href="/scheduling/build">&larr; Choose a different plan</a>
+			<div class="build-page-nav-primary">
+				<a href={ templ.URL(fmt.Sprintf("/scheduling/build?service_type_id=%s", setData.ServiceTypeID)) }>&larr; Choose a different plan</a>
+				if setData.PrevPlanID != "" {
+					<a href={ templ.URL(adjacentPlanURL(setData.ServiceTypeID, setData.PrevPlanID, activeTab)) }>&larr; Previous plan</a>
+				}
+				if setData.NextPlanID != "" {
+					<a href={ templ.URL(adjacentPlanURL(setData.ServiceTypeID, setData.NextPlanID, activeTab)) }>Next plan &rarr;</a>
+				}
+			</div>
 			<div class="build-page-nav-links">
 				<a href={ templ.URL(pcoPlanURL(setData.PlanID)) } target="_blank" rel="noopener">Open in Planning Center ↗</a>
 				<a href={ templ.URL(fmt.Sprintf("/scheduling/build/%s/%s/run-sheet", setData.ServiceTypeID, setData.PlanID)) } target="_blank" rel="noopener">Run sheet ↗</a>

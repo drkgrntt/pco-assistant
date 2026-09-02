@@ -40,6 +40,17 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 	if plan, err := pco.GetPlan(ctx, serviceTypeID, planID); err == nil {
 		data.PlanTitle = plan.Data.Attributes.Title
 		data.PlanDates = plan.Data.Attributes.Dates
+		// PreviousPlan/NextPlan are PCO's own relationship on the plan
+		// itself (chronologically adjacent within this service type) -
+		// reused as-is rather than fetched separately, so the
+		// Previous/Next buttons (build.templ) cost nothing beyond this
+		// GetPlan call the page already makes.
+		if rel := plan.Data.Relationships.PreviousPlan.Data; rel != nil {
+			data.PrevPlanID = rel.ID
+		}
+		if rel := plan.Data.Relationships.NextPlan.Data; rel != nil {
+			data.NextPlanID = rel.ID
+		}
 		// ReadOnly mirrors buildRosterBuilderData's own planDate-derived
 		// check (rosters_builder.go) - a plan whose sort_date has already
 		// passed is shown for browsing only, no Publish/Discard/PCO-sync

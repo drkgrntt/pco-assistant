@@ -8,14 +8,14 @@
    styling. */
 
 /* The Build page's top-of-page nav row (see BuildPlan) - "Choose a
-   different plan" (this app's own back-navigation) on the left, "Open in
-   Planning Center"/"Run sheet" (both open a different site/page in a new
-   tab) grouped on the right. Splitting the group apart, rather than all
-   three inline with middle-dot separators, reads as "back" vs. "jump
-   elsewhere" instead of one flat list of three equally-weighted links -
-   the smaller/muted styling on the right-hand group reinforces that
-   they're secondary to the actual builder below, not another primary
-   action. */
+   different plan" plus Previous/Next plan (all three navigate within this
+   app, to another builder page) grouped on the left, "Open in Planning
+   Center"/"Run sheet" (both open a different site/page in a new tab)
+   grouped on the right. Splitting the groups apart, rather than one flat
+   list of five equally-weighted links, reads as "navigate here" vs. "jump
+   elsewhere" - the smaller/muted styling on the right-hand group
+   reinforces that they're secondary to the actual builder below, not
+   another primary action. */
 .build-page-nav {
   display: flex;
   align-items: center;
@@ -23,6 +23,12 @@
   flex-wrap: wrap;
   gap: var(--space-2) var(--space-4);
   margin-block: var(--space-2);
+}
+
+.build-page-nav-primary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
 }
 
 .build-page-nav-links {

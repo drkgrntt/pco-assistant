@@ -1,5 +1,20 @@
 package scheduling
 
+import "fmt"
+
+// adjacentPlanURL builds the link for BuildPlan's Previous/Next plan
+// buttons - the same builder page, just pointed at PCO's own
+// previous_plan/next_plan relationship id for this service type (see
+// SetBuilderData.PrevPlanID/NextPlanID). Carries activeTab across so
+// paging through plans from the Team tab doesn't bounce back to Songs.
+func adjacentPlanURL(serviceTypeID, planID, activeTab string) string {
+	url := fmt.Sprintf("/scheduling/build/%s/%s", serviceTypeID, planID)
+	if activeTab == "team" {
+		url += "?tab=team"
+	}
+	return url
+}
+
 // pcoPlanURL builds the Planning Center Services web app URL for a plan -
 // backs the builder page's "Open in Planning Center" deep link, so jumping
 // from a draft here to the real, live plan (to see it exactly as
