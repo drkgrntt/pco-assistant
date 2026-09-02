@@ -93,7 +93,7 @@ func (sc *SchedulingController) PublishRoster(c *fiber.Ctx) error {
 
 		if err := pco.DeleteTeamMember(ctx, serviceTypeID, planID, ra.PCOPlanPersonID); err != nil {
 			failuresMu.Lock()
-			failures = append(failures, fmt.Sprintf("removing %s: %s", name, err.Error()))
+			failures = append(failures, fmt.Sprintf("removing %s: %s", name, friendlyPCOErr(err)))
 			failuresMu.Unlock()
 			return
 		}
@@ -123,7 +123,7 @@ func (sc *SchedulingController) PublishRoster(c *fiber.Ctx) error {
 		})
 		if err != nil {
 			failuresMu.Lock()
-			failures = append(failures, fmt.Sprintf("%s: %s", name, err.Error()))
+			failures = append(failures, fmt.Sprintf("%s: %s", name, friendlyPCOErr(err)))
 			failuresMu.Unlock()
 			return
 		}
