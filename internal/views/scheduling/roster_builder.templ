@@ -575,6 +575,29 @@ templ personBadgesOOB(refreshed AssignmentView) {
 	</div>
 }
 
+// personRefreshStatusElementID is the stable HTML id for one assignment's
+// own "Refresh availability data" confirmation line on its sidebar detail
+// card (personDetailCard, person_detail_card.templ) - see
+// personRefreshStatusOOB below for why this exists as its own element
+// rather than folding into personBadgesOOB.
+func personRefreshStatusElementID(assignmentID int64) string {
+	return fmt.Sprintf("person-refresh-status-%d", assignmentID)
+}
+
+// personRefreshStatusOOB confirms a "Refresh availability data" click
+// actually ran. personBadgesOOB above already shows whatever the refresh
+// found, but a refresh that finds no new conflicts - the common case, since
+// this button exists for the rare gap between the background sync and
+// right-now, not because refreshes usually change anything - leaves
+// personBadgesOOB's own output looking identical to before the click, which
+// reads as the click having done nothing. This is the same "an all-clear
+// result is still an answer" reasoning as CandidateWarningsFragment's own
+// else branch above, just for an action whose result can be unchanged
+// output rather than empty output.
+templ personRefreshStatusOOB(assignmentID int64) {
+	<span id={ personRefreshStatusElementID(assignmentID) } class="muted" hx-swap-oob="true">Refreshed.</span>
+}
+
 // RosterPersonDataRefreshResponse is RefreshPersonData's htmx response
 // (rosters_person_data_refresh.go) - a director clicking "Refresh
 // availability data" on one person's own sidebar detail card. Same primary
@@ -592,6 +615,7 @@ templ RosterPersonDataRefreshResponse(serviceTypeID, planID string, group Positi
 	@positionGroupCard(serviceTypeID, planID, top.SchedulePreferenceOptions, group, top.ReadOnly)
 	@rosterTopOOB(top)
 	@personBadgesOOB(refreshed)
+	@personRefreshStatusOOB(refreshed.ID)
 }
 
 // RosterTopMutationResponse is QuickAddPersonRelationship's htmx response -
@@ -614,6 +638,13 @@ templ RosterTopMutationResponse(top RosterBuilderData) {
 // when a director clicks "Check for conflicts". Mirrors the exact badge
 // pattern the assigned/candidate rows above already render - no wrapper
 // element, since it swaps straight into a span the row already provides.
+//
+// The all-clear else branch matters as much as the badges themselves: this
+// span starts genuinely empty (see candidateDetailCard, person_detail_card.
+// templ), so a clean result - no warnings at all, the common case - would
+// otherwise swap in nothing and leave the click looking like it did
+// nothing. Confirming "found none" is the actual answer to "Check for
+// conflicts", not a no-op.
 templ CandidateWarningsFragment(view CandidatePersonView) {
 	if view.FrequencyWarning != "" {
 		@components.ConflictBadge(view.FrequencyWarning)
@@ -623,5 +654,8 @@ templ CandidateWarningsFragment(view CandidatePersonView) {
 	}
 	if view.CrossTeamWarning != "" {
 		@components.ConflictBadge(view.CrossTeamWarning)
+	}
+	if view.FrequencyWarning == "" && view.BlockoutWarning == "" && view.CrossTeamWarning == "" {
+		<span class="muted">No conflicts found.</span>
 	}
 }

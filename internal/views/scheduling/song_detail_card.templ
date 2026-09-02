@@ -138,6 +138,31 @@ templ SongArrangementInfoRefreshFragment(data SetBuilderData, song SetSongView, 
 	<div class="muted song-meta" id={ fmt.Sprintf("song-meta-%d", song.ID) } hx-swap-oob="true">{ song.ArrangementInfo }</div>
 	@songBadgesOOB(song)
 	@songWarningsOOB(data)
+	@songRefreshStatusOOB(song.ID, errMsg)
+}
+
+// songRefreshStatusElementID is the stable HTML id for one song's own
+// "Update from Planning Center" confirmation line on its sidebar detail
+// card (songDetailCard above) - same purpose as
+// personRefreshStatusElementID (roster_builder.templ), for the same
+// reason: this button most often finds Planning Center's cached values
+// already match, so the primary swap target
+// (#song-arrangement-info-<id>) renders identically to before the click
+// and the click would otherwise look like a no-op.
+func songRefreshStatusElementID(songID int64) string {
+	return fmt.Sprintf("song-refresh-status-%d", songID)
+}
+
+// songRefreshStatusOOB confirms a "Update from Planning Center" click
+// actually ran - "Updated." on success, cleared on failure since the
+// primary swap target already surfaces errMsg right where the click
+// happened.
+templ songRefreshStatusOOB(songID int64, errMsg string) {
+	<span id={ songRefreshStatusElementID(songID) } class="muted" hx-swap-oob="true">
+		if errMsg == "" {
+			Updated.
+		}
+	</span>
 }
 
 // songDetailCard is one song's detail card - hidden until selectSongRow
@@ -248,6 +273,7 @@ templ songDetailCard(data SetBuilderData, song SetSongView) {
 				>
 					Update from Planning Center
 				</button>
+				<span id={ songRefreshStatusElementID(song.ID) } class="muted"></span>
 				<button type="button" data-row-id={ fmt.Sprintf("%d", song.ID) } onclick="openQuickAction(this, 'tag')">
 					@components.IconTag()
 					Tag this song

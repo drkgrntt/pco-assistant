@@ -115,6 +115,7 @@ templ personDetailCard(data RosterBuilderData, a AssignmentView) {
 				>
 					Refresh availability data
 				</button>
+				<span id={ personRefreshStatusElementID(a.ID) } class="muted"></span>
 			</div>
 		}
 	}
@@ -212,5 +213,8 @@ templ personBadgeSpans(a AssignmentView) {
 	}
 	if a.CrossTeamWarning != "" {
 		@components.ConflictBadge(a.CrossTeamWarning)
+	}
+	if a.FrequencyWarning == "" && a.BlockoutWarning == "" && a.CrossTeamWarning == "" {
+		<span class="muted">No known conflicts.</span>
 	}
 }

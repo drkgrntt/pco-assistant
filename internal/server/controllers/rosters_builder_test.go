@@ -22,6 +22,16 @@ func rosterAssignment(id int64, personID, teamID, positionName string) schedulin
 	return scheduling.RosterAssignment{ID: id, PersonID: personID, TeamID: teamID, TeamPositionName: positionName}
 }
 
+// publishedRosterAssignment mirrors rosterAssignment for an assignment
+// that's already been pushed to Planning Center as a real PlanPerson (or
+// was imported from one) - see PCOPlanPersonID's own doc comment
+// (scheduling/rosters.go).
+func publishedRosterAssignment(id int64, personID, teamID, positionName, pcoPlanPersonID string) scheduling.RosterAssignment {
+	a := rosterAssignment(id, personID, teamID, positionName)
+	a.PCOPlanPersonID = pcoPlanPersonID
+	return a
+}
+
 func TestGroupNeededPositionsMergesQuantityAndAssignments(t *testing.T) {
 	needed := []pco.NeededPositionData{
 		neededPosition("t1", "Drums", 2),
@@ -57,6 +67,53 @@ func TestGroupNeededPositionsKeepsAssignmentWithNoNeededEntry(t *testing.T) {
 
 	if len(got) != 1 || got[0].TeamPositionName != "Lights" || got[0].Quantity != 0 || len(got[0].Assignments) != 1 {
 		t.Errorf("expected a 0-quantity Lights group with 1 assignment, got %+v", got)
+	}
+}
+
+// TestGroupNeededPositionsAddsBackAlreadyPublishedFills confirms the fix
+// for the "N of (N-1) filled" bug: Planning Center's own
+// NeededPosition.Quantity counts down as a position gets filled (dropping
+// out of the list entirely once fully staffed, not settling at an
+// explicit 0), so a position PCO reports as needing 0 more - because its
+// one assigned person is already published there - must still show as
+// needing 1 total, not 0, once that published fill is added back in.
+func TestGroupNeededPositionsAddsBackAlreadyPublishedFills(t *testing.T) {
+	// Fully staffed: PCO has dropped it from needed_positions entirely
+	// (no matching entry at all), same as a real fully-filled plan.
+	assignments := []scheduling.RosterAssignment{
+		publishedRosterAssignment(1, "p1", "t1", "Drums", "pp-1"),
+	}
+
+	got := groupNeededPositions(nil, assignments)
+
+	if len(got) != 1 || got[0].Quantity != 1 || len(got[0].Assignments) != 1 {
+		t.Fatalf("expected Drums to need 1 total (1 already published), got %+v", got)
+	}
+
+	// Partially staffed: PCO still lists it, with Quantity already
+	// decremented for the one person already published to it.
+	needed := []pco.NeededPositionData{neededPosition("t1", "Vocals", 1)}
+	assignments = []scheduling.RosterAssignment{
+		publishedRosterAssignment(2, "p2", "t1", "Vocals", "pp-2"),
+	}
+
+	got = groupNeededPositions(needed, assignments)
+
+	if len(got) != 1 || got[0].Quantity != 2 || len(got[0].Assignments) != 1 {
+		t.Fatalf("expected Vocals to need 2 total (1 still open + 1 already published), got %+v", got)
+	}
+
+	// An unpublished (local-draft-only) assignment doesn't get added back
+	// - Planning Center has no idea about it yet, so its own Quantity
+	// hasn't moved to account for it.
+	assignments = []scheduling.RosterAssignment{
+		rosterAssignment(3, "p3", "t1", "Vocals"),
+	}
+
+	got = groupNeededPositions(needed, assignments)
+
+	if len(got) != 1 || got[0].Quantity != 1 || len(got[0].Assignments) != 1 {
+		t.Fatalf("expected an unpublished assignment to leave Quantity untouched, got %+v", got)
 	}
 }
 

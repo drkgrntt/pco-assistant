@@ -70,10 +70,15 @@ type positionGroup struct {
 }
 
 // groupNeededPositions merges a plan's open slots (from PCO) with a
-// roster's local assignments, grouped by (team_id, team_position_name). A
-// position with assignments but no matching NeededPosition entry (e.g.
-// Planning Center's "needed" count was never configured) still appears -
-// data is never silently dropped, same principle as mergeServiceOrder.
+// roster's local assignments, grouped by (team_id, team_position_name),
+// producing a Quantity that means "how many total this position needs" -
+// not PCO's own NeededPosition.Quantity, which means "how many more are
+// still needed" and counts down (potentially to a missing entry, not just
+// zero) as positions get filled; see the PCOPlanPersonID check below for
+// how that gets un-done. A position with assignments but no matching
+// NeededPosition entry (e.g. Planning Center's "needed" count was never
+// configured) still appears - data is never silently dropped, same
+// principle as mergeServiceOrder.
 func groupNeededPositions(needed []pco.NeededPositionData, assignments []scheduling.RosterAssignment) []positionGroup {
 	type key struct{ teamID, positionName string }
 	var order []key
@@ -101,6 +106,24 @@ func groupNeededPositions(needed []pco.NeededPositionData, assignments []schedul
 	for _, a := range assignments {
 		g := group(a.TeamID, a.TeamPositionName)
 		g.Assignments = append(g.Assignments, a)
+
+		// Planning Center's own NeededPosition.Quantity is "how many more
+		// are still needed", not "how many total" - it counts down as
+		// people get scheduled to a position, and a fully-staffed position
+		// can drop out of the needed_positions list entirely (quantity 0
+		// with no entry at all, rather than an explicit 0). An assignment
+		// PCO already knows about (PCOPlanPersonID set - it's been
+		// published, whether via this app's Publish or by being imported
+		// from an assignment made directly in Planning Center) is exactly
+		// one of the fills PCO has already subtracted out of that
+		// countdown, so add it back here to recover "how many total": the
+		// still-open group.Quantity from the needed loop above plus one
+		// per assignment PCO has already counted against it. An
+		// unpublished (local-draft-only) assignment doesn't get this - PCO
+		// has no idea about it yet, so its Quantity hasn't moved for it.
+		if a.PCOPlanPersonID != "" {
+			g.Quantity++
+		}
 	}
 
 	out := make([]positionGroup, 0, len(order))
