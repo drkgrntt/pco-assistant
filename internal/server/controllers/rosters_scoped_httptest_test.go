@@ -1,0 +1,176 @@
+package controllers
+
+// Call-count regression test for fetchRosterSharedPCOData (rosters_scoped.go)
+// - the fix for the Team Builder's worst-per-action PCO cost: before this,
+// buildRosterPositionGroupData and buildRosterLightData each independently
+// called GetTeamMembers/GetNeededPositions/GetTeams for the same plan on
+// every add/remove/quick-add mutation (see rosters_detail.go's
+// AddRosterAssignment/RemoveRosterAssignment/QuickAddPositionPreference,
+// which call both functions back-to-back), so those three requests were
+// sent twice each - 6 calls where 3 would do. Both functions now read
+// these three resources off a *rosterSharedPCOData the caller fetches
+// once (see rosters_scoped.go's own doc comments) instead of calling PCO
+// themselves whenever one is handed in, so fetchRosterSharedPCOData is now
+// the single place these three requests originate from for that shared
+// path.
+//
+// Same pco.SetBaseURLForTesting seam as internal/scheduling's
+// pco_songs_httptest_test.go and this package's own
+// build_httptest_test.go - a local httptest.Server stands in for Planning
+// Center, no real network call or credentials. Unlike those two, this
+// package's build functions need a working *scheduling.Store (real
+// Postgres) to test end-to-end, which this repo's test suite has no
+// harness for anywhere (no test DB setup exists in internal/scheduling or
+// internal/server/controllers - every existing controller test is either a
+// pure-function test or, like this one, an httptest-only call-count test)
+// - so this test targets the shared-fetch helper directly, the one piece
+// of the fix that's both PCO-call-count-bearing and DB-free. A regression
+// that made a handler call fetchRosterSharedPCOData twice instead of once
+// (defeating the fix without touching rosters_scoped.go at all) would
+// still need a source read of rosters_detail.go's three handlers to catch
+// - this test proves the helper itself is duplication-free, and the two
+// tests below contrast what one call versus two actually cost in requests.
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync/atomic"
+	"testing"
+
+	pco "github.com/drkgrntt/go-pco"
+)
+
+// rosterSharedFetchCounts tallies how many requests a fake PCO server saw
+// for each of the three endpoints fetchRosterSharedPCOData calls,
+// distinguished by URL path suffix (team_members/needed_positions/teams -
+// see go-pco's teamMembersPath/neededPositionsPath/teamsPath, none of
+// which collide with each other or with any other endpoint's suffix).
+type rosterSharedFetchCounts struct {
+	teamMembers     int32
+	neededPositions int32
+	teams           int32
+}
+
+// newRosterSharedFetchFakeServer stands in for Planning Center's
+// team_members/needed_positions/teams endpoints, incrementing counts's
+// matching counter per request and replying with a minimal-but-valid
+// single-page response for whichever one was hit.
+func newRosterSharedFetchFakeServer(t *testing.T, counts *rosterSharedFetchCounts) *httptest.Server {
+	t.Helper()
+
+	writeJSON := func(w http.ResponseWriter, body map[string]any) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(body)
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/team_members"):
+			atomic.AddInt32(&counts.teamMembers, 1)
+			writeJSON(w, map[string]any{
+				"data": []map[string]any{
+					{"type": "PlanPerson", "id": "pp-1", "attributes": map[string]any{"notes": "bring a capo"}},
+				},
+			})
+		case strings.HasSuffix(r.URL.Path, "/needed_positions"):
+			atomic.AddInt32(&counts.neededPositions, 1)
+			writeJSON(w, map[string]any{
+				"data": []map[string]any{
+					{"type": "NeededPosition", "id": "np-1", "attributes": map[string]any{"team_position_name": "Drums", "quantity": 1}},
+				},
+			})
+		case strings.HasSuffix(r.URL.Path, "/teams"):
+			atomic.AddInt32(&counts.teams, 1)
+			writeJSON(w, map[string]any{
+				"data": []map[string]any{
+					{"type": "Team", "id": "t-1", "attributes": map[string]any{"name": "Worship"}},
+				},
+			})
+		default:
+			t.Errorf("unexpected request to %s", r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(server.Close)
+	return server
+}
+
+// TestFetchRosterSharedPCODataMakesOneCallEach proves a single
+// fetchRosterSharedPCOData call costs exactly one GetTeamMembers, one
+// GetNeededPositions, and one GetTeams request - the shared fetch every
+// rosters_detail.go handler that needs both build functions now performs
+// once per request, in place of each function fetching its own copy.
+func TestFetchRosterSharedPCODataMakesOneCallEach(t *testing.T) {
+	var counts rosterSharedFetchCounts
+	server := newRosterSharedFetchFakeServer(t, &counts)
+
+	restore := pco.SetBaseURLForTesting(server.URL)
+	defer restore()
+
+	shared := fetchRosterSharedPCOData(context.Background(), "service-type-1", "plan-1")
+
+	if shared.MembersErr != nil {
+		t.Errorf("unexpected Members fetch error: %v", shared.MembersErr)
+	}
+	if shared.NeededErr != nil {
+		t.Errorf("unexpected Needed fetch error: %v", shared.NeededErr)
+	}
+	if shared.TeamsErr != nil {
+		t.Errorf("unexpected Teams fetch error: %v", shared.TeamsErr)
+	}
+	if len(shared.Members.Data) != 1 || shared.Members.Data[0].ID != "pp-1" {
+		t.Errorf("expected 1 team member (pp-1), got %+v", shared.Members.Data)
+	}
+	if len(shared.Needed.Data) != 1 || shared.Needed.Data[0].ID != "np-1" {
+		t.Errorf("expected 1 needed position (np-1), got %+v", shared.Needed.Data)
+	}
+	if len(shared.Teams.Data) != 1 || shared.Teams.Data[0].ID != "t-1" {
+		t.Errorf("expected 1 team (t-1), got %+v", shared.Teams.Data)
+	}
+
+	// The regression this test exists to catch: before rosterSharedPCOData,
+	// a request that needed both buildRosterPositionGroupData and
+	// buildRosterLightData sent each of these three requests twice.
+	if got := atomic.LoadInt32(&counts.teamMembers); got != 1 {
+		t.Errorf("expected exactly 1 GetTeamMembers request, got %d", got)
+	}
+	if got := atomic.LoadInt32(&counts.neededPositions); got != 1 {
+		t.Errorf("expected exactly 1 GetNeededPositions request, got %d", got)
+	}
+	if got := atomic.LoadInt32(&counts.teams); got != 1 {
+		t.Errorf("expected exactly 1 GetTeams request, got %d", got)
+	}
+}
+
+// TestFetchRosterSharedPCODataCalledTwiceDoublesRequests models the
+// pre-fix shape - buildRosterPositionGroupData and buildRosterLightData
+// each independently calling what's now fetchRosterSharedPCOData's three
+// PCO calls - for direct contrast with
+// TestFetchRosterSharedPCODataMakesOneCallEach's single-call assertion of
+// 1 request each: two independent fetches for the same plan cost 2
+// requests per resource (6 total), exactly the duplication this fix
+// eliminates by fetching once and sharing the result instead.
+func TestFetchRosterSharedPCODataCalledTwiceDoublesRequests(t *testing.T) {
+	var counts rosterSharedFetchCounts
+	server := newRosterSharedFetchFakeServer(t, &counts)
+
+	restore := pco.SetBaseURLForTesting(server.URL)
+	defer restore()
+
+	ctx := context.Background()
+	_ = fetchRosterSharedPCOData(ctx, "service-type-1", "plan-1")
+	_ = fetchRosterSharedPCOData(ctx, "service-type-1", "plan-1")
+
+	if got := atomic.LoadInt32(&counts.teamMembers); got != 2 {
+		t.Errorf("expected 2 GetTeamMembers requests from 2 independent fetches, got %d", got)
+	}
+	if got := atomic.LoadInt32(&counts.neededPositions); got != 2 {
+		t.Errorf("expected 2 GetNeededPositions requests from 2 independent fetches, got %d", got)
+	}
+	if got := atomic.LoadInt32(&counts.teams); got != 2 {
+		t.Errorf("expected 2 GetTeams requests from 2 independent fetches, got %d", got)
+	}
+}

@@ -283,3 +283,45 @@ needed: `buildSongInfoData`'s `CachedCount`/`TotalCount` already recompute
 live from the DB on every render, so reloading the Song Info page shows
 the sync's progress for free, and `nav.go`'s existing `songInfoNeedsSync`
 badge already clears itself within a minute of the cache filling in.
+
+## Addendum: Team Builder's duplicate scoped-fetch calls were the worst
+## per-action cost in the app
+
+Found via two independent audit passes, unrelated to the sync above -
+`internal/server/controllers/rosters_scoped.go`'s two narrow-fragment
+builders, `buildRosterPositionGroupData` (recomputes one position group)
+and `buildRosterLightData` (recomputes the roster's shared page chrome),
+were each independently calling `pco.GetTeamMembers`,
+`pco.GetNeededPositions`, and `pco.GetTeams` for the same plan.
+`rosters_detail.go`'s `AddRosterAssignment`, `RemoveRosterAssignment`, and
+`QuickAddPositionPreference` handlers call *both* functions back-to-back on
+every single add/remove/quick-add click, so those three requests were sent
+twice each - 6 calls where 3 would do, on top of
+`buildRosterPositionGroupData`'s own per-position/per-person fan-out
+(`GetTeamPositions`, `GetPlan`, `GetPersonTeamPositionAssignments`, plus
+the `GetBlockouts`/cross-team/other-dates fan-out already covered by
+mitigation #6 above). A single click on the Team Builder tab could cost
+roughly 30-40 PCO calls total, at least 6 of which were byte-for-byte
+duplicate requests for data already in hand from the other function's own
+call moments earlier - narrower in reach than the pre-fix song list (only
+the Team Builder tab, not every page) but worse per-action.
+
+Fixed by introducing `rosterSharedPCOData` (`rosters_scoped.go`): a small
+struct holding all three responses (plus their own fetch errors, since the
+two functions don't agree on which of the three is worth surfacing as an
+error - see the struct's own doc comment) and
+`fetchRosterSharedPCOData(ctx, serviceTypeID, planID)`, which fetches all
+three once. `buildRosterPositionGroupData`/`buildRosterLightData` both now
+take a `*rosterSharedPCOData` parameter: nil means "fetch your own copy"
+(preserving the original one-fetch-each behavior for a caller that only
+needs one of the two - `QuickAddPersonRelationship` is the only such
+caller today), while the three `rosters_detail.go` handlers that call both
+functions together fetch once and hand the same pointer to both. No
+change to `buildRosterPositionGroupData`'s own remaining per-position/
+per-person fan-out, `buildRosterBuilderData`'s full-rebuild path (never
+calls both scoped functions together, so was never affected), or any
+behavior/error-message text - purely eliminates the duplicate requests.
+Team/position lists and team member names remain uncached *across*
+requests (mitigation #5's still-open gap) - this fix only removes the
+*within-one-request* duplication, a narrower and cheaper problem than
+adding a cache would be.

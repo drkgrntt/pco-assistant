@@ -59,8 +59,15 @@ func (sc *SchedulingController) AddRosterAssignment(c *fiber.Ctx) error {
 		}
 	}
 
-	group, groupErrMsg := sc.buildRosterPositionGroupData(ctx, orgID, serviceTypeID, planID, body.TeamID, body.TeamPositionName)
-	top := sc.buildRosterLightData(ctx, orgID, serviceTypeID, planID)
+	// Fetched once and handed to both builders below - see
+	// rosterSharedPCOData's doc comment (rosters_scoped.go): without this,
+	// buildRosterPositionGroupData and buildRosterLightData would each make
+	// their own GetTeamMembers/GetNeededPositions/GetTeams calls for the
+	// same plan a moment apart, doubling this handler's PCO cost for no
+	// reason.
+	shared := fetchRosterSharedPCOData(ctx, serviceTypeID, planID)
+	group, groupErrMsg := sc.buildRosterPositionGroupData(ctx, orgID, serviceTypeID, planID, body.TeamID, body.TeamPositionName, shared)
+	top := sc.buildRosterLightData(ctx, orgID, serviceTypeID, planID, shared)
 	top.ErrMsg = appendErr(appendErr(errMsg, groupErrMsg), top.ErrMsg)
 
 	var addedView *views.AssignmentView
@@ -162,8 +169,10 @@ func (sc *SchedulingController) RemoveRosterAssignment(c *fiber.Ctx) error {
 		return render(c, views.RosterBuilderBody(sc.buildRosterBuilderDataWithErr(ctx, orgID, serviceTypeID, planID, errMsg)))
 	}
 
-	group, groupErrMsg := sc.buildRosterPositionGroupData(ctx, orgID, serviceTypeID, planID, removed.TeamID, removed.TeamPositionName)
-	top := sc.buildRosterLightData(ctx, orgID, serviceTypeID, planID)
+	// See AddRosterAssignment's own comment on this same pattern.
+	shared := fetchRosterSharedPCOData(ctx, serviceTypeID, planID)
+	group, groupErrMsg := sc.buildRosterPositionGroupData(ctx, orgID, serviceTypeID, planID, removed.TeamID, removed.TeamPositionName, shared)
+	top := sc.buildRosterLightData(ctx, orgID, serviceTypeID, planID, shared)
 	top.ErrMsg = appendErr(appendErr(errMsg, groupErrMsg), top.ErrMsg)
 
 	return render(c, views.RosterAssignmentRemovedResponse(serviceTypeID, planID, group, top, int64(rowID)))
@@ -198,7 +207,11 @@ func (sc *SchedulingController) QuickAddPersonRelationship(c *fiber.Ctx) error {
 		errMsg = err.Error()
 	}
 
-	top := sc.buildRosterLightData(ctx, orgID, serviceTypeID, planID)
+	// nil: this handler never calls buildRosterPositionGroupData, so
+	// there's no second consumer to share a prefetch with - buildRosterLightData
+	// just fetches its own copy, same as before this shared-data parameter
+	// existed.
+	top := sc.buildRosterLightData(ctx, orgID, serviceTypeID, planID, nil)
 	top.ErrMsg = appendErr(errMsg, top.ErrMsg)
 
 	return render(c, views.RosterTopMutationResponse(top))
@@ -236,8 +249,10 @@ func (sc *SchedulingController) QuickAddPositionPreference(c *fiber.Ctx) error {
 		errMsg = err.Error()
 	}
 
-	group, groupErrMsg := sc.buildRosterPositionGroupData(ctx, orgID, serviceTypeID, planID, body.TeamID, body.TeamPositionName)
-	top := sc.buildRosterLightData(ctx, orgID, serviceTypeID, planID)
+	// See AddRosterAssignment's own comment on this same pattern.
+	shared := fetchRosterSharedPCOData(ctx, serviceTypeID, planID)
+	group, groupErrMsg := sc.buildRosterPositionGroupData(ctx, orgID, serviceTypeID, planID, body.TeamID, body.TeamPositionName, shared)
+	top := sc.buildRosterLightData(ctx, orgID, serviceTypeID, planID, shared)
 	top.ErrMsg = appendErr(appendErr(errMsg, groupErrMsg), top.ErrMsg)
 
 	return render(c, views.RosterPositionGroupMutationResponse(serviceTypeID, planID, group, top))
