@@ -10,7 +10,14 @@ type RosterBuilderData struct {
 	PlanID        string
 	PlanTitle     string
 	PlanDates     string
-	ErrMsg        string
+	// PrevPlanID/NextPlanID are this service type's chronologically
+	// adjacent plan ids (PCO's own previous_plan/next_plan relationship on
+	// the plan itself - see buildRosterBuilderData), empty when this is
+	// the first/last plan PCO has for the service type. Drive the
+	// Previous/Next buttons in BuildPlan's header.
+	PrevPlanID string
+	NextPlanID string
+	ErrMsg     string
 	// ReadOnly - see SetBuilderData.ReadOnly, which this mirrors exactly.
 	ReadOnly bool
 	// PublishMsg is a status line for the last "Publish to Planning Center"

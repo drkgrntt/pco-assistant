@@ -18,7 +18,11 @@ type SetBuilderData struct {
 	PlanID        string
 	PlanTitle     string
 	PlanDates     string
-	ErrMsg        string
+	// PrevPlanID/NextPlanID - see RosterBuilderData's fields of the same
+	// name, which this mirrors exactly.
+	PrevPlanID string
+	NextPlanID string
+	ErrMsg     string
 	// ReadOnly is true once this plan's own sort_date has already passed
 	// (see buildSetBuilderData) - the past-plans archive (BuildPlansList's
 	// past tab) reuses this same builder rendering, just with every

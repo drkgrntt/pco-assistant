@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -46,6 +47,14 @@ func planTab(c *fiber.Ctx) string {
 // BuildPage renders the service-type picker. With only one service type,
 // there's nothing to actually pick, so its plans are loaded immediately
 // instead of waiting for a submit that would only ever have one option.
+// Landing here with ?service_type_id= set (BuildPlan's back link round-
+// trips its own ServiceTypeID - see build.templ - and BuildPlans pushes
+// this same param into the URL on every picker/tab change, see its own doc
+// comment) gets the identical treatment: that service type's plans are
+// fetched and rendered in this same response, so returning to "a different
+// plan" lands back on the service type just left, already populated,
+// rather than the bare picker - no client-side re-fetch needed, since it's
+// baked into this one server render same as the len==1 case below.
 func (sc *SchedulingController) BuildPage(c *fiber.Ctx) error {
 	_, personName := middleware.CurrentPerson(c)
 	orgName := middleware.CurrentOrganization(c)
@@ -57,13 +66,34 @@ func (sc *SchedulingController) BuildPage(c *fiber.Ctx) error {
 		return render(c, views.Build(personName, orgName, nil, "", nil, 1, 1, "upcoming", err.Error()))
 	}
 
+	serviceTypeID := c.Query("service_type_id")
 	if len(serviceTypes) == 1 {
-		serviceTypeID := serviceTypes[0].ID
+		serviceTypeID = serviceTypes[0].ID
+	} else if serviceTypeID != "" && !serviceTypeKnown(serviceTypes, serviceTypeID) {
+		// A stale/tampered id (the service type was deleted in PCO since
+		// this link was made, or someone hand-edited the URL) falls back
+		// to the bare picker rather than handing an id PCO doesn't
+		// recognize straight to combinedPlansForServiceType.
+		serviceTypeID = ""
+	}
+
+	if serviceTypeID != "" {
 		rows, page, totalPages, errMsg := sc.combinedPlansForServiceType(ctx, orgID, serviceTypeID, "", 1, false)
 		return render(c, views.Build(personName, orgName, serviceTypes, serviceTypeID, rows, page, totalPages, "upcoming", errMsg))
 	}
 
 	return render(c, views.Build(personName, orgName, serviceTypes, "", nil, 1, 1, "upcoming", ""))
+}
+
+// serviceTypeKnown reports whether id names one of serviceTypes - see
+// BuildPage's ?service_type_id= handling above.
+func serviceTypeKnown(serviceTypes []pco.ServiceTypeData, id string) bool {
+	for _, st := range serviceTypes {
+		if st.ID == id {
+			return true
+		}
+	}
+	return false
 }
 
 // BuildPlans lists a freshly-chosen service type's plans (search blank,
@@ -72,12 +102,22 @@ func (sc *SchedulingController) BuildPage(c *fiber.Ctx) error {
 // Build page. Unlike BuildPlansSearch below, this re-renders the whole
 // picker block (search box and tab bar included), since switching service
 // types or tabs is a clean slate.
+//
+// Also pushes ?service_type_id= into the browser's URL/history (the
+// HX-Push-Url response header, since this endpoint's own request URL is
+// the /scheduling/build/plans fragment route, not the page URL a reload or
+// a copied link should actually land on) - so BuildPage's own
+// ?service_type_id= handling above and BuildPlan's back link (build.templ)
+// both stay in sync with whatever was last picked here, without any
+// client-side state to keep in sync separately.
 func (sc *SchedulingController) BuildPlans(c *fiber.Ctx) error {
 	serviceTypeID := c.Query("service_type_id")
 	tab := planTab(c)
 	if serviceTypeID == "" {
 		return render(c, views.BuildPlansList(nil, "", "", 1, 1, tab, ""))
 	}
+
+	c.Set("HX-Push-Url", "/scheduling/build?service_type_id="+url.QueryEscape(serviceTypeID))
 
 	rows, page, totalPages, errMsg := sc.combinedPlansForServiceType(middleware.RequestContext(c), middleware.CurrentOrganizationID(c), serviceTypeID, "", 1, tab == "past")
 	return render(c, views.BuildPlansList(rows, serviceTypeID, "", page, totalPages, tab, errMsg))
@@ -431,11 +471,13 @@ func (sc *SchedulingController) BuildPlanPage(c *fiber.Ctx) error {
 		setData.ServiceTypeID, setData.PlanID = serviceTypeID, planID
 		setData.PlanTitle, setData.PlanDates = rosterData.PlanTitle, rosterData.PlanDates
 		setData.ReadOnly = rosterData.ReadOnly
+		setData.PrevPlanID, setData.NextPlanID = rosterData.PrevPlanID, rosterData.NextPlanID
 	} else {
 		setData = sc.buildSetBuilderData(ctx, orgID, serviceTypeID, planID)
 		rosterData.ServiceTypeID, rosterData.PlanID = serviceTypeID, planID
 		rosterData.PlanTitle, rosterData.PlanDates = setData.PlanTitle, setData.PlanDates
 		rosterData.ReadOnly = setData.ReadOnly
+		rosterData.PrevPlanID, rosterData.NextPlanID = setData.PrevPlanID, setData.NextPlanID
 	}
 
 	// Best-effort: a failed note lookup just means the page renders with
