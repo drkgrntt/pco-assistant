@@ -82,7 +82,7 @@
   margin-top: var(--space-2);
 }
 
-.build-detail-actions button,
+.build-detail-actions > button,
 .build-detail-actions .replace-form {
   width: 100%;
 }
