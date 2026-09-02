@@ -33,15 +33,18 @@ import (
 	"pco-assistant/internal/auth"
 	"pco-assistant/internal/database"
 	"pco-assistant/internal/logger"
+	"pco-assistant/internal/scheduling"
 
 	pco "github.com/drkgrntt/go-pco"
 	_ "github.com/joho/godotenv/autoload"
 )
 
-// pcoresetPageSize/pcoresetMaxPages mirror fetchAllSongs' pagination
-// pattern (internal/server/controllers/scheduling.go) - a page size PCO
-// comfortably handles per request, capped at enough pages to cover even a
-// large dev org without looping forever if Meta.TotalCount is ever wrong.
+// pcoresetPageSize/pcoresetMaxPages back allPlans/allServiceTypes' own
+// pagination loops (allSongs delegates to
+// scheduling.FetchAllSongsIncludingArchived instead, which has its own
+// sanity ceiling) - a page size PCO comfortably handles per request,
+// capped at enough pages to cover even a large dev org without looping
+// forever if Meta.TotalCount is ever wrong.
 const (
 	pcoresetPageSize = 100
 	pcoresetMaxPages = 50
@@ -211,27 +214,22 @@ type songToDelete struct {
 	title string
 }
 
+// allSongs delegates to scheduling.FetchAllSongsIncludingArchived rather
+// than hand-rolling its own pagination loop (the old version of this
+// function did, with the same silent-cap risk the old
+// scheduling.FetchAllSongs had) - deliberately the "including archived"
+// variant, not the cached/active-only FetchActiveSongs, since pcoreset
+// deletes every Song in the org as part of a full reset and archived
+// songs are still real Songs to delete.
 func allSongs(ctx context.Context) ([]songToDelete, error) {
-	var songs []songToDelete
-
-	for page := 0; page < pcoresetMaxPages; page++ {
-		resp, err := pco.GetSongs(ctx, &pco.SongsParams{
-			OrderBy: "title",
-			PerPage: pcoresetPageSize,
-			Offset:  page * pcoresetPageSize,
-		})
-		if err != nil {
-			return nil, err
-		}
-
-		for _, s := range resp.Data {
-			songs = append(songs, songToDelete{id: s.ID, title: s.Attributes.Title})
-		}
-
-		if len(resp.Data) < pcoresetPageSize {
-			break
-		}
+	fetched, err := scheduling.FetchAllSongsIncludingArchived(ctx)
+	if err != nil {
+		return nil, err
 	}
 
+	songs := make([]songToDelete, 0, len(fetched))
+	for _, s := range fetched {
+		songs = append(songs, songToDelete{id: s.ID, title: s.Attributes.Title})
+	}
 	return songs, nil
 }

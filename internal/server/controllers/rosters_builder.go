@@ -314,7 +314,7 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 	for i := range groups {
 		groupIndexes[i] = i
 	}
-	runConcurrently(groupIndexes, func(i int) {
+	scheduling.RunConcurrently(groupIndexes, func(i int) {
 		posID := positionIDs[i]
 		if posID == "" {
 			return
@@ -352,7 +352,7 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 	// writes into the same map.
 	blockoutsByPerson := map[string][]pco.BlockoutData{}
 	var blockoutsMu sync.Mutex
-	runConcurrently(relevantIDs, func(id string) {
+	scheduling.RunConcurrently(relevantIDs, func(id string) {
 		bo, err := pco.GetBlockouts(ctx, id, &pco.BlockoutsParams{Filter: "future"})
 		if err != nil {
 			return
@@ -417,7 +417,7 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 	}
 	crossTeamCache := map[string][]string{}
 	var crossTeamMu sync.Mutex
-	runConcurrently(crossTeamPersonIDList, func(personID string) {
+	scheduling.RunConcurrently(crossTeamPersonIDList, func(personID string) {
 		labels := crossTeamAssignmentsThisWeek(ctx, personID, planDate, planID)
 		crossTeamMu.Lock()
 		crossTeamCache[personID] = labels
@@ -433,7 +433,7 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 	}
 	otherDatesCache := map[string][]time.Time{}
 	var otherDatesMu sync.Mutex
-	runConcurrently(otherDatesKeyList, func(k otherDatesKey) {
+	scheduling.RunConcurrently(otherDatesKeyList, func(k otherDatesKey) {
 		dates := otherAssignmentDates(ctx, k.personID, k.teamID, k.teamPositionName, planID)
 		otherDatesMu.Lock()
 		otherDatesCache[k.personID+"|"+k.teamID+"|"+k.teamPositionName] = dates

@@ -95,6 +95,7 @@ func RequireAuth(store *auth.Store) fiber.Handler {
 				c.Locals("organization_id", session.OrganizationID)
 				c.Locals("organization_name", session.OrganizationName)
 				c.Locals("pco_ctx", pco.WithAccessToken(c.Context(), accessToken))
+				c.Locals("access_token", accessToken)
 				return c.Next()
 			}
 		}
@@ -170,4 +171,22 @@ func RequestContext(c *fiber.Ctx) context.Context {
 		return ctx
 	}
 	return c.Context()
+}
+
+// AccessToken returns the signed-in person's raw PCO OAuth access token as
+// a plain string, independent of the fiber request's own context/lifecycle.
+// RequestContext's pco_ctx already carries this token, but go-pco's
+// WithAccessToken stores it under an unexported context key precisely so
+// nothing outside that package can read it back out - so a caller that
+// needs the token itself, not just a context authenticated with it, reads
+// it from here instead. The one real use case: a handler that launches a
+// goroutine outdoing the request (e.g. SyncSongInfo in
+// internal/server/controllers/song_arrangement_cache.go) needs the token
+// to build a fresh context.Background()-derived context for that
+// goroutine, since c.Context() (and anything derived from it, including
+// pco_ctx) is cancelled the moment the handler returns. Only meaningful on
+// routes RequireAuth let through.
+func AccessToken(c *fiber.Ctx) string {
+	token, _ := c.Locals("access_token").(string)
+	return token
 }

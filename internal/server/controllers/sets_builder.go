@@ -61,11 +61,25 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 		return data
 	}
 
-	songs, songsErr := fetchAllSongs(ctx)
+	songs, songsErr := fetchActiveSongs(ctx, organizationID)
 	if songsErr != nil {
 		data.ErrMsg = appendErr(data.ErrMsg, "loading songs from Planning Center: "+songsErr.Error())
 	}
 	titles := songTitleMap(songs)
+
+	// SetSongs/pendingDeletions (below) reference songs already scheduled
+	// locally, as opposed to AllSongs (songs, above - the add-a-song
+	// candidate pool), which is deliberately active-only with no caveats.
+	// A song scheduled while active, then archived in PCO later, would
+	// otherwise silently fall back to titleOrID's raw-ID display for
+	// every one of these - so backfill titles for exactly the local
+	// set-song rows that reference it, with one targeted GetSong call per
+	// still-missing id (typically zero in practice).
+	setSongIDs := make([]string, 0, len(setSongs))
+	for _, ss := range setSongs {
+		setSongIDs = append(setSongIDs, ss.SongID)
+	}
+	resolveMissingTitles(ctx, titles, setSongIDs)
 
 	// New-to-the-church detection: the first time this app ever sees a song
 	// with no Planning Center scheduling history at all, permanently mark it
@@ -148,6 +162,13 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 	if err != nil {
 		data.ErrMsg = appendErr(data.ErrMsg, err.Error())
 	}
+	// Same backfill reasoning as setSongIDs above - a tombstoned set-song
+	// row can just as easily reference a since-archived song.
+	pendingDeletionIDs := make([]string, 0, len(pendingDeletions))
+	for _, pd := range pendingDeletions {
+		pendingDeletionIDs = append(pendingDeletionIDs, pd.SongID)
+	}
+	resolveMissingTitles(ctx, titles, pendingDeletionIDs)
 	data.PendingDeleteCount = len(pendingDeletions)
 
 	// PendingChanges spells out exactly what's different from Planning
@@ -831,7 +852,7 @@ func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizati
 		indexes[i] = i
 	}
 
-	runConcurrently(indexes, func(i int) {
+	scheduling.RunConcurrently(indexes, func(i int) {
 		row := rows[i]
 		if row.Item != nil {
 			label := row.Item.Attributes.Title
@@ -952,6 +973,50 @@ func titleOrID(titles map[string]string, id string) string {
 		return title
 	}
 	return id
+}
+
+// missingSongIDs returns the subset of songIDs (deduplicated, "" skipped)
+// that aren't already a key in titles - pure and testable independent of
+// any PCO call, so resolveMissingTitles' actual live-fetch logic can stay
+// thin.
+func missingSongIDs(titles map[string]string, songIDs []string) []string {
+	seen := make(map[string]bool, len(songIDs))
+	var missing []string
+	for _, id := range songIDs {
+		if id == "" || seen[id] {
+			continue
+		}
+		seen[id] = true
+		if _, ok := titles[id]; !ok {
+			missing = append(missing, id)
+		}
+	}
+	return missing
+}
+
+// resolveMissingTitles backfills titles (in place) for any songID in
+// songIDs that's missing from it - e.g. because fetchActiveSongs'
+// archived-song filter excluded it after it was scheduled while still
+// active - with one pco.GetSong call per still-missing id. Typically zero
+// calls in practice: bounded by however many stale references exist in
+// this one set/roster, not by the size of the song library. Shared by
+// sets_builder.go's SetSongs/pendingDeletions and sets_publish.go's
+// PublishSet/RefreshSongInfo - all four resolve titles for songs already
+// referenced by a local set-song row, as opposed to AllSongs/the
+// add-a-song candidate pool, which is deliberately active-only with no
+// such backfill.
+//
+// Best-effort, same tolerance as every other title lookup in this file: a
+// failed individual GetSong just leaves that one id unresolved, falling
+// back to titleOrID's raw-ID display - not a new failure mode, the
+// pre-existing "song not found in the title map" degrade path, just one
+// this backfill narrows rather than widens.
+func resolveMissingTitles(ctx context.Context, titles map[string]string, songIDs []string) {
+	for _, id := range missingSongIDs(titles, songIDs) {
+		if song, err := pco.GetSong(ctx, id); err == nil {
+			titles[id] = song.Data.Attributes.Title
+		}
+	}
 }
 
 func appendErr(a, b string) string {

@@ -140,6 +140,10 @@ someone has to remember to ask for:
   examples in Planning annotations), don't just leave it listed as open.
 - A product-direction decision actually gets made -> `ideas.md`'s
   Vision/positioning or the relevant settled-thinking section.
+- A change touches how often or how heavily this app calls PCO's API (a
+  new hot-path call, a fix to one, a newly-discovered risk) ->
+  `pco-api-risks.md`, and this file's "PCO API calls" callout in
+  Architecture if the reference pattern itself changes.
 
 ## Architecture
 
@@ -215,6 +219,40 @@ query that touches org-owned data takes an organization id
 and are deliberately *not* scoped - each store method's doc comment says
 which. When adding a new scheduling table/method, match the existing
 pattern in its file rather than guessing.
+
+**PCO API calls: rate limits & performance** - this has already caused a
+real production bug, not a hypothetical one: a church's ~900-song PCO
+library (mostly archived, never cleaned up) was being pulled live,
+unfiltered, and uncached on nearly every page view, and the app was
+hitting PCO's rate limit (100 requests/20 seconds, per user token) on
+basically every screen. `pco-api-risks.md` is the living risk-assessment
+doc - ranked mitigations, which have shipped, which were explicitly
+declined and why, which are still open. Read it, and update it, any time
+a change touches how often or how heavily this app calls PCO - don't let
+it silently drift stale the way this file's own "Keeping the docs
+current" section warns about for `ideas.md`/`README.md`.
+`internal/scheduling/pco_songs.go`'s `FetchActiveSongs` is the reference
+pattern for "PCO data that's expensive to fetch and doesn't change
+mid-session": org-scoped, cached in-process for 60s (mirrors
+`internal/server/middleware/nav.go`'s `cachedNavState`/`cacheEntryFresh`),
+archived-filtered both server-side (`where[hidden]`) and client-side (the
+client-side filter is the real correctness guarantee - never trust a
+server-side filter alone), pagination driven by `Meta.TotalCount` rather
+than a silent page cap, fanned out concurrently via
+`scheduling.RunConcurrently`/`scheduling.PCOFanOutLimit` (bounded to 10
+in-flight). Before adding any new PCO call inside a loop or a hot render
+path (page load, htmx fragment re-render): can it batch instead of
+calling once per item (`where[id]=...`, following
+`personNameMapForIDs`'s precedent)? Can it fan out via
+`scheduling.RunConcurrently` instead of running sequentially? Is what it's
+fetching actually session-stable (safe to cache, like a song list) rather
+than something that must stay live for correctness (never cache a live
+availability/conflict check the way the song list gets cached - staleness
+there is a real bug, not a cosmetic one)? Note one deliberate gap still
+open per `pco-api-risks.md`: team/position lists and team-member names are
+still fetched live, uncached, on every roster render - not yet fixed
+because it hasn't produced an actual reported symptom the way the song
+list did, not because it was missed.
 
 **Controllers**: grouped by page/feature under
 `internal/server/controllers/` (`build.go` is the combined Songs/Team

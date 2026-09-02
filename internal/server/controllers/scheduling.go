@@ -22,14 +22,16 @@ import (
 // by search query instead of listed up front.
 const personSearchResultLimit = 8
 
-// fetchAllSongs pages through the PCO song library, ordered by title, for
-// use as a picker's option list (song relationships, song/person
-// preferences). Delegates to scheduling.FetchAllSongs, which moved there
+// fetchActiveSongs pages through the PCO song library, ordered by title,
+// excluding archived (hidden) songs, for use as a picker's option list
+// (song relationships, song/person preferences) or candidate pool.
+// Delegates to scheduling.FetchActiveSongs, which is cached per
+// organization for scheduling.songCacheTTL and lives in internal/scheduling
 // so middleware.PopulateNavState can fetch the same library without a
-// controllers/middleware import cycle - kept as this name/signature here
-// since it's called throughout this package already.
-func fetchAllSongs(ctx context.Context) ([]pco.SongData, error) {
-	return scheduling.FetchAllSongs(ctx)
+// controllers/middleware import cycle - kept as a thin wrapper here since
+// it's called throughout this package already.
+func fetchActiveSongs(ctx context.Context, organizationID string) ([]pco.SongData, error) {
+	return scheduling.FetchActiveSongs(ctx, organizationID)
 }
 
 // formatArrangementInfo renders a cached (or freshly-fetched) arrangement
@@ -263,21 +265,24 @@ func songTagsBySong(tags []scheduling.SongTag) map[string][]scheduling.SongTag {
 // its PCO display name, for showing names instead of raw IDs in the
 // preferences table. Unlike songTitleMap, this doesn't come from a bulk
 // listing - a People directory can be far bigger than a song library - so
-// it looks up only the handful of IDs actually in use, one GetPerson call
-// each. An ID that fails to resolve (e.g. the person was since deleted) is
-// simply left out of the map; callers fall back to showing the raw ID.
+// it looks up only the handful of IDs actually in use. Just collects those
+// distinct IDs and delegates to personNameMapForIDs (people.go), which
+// batches them into `where[id]=...` calls of up to personIDBatchSize at
+// once rather than one GetPerson round trip per person - this used to do
+// exactly that sequential per-person loop itself before personNameMapForIDs
+// existed. An ID that fails to resolve (e.g. the person was since deleted)
+// is simply left out of the map; callers fall back to showing the raw ID -
+// personNameMapForIDs already has this same fallback behavior.
 func personNameMap(ctx context.Context, preferences []scheduling.SongPersonPreference) map[string]string {
-	names := make(map[string]string, len(preferences))
+	seen := make(map[string]bool, len(preferences))
+	ids := make([]string, 0, len(preferences))
 	for _, pref := range preferences {
-		if _, ok := names[pref.PersonID]; ok {
-			continue
-		}
-
-		if person, err := pco.GetPerson(ctx, pref.PersonID); err == nil {
-			names[pref.PersonID] = person.Data.Attributes.Name
+		if !seen[pref.PersonID] {
+			seen[pref.PersonID] = true
+			ids = append(ids, pref.PersonID)
 		}
 	}
-	return names
+	return personNameMapForIDs(ctx, ids)
 }
 
 // parseFormID reads the "id" field a setup page's create/edit form carries
@@ -387,7 +392,7 @@ func (sc *SchedulingController) RelationshipsPage(c *fiber.Ctx) error {
 	orgName := middleware.CurrentOrganization(c)
 	orgID := middleware.CurrentOrganizationID(c)
 
-	songs, songsErr := fetchAllSongs(middleware.RequestContext(c))
+	songs, songsErr := fetchActiveSongs(middleware.RequestContext(c), orgID)
 
 	relationshipTypes, err := sc.store.ListSongRelationshipTypes(c.Context())
 	if err != nil {
@@ -432,7 +437,7 @@ func (sc *SchedulingController) CreateRelationship(c *fiber.Ctx) error {
 	// Best-effort: song titles and relationship type labels are a display
 	// nicety for the table, so a failure here just falls back to showing
 	// raw IDs/codes rather than failing the whole request.
-	songs, _ := fetchAllSongs(middleware.RequestContext(c))
+	songs, _ := fetchActiveSongs(middleware.RequestContext(c), orgID)
 	relationshipTypes, _ := sc.store.ListSongRelationshipTypes(c.Context())
 
 	return render(c, views.RelationshipsTable(relationships, songTitleMap(songs), songRelationshipTypeLabelMap(relationshipTypes), errMsg))
@@ -454,7 +459,7 @@ func (sc *SchedulingController) DeleteRelationship(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
 	}
 
-	songs, _ := fetchAllSongs(middleware.RequestContext(c))
+	songs, _ := fetchActiveSongs(middleware.RequestContext(c), orgID)
 	relationshipTypes, _ := sc.store.ListSongRelationshipTypes(c.Context())
 
 	return render(c, views.RelationshipsTable(relationships, songTitleMap(songs), songRelationshipTypeLabelMap(relationshipTypes), errMsg))
@@ -466,7 +471,7 @@ func (sc *SchedulingController) PreferencesPage(c *fiber.Ctx) error {
 	orgID := middleware.CurrentOrganizationID(c)
 
 	ctx := middleware.RequestContext(c)
-	songs, songsErr := fetchAllSongs(ctx)
+	songs, songsErr := fetchActiveSongs(ctx, orgID)
 
 	preferenceTypes, err := sc.store.ListSongPreferenceTypes(c.Context())
 	if err != nil {
@@ -512,7 +517,7 @@ func (sc *SchedulingController) SetPreference(c *fiber.Ctx) error {
 	// a table nicety, so a lookup failure just falls back to raw IDs/codes
 	// rather than failing the whole request.
 	ctx := middleware.RequestContext(c)
-	songs, _ := fetchAllSongs(ctx)
+	songs, _ := fetchActiveSongs(ctx, orgID)
 	preferenceTypes, _ := sc.store.ListSongPreferenceTypes(c.Context())
 
 	return render(c, views.PreferencesTable(preferences, songTitleMap(songs), personNameMap(ctx, preferences), songPreferenceTypeLabelMap(preferenceTypes), errMsg))
@@ -535,7 +540,7 @@ func (sc *SchedulingController) DeletePreference(c *fiber.Ctx) error {
 	}
 
 	ctx := middleware.RequestContext(c)
-	songs, _ := fetchAllSongs(ctx)
+	songs, _ := fetchActiveSongs(ctx, orgID)
 	preferenceTypes, _ := sc.store.ListSongPreferenceTypes(c.Context())
 
 	return render(c, views.PreferencesTable(preferences, songTitleMap(songs), personNameMap(ctx, preferences), songPreferenceTypeLabelMap(preferenceTypes), errMsg))

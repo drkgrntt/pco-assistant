@@ -2,9 +2,13 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 
+	"pco-assistant/internal/logger"
+	"pco-assistant/internal/scheduling"
 	"pco-assistant/internal/server/middleware"
 	views "pco-assistant/internal/views/scheduling"
 
@@ -14,13 +18,18 @@ import (
 
 // --- Build (the combined song/team workflow) ---------------------------------
 
-// buildPlansFetchPageSize/MaxPages bound fetchUpcomingPlans' PCO paging,
-// same reasoning as pcoSongPickerPageSize/MaxPages. buildPlansPageSize is
-// this app's own display page size for the plan picker.
+// buildPlansFetchPageSize is PCO's max per_page.
+// buildPlansFetchSanityMaxPages is a runaway/bug guard, not a real cap -
+// same reasoning and value as scheduling.pcoSongSanityMaxPages:
+// fetchPlansByFilter always fans out exactly as many pages as
+// pco.Meta.TotalCount says it needs (see below), so a real service type
+// only ever exceeds this if TotalCount itself is implausible - covers
+// ~20,000 plans, far beyond any real church's history. buildPlansPageSize
+// is this app's own display page size for the plan picker.
 const (
-	buildPlansFetchPageSize = 100
-	buildPlansFetchMaxPages = 20
-	buildPlansPageSize      = 10
+	buildPlansFetchPageSize       = 100
+	buildPlansFetchSanityMaxPages = 200
+	buildPlansPageSize            = 10
 )
 
 // planTab reads the plan picker's "tab" query param - "past" or anything
@@ -43,18 +52,18 @@ func (sc *SchedulingController) BuildPage(c *fiber.Ctx) error {
 	orgID := middleware.CurrentOrganizationID(c)
 
 	ctx := middleware.RequestContext(c)
-	serviceTypes, err := pco.GetServiceTypes(ctx, nil)
+	serviceTypes, err := scheduling.FetchServiceTypes(ctx, orgID)
 	if err != nil {
 		return render(c, views.Build(personName, orgName, nil, "", nil, 1, 1, "upcoming", err.Error()))
 	}
 
-	if len(serviceTypes.Data) == 1 {
-		serviceTypeID := serviceTypes.Data[0].ID
+	if len(serviceTypes) == 1 {
+		serviceTypeID := serviceTypes[0].ID
 		rows, page, totalPages, errMsg := sc.combinedPlansForServiceType(ctx, orgID, serviceTypeID, "", 1, false)
-		return render(c, views.Build(personName, orgName, serviceTypes.Data, serviceTypeID, rows, page, totalPages, "upcoming", errMsg))
+		return render(c, views.Build(personName, orgName, serviceTypes, serviceTypeID, rows, page, totalPages, "upcoming", errMsg))
 	}
 
-	return render(c, views.Build(personName, orgName, serviceTypes.Data, "", nil, 1, 1, "upcoming", ""))
+	return render(c, views.Build(personName, orgName, serviceTypes, "", nil, 1, 1, "upcoming", ""))
 }
 
 // BuildPlans lists a freshly-chosen service type's plans (search blank,
@@ -134,33 +143,89 @@ func (sc *SchedulingController) UpdatePlanNote(c *fiber.Ctx) error {
 // deliberately computed separately, only for whichever page is actually
 // being displayed, since that's the expensive part - see
 // combinedPlansForServiceType), for the Build page's plan picker to
-// search/paginate over locally. Same "return whatever was fetched so far"
-// tolerance as fetchAllSongs, and fixes a latent bug this replaces: a
-// single unpaginated GetPlans call would otherwise silently rely on PCO's
-// default per_page, so a service type with many plans (recurring templates
-// scheduled well ahead, or a long-running church's full past history)
-// could be quietly truncated. Shared by fetchUpcomingPlans/fetchPastPlans
-// below - the only thing that differs between the two tabs is which filter
-// and sort order makes sense to browse by.
+// search/paginate over locally.
+//
+// Same shape as scheduling.fetchSongsFromPCO (see that function's doc
+// comment for the full reasoning): fetches page 0 first (synchronously) to
+// learn Meta.TotalCount, then fans the remaining pages out concurrently
+// via scheduling.RunConcurrently, bounded by buildPlansFetchSanityMaxPages
+// as a runaway/bug guard rather than a real cap - offset-based pagination
+// (not Links.Next-driven) is what makes this safe to fan out, and
+// PlansParams is offset-based the same way SongsParams is. Fixes the bug
+// this replaces: a single unpaginated GetPlans call would otherwise
+// silently rely on PCO's default per_page, so a service type with many
+// plans (recurring templates scheduled well ahead, or a long-running
+// church's full past history) could be quietly truncated. Unlike the old
+// version, a failed page now returns a real error (no partial slice) -
+// same reasoning as fetchSongsFromPCO's own error-handling note. Shared by
+// fetchUpcomingPlans/fetchPastPlans below - the only thing that differs
+// between the two tabs is which filter and sort order makes sense to
+// browse by.
 func fetchPlansByFilter(ctx context.Context, serviceTypeID, filter, orderBy string) ([]pco.PlanData, error) {
-	var plans []pco.PlanData
+	first, err := pco.GetPlans(ctx, serviceTypeID, &pco.PlansParams{
+		Filter:  filter,
+		OrderBy: orderBy,
+		PerPage: buildPlansFetchPageSize,
+		Offset:  0,
+	})
+	if err != nil {
+		return nil, err
+	}
 
-	for page := 0; page < buildPlansFetchMaxPages; page++ {
-		resp, err := pco.GetPlans(ctx, serviceTypeID, &pco.PlansParams{
-			Filter:  filter,
-			OrderBy: orderBy,
-			PerPage: buildPlansFetchPageSize,
-			Offset:  page * buildPlansFetchPageSize,
+	totalCount := first.Meta.TotalCount
+	totalPages := (totalCount + buildPlansFetchPageSize - 1) / buildPlansFetchPageSize
+	if totalPages < 1 {
+		totalPages = 1
+	}
+
+	if totalPages > buildPlansFetchSanityMaxPages {
+		logger.Error("PCO plan list page count exceeds sanity ceiling - aborting fetch",
+			"service_type_id", serviceTypeID, "filter", filter, "total_count", totalCount,
+			"total_pages", totalPages, "sanity_max_pages", buildPlansFetchSanityMaxPages)
+		return nil, fmt.Errorf("PCO reports %d plans (%d pages) for service type %s filter %q - exceeds sanity ceiling of %d pages, aborting", totalCount, totalPages, serviceTypeID, filter, buildPlansFetchSanityMaxPages)
+	}
+
+	pages := make([][]pco.PlanData, totalPages)
+	pages[0] = first.Data
+
+	if totalPages > 1 {
+		pageIndexes := make([]int, totalPages-1)
+		for i := range pageIndexes {
+			pageIndexes[i] = i + 1
+		}
+
+		var fetchErr error
+		var errMu sync.Mutex
+
+		scheduling.RunConcurrently(pageIndexes, func(page int) {
+			resp, err := pco.GetPlans(ctx, serviceTypeID, &pco.PlansParams{
+				Filter:  filter,
+				OrderBy: orderBy,
+				PerPage: buildPlansFetchPageSize,
+				Offset:  page * buildPlansFetchPageSize,
+			})
+			if err != nil {
+				errMu.Lock()
+				if fetchErr == nil {
+					fetchErr = err
+				}
+				errMu.Unlock()
+				return
+			}
+			// pages[page] is this goroutine's own, exclusive index into a
+			// pre-sized slice - no lock needed (see RunConcurrently's doc
+			// comment).
+			pages[page] = resp.Data
 		})
-		if err != nil {
-			return plans, err
-		}
 
-		plans = append(plans, resp.Data...)
-
-		if len(resp.Data) < buildPlansFetchPageSize || len(plans) >= resp.Meta.TotalCount {
-			break
+		if fetchErr != nil {
+			return nil, fetchErr
 		}
+	}
+
+	plans := make([]pco.PlanData, 0, totalCount)
+	for _, page := range pages {
+		plans = append(plans, page...)
 	}
 
 	return plans, nil
@@ -251,8 +316,13 @@ func paginateUpcomingPlans(filtered []pco.PlanData, page int) (pageOfPlans []pco
 // are the one exception - fetched in bulk for the whole service type
 // (ListPlanNotesForServiceType) up front, before paginating, since search
 // needs to match against every plan's note, not just the page actually
-// shown. Returns the clamped page actually shown alongside the total page
-// count.
+// shown. The per-row status lookups themselves are fanned out concurrently
+// by buildPlanRows below rather than run one row at a time - each row's
+// planStatus/rosterStatus can fall back to a live PCO call
+// (GetItems/GetTeamMembers) when there's no local draft yet, so a full page
+// of buildPlansPageSize rows could otherwise mean up to 2*buildPlansPageSize
+// sequential round trips just to render the picker. Returns the clamped
+// page actually shown alongside the total page count.
 func (sc *SchedulingController) combinedPlansForServiceType(ctx context.Context, organizationID, serviceTypeID, search string, page int, past bool) (rows []views.PlanRow, currentPage int, totalPages int, errMsg string) {
 	fetch := fetchUpcomingPlans
 	if past {
@@ -270,18 +340,47 @@ func (sc *SchedulingController) combinedPlansForServiceType(ctx context.Context,
 	filtered := filterUpcomingPlans(plans, search, notes)
 	pageOfPlans, page, totalPages := paginateUpcomingPlans(filtered, page)
 
-	rows = make([]views.PlanRow, len(pageOfPlans))
-	for i, plan := range pageOfPlans {
+	rows = buildPlanRows(pageOfPlans, notes, func(plan pco.PlanData) (setStatus, rosterStatus string) {
+		return sc.planStatus(ctx, organizationID, serviceTypeID, plan.ID), sc.rosterStatus(ctx, organizationID, serviceTypeID, plan.ID)
+	})
+	return rows, page, totalPages, ""
+}
+
+// buildPlanRows turns one page of plans into display rows, computing each
+// row's SetStatus/RosterStatus via statusFn - split out from
+// combinedPlansForServiceType so the concurrent fan-out itself is testable
+// against a fake statusFn, without needing a real *scheduling.Store or a
+// live PCO round trip (see build_httptest_test.go).
+//
+// Each row's status is independent of every other row's, so the up-to-
+// buildPlansPageSize rows are fanned out via scheduling.RunConcurrently
+// (bounded to scheduling.PCOFanOutLimit) instead of calling statusFn one
+// row at a time - same pre-sized, index-owned-per-goroutine pattern as
+// renderServiceOrder (sets_builder.go): out is allocated up front and each
+// goroutine only ever writes its own index, so no lock is needed and rows
+// can never land on the wrong plan despite running concurrently.
+func buildPlanRows(pageOfPlans []pco.PlanData, notes map[string]string, statusFn func(plan pco.PlanData) (setStatus, rosterStatus string)) []views.PlanRow {
+	rows := make([]views.PlanRow, len(pageOfPlans))
+
+	indexes := make([]int, len(pageOfPlans))
+	for i := range pageOfPlans {
+		indexes[i] = i
+	}
+
+	scheduling.RunConcurrently(indexes, func(i int) {
+		plan := pageOfPlans[i]
+		setStatus, rosterStatus := statusFn(plan)
 		rows[i] = views.PlanRow{
 			ID:           plan.ID,
 			Title:        plan.Attributes.Title,
 			Dates:        plan.Attributes.Dates,
 			Note:         notes[plan.ID],
-			SetStatus:    sc.planStatus(ctx, organizationID, serviceTypeID, plan.ID),
-			RosterStatus: sc.rosterStatus(ctx, organizationID, serviceTypeID, plan.ID),
+			SetStatus:    setStatus,
+			RosterStatus: rosterStatus,
 		}
-	}
-	return rows, page, totalPages, ""
+	})
+
+	return rows
 }
 
 // BuildPlanPage renders one plan's combined builder - the song order of

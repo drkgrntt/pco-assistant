@@ -7,6 +7,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"pco-assistant/internal/scheduling"
 	"pco-assistant/internal/server/middleware"
@@ -71,29 +73,47 @@ func (sc *SchedulingController) PublishRoster(c *fiber.Ctx) error {
 		return render(c, views.RosterBuilderBody(sc.buildRosterBuilderDataWithErr(ctx, orgID, serviceTypeID, planID, err.Error())))
 	}
 
+	// failures is appended from concurrent goroutines below (both the
+	// deletion and creation fan-outs), guarded by failuresMu throughout -
+	// a plain slice append isn't safe for concurrent writers on its own.
+	// deleted/created are tallied via atomic counters for the same reason.
+	// Each fan-out still fully completes (RunConcurrently blocks until
+	// every goroutine returns) before the next one starts, so the
+	// deletions-before-creates ordering the sequential version had is
+	// unchanged - PublishRoster has no reorder step to worry about
+	// afterward (see this function's own doc comment).
 	var failures []string
-	deleted, created := 0, 0
+	var failuresMu sync.Mutex
+	var deletedCount, createdCount int32
 
 	names := personNameMapForIDs(ctx, assignmentPersonIDs(append(append([]scheduling.RosterAssignment{}, assignments...), pendingDeletions...)))
 
-	for _, ra := range pendingDeletions {
+	scheduling.RunConcurrently(pendingDeletions, func(ra scheduling.RosterAssignment) {
 		name := titleOrID(names, ra.PersonID)
 
 		if err := pco.DeleteTeamMember(ctx, serviceTypeID, planID, ra.PCOPlanPersonID); err != nil {
+			failuresMu.Lock()
 			failures = append(failures, fmt.Sprintf("removing %s: %s", name, err.Error()))
-			continue
+			failuresMu.Unlock()
+			return
 		}
 		if err := sc.store.DeleteAssignmentRow(ctx, ra.ID); err != nil {
+			failuresMu.Lock()
 			failures = append(failures, fmt.Sprintf("removed %s from Planning Center but failed to clear it locally: %s", name, err.Error()))
-			continue
+			failuresMu.Unlock()
+			return
 		}
-		deleted++
+		atomic.AddInt32(&deletedCount, 1)
+	})
+
+	var toCreate []scheduling.RosterAssignment
+	for _, ra := range assignments {
+		if ra.PCOPlanPersonID == "" {
+			toCreate = append(toCreate, ra)
+		}
 	}
 
-	for _, ra := range assignments {
-		if ra.PCOPlanPersonID != "" {
-			continue
-		}
+	scheduling.RunConcurrently(toCreate, func(ra scheduling.RosterAssignment) {
 		name := titleOrID(names, ra.PersonID)
 
 		member, err := pco.CreateTeamMember(ctx, serviceTypeID, planID, &pco.CreateTeamMemberParams{
@@ -102,15 +122,21 @@ func (sc *SchedulingController) PublishRoster(c *fiber.Ctx) error {
 			TeamPositionName: ra.TeamPositionName,
 		})
 		if err != nil {
+			failuresMu.Lock()
 			failures = append(failures, fmt.Sprintf("%s: %s", name, err.Error()))
-			continue
+			failuresMu.Unlock()
+			return
 		}
 		if err := sc.store.MarkAssignmentPublished(ctx, roster.ID, ra.ID, member.Data.ID); err != nil {
+			failuresMu.Lock()
 			failures = append(failures, fmt.Sprintf("%s: created in Planning Center but failed to record locally: %s", name, err.Error()))
-			continue
+			failuresMu.Unlock()
+			return
 		}
-		created++
-	}
+		atomic.AddInt32(&createdCount, 1)
+	})
+
+	deleted, created := int(deletedCount), int(createdCount)
 
 	var summary []string
 	if created > 0 {

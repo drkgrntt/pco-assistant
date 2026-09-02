@@ -29,7 +29,7 @@ func (sc *SchedulingController) SongRolesPage(c *fiber.Ctx) error {
 	orgName := middleware.CurrentOrganization(c)
 	orgID := middleware.CurrentOrganizationID(c)
 
-	songs, songsErr := fetchAllSongs(middleware.RequestContext(c))
+	songs, songsErr := fetchActiveSongs(middleware.RequestContext(c), orgID)
 
 	roleTypes, err := sc.store.ListSongRoleTypes(c.Context())
 	if err != nil {
@@ -71,7 +71,7 @@ func (sc *SchedulingController) CreateSongRole(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
 	}
 
-	songs, _ := fetchAllSongs(middleware.RequestContext(c))
+	songs, _ := fetchActiveSongs(middleware.RequestContext(c), orgID)
 	roleTypes, _ := sc.store.ListSongRoleTypes(c.Context())
 
 	return render(c, views.SongRolesTable(roles, songTitleMap(songs), songRoleTypeLabelMap(roleTypes), errMsg))
@@ -93,7 +93,7 @@ func (sc *SchedulingController) DeleteSongRole(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
 	}
 
-	songs, _ := fetchAllSongs(middleware.RequestContext(c))
+	songs, _ := fetchActiveSongs(middleware.RequestContext(c), orgID)
 	roleTypes, _ := sc.store.ListSongRoleTypes(c.Context())
 
 	return render(c, views.SongRolesTable(roles, songTitleMap(songs), songRoleTypeLabelMap(roleTypes), errMsg))

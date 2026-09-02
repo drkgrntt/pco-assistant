@@ -40,7 +40,12 @@ templ SongInfoBody(data SongInfoData) {
 				{ fmt.Sprintf("%d of %d song(s) in your library are cached.", data.CachedCount, data.TotalCount) }
 			}
 		</p>
-		if data.TotalCount > 0 && data.CachedCount < data.TotalCount {
+		if data.SyncInProgress {
+			<p class="muted">
+				Sync in progress - this can take a while for a large library.
+				Refresh this page to see progress.
+			</p>
+		} else if data.TotalCount > 0 && data.CachedCount < data.TotalCount {
 			<form hx-post="/scheduling/song-info/sync" hx-target="#song-info-body" hx-swap="outerHTML">
 				<button type="submit" class="primary">Sync now</button>
 			</form>

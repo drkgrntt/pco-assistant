@@ -79,7 +79,7 @@ func PopulateNavState(schedulingStore *scheduling.Store) fiber.Handler {
 
 		ctx := RequestContext(c)
 
-		songs, err := scheduling.FetchAllSongs(ctx)
+		songs, err := scheduling.FetchActiveSongs(ctx, orgID)
 		if err != nil {
 			return c.Next()
 		}

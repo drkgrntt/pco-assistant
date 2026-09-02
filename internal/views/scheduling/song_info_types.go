@@ -9,9 +9,22 @@ package scheduling
 type SongInfoData struct {
 	CachedCount int
 	TotalCount  int
-	// SyncMsg reports the outcome of the last "Sync now" action (e.g.
-	// "Synced 12 song(s): 3 newly cached, 9 already cached, 0 failed."),
-	// same pattern as every other setup page's success line.
+	// SyncInProgress reports whether a background sync (see SyncSongInfo/
+	// runSongInfoSync in internal/server/controllers/
+	// song_arrangement_cache.go) is currently running for this
+	// organization - checked against the same in-memory guard that
+	// prevents a second concurrent sync. Used to hide the "Sync now" button
+	// (starting a second pass would just be rejected anyway) and show a
+	// "sync in progress" message instead of a stale SyncMsg from before the
+	// sync was kicked off.
+	SyncInProgress bool
+	// SyncMsg reports the outcome of the last "Sync now" click - either
+	// that a background sync was just started, that one was already
+	// running, or an error - since the sync itself now runs in the
+	// background and its actual per-song results aren't known by the time
+	// this renders (see runSongInfoSync's doc comment). CachedCount/
+	// TotalCount above are what actually reflect progress, live, on every
+	// render.
 	SyncMsg string
 	ErrMsg  string
 }

@@ -188,12 +188,28 @@ actually PCO just cut the app off partway through.
    so one hung call can't hang the whole render. This is a `go-pco` change,
    not just this app. Declined explicitly - revisit only if a future
    symptom (real 429s in practice, a hung render) points back at it.
-5. **A short-lived in-process cache** (or reuse the existing DB-cache
-   pattern from `song_arrangement_cache`) for things that don't change
-   mid-session - team/position lists, team member names - so repeated
-   add/remove renders on the same plan don't refetch identical data every
-   time. Not started - mostly helps *repeat* renders on an already-open
-   plan (the add/remove churn noted above), not first page load.
+5. ~~**A short-lived in-process cache**~~ - implemented, scoped specifically
+   to the full song list (the concrete case that turned out to matter: a
+   worship pastor's ~900-song PCO library, most of it archived, being
+   pulled live/uncached/unfiltered on every page view and htmx add/remove
+   - see the "Fix PCO song-list performance" plan). `internal/scheduling/
+   pco_songs.go`'s `FetchActiveSongs(ctx, organizationID)` replaced the old
+   unfiltered, uncapped-only-by-a-silent-20-page-cap `FetchAllSongs`:
+   filters out archived (`Attributes.Hidden`) songs client-side
+   (`filterActiveSongs` - the real correctness guarantee, always applied)
+   and, since PCO's Songs#index confirmed live to actually support
+   server-side `where[hidden]` filtering (`can_query_by` includes
+   `hidden`; `where[hidden]=true` vs. `=false` return different, correct
+   `total_count`s), also passes `Hidden: false` server-side for a smaller
+   page count on top of that. Caches the result per organization for 60s
+   (`songCacheTTL`, matching `middleware.navStateTTL`'s reasoning), with
+   the same fail-safe convention as nav.go's cache: a transient fetch
+   failure is never cached, so it can't pin a stale/empty result in for
+   the rest of the window. `pcoreset` gets its own uncached, unfiltered
+   `FetchAllSongsIncludingArchived`, since a full org reset needs to see
+   (and delete) archived songs too. Team/position lists and team member
+   names (this item's other original examples) remain uncached - the song
+   list was the one with an actual reported symptom.
 6. ~~**Bounded concurrency for independent PCO calls**~~ - not on the
    original list; added once #1/#2 landed and first-load time was still
    ~9s. #1 and #2 cut call *count*; neither touched the fact that every
@@ -202,9 +218,13 @@ actually PCO just cut the app off partway through.
    `http.Client.Do` - no batching, no concurrency), so a ~100-200-call
    chain at 100-400ms each stays a multi-second wait regardless of how
    many of those calls are duplicates. Added `runConcurrently` (bounded to
-   `pcoFanOutLimit` = 10 goroutines at once, `internal/server/controllers/
-   concurrency.go`) and fanned out every independent per-item PCO loop
-   through it: `rosters_builder.go`'s per-group candidate-pool fetch, its
+   `pcoFanOutLimit` = 10 goroutines at once, originally
+   `internal/server/controllers/concurrency.go`, later relocated to
+   `internal/scheduling/concurrency.go` as `RunConcurrently`/
+   `PCOFanOutLimit` so `fetchSongsFromPCO`'s own concurrent page fan-out,
+   #5 above, could use it too) and fanned out every independent per-item
+   PCO loop through it: `rosters_builder.go`'s per-group candidate-pool
+   fetch, its
    per-person `GetBlockouts` fetch (confirmed live this endpoint has no
    batch/`where[id]` option - `services/v2/people/{id}/blockouts`'
    `can_query_by` is just `group_identifier` - so concurrency is the only
@@ -223,10 +243,213 @@ already inside one window either way, so fanning it out doesn't add new
 rate-limit exposure; if anything, finishing sooner narrows the chance of
 overlapping with the *next* request's own calls.
 
-With #1, #2, #3, and #6 all landed, the only open item is **#5** (short-lived
-in-process cache) - lower priority since it mainly helps repeat edits on an
-already-open plan, not first load. #4 is explicitly off the table for now
-(see above). If first load is *still* materially slow after #3/#6, that's a
-signal worth re-measuring rather than guessing at a #7: confirm with real
-timing (not just "still feels slow") before picking the next lever, since
-the two easy, well-understood wins are both already in.
+With #1, #2, #3, #5, and #6 all landed, #4 is explicitly off the table for
+now (see above) and nothing else is currently open. If first load is
+*still* materially slow after all of these, that's a signal worth
+re-measuring rather than guessing at a #7: confirm with real timing (not
+just "still feels slow") before picking the next lever, since several
+easy, well-understood wins are already in.
+
+## Addendum: Song Info's bulk sync was a separate, sharper risk
+
+Found after the above was written "nothing else is currently open" -
+`SyncSongInfo` (`internal/server/controllers/song_arrangement_cache.go`)
+walks every active song needing a cache backfill and live-fetches its
+arrangement + key (2 calls/song), **fully sequentially, inside the HTTP
+request**. Unlike the Plan page's ~100-200 calls (bad but survivable,
+see #6's rate-limit note above), a first sync for a ~100-song library
+alone needs up to ~200 calls - double PCO's 100-req/20s budget in a
+*single* request, and the more songs, the worse. Simply wrapping the loop
+in `RunConcurrently` (like #6 above) would make it faster but strictly
+*more* likely to trip a 429, not less, since it crams the same total call
+count into a much shorter window instead of the accidental self-throttling
+sequential latency provided.
+
+Fixed by detaching the sync from the request entirely: `SyncSongInfo`
+launches a background goroutine (`runSongInfoSync`, given a
+`context.Background()`-derived context carrying the user's PCO access
+token via `middleware.AccessToken` - independent of the fiber request's
+own context, which is cancelled once the handler returns) and responds
+immediately. The goroutine paces itself: songs needing a sync are batched
+(`songInfoSyncBatchSize` = `PCOFanOutLimit`, 10 songs/batch = up to 20
+calls/batch), each batch run concurrently via `RunConcurrently`, with a
+`songInfoSyncBatchPause` (10s) pause between batches - capping the
+sustained rate at ~60 calls per any 20-second window (60% of budget,
+comfortable headroom left for the rest of the app's ordinary traffic)
+regardless of how large the library is. An in-memory `songSyncInProgress`
+guard (mutex + map, same pattern as `nav.go`'s cache) stops a second
+concurrent pass for the same org. No new progress-tracking table was
+needed: `buildSongInfoData`'s `CachedCount`/`TotalCount` already recompute
+live from the DB on every render, so reloading the Song Info page shows
+the sync's progress for free, and `nav.go`'s existing `songInfoNeedsSync`
+badge already clears itself within a minute of the cache filling in.
+
+## Addendum: Team Builder's duplicate scoped-fetch calls were the worst
+## per-action cost in the app
+
+Found via two independent audit passes, unrelated to the sync above -
+`internal/server/controllers/rosters_scoped.go`'s two narrow-fragment
+builders, `buildRosterPositionGroupData` (recomputes one position group)
+and `buildRosterLightData` (recomputes the roster's shared page chrome),
+were each independently calling `pco.GetTeamMembers`,
+`pco.GetNeededPositions`, and `pco.GetTeams` for the same plan.
+`rosters_detail.go`'s `AddRosterAssignment`, `RemoveRosterAssignment`, and
+`QuickAddPositionPreference` handlers call *both* functions back-to-back on
+every single add/remove/quick-add click, so those three requests were sent
+twice each - 6 calls where 3 would do, on top of
+`buildRosterPositionGroupData`'s own per-position/per-person fan-out
+(`GetTeamPositions`, `GetPlan`, `GetPersonTeamPositionAssignments`, plus
+the `GetBlockouts`/cross-team/other-dates fan-out already covered by
+mitigation #6 above). A single click on the Team Builder tab could cost
+roughly 30-40 PCO calls total, at least 6 of which were byte-for-byte
+duplicate requests for data already in hand from the other function's own
+call moments earlier - narrower in reach than the pre-fix song list (only
+the Team Builder tab, not every page) but worse per-action.
+
+Fixed by introducing `rosterSharedPCOData` (`rosters_scoped.go`): a small
+struct holding all three responses (plus their own fetch errors, since the
+two functions don't agree on which of the three is worth surfacing as an
+error - see the struct's own doc comment) and
+`fetchRosterSharedPCOData(ctx, serviceTypeID, planID)`, which fetches all
+three once. `buildRosterPositionGroupData`/`buildRosterLightData` both now
+take a `*rosterSharedPCOData` parameter: nil means "fetch your own copy"
+(preserving the original one-fetch-each behavior for a caller that only
+needs one of the two - `QuickAddPersonRelationship` is the only such
+caller today), while the three `rosters_detail.go` handlers that call both
+functions together fetch once and hand the same pointer to both. No
+change to `buildRosterPositionGroupData`'s own remaining per-position/
+per-person fan-out, `buildRosterBuilderData`'s full-rebuild path (never
+calls both scoped functions together, so was never affected), or any
+behavior/error-message text - purely eliminates the duplicate requests.
+Team/position lists and team member names remain uncached *across*
+requests (mitigation #5's still-open gap) - this fix only removes the
+*within-one-request* duplication, a narrower and cheaper problem than
+adding a cache would be.
+
+## Addendum: three residual sequential loops found by a later audit
+
+Found by two independent audit passes well after "nothing else is
+currently open" above - #2 and #6 fixed the *worst* sequential/duplicate
+loops, but three smaller ones of the same shape survived both passes:
+
+- **`personNameMap`** (`internal/server/controllers/scheduling.go`) - the
+  song/person Preferences page's own name resolver, a near-duplicate of
+  the `personNameMapForIDs` #2 fixed, except this one still ran one
+  `pco.GetPerson` call per distinct person id in the preferences list. Not
+  caught by #2 because it's a separate function serving a separate page,
+  not a call site of `personNameMapForIDs` itself. Fixed by rewriting it
+  to collect its distinct ids and delegate to `personNameMapForIDs`
+  directly - it's now a ~10-line wrapper, same batched `where[id]=...`
+  calls, same leave-it-out-of-the-map fallback for an id that fails to
+  resolve.
+- **`combinedPlansForServiceType`** (`internal/server/controllers/
+  build.go`) - the Build page's plan-picker: after paginating to at most
+  `buildPlansPageSize` (10) rows, ran `planStatus`/`rosterStatus` for each
+  row in a sequential loop. Each of those falls back to a live
+  `GetItems`/`GetTeamMembers` call when the row has no local draft yet, so
+  a full page of rows could mean up to 20 sequential round trips just to
+  render the picker - the same "independent per-row PCO calls, run one at
+  a time" shape #6 fixed elsewhere in `sets_builder.go`/
+  `rosters_builder.go`, just not caught in that pass since this loop lives
+  in `build.go` itself rather than the two builder files #6 focused on.
+  Fixed by fanning the per-row status computation out via
+  `scheduling.RunConcurrently` (`buildPlanRows`, pulled out as its own
+  function so the fan-out is testable against a fake status callback
+  without a real `*scheduling.Store` or PCO round trip) - pre-sized,
+  index-owned-per-goroutine, same pattern as `renderServiceOrder`.
+- **`fetchTeamPositions`** (`internal/server/controllers/people.go`) - the
+  position-preferences page's team/position walk: one `GetTeamPositions`
+  call per team on the service type, sequentially. Same fix, fanned out
+  via `scheduling.RunConcurrently` into a pre-sized, index-matched slice
+  so team order (`GetTeams`' own `OrderBy: "name"`) survives the fan-out;
+  "first error wins" (via `sync.Once`) replaces the old sequential loop's
+  literal first error, since concurrent completion order no longer
+  guarantees the same team "loses" the race every time - documented at
+  the call site as "an" error rather than strictly the first one, which
+  is fine given the caller only ever shows a single generic "loading
+  teams from Planning Center" message either way.
+
+None of these change PCO call *count* (unlike #2) or introduce a new
+cache (unlike #5) - all three are pure wall-clock fixes, same category as
+#6, just for loops #6's pass didn't reach. Team/position lists and
+team-member names (see #5) remain uncached, same as before this addendum
+- this only fixed how those calls are scheduled relative to each other,
+not whether they happen at all.
+
+## Addendum: GetServiceTypes cached, matching FetchActiveSongs' pattern
+
+Low severity, broad reach: `build.go`'s `BuildPage`, `home.go`'s
+`buildHomeData`, and `people.go`'s `PositionPreferencesPage` each called
+`pco.GetServiceTypes` independently, with no caching between them - cheap
+individually (a service type list is small, no pagination involved,
+unlike the song library), but three uncached live calls across three
+different pages that can all be hit in normal navigation.
+
+Fixed by `internal/scheduling/pco_service_types.go`'s `FetchServiceTypes`
+- an org-scoped, 60s-TTL cache, same shape as `FetchActiveSongs`
+(including reusing its `songCacheEntryFresh` pure freshness check
+directly, since both live in the `scheduling` package - no need to
+duplicate it the way `nav.go`'s copy is duplicated across the
+`middleware`/`scheduling` package boundary). All three call sites now go
+through it instead of calling `pco.GetServiceTypes` directly. The `/pco`
+dev-only exploration group (`pco.go`, gated behind `APP_ENV=local`, not
+real production traffic) was deliberately left alone - not worth
+threading org-scoping through a debug-only endpoint for.
+
+`httptest`-backed tests (`pco_service_types_httptest_test.go`, same
+`pco.SetBaseURLForTesting` seam as `pco_songs_httptest_test.go`) prove a
+second call within the TTL window costs zero additional PCO requests, and
+that the cache is genuinely per-organization.
+
+## Addendum: publish-path loops parallelized - writes, not reads, extra care taken
+
+Low-medium severity, but a different risk shape than every fix above:
+`PublishSet`'s deletion loop and create/update loop (`sets_publish.go`),
+`RefreshSongInfo`'s PATCH loop (`sets_publish.go`), and `PublishRoster`'s
+deletion and creation loops (`rosters_publish.go`) all called PCO
+sequentially, one write per song/assignment. Real, but only on an
+explicit Publish/Refresh click, not render time, and already
+self-throttling by virtue of being sequential - the same reason this
+mattered less urgently than the read-side fixes above.
+
+Fanned out via `scheduling.RunConcurrently`, same as every other fix in
+this doc, but writes need more care than reads:
+
+- **Ordering invariants preserved structurally, not just by convention**:
+  `RunConcurrently` blocks until every goroutine in one fan-out returns
+  before the caller continues, so `PublishSet`'s "deletions fully finish
+  before any create/update starts" and `PublishRoster`'s equivalent still
+  hold exactly as they did sequentially - each loop is its own fan-out,
+  not one fan-out spanning both phases.
+- **`PublishSet`'s create/update loop is the one with a real subtlety**: a
+  song that fails to create must be excluded from `publishable` (the list
+  fed to `mergeServiceOrder` for the reorder call) - the sequential
+  version did this with a bare `continue`. The concurrent version uses a
+  pre-sized, index-matched `results []publishResult` slice with an
+  `include` flag, defaulting to `false` (excluded) unless the goroutine
+  reaches the point where it would have fallen through to `publishable =
+  append(...)` in the original. Confirmed safe to reorder in whatever
+  order the fan-out finishes in: `mergeServiceOrder` groups by each
+  `SetSong`'s stored `AnchorItemID`/`Position`, not by input list order
+  (see `TestMergeServiceOrderGroupOrderedByPosition`,
+  `sets_builder_test.go`) - `publishable`'s own element order was never
+  load-bearing, sequential or concurrent.
+- **Failure/counter collection made goroutine-safe**: every `failures =
+  append(...)` is now guarded by a `sync.Mutex`; every `deleted`/
+  `created`/`updated`/`refreshed` counter is a `sync/atomic` `int32`,
+  converted back to a plain `int` only after its fan-out has fully
+  returned. Same per-item error messages and best-effort tolerance as
+  before - purely a concurrency-safety change, not a behavior change.
+
+**Not covered by an automated test** - unlike every other fix in this
+doc, none of `PublishSet`/`RefreshSongInfo`/`PublishRoster` have any
+existing test coverage (or an `httptest`-only path to it): they need a
+real `*scheduling.Store`, and this codebase has no DB-backed test harness
+anywhere yet (confirmed - no other controller test needing a live Store
+exists either). Verified instead by careful manual review of the ordering
+invariants above, plus the existing `mergeServiceOrder`/pure-helper tests
+that already cover the assumptions this change leans on. Recommended: a
+manual Publish/Refresh/PublishRoster smoke test against a real (dev) PCO
+plan before leaning on this in production, given the higher stakes of a
+mistake here (real writes to a church's live service order) versus every
+read-only fix above.
