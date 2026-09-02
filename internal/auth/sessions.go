@@ -133,6 +133,57 @@ func (s *Store) DeleteSession(ctx context.Context, token string) error {
 	return err
 }
 
+// ActiveSession is one row from ListActiveSessions - enough to show and
+// act on a currently signed-in person from the Account page.
+type ActiveSession struct {
+	PersonID, PersonName string
+	CreatedAt, ExpiresAt time.Time
+}
+
+// ListActiveSessions returns every live session for orgID, most recent
+// first - one row per session, not deduped by person (a person signed in
+// on two devices shows twice; auth.SeatCounts is the source of truth for
+// the deduped billed count, this is just a visibility/action list).
+func (s *Store) ListActiveSessions(ctx context.Context, orgID string) ([]ActiveSession, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT person_id, person_name, created_at, expires_at
+		FROM sessions
+		WHERE organization_id = $1 AND expires_at > now()
+		ORDER BY created_at DESC
+	`, orgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var sessions []ActiveSession
+	for rows.Next() {
+		var sess ActiveSession
+		if err := rows.Scan(&sess.PersonID, &sess.PersonName, &sess.CreatedAt, &sess.ExpiresAt); err != nil {
+			return nil, err
+		}
+		sessions = append(sessions, sess)
+	}
+
+	return sessions, rows.Err()
+}
+
+// DeleteSessionsForPerson ends every live session a specific person has in
+// this org - the "sign this person out" action from the Account page.
+// Unlike DeleteSession (keyed by one raw token, for self-logout via
+// /auth/logout), this is keyed by person id since whoever's performing
+// this action doesn't have the target person's session token. Returns how
+// many sessions were deleted (0 if the person had none - not an error).
+func (s *Store) DeleteSessionsForPerson(ctx context.Context, orgID, personID string) (int64, error) {
+	result, err := s.db.ExecContext(ctx, `
+		DELETE FROM sessions WHERE organization_id = $1 AND person_id = $2
+	`, orgID, personID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 // DeleteExpiredSessions purges expired rows. Called periodically from
 // jobs.AuthJobs so the table doesn't grow unbounded.
 func (s *Store) DeleteExpiredSessions(ctx context.Context) (int64, error) {

@@ -1,6 +1,8 @@
 package views
 
 import (
+	"fmt"
+
 	"pco-assistant/internal/views/components"
 )
 
@@ -23,6 +25,8 @@ templ Account(personName, organizationName string, data AccountData) {
 		@BillingBody(data.Billing)
 		<h2>Data &amp; Caches</h2>
 		@AccountCacheBody(data)
+		<h2>Who's signed in</h2>
+		@AccountSessionsBody(data)
 	}
 }
 
@@ -92,6 +96,71 @@ templ AccountCacheBody(data AccountData) {
 			>
 				<button type="submit">Clear person data cache</button>
 			</form>
+		}
+	</div>
+}
+
+// AccountSessionsBody is both the initial-render fragment and the htmx
+// swap target (id="account-sessions-body") for the "who's signed in" list
+// and its per-person sign-out action - same shape as AccountCacheBody
+// above.
+//
+// Not "danger"-styled (see publish_panel.templ for what that class is
+// reserved for - a genuinely irreversible action like Discard): signing
+// someone out is reversible, they can just sign back in with Planning
+// Center if they still have access. Same "not destructive" framing tier
+// as AccountCacheBody's two actions, just still worth an hx-confirm since
+// it does interrupt someone's live session.
+templ AccountSessionsBody(data AccountData) {
+	<div id="account-sessions-body">
+		if data.SessionsErr != "" {
+			<p class="error">{ data.SessionsErr }</p>
+		}
+		if data.SignOutErr != "" {
+			<p class="error">{ data.SignOutErr }</p>
+		}
+		if data.SignOutMsg != "" {
+			<p class="success">{ data.SignOutMsg }</p>
+		}
+		@components.Card("Currently signed in") {
+			<p class="muted">
+				Everyone signed in counts as a billed seat until their session
+				either expires on its own (30 days after they last signed in) or
+				you sign them out here - useful right away when someone leaves
+				staff and you don't want to wait out the 30 days for their seat
+				to free up.
+			</p>
+			if len(data.Sessions) == 0 {
+				<p class="muted">Nobody is currently signed in.</p>
+			} else {
+				@components.SortableTableWrap() {
+					<thead>
+						<tr>
+							<th>Person</th>
+							<th>Signed in</th>
+							<th></th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, sess := range data.Sessions {
+							<tr>
+								<td>{ sess.PersonName }</td>
+								<td>{ sess.CreatedAt.Format("Jan 2, 2006 3:04 PM") }</td>
+								<td>
+									<form
+										hx-post={ fmt.Sprintf("/account/sessions/%s/sign-out", sess.PersonID) }
+										hx-target="#account-sessions-body"
+										hx-swap="outerHTML"
+										hx-confirm={ fmt.Sprintf("This immediately ends %s's session - they'll need to sign in with Planning Center again to come back. Continue?", sess.PersonName) }
+									>
+										<button type="submit">Sign out</button>
+									</form>
+								</td>
+							</tr>
+						}
+					</tbody>
+				}
+			}
 		}
 	</div>
 }
