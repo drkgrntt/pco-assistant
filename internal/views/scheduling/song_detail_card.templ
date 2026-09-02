@@ -143,8 +143,8 @@ templ songDetailCard(data SetBuilderData, song SetSongView) {
 				<!--
 					No forms for a past plan - see SetBuilderData.ReadOnly.
 					Key/note are shown as plain text instead of editable
-					fields, same info keyForm/descriptionForm/songNoteForm
-					would otherwise carry.
+					fields, same info keyForm/descriptionForm would
+					otherwise carry.
 				-->
 				if song.Key != "" {
 					<p><strong>Key (that week):</strong> { song.Key }</p>
@@ -152,36 +152,9 @@ templ songDetailCard(data SetBuilderData, song SetSongView) {
 				if song.Description != "" {
 					<p><strong>Note:</strong> { song.Description }</p>
 				}
-				for _, note := range song.Notes {
-					if note.Content != "" {
-						<p><strong>{ note.CategoryName }:</strong> { note.Content }</p>
-					}
-				}
 			} else {
 				@keyForm(data, song, "")
 				@descriptionForm(data, song, "")
-				<!--
-					Song.Notes - one Planning Center ItemNote per note category
-					(Audio/Visual, Band, Vocals, etc. - configured per service
-					type) already on this song's plan item, plus an empty slot
-					for any category that doesn't have one yet. Each saves
-					straight to Planning Center immediately (see UpdateSongNote),
-					same "ad hoc, not part of the draft/publish cycle" shape as
-					the Tag/Relate/Mark role actions below - these are real,
-					existing PCO records, not local state to publish later.
-					Only populated for a published song (nil otherwise, since
-					there's no plan item yet to attach a note to).
-				-->
-				for _, note := range song.Notes {
-					@songNoteForm(data, song, note, "")
-				}
-				if len(song.Notes) == 0 {
-					if song.Published {
-						<p class="muted">No note categories are configured for this service type yet - add some in Planning Center.</p>
-					} else {
-						<p class="muted">Publish this song first to add notes here (Audio/Visual, Band, Vocals, etc.).</p>
-					}
-				}
 			}
 		</div>
 		if !data.ReadOnly {
@@ -239,6 +212,46 @@ templ songDetailCard(data SetBuilderData, song SetSongView) {
 					Mark a role
 				</button>
 			</div>
+		}
+		<!--
+			Song.Notes - one Planning Center ItemNote per note category
+			(Audio/Visual, Band, Vocals, etc. - configured per service
+			type) already on this song's plan item, plus an empty slot
+			for any category that doesn't have one yet. Each saves
+			straight to Planning Center immediately (see UpdateSongNote),
+			same "ad hoc, not part of the draft/publish cycle" shape as
+			the Tag/Relate/Mark role actions above - these are real,
+			existing PCO records, not local state to publish later.
+			Only populated for a published song (nil otherwise, since
+			there's no plan item yet to attach a note to).
+
+			Collapsed by default (collapsibleSection, open=false): these
+			are touched far less often than the "This week" key/note
+			above, and a service type with several note categories would
+			otherwise push a form per category ahead of every song
+			card's own actions - see SongNoteFormFragment's own doc
+			comment above for the full "why a separate concept from
+			key/note" reasoning.
+		-->
+		if data.ReadOnly {
+			for _, note := range song.Notes {
+				if note.Content != "" {
+					<p><strong>{ note.CategoryName }:</strong> { note.Content }</p>
+				}
+			}
+		} else {
+			@collapsibleSection(fmt.Sprintf("song-notes-%d", song.ID), "Category notes (Planning Center)", false) {
+				for _, note := range song.Notes {
+					@songNoteForm(data, song, note, "")
+				}
+				if len(song.Notes) == 0 {
+					if song.Published {
+						<p class="muted">No note categories are configured for this service type yet - add some in Planning Center.</p>
+					} else {
+						<p class="muted">Publish this song first to add notes here (Audio/Visual, Band, Vocals, etc.).</p>
+					}
+				}
+			}
 		}
 	}
 }
