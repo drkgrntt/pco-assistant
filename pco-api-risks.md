@@ -542,3 +542,41 @@ every other cache in this doc. `sets_builder_history_cache_test.go`
 tests in this doc) proves a second call within the TTL costs zero
 additional requests, a failed call is never cached, and two different
 service types never share an entry.
+
+## Addendum: app-wide re-audit (2026-09-01) - one sequential loop found, everything else already covered
+
+Prompted by a request to re-check for N+1/uncached-fan-out risk at scale
+(hundreds of songs/arrangements/services/people), independent of any
+specific reported symptom. Walked every call site of `pco.Get*`/
+`pco.Create*`/`pco.Update*`/`pco.Delete*` across `internal/server/
+controllers` and `internal/scheduling` and checked each one against the
+patterns already fixed above (sequential per-item loop, duplicate fetch,
+missing cache on a session-stable read). Everything already covered by
+mitigations #1-#6 and the addenda above was confirmed still fixed in its
+current form: `rosters_builder.go`/`rosters_scoped.go`'s team/position/
+candidate/blockout/cross-team fan-outs, `people.go`'s `fetchTeamPositions`
+and batched `personNameMapForIDs`, `build.go`'s paginated/fanned-out
+`fetchPlansByFilter` and `buildPlanRows`, `sets_builder.go`'s
+`renderServiceOrder` and cached `fetchRecentPlanHistory`, and
+`sets_publish.go`/`rosters_publish.go`'s fanned-out publish loops.
+
+One real gap survived every prior pass: **`home.go`'s `buildHomeData`**,
+the signed-in landing page every login hits. For each of up to
+`homeServiceTypesCap` (5) service types, it ran `pco.GetPlans` then
+`planStatus`/`rosterStatus` **sequentially, one service type at a time**
+- the exact same shape #6/the `combinedPlansForServiceType` addendum
+already fixed for the Build page's plan picker (`buildPlanRows`), just
+never applied here since this is a separate function on a separate page.
+`planStatus`/`rosterStatus` each fall back to a live `GetItems`/
+`GetTeamMembers` call whenever the service type has no local draft yet
+(the common case for a church just adopting this app, or a service type
+nobody's built out locally), so a multi-service-type church could pay up
+to 3 sequential round trips per service type - up to ~15 sequential PCO
+calls - on every single home page visit, not just occasionally.
+
+Fixed the same way as `buildPlanRows`: fanned out via
+`scheduling.RunConcurrently` over a pre-sized, index-owned `[]*views.
+HomePlanRow` slice (a nil entry means "no upcoming plan, or a fetch
+failed" and is filtered out afterward), preserving service-type order
+regardless of which goroutine finishes first. No behavior change beyond
+wall-clock time - same best-effort tolerance, same data, same order.
