@@ -46,7 +46,7 @@ func assignmentPersonIDs(assignments []scheduling.RosterAssignment) []string {
 // TestCandidatePersonViewLeavesWarningsEmpty (rosters_builder_test.go) can
 // guarantee the invariant this file's other comments describe: candidates
 // deliberately never get FrequencyWarning/BlockoutWarning/CrossTeamWarning
-// computed eagerly (see pco-api-risks.md's cold-start-eligibility-pool
+// computed eagerly (see docs/pco-api-risks.md's cold-start-eligibility-pool
 // addendum) - a candidate's warnings are fetched on demand instead, only
 // when someone clicks "Check availability" on that one row (CandidateWarnings,
 // rosters_candidate_warnings.go).
@@ -343,7 +343,7 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 	// writes, and it's normally a cache hit anyway (a handful of distinct
 	// teams). The actual per-group PCO fetch is independent of every other
 	// group, so it fans out via runConcurrently instead of paying each
-	// group's round trip serially - see pco-api-risks.md's concurrency
+	// group's round trip serially - see docs/pco-api-risks.md's concurrency
 	// mitigation. candidatesByGroup[i] is each goroutine's own slice index,
 	// so no lock is needed for these writes.
 	positionIDs := make([]string, len(groups))
@@ -371,7 +371,7 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 	// relevantPersonIDs (and every other per-person warning fetch below) is
 	// deliberately scoped to people actually assigned to a position on this
 	// roster, NOT every candidate in a position's PCO eligibility pool - see
-	// pco-api-risks.md's "cold-start eligibility-pool" addendum for why the
+	// docs/pco-api-risks.md's "cold-start eligibility-pool" addendum for why the
 	// eligibility pool, not the (small, plan-bounded) assigned roster, was
 	// the real driver of this page's call-count risk. The names map below
 	// still covers candidates too (their names render either way); only the
@@ -456,7 +456,7 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 	// group) pair - a person eligible for several positions otherwise
 	// triggers the same PCO call once per position. otherAssignmentDates is
 	// scoped to a specific (team, position) slot, so it's keyed on that
-	// instead. See pco-api-risks.md's mitigation #1 (the dedup) and its
+	// instead. See docs/pco-api-risks.md's mitigation #1 (the dedup) and its
 	// concurrency mitigation (the fan-out below).
 	//
 	// Every key either loop needs is collected up front in this pass -
@@ -554,7 +554,7 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 		// Candidates deliberately don't get FrequencyWarning/BlockoutWarning/
 		// CrossTeamWarning computed here - unlike the assigned loop above,
 		// this walks PCO's full eligibility pool for the position, which can
-		// be large for a well-staffed church (see pco-api-risks.md's
+		// be large for a well-staffed church (see docs/pco-api-risks.md's
 		// cold-start addendum). Their warnings are fetched on demand instead,
 		// only for a candidate someone actually clicks "Check availability"
 		// on (CandidateWarnings, rosters_candidate_warnings.go) - left as

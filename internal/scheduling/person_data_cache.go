@@ -3,7 +3,7 @@ package scheduling
 // Local Postgres caches for three per-person Planning Center reads the Team
 // Builder page used to make live, once per relevant person, on every render
 // (see rosters_warnings.go/rosters_builder.go in internal/server/
-// controllers, and pco-api-risks.md's addendum on this change): blockouts,
+// controllers, and docs/pco-api-risks.md's addendum on this change): blockouts,
 // all-teams plan-people history (crossTeamAssignmentsThisWeek), and
 // per-team plan-people history (otherAssignmentDates). Same "sync-marker
 // row plus zero-or-more detail rows" shape as song_arrangement_cache

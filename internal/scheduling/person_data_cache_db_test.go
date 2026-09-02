@@ -2,7 +2,7 @@ package scheduling
 
 // DB-backed tests for the person-data cache store methods (migration
 // 00033). This codebase has no DB-backed test harness anywhere else yet
-// (confirmed - see pco-api-risks.md's publish-path-concurrency addendum,
+// (confirmed - see docs/pco-api-risks.md's publish-path-concurrency addendum,
 // which hit the same gap and fell back to manual review instead) - these
 // are gated behind RUN_DB_TESTS=1 so a plain `go test ./...`/`make test`
 // never silently runs them (they need a real reachable Postgres via the

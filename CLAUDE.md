@@ -15,13 +15,13 @@ back to real PCO records on Publish. See `README.md` for the full feature
 list and pricing/billing model; it's worth reading before making changes
 to billing, publish/sync, or the Build page.
 
-**Product direction**: `ideas.md`'s "Vision / positioning" section holds
+**Product direction**: `docs/ideas.md`'s "Vision / positioning" section holds
 the True North - every feature should either **protect the team**
 (burnout, preferences, relational friction, mentorship pairing) or
 **protect the service** (repetition fatigue, set flow, conflicts caught
 before publish). Check a proposed feature against those two promises
 before recommending it, especially when asked to prioritize among
-ideas.md's brainstorm items - "does PCO already do this" is the wrong
+docs/ideas.md's brainstorm items - "does PCO already do this" is the wrong
 test (see that section for why); "which promise does this serve, and how
 directly" is the right one.
 
@@ -98,7 +98,7 @@ for a real (non-trivial) change:
 6. Wait for the user's explicit "delete the branch" before deleting it,
    locally and on origin.
 
-Small/doc-only changes (a copy tweak, a README/ideas.md correction) skip
+Small/doc-only changes (a copy tweak, a README/docs/ideas.md correction) skip
 the branch ceremony - commit straight to `main` - but still only on the
 user's explicit ask to commit/push/deploy, same gating either way.
 
@@ -124,9 +124,9 @@ this project's history.
 
 ## Keeping the docs current
 
-`CLAUDE.md`/`README.md`/`ideas.md` drift the moment a change lands without
+`CLAUDE.md`/`README.md`/`docs/ideas.md` drift the moment a change lands without
 touching them - this has already happened more than once (a shipped
-`ideas.md` item left listed as open brainstorm, a new package missing from
+`docs/ideas.md` item left listed as open brainstorm, a new package missing from
 this file's own Architecture list, a new feature missing from README's
 Features section). Treat updating whichever of these a change actually
 affects as part of finishing that change, not a separate follow-up
@@ -135,14 +135,14 @@ someone has to remember to ask for:
 - New `internal/` package, or a real architectural shift -> this file's
   Architecture section.
 - New user-facing feature or Setup/env-var change -> `README.md`.
-- An `ideas.md` brainstorm item actually gets built -> mark it
+- A `docs/ideas.md` brainstorm item actually gets built -> mark it
   `~~struck~~` with a one-line pointer to where it landed (see existing
   examples in Planning annotations), don't just leave it listed as open.
-- A product-direction decision actually gets made -> `ideas.md`'s
+- A product-direction decision actually gets made -> `docs/ideas.md`'s
   Vision/positioning or the relevant settled-thinking section.
 - A change touches how often or how heavily this app calls PCO's API (a
   new hot-path call, a fix to one, a newly-discovered risk) ->
-  `pco-api-risks.md`, and this file's "PCO API calls" callout in
+  `docs/pco-api-risks.md`, and this file's "PCO API calls" callout in
   Architecture if the reference pattern itself changes.
 
 ## Architecture
@@ -225,12 +225,12 @@ real production bug, not a hypothetical one: a church's ~900-song PCO
 library (mostly archived, never cleaned up) was being pulled live,
 unfiltered, and uncached on nearly every page view, and the app was
 hitting PCO's rate limit (100 requests/20 seconds, per user token) on
-basically every screen. `pco-api-risks.md` is the living risk-assessment
+basically every screen. `docs/pco-api-risks.md` is the living risk-assessment
 doc - ranked mitigations, which have shipped, which were explicitly
 declined and why, which are still open. Read it, and update it, any time
 a change touches how often or how heavily this app calls PCO - don't let
 it silently drift stale the way this file's own "Keeping the docs
-current" section warns about for `ideas.md`/`README.md`.
+current" section warns about for `docs/ideas.md`/`README.md`.
 `internal/scheduling/pco_songs.go`'s `FetchActiveSongs` is the reference
 pattern for "PCO data that's expensive to fetch and doesn't change
 mid-session": org-scoped, cached in-process for 60s (mirrors
@@ -249,7 +249,7 @@ fetching actually session-stable (safe to cache, like a song list) rather
 than something that must stay live for correctness (never cache a live
 availability/conflict check the way the song list gets cached - staleness
 there is a real bug, not a cosmetic one)? Note one deliberate gap still
-open per `pco-api-risks.md`: team/position lists and team-member names are
+open per `docs/pco-api-risks.md`: team/position lists and team-member names are
 still fetched live, uncached, on every roster render - not yet fixed
 because it hasn't produced an actual reported symptom the way the song
 list did, not because it was missed.

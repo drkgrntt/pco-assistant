@@ -198,7 +198,7 @@ func TestPositionTeamSequenceUnknownTeamSortsLast(t *testing.T) {
 // see rosters_scoped_httptest_test.go's own doc comment on why this
 // package has no DB test harness), so this is the practical way to pin the
 // "candidates never get eager warnings" invariant described in
-// pco-api-risks.md's cold-start-eligibility-pool addendum: as long as both
+// docs/pco-api-risks.md's cold-start-eligibility-pool addendum: as long as both
 // build functions only ever construct a CandidatePersonView via this one
 // function (confirmed by reading rosters_builder.go/rosters_scoped.go), a
 // regression that made this helper populate a warning field would be

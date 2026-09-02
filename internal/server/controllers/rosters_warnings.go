@@ -132,9 +132,10 @@ func blockoutWarning(targetDate time.Time, blockouts []pco.BlockoutData) string 
 // personCacheStale) - a few hours, not FetchActiveSongs'/navStateTTL's 60s:
 // blockouts and serving history don't change minute-to-minute the way "is
 // this song still active" does, so a short TTL would barely improve the
-// cold-render case (see plan.md's "Caching" section - this is the whole
-// reason this cache is a persisted table with its own TTL rather than an
-// in-process map). Chosen as a round, safely-long default; tune once real
+// cold-render case (see docs/pco-roster-cold-start-plan.md's "Caching"
+// section - this is the whole reason this cache is a persisted table
+// with its own TTL rather than an in-process map). Chosen as a round,
+// safely-long default; tune once real
 // usage shows how often blockouts/commitments actually change.
 const personCacheTTL = 4 * time.Hour
 
@@ -259,7 +260,7 @@ func (sc *SchedulingController) crossTeamAssignmentsThisWeek(ctx context.Context
 
 // crossTeamWarning turns crossTeamAssignmentsThisWeek's labels into a
 // display string, mirroring frequencyWarning/blockoutWarning's shape - a
-// non-blocking "protect the team" nudge (see ideas.md's "Cross-team
+// non-blocking "protect the team" nudge (see docs/ideas.md's "Cross-team
 // burnout") for someone within preference on any single position who's
 // nonetheless serving several positions/teams the same week.
 func crossTeamWarning(otherCommitments []string) string {

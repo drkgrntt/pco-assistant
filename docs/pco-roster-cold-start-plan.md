@@ -8,7 +8,7 @@ problem" below). This revision reorders the work so the actual rate-limit
 risk gets fixed first, with caching kept as a real but secondary
 improvement.
 
-Read `pco-api-risks.md` in full before starting - this plan assumes its
+Read `docs/pco-api-risks.md` in full before starting - this plan assumes its
 vocabulary (`RunConcurrently`/`PCOFanOutLimit`, the `FetchActiveSongs`
 cache pattern, the org-scoping convention, PCO's 100-requests/20-seconds
 limit) and adds one new addendum to it once shipped rather than
@@ -32,7 +32,7 @@ any of them:
   `rosters_warnings.go:134`) - can exceed the person count.
 
 That's roughly 2-3 PCO calls per distinct person on top of a handful of
-fixed overhead calls. `pco-api-risks.md`'s own estimate for "6 position
+fixed overhead calls. `docs/pco-api-risks.md`'s own estimate for "6 position
 groups, ~40 people" is 100-200 calls, and it scales **linearly with the
 size of the volunteer pool involved**, unlike everything else in the app
 (which is capped, batched, or already cached).
@@ -61,7 +61,7 @@ Two things compound this into a real, not theoretical, rate-limit risk:
   a few hundred calls at PCO in a handful of seconds for a large
   candidate pool - well inside one 20s window, well over the 100-request
   ceiling within it.
-- **The failure mode is silent, not loud**: per `pco-api-risks.md`'s own
+- **The failure mode is silent, not loud**: per `docs/pco-api-risks.md`'s own
   risk assessment, a 429 mid-render is swallowed by the existing
   best-effort `if err == nil` handling - a director sees candidates with
   no warnings at all, indistinguishable from "no conflicts," rather than
@@ -79,7 +79,7 @@ Same shape as an already-shipped fix in this codebase: `sets_builder.go`'s
 "Browse all songs" candidate list used to eagerly compute rich per-song
 data (conflicts, tags, roles) for *every* active song on every render;
 it's now search-driven (`BuildCandidatesSearch`), computed only for songs
-actually matching what's typed, capped at 50 - see `pco-api-risks.md`'s
+actually matching what's typed, capped at 50 - see `docs/pco-api-risks.md`'s
 "'Browse all songs' made search-driven" addendum for the exact precedent
 and the one new risk it introduced (worth re-reading, since the caution
 below mirrors it).
@@ -329,7 +329,7 @@ live PCO needed - `frequencyWarning`/`blockoutWarning`/`crossTeamWarning`
 are already unit-tested pure functions).
 
 **Caching piece**: this is the first read-path feature in this codebase
-needing a real DB-backed test, not just `httptest` - `pco-api-risks.md`
+needing a real DB-backed test, not just `httptest` - `docs/pco-api-risks.md`
 already notes the publish-path concurrency fixes hit this same gap ("no
 DB-backed test harness anywhere yet") and were verified by manual review
 instead. Decide up front whether to invest in that harness now (probably
@@ -365,7 +365,7 @@ branches/PRs if that's easier to review - scope-reduction is the one that
 actually matters for the rate-limit risk, so don't let it get blocked
 waiting on caching to also be ready.
 
-After shipping, update `pco-api-risks.md` with a new addendum (matching
+After shipping, update `docs/pco-api-risks.md` with a new addendum (matching
 this doc's existing addendum style) describing both pieces: what was
 made lazy/deferred (and why eager candidate-pool computation was the real
 driver, not just an efficiency nit), and what was cached, with the TTL
@@ -388,7 +388,7 @@ than assume:
    open question in "One design fork this unlocks" above.
 2. **A global/org-wide blockouts listing**: this plan assumes the only
    option is the per-person nested `services/v2/people/{id}/blockouts`
-   resource (confirmed in `pco-api-risks.md` to have no batch/`where[id]`
+   resource (confirmed in `docs/pco-api-risks.md` to have no batch/`where[id]`
    option). Worth double-checking whether PCO's People product exposes
    blockouts at a top level with a batch filter the way `GetPeople` does
    (see `personNameMapForIDs`'s precedent) - if so, that would eliminate

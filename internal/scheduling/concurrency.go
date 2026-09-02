@@ -4,8 +4,9 @@ import "sync"
 
 // PCOFanOutLimit bounds how many PCO calls a single page-build fans out at
 // once via RunConcurrently. PCO's rate limit is 100 requests/20s per user
-// token (see pco-api-risks.md) - well above what one bounded fan-out inside
-// one page render needs, so this is chosen for a solid wall-clock win
+// token (see docs/pco-api-risks.md) - well above what one bounded
+// fan-out inside one page render needs, so this is chosen for a solid
+// wall-clock win
 // without pushing a burst of near-simultaneous requests at PCO.
 const PCOFanOutLimit = 10
 
@@ -14,7 +15,7 @@ const PCOFanOutLimit = 10
 // has returned. It exists so the PCO-calling loops in build.go/
 // sets_builder.go/rosters_builder.go (and this package's own
 // fetchSongsFromPCO) can fan independent round trips out instead of paying
-// each one's ~100-400ms latency serially - see pco-api-risks.md's
+// each one's ~100-400ms latency serially - see docs/pco-api-risks.md's
 // concurrency mitigation for the wall-clock-time reasoning (dedup
 // mitigations #1/#2 cut call *count*; this cuts the *sequential* chain
 // those calls sit in).

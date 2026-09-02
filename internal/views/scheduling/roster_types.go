@@ -137,7 +137,7 @@ type AssignmentView struct {
 	// frequencyWarning/blockoutWarning/crossTeamWarning. CrossTeamWarning
 	// looks across every team/position (not just this one), flagging when
 	// this person is also serving elsewhere the same calendar week - see
-	// ideas.md's "Cross-team burnout".
+	// docs/ideas.md's "Cross-team burnout".
 	FrequencyWarning string
 	BlockoutWarning  string
 	CrossTeamWarning string

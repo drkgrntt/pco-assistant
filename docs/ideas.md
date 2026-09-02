@@ -450,7 +450,7 @@ pattern as `song_tags`/`song_relationships`:**
     relationship/preference data exists.
 
   Cost is the real gate, and it's a bigger fan-out than anything shipped
-  so far - `pco-api-risks.md` already flags the single-plan roster builder
+  so far - `docs/pco-api-risks.md` already flags the single-plan roster builder
   as ~100-200 sequential PCO calls before mitigation; a matrix is N plans
   x M people of exactly that same shape (blockouts, frequency history,
   cross-team checks), not one plan's worth. Bounded scope needs to be

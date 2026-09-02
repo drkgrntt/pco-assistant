@@ -8,7 +8,7 @@ import (
 )
 
 // RunSheetPage renders the printable "day-of" run sheet for one plan - the
-// combined service/run sheet from ideas.md's "Run sheet (day-of output)"
+// combined service/run sheet from docs/ideas.md's "Run sheet (day-of output)"
 // section: set list, key/tempo/meter/length, item notes, role badges, and
 // the roster, flattened onto one page a director can print (or "print to
 // PDF" via the browser) and carry into rehearsal or hand to the sound
@@ -17,7 +17,7 @@ import (
 // Deliberately a pure view over data BuildPlanPage already computes: same
 // buildSetBuilderData/buildRosterBuilderData calls, same ctx/org/plan
 // resolution, no additional Planning Center requests and no new storage.
-// ideas.md's original wording also mentions "capo" and "gear needs," but
+// docs/ideas.md's original wording also mentions "capo" and "gear needs," but
 // neither concept exists anywhere in this codebase's data model (confirmed
 // by search) - this only surfaces what's actually there.
 func (sc *SchedulingController) RunSheetPage(c *fiber.Ctx) error {

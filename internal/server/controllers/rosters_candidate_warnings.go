@@ -3,7 +3,7 @@ package controllers
 // CandidateWarnings is the on-demand counterpart to the eager candidate
 // warning computation buildRosterBuilderData/buildRosterPositionGroupData
 // used to do for every candidate in a position's PCO eligibility pool - see
-// pco-api-risks.md's cold-start-eligibility-pool addendum for why that was
+// docs/pco-api-risks.md's cold-start-eligibility-pool addendum for why that was
 // scoped down to assigned-only. A director who wants to know whether one
 // specific candidate has a conflict clicks "Check availability" on that
 // person's own row (roster_builder.templ's positionGroupCard), which hits

@@ -497,7 +497,7 @@ const candidateSearchLimit = 50
 // compute unconditionally, for the entire not-yet-added song library, on
 // every single Build page render regardless of whether this collapsible
 // section was even open (a real church library can run to hundreds of
-// songs - see pco-api-risks.md). Same hx-target-a-narrow-fragment shape as
+// songs - see docs/pco-api-risks.md). Same hx-target-a-narrow-fragment shape as
 // BuildPlansSearch (build.go): this renders only
 // views.CandidateSearchResults, the <ul id="set-candidates">'s inner
 // content, never the whole page or even the whole builder body - so typing
@@ -536,7 +536,7 @@ func (sc *SchedulingController) BuildCandidatesSearch(c *fiber.Ctx) error {
 // buildSetBuilderData's plan-item/order-of-service fetches (GetPlan,
 // GetItems, note categories) are needed here, fetchActiveSongs itself is
 // the same 60s-cached call every other Build page hit already reuses (see
-// pco-api-risks.md), and - the actual point of this endpoint existing -
+// docs/pco-api-risks.md), and - the actual point of this endpoint existing -
 // only the songs that actually match query/role ever get the full
 // candidateSongView treatment, capped at candidateSearchLimit, rather than
 // the whole library. Best-effort throughout, same convention as
@@ -1204,7 +1204,7 @@ func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizati
 	// Postgres, not this in-memory map - see its own doc comment), so
 	// there's nothing here for concurrent rows to race on. out is pre-sized
 	// and each goroutine only ever writes its own index, so no lock is
-	// needed for that either. See pco-api-risks.md's concurrency
+	// needed for that either. See docs/pco-api-risks.md's concurrency
 	// mitigation - this replaces a sequential per-row loop that paid every
 	// song's GetItemNotes/GetArrangements/GetKeys latency one at a time.
 	out := make([]views.ServiceOrderRow, len(rows))

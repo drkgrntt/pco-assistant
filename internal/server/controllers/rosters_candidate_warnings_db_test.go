@@ -4,7 +4,7 @@ package controllers
 // counterpart to the eager per-candidate warning computation
 // buildRosterBuilderData/buildRosterPositionGroupData used to do for every
 // candidate in a position's whole PCO eligibility pool - see
-// pco-api-risks.md's cold-start-eligibility-pool addendum. It force-syncs
+// docs/pco-api-risks.md's cold-start-eligibility-pool addendum. It force-syncs
 // one person's cache (syncPersonBlockouts/syncPersonPlanHistory/
 // syncPersonTeamPlanHistory, person_data_cache.go) before reading it, so -
 // unlike the pure httptest-only version this replaced - it needs a real

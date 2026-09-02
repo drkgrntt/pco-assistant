@@ -3,7 +3,7 @@
 **Status: shipped 2026-09-02.** Implemented in `go-pco` `v0.18.0`
 (`ConfigureThrottle`/`WithPriority`, per-token priority queue + token
 bucket) and adopted in this repo (`go.mod` bumped, both background syncs
-tagged at priority 20) - see `pco-api-risks.md`'s "priority-aware request
+tagged at priority 20) - see `docs/pco-api-risks.md`'s "priority-aware request
 throttle" addendum for what actually shipped vs. this design, including
 one deliberate deviation (default rate landed at 60/20s, not this doc's
 originally-proposed 80/20s) and what's still deliberately left off
@@ -12,8 +12,9 @@ there's a real reason to turn it on). This doc is kept as-is below as the
 original design record, not edited to match the final shipped shape.
 
 Written 2026-09-02, prompted by a conversation during the roster
-cold-start rate-limit fix (see `plan.md`, now shipped as two branches) -
-that work surfaced a coordination gap this doc exists to close: Song
+cold-start rate-limit fix (see `docs/pco-roster-cold-start-plan.md`, now
+shipped as two branches) - that work surfaced a coordination gap this
+doc exists to close: Song
 Info's background sync, the new person-data cache's background sync, and
 ordinary interactive traffic each self-throttle *independently*, tuned by
 hand against a shared assumption ("60% of budget should leave enough
@@ -24,7 +25,7 @@ this is written up for later rather than built now.
 
 ## Where this lives: go-pco, not this repo
 
-`pco-api-risks.md`'s mitigation #4 already established why: every
+`docs/pco-api-risks.md`'s mitigation #4 already established why: every
 `pco.Get*`/`Create*`/`Update*`/`Delete*` call goes through go-pco's
 `NewRequest`, a stateless free function that builds and discards its own
 `http.Client` per call. This app has no seam to intercept calls globally
@@ -263,7 +264,7 @@ A separate, later step - not part of go-pco's own change:
    throttle has actually been running in production for a while -
    removing a working safety net before trusting its replacement would
    be backwards.
-6. Add a `pco-api-risks.md` addendum once adopted, same as every other
+6. Add a `docs/pco-api-risks.md` addendum once adopted, same as every other
    change in that doc's history.
 
 ## Open questions for whoever implements this
