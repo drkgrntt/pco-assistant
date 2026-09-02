@@ -181,13 +181,49 @@ actually PCO just cut the app off partway through.
    keeping it hidden - the existing OOB siblings all assumed "my own tab
    is already open" and never set `hidden` at all, which is wrong for a
    tab being prefetched while it's still inactive.
-4. **Will not do.** Add a client-side rate-limit guard in `go-pco` - read
-   `X-PCO-API-Request-Rate-Count`/`-Limit` off responses and self-throttle
-   (or at minimum surface `Retry-After` on a 429 as a real, visible error
-   instead of silently degrading), plus a sane `http.Client{Timeout: ...}`
-   so one hung call can't hang the whole render. This is a `go-pco` change,
-   not just this app. Declined explicitly - revisit only if a future
-   symptom (real 429s in practice, a hung render) points back at it.
+4. **Split into three, re-evaluated 2026-09-01 - two done, one still
+   declined.** The original item bundled a timeout, `Retry-After`
+   visibility, and proactive self-throttling together and declined all
+   three as "a `go-pco` change, not just this app." Splitting them out
+   matters because the app genuinely *cannot* implement any of this
+   itself no matter how it's structured - `NewRequest` (a stateless free
+   function, not a client struct/options pattern) discards the raw
+   `http.Response` after reading the body, so nothing in it (headers,
+   status nuance) is visible to a caller unless `go-pco` chooses to
+   surface it. That's a hard constraint on "let the app manage it
+   instead," not a design preference either way.
+     - ~~**Request timeout**~~ - done: confirmed live in `go-pco`'s
+       `pco.go` that `NewRequest` built a fresh `&http.Client{}` per call
+       with no `Timeout` set at all, so a hung PCO response really could
+       hang the whole render indefinitely (nothing in a render-time
+       caller's context enforces a deadline unless it sets one itself).
+       Not a rate-limit or policy question - plain correctness gap only
+       `go-pco` could fix, since only it owns that `http.Client`. Fixed
+       unconditionally (no opt-in needed) with a fixed 30s
+       `requestTimeout` const in `go-pco` `v0.17.0`; this repo's `go.mod`
+       now pins that tag.
+     - ~~**Surface `Retry-After` on a 429**~~ - done, same release:
+       `RequestError` already existed and already carried `StatusCode` (a
+       429 was already distinguishable via `errors.As`, just nothing was
+       checking), so this was a one-field, backward-compatible addition -
+       `RetryAfter string`, populated verbatim from the header (empty
+       when absent), left unparsed since PCO always sends a
+       delay-in-seconds value, never an HTTP-date. This is the
+       mechanism/policy split working as it should: `go-pco` exposes the
+       one fact only it can see, this app decides what (if anything) to
+       do with it - nothing consumes `RetryAfter` yet, added purely so
+       the option exists next time a 429 actually shows up in practice.
+     - **Proactive self-throttle from `X-PCO-API-Request-Rate-Count`/
+       `-Limit`** - still declined, unchanged reasoning: this is the
+       genuinely policy-shaped piece (different consumers would want
+       different behavior - throttle vs. log vs. alert), and nothing in
+       this re-evaluation surfaced a new symptom to justify building it
+       speculatively. If it's ever built, it should be opt-in (a
+       nil-by-default callback/hook `go-pco` calls after every response,
+       mirroring the existing `SetBaseURLForTesting` package-level-var
+       pattern) rather than automatic behavior every consumer is forced
+       into - revisit only if a real consumer hits an actual 429 in
+       practice.
 5. ~~**A short-lived in-process cache**~~ - implemented, scoped specifically
    to the full song list (the concrete case that turned out to matter: a
    worship pastor's ~900-song PCO library, most of it archived, being
@@ -243,12 +279,13 @@ already inside one window either way, so fanning it out doesn't add new
 rate-limit exposure; if anything, finishing sooner narrows the chance of
 overlapping with the *next* request's own calls.
 
-With #1, #2, #3, #5, and #6 all landed, #4 is explicitly off the table for
-now (see above) and nothing else is currently open. If first load is
-*still* materially slow after all of these, that's a signal worth
-re-measuring rather than guessing at a #7: confirm with real timing (not
-just "still feels slow") before picking the next lever, since several
-easy, well-understood wins are already in.
+With #1, #2, #3, #5, and #6 all landed, and #4's timeout/`Retry-After`
+pieces landed separately (its self-throttle piece still declined, see
+above), nothing else is currently open. If first load is *still*
+materially slow after all of these, that's a signal worth re-measuring
+rather than guessing at a #7: confirm with real timing (not just "still
+feels slow") before picking the next lever, since several easy,
+well-understood wins are already in.
 
 ## Addendum: Song Info's bulk sync was a separate, sharper risk
 
