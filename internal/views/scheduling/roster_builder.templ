@@ -40,6 +40,39 @@ func candidateWarningsElementID(teamID, teamPositionName, personID string) strin
 	return fmt.Sprintf("candidate-warnings-%08x", h.Sum32())
 }
 
+// candidateCardElementID is the stable HTML id for one candidate row's own
+// sidebar detail card (candidateDetailCard, person_detail_card.templ) and,
+// via data-row-id, the row itself (positionGroupCard below) - hashed the
+// same way as candidateWarningsElementID, for the same reason (one person
+// can be a candidate on more than one position group on this page). A
+// distinct prefix keeps this id from ever colliding with
+// candidateWarningsElementID's own hash of the same three inputs, since
+// both ids can be present on the page for the same candidate at once (the
+// warnings span lives inside this card, not in place of it).
+func candidateCardElementID(teamID, teamPositionName, personID string) string {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(teamID + "\x00" + teamPositionName + "\x00" + personID))
+	return fmt.Sprintf("candidate-card-%08x", h.Sum32())
+}
+
+// candidateGroupElementID is the stable HTML id for one position group's
+// own cluster of candidate detail cards in the sidebar (candidateDetailGroup,
+// person_detail_card.templ) - hashed like PositionGroupElementID, with its
+// own prefix so a position-scoped mutation (rosters_detail.go, which
+// already has this position's freshly-recomputed Candidates in hand) can
+// refresh just this one position's candidate cards via OOB without
+// touching any other position's own candidate cards - or the assigned
+// side's personDetailCard entries - elsewhere in the same shared sidebar
+// group. See personDetailCardsOOB's own doc comment for why the assigned
+// side avoids a full-group re-render the same way, for the same reason:
+// not disturbing whatever detail card is currently open elsewhere on the
+// page.
+func candidateGroupElementID(teamID, teamPositionName string) string {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(teamID + "\x00" + teamPositionName))
+	return fmt.Sprintf("candidate-group-%08x", h.Sum32())
+}
+
 // candidateWarningsURL builds the CandidateWarnings (rosters_candidate_
 // warnings.go) endpoint URL for one candidate row's "Check for conflicts"
 // button - team_id/team_position_name/schedule_preference travel as query
@@ -390,28 +423,20 @@ templ positionGroupCard(serviceTypeID, planID string, schedulePreferenceOptions 
 			if len(pos.Candidates) > 0 {
 				<ul class="candidate-list">
 					for _, cand := range pos.Candidates {
-						@components.ListItem("candidate-row", nil, cand.Name) {
+						<!--
+							Clicking the row (like an assigned row -
+							selectPersonRow, scheduling.js) opens this
+							candidate's own sidebar detail card
+							(candidateDetailCard, person_detail_card.templ),
+							which holds the on-demand "Check for conflicts"
+							button and the warnings it fills in - kept off
+							this row itself so a fully-expanded card with
+							many candidates stays a quick scan of name +
+							preference + Add, the same shape an assigned
+							row keeps.
+						-->
+						@components.ListItem("candidate-row", templ.Attributes{"data-row-id": candidateCardElementID(pos.TeamID, pos.TeamPositionName, cand.PersonID), "onclick": "selectPersonRow(this, event)"}, cand.Name) {
 							<span class="muted">{ cand.SchedulePreference }</span>
-							<!--
-								Candidate warnings aren't computed eagerly (see
-								buildRosterBuilderData's own comment on why -
-								pco-api-risks.md's cold-start addendum) - this
-								span starts empty and is only ever filled by an
-								explicit click below, never a passive trigger,
-								so a fully-expanded card with many candidates
-								never bursts a fetch per row on its own.
-							-->
-							<span id={ candidateWarningsElementID(pos.TeamID, pos.TeamPositionName, cand.PersonID) } class="candidate-warnings"></span>
-							<button
-								type="button"
-								aria-label="Check for scheduling conflicts"
-								title="See whether adding this person would conflict with their serving-frequency preference, a blockout date they've marked in Planning Center, or another commitment they already have this same week"
-								hx-get={ candidateWarningsURL(serviceTypeID, planID, pos.TeamID, pos.TeamPositionName, cand.PersonID, cand.SchedulePreference) }
-								hx-target={ "#" + candidateWarningsElementID(pos.TeamID, pos.TeamPositionName, cand.PersonID) }
-								hx-swap="innerHTML"
-							>
-								Check for conflicts
-							</button>
 							<form hx-post={ fmt.Sprintf("/scheduling/rosters/%s/%s/assignments", serviceTypeID, planID) } hx-target={ "#" + PositionGroupElementID(pos.TeamID, pos.TeamPositionName) } hx-swap="outerHTML">
 								<input type="hidden" name="person_id" value={ cand.PersonID }/>
 								<input type="hidden" name="team_id" value={ pos.TeamID }/>
@@ -486,11 +511,18 @@ templ positionGroupCard(serviceTypeID, planID string, schedulePreferenceOptions 
 // is scoped to just the one group instead of the whole
 // #roster-builder-body every mutation used to re-render. added is nil
 // when the add itself failed (nothing new to insert a detail card for).
+// candidateDetailGroupOOB refreshes this same group's own cluster of
+// candidate cards - the person just added is no longer one of group's
+// Candidates (see buildRosterPositionGroupData), so their now-stale
+// candidate card (unreachable anyway, since its row is gone from the
+// freshly-swapped candidate list above) is dropped along with it, without
+// touching any other position's own candidate cards.
 templ RosterAssignmentAddedResponse(serviceTypeID, planID string, group PositionGroupView, top RosterBuilderData, added *AssignmentView) {
 	@positionGroupCard(serviceTypeID, planID, top.SchedulePreferenceOptions, group, top.ReadOnly)
 	@rosterTopOOB(top)
 	@rosterPublishPanelOOB(top)
 	@rosterGlanceOOB(top)
+	@candidateDetailGroupOOB(serviceTypeID, planID, group)
 	if added != nil {
 		@personDetailCardInsertOOB(top, *added)
 	}
@@ -499,27 +531,31 @@ templ RosterAssignmentAddedResponse(serviceTypeID, planID string, group Position
 // RosterAssignmentRemovedResponse is RemoveRosterAssignment's htmx
 // response - see RosterAssignmentAddedResponse's doc comment, which this
 // mirrors, swapping the detail-card insert for a delete of the removed
-// person's own card.
+// person's own card. candidateDetailGroupOOB here picks up the opposite
+// change - the removed person re-entering group's Candidates (if still
+// eligible), whose row now needs a real candidate card to open.
 templ RosterAssignmentRemovedResponse(serviceTypeID, planID string, group PositionGroupView, top RosterBuilderData, removedAssignmentID int64) {
 	@positionGroupCard(serviceTypeID, planID, top.SchedulePreferenceOptions, group, top.ReadOnly)
 	@rosterTopOOB(top)
 	@rosterPublishPanelOOB(top)
 	@rosterGlanceOOB(top)
+	@candidateDetailGroupOOB(serviceTypeID, planID, group)
 	@personDetailCardRemoveOOB(removedAssignmentID)
 }
 
 // RosterPositionGroupMutationResponse is QuickAddPositionPreference's htmx
 // response - same shape as the assignment responses above, minus any
-// detail-card change: setting a position preference doesn't add or remove
-// anyone from the roster, only this one position's own candidate pool
-// (and, when the person happens to already be assigned here too, their
-// FrequencyWarning), so there's nothing for the sidebar detail-card group
-// to gain or lose.
+// assigned-side detail-card change: setting a position preference doesn't
+// add or remove anyone from the roster, only this one position's own
+// candidate pool (a newly-eligible person becomes a new candidate row,
+// each needing its own detail card to open into) - candidateDetailGroupOOB
+// covers exactly that.
 templ RosterPositionGroupMutationResponse(serviceTypeID, planID string, group PositionGroupView, top RosterBuilderData) {
 	@positionGroupCard(serviceTypeID, planID, top.SchedulePreferenceOptions, group, top.ReadOnly)
 	@rosterTopOOB(top)
 	@rosterPublishPanelOOB(top)
 	@rosterGlanceOOB(top)
+	@candidateDetailGroupOOB(serviceTypeID, planID, group)
 }
 
 // personBadgesOOB is RefreshPersonData's (rosters_person_data_refresh.go)

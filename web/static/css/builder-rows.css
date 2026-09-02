@@ -58,8 +58,12 @@
 /* Clicking a song row (see selectSongRow, scheduling.js) opens its detail
    card in the sidebar (components/build-detail-card.css) - cursor:pointer
    signals the row itself is clickable, not just its action buttons/drag
-   handle. .selected gets the same highlight .assignment-list li.selected
-   below uses, for the people equivalent. */
+   handle. .selected gets the same highlight .assignment-list li.selected/
+   .candidate-list li.selected below use, for the people equivalent -
+   assignment rows (personDetailCard) and candidate rows
+   (candidateDetailCard) both open a sidebar detail card the same way (see
+   selectPersonRow, scheduling.js), so both get the same "this row is
+   clickable" treatment here. */
 tr.song-row {
   cursor: pointer;
 }
@@ -69,11 +73,13 @@ tr.song-row.selected {
   background: var(--surface-hover);
 }
 
-.assignment-list li {
+.assignment-list li,
+.candidate-row {
   cursor: pointer;
 }
 
-.assignment-list li.selected {
+.assignment-list li.selected,
+.candidate-row.selected {
   background: var(--surface-hover);
   border-color: var(--accent);
 }

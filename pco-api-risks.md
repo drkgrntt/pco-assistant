@@ -624,14 +624,17 @@ route, `GET /scheduling/rosters/:service_type_id/:plan_id/candidates/
 computes one person's three warnings via the exact same pure functions and
 thin PCO-calling wrappers the old eager path used, returning a small
 fragment (`CandidateWarningsFragment`, `roster_builder.templ`) swapped into
-that one candidate row's own placeholder span. The trigger is a plain
-`<button>` ("Check availability") on each candidate row - a real UI
-constraint ruled out anything passive (`mouseenter`/on-visible/on-load):
-`positionGroupCard`'s `collapsibleCard` already expands a position by
-default whenever it's short-staffed (the common case for an open
-position), and an expanded card renders every one of its candidate rows at
-once with no per-row disclosure - a passive trigger firing for every row
-the instant such a card opens would reintroduce exactly the burst this fix
+that one candidate's own placeholder span. The trigger is a plain
+`<button>` ("Check for conflicts") on that candidate's own sidebar detail
+card (`candidateDetailCard`, `person_detail_card.templ`) - reached by
+clicking the candidate row itself, which opens the card but never fires
+the fetch on its own - a real UI constraint ruled out anything passive
+(`mouseenter`/on-visible/on-load): `positionGroupCard`'s `collapsibleCard`
+already expands a position by default whenever it's short-staffed (the
+common case for an open position), and an expanded card renders every one
+of its candidate rows at once with no per-row disclosure - a passive
+trigger firing for every row the instant such a card opens would
+reintroduce exactly the burst this fix
 removes, just moved from render-time to open-time. A `<button>`'s default
 htmx trigger is a real click, so this can't fire without someone actually
 asking for that one person's warnings.
