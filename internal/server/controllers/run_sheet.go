@@ -29,6 +29,7 @@ func (sc *SchedulingController) RunSheetPage(c *fiber.Ctx) error {
 
 	setData := sc.buildSetBuilderData(ctx, orgID, serviceTypeID, planID)
 	rosterData := sc.buildRosterBuilderData(ctx, orgID, serviceTypeID, planID)
+	sc.triggerPersonDataSync(c)
 
 	return render(c, views.RunSheet(setData, rosterData))
 }

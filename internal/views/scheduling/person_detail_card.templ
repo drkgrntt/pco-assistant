@@ -82,20 +82,8 @@ templ personDetailCardRemoveOOB(assignmentID int64) {
 templ personDetailCard(data RosterBuilderData, a AssignmentView) {
 	@buildDetailCardShell(fmt.Sprintf("%d", a.ID), a.Name, "closePersonDetail()") {
 		<p class="muted">{ a.TeamName } / { a.TeamPositionName }</p>
-		<div class="build-detail-badges">
-			@components.Badge("", a.Status)
-			if a.Published {
-				@components.Badge("published", "Published")
-			}
-			if a.FrequencyWarning != "" {
-				@components.ConflictBadge(a.FrequencyWarning)
-			}
-			if a.BlockoutWarning != "" {
-				@components.ConflictBadge(a.BlockoutWarning)
-			}
-			if a.CrossTeamWarning != "" {
-				@components.ConflictBadge(a.CrossTeamWarning)
-			}
+		<div class="build-detail-badges" id={ personBadgesElementID(a.ID) }>
+			@personBadgeSpans(a)
 		</div>
 		if a.Notes != "" {
 			<p class="build-detail-notes">{ a.Notes }</p>
@@ -113,7 +101,49 @@ templ personDetailCard(data RosterBuilderData, a AssignmentView) {
 					@components.IconRemove()
 					Remove from position
 				</button>
+				<button
+					type="button"
+					title="Re-fetch this person's blockouts and serving history from Planning Center right now, instead of waiting for the paced background sync"
+					hx-post={ fmt.Sprintf("/scheduling/rosters/%s/%s/assignments/%d/refresh-data", data.ServiceTypeID, data.PlanID, a.ID) }
+					hx-target={ "#" + PositionGroupElementID(a.TeamID, a.TeamPositionName) }
+					hx-swap="outerHTML"
+				>
+					Refresh availability data
+				</button>
 			</div>
 		}
+	}
+}
+
+// personBadgesElementID is the stable HTML id for one assignment's own
+// badges block on its sidebar detail card (personDetailCard above) - the
+// OOB target RefreshPersonData's response (roster_builder.templ) swaps in
+// place after a manual refresh, without touching the rest of the card (in
+// particular, never re-rendering buildDetailCardShell's own root element,
+// which always renders `hidden` by default - see selectPersonRow in
+// scheduling.js. Swapping that whole shell via OOB would silently re-hide
+// whatever card the person clicking Refresh is actively looking at).
+func personBadgesElementID(assignmentID int64) string {
+	return fmt.Sprintf("person-badges-%d", assignmentID)
+}
+
+// personBadgeSpans is the assignment-status/warning badge set shown on the
+// sidebar detail card (personDetailCard) - split out so
+// RefreshPersonData's own OOB update (personBadgesOOB, roster_builder.templ)
+// can re-render exactly this content after a manual cache refresh, without
+// duplicating the badge list in two places.
+templ personBadgeSpans(a AssignmentView) {
+	@components.Badge("", a.Status)
+	if a.Published {
+		@components.Badge("published", "Published")
+	}
+	if a.FrequencyWarning != "" {
+		@components.ConflictBadge(a.FrequencyWarning)
+	}
+	if a.BlockoutWarning != "" {
+		@components.ConflictBadge(a.BlockoutWarning)
+	}
+	if a.CrossTeamWarning != "" {
+		@components.ConflictBadge(a.CrossTeamWarning)
 	}
 }

@@ -1,7 +1,9 @@
 package controllers
 
 // Pure, testable roster warning logic (frequency/blockout/cross-team) plus
-// the thin PCO-calling wrappers that feed it real assignment history.
+// the cache-first read wrappers that feed it real assignment history - see
+// person_data_cache.go for the background sync that actually fills that
+// cache from Planning Center.
 
 import (
 	"context"
@@ -125,39 +127,58 @@ func blockoutWarning(targetDate time.Time, blockouts []pco.BlockoutData) string 
 	return ""
 }
 
-// otherAssignmentDates fetches personID's own serving dates for the exact
-// (teamID, teamPositionName) slot, excluding excludePlanID (the plan
-// currently being built, if they're already on it) - the thin PCO-calling
-// wrapper frequencyWarning's pure check runs against. PCO's plan_people
-// endpoint filters by team_id server-side but not by position name, so the
-// position match happens here client-side.
-func otherAssignmentDates(ctx context.Context, personID, teamID, teamPositionName, excludePlanID string) []time.Time {
-	history, err := pco.GetPersonPlanPeople(ctx, personID, &pco.PersonPlanPeopleParams{
-		TeamID:  teamID,
-		Include: []string{"plan"},
-		PerPage: 25,
-	})
-	if err != nil {
+// personCacheTTL bounds how long a cached blockout/plan-history row is
+// served before a render also queues a background refresh for it (see
+// personCacheStale) - a few hours, not FetchActiveSongs'/navStateTTL's 60s:
+// blockouts and serving history don't change minute-to-minute the way "is
+// this song still active" does, so a short TTL would barely improve the
+// cold-render case (see plan.md's "Caching" section - this is the whole
+// reason this cache is a persisted table with its own TTL rather than an
+// in-process map). Chosen as a round, safely-long default; tune once real
+// usage shows how often blockouts/commitments actually change.
+const personCacheTTL = 4 * time.Hour
+
+// personCacheStale reports whether syncedAt is old enough that a render
+// should also queue a background refresh (see enqueuePersonSync) while
+// still serving the row it has immediately - never blocks on the refresh.
+func personCacheStale(syncedAt time.Time) bool {
+	return time.Since(syncedAt) > personCacheTTL
+}
+
+// otherAssignmentDates returns personID's own cached serving dates for the
+// exact (teamID, teamPositionName) slot, excluding excludePlanID (the plan
+// currently being built, if they're already on it) - the thin cache-read
+// wrapper frequencyWarning's pure check runs against.
+//
+// Pure read of the local person_team_plan_history cache (see
+// scheduling.Store.PersonTeamPlanHistoryCache) - no PCO call happens here,
+// cache hit or not (see personBlockouts' doc comment below for why). On a
+// miss (no sync-marker row yet for this person/team) this returns nil and
+// queues a background sync (see enqueuePersonSync/triggerPersonDataSync in
+// person_data_cache.go); on a stale hit it serves the cached rows
+// immediately and also queues a refresh. The cached rows span every
+// position on teamID (PCO's plan_people endpoint filters by team_id
+// server-side but not by position name, same as the live call this
+// replaced), so the position match still happens here client-side.
+func (sc *SchedulingController) otherAssignmentDates(ctx context.Context, organizationID, personID, teamID, teamPositionName, excludePlanID string) []time.Time {
+	entries, syncedAt, ok, err := sc.store.PersonTeamPlanHistoryCache(ctx, organizationID, personID, teamID)
+	if err != nil || !ok {
+		enqueuePersonSync(personSyncRequest{organizationID: organizationID, personID: personID, teamID: teamID, kind: personSyncKindTeamHistory})
 		return nil
 	}
-
-	planDates := planSortDatesFromIncluded(history.Included)
+	if personCacheStale(syncedAt) {
+		enqueuePersonSync(personSyncRequest{organizationID: organizationID, personID: personID, teamID: teamID, kind: personSyncKindTeamHistory})
+	}
 
 	var dates []time.Time
-	for _, pp := range history.Data {
-		if pp.Attributes.TeamPositionName != teamPositionName {
+	for _, e := range entries {
+		if e.TeamPositionName != teamPositionName {
 			continue
 		}
-		if pp.Relationships.Plan.Data == nil {
+		if e.PlanID == excludePlanID {
 			continue
 		}
-		planID := pp.Relationships.Plan.Data.ID
-		if planID == excludePlanID {
-			continue
-		}
-		if d, ok := planDates[planID]; ok {
-			dates = append(dates, d)
-		}
+		dates = append(dates, e.SortDate)
 	}
 	return dates
 }
@@ -198,43 +219,40 @@ func weekdayAMPM(t time.Time) string {
 // Returns one human-readable label per other commitment found (e.g.
 // "Photography (Sun AM)"), preferring the resolved team name and falling
 // back to the position name alone when the team can't be resolved.
-func crossTeamAssignmentsThisWeek(ctx context.Context, personID string, targetDate time.Time, excludePlanID string) []string {
-	history, err := pco.GetPersonPlanPeople(ctx, personID, &pco.PersonPlanPeopleParams{
-		Include: []string{"plan", "team"},
-		PerPage: 25,
-	})
-	if err != nil {
+//
+// Pure read of the local person_plan_history cache (see
+// scheduling.Store.PersonPlanHistoryCache) - see otherAssignmentDates' doc
+// comment for the shared miss/stale-hit/never-block-on-PCO shape this
+// follows exactly, just against the all-teams cache instead of the
+// per-team one.
+func (sc *SchedulingController) crossTeamAssignmentsThisWeek(ctx context.Context, organizationID, personID string, targetDate time.Time, excludePlanID string) []string {
+	entries, syncedAt, ok, err := sc.store.PersonPlanHistoryCache(ctx, organizationID, personID)
+	if err != nil || !ok {
+		enqueuePersonSync(personSyncRequest{organizationID: organizationID, personID: personID, kind: personSyncKindCrossTeamHistory})
 		return nil
 	}
-
-	planDates := planSortDatesFromIncluded(history.Included)
-	teamNames := teamNamesFromIncluded(history.Included)
+	if personCacheStale(syncedAt) {
+		enqueuePersonSync(personSyncRequest{organizationID: organizationID, personID: personID, kind: personSyncKindCrossTeamHistory})
+	}
 
 	var labels []string
-	for _, pp := range history.Data {
-		if pp.Relationships.Plan.Data == nil {
+	for _, e := range entries {
+		if e.PlanID == excludePlanID {
 			continue
 		}
-		planID := pp.Relationships.Plan.Data.ID
-		if planID == excludePlanID {
-			continue
-		}
-		date, ok := planDates[planID]
-		if !ok || !sameWeek(date, targetDate) {
+		if !sameWeek(e.SortDate, targetDate) {
 			continue
 		}
 
-		label := pp.Attributes.TeamPositionName
-		if pp.Relationships.Team.Data != nil {
-			if name, ok := teamNames[pp.Relationships.Team.Data.ID]; ok && name != "" {
-				label = name
-			}
+		label := e.TeamPositionName
+		if e.TeamName != "" {
+			label = e.TeamName
 		}
 		if label == "" {
 			label = "another position"
 		}
 
-		labels = append(labels, fmt.Sprintf("%s (%s)", label, weekdayAMPM(date)))
+		labels = append(labels, fmt.Sprintf("%s (%s)", label, weekdayAMPM(e.SortDate)))
 	}
 	return labels
 }
@@ -259,4 +277,43 @@ func blockoutWarningIfKnown(planDate time.Time, blockouts []pco.BlockoutData) st
 		return ""
 	}
 	return blockoutWarning(planDate, blockouts)
+}
+
+// personBlockouts returns personID's cached future blockouts, in the same
+// []pco.BlockoutData shape the old live pco.GetBlockouts call
+// (rosters_builder.go/rosters_scoped.go) returned - so blockoutWarningIfKnown
+// and every existing caller keep working unchanged.
+//
+// Pure read of the local person_blockouts cache (see
+// scheduling.Store.PersonBlockoutCache) - no PCO call happens in this
+// (or any) render path anymore, cache hit or not: a miss just means
+// nothing to warn about *this render*, not a blocked page. On a miss (no
+// sync-marker row yet) this returns nil and queues a background sync (see
+// enqueuePersonSync/triggerPersonDataSync in person_data_cache.go); on a
+// stale hit it serves the cached rows immediately and also queues a
+// refresh - never blocks on PCO either way. See otherAssignmentDates'/
+// crossTeamAssignmentsThisWeek's doc comments for the identical shape.
+func (sc *SchedulingController) personBlockouts(ctx context.Context, organizationID, personID string) []pco.BlockoutData {
+	blockouts, syncedAt, ok, err := sc.store.PersonBlockoutCache(ctx, organizationID, personID)
+	if err != nil || !ok {
+		enqueuePersonSync(personSyncRequest{organizationID: organizationID, personID: personID, kind: personSyncKindBlockouts})
+		return nil
+	}
+	if personCacheStale(syncedAt) {
+		enqueuePersonSync(personSyncRequest{organizationID: organizationID, personID: personID, kind: personSyncKindBlockouts})
+	}
+
+	out := make([]pco.BlockoutData, 0, len(blockouts))
+	for _, b := range blockouts {
+		out = append(out, pco.BlockoutData{
+			ID: b.PCOBlockoutID,
+			Attributes: pco.BlockoutAttributes{
+				Reason:          b.Reason,
+				StartsAt:        b.StartsAt,
+				EndsAt:          b.EndsAt,
+				RepeatFrequency: b.RepeatFrequency,
+			},
+		})
+	}
+	return out
 }

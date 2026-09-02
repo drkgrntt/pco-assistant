@@ -211,15 +211,14 @@ func (sc *SchedulingController) buildRosterPositionGroupData(ctx context.Context
 	}
 	names := personNameMapForIDs(ctx, namedIDs)
 
+	// Cache-first read per relevant person - see personBlockouts
+	// (rosters_warnings.go); no PCO call happens here, cache hit or not.
 	blockoutsByPerson := map[string][]pco.BlockoutData{}
 	var blockoutsMu sync.Mutex
 	scheduling.RunConcurrently(relevantIDs, func(id string) {
-		bo, err := pco.GetBlockouts(ctx, id, &pco.BlockoutsParams{Filter: "future"})
-		if err != nil {
-			return
-		}
+		bo := sc.personBlockouts(ctx, organizationID, id)
 		blockoutsMu.Lock()
-		blockoutsByPerson[id] = bo.Data
+		blockoutsByPerson[id] = bo
 		blockoutsMu.Unlock()
 	})
 
@@ -237,7 +236,7 @@ func (sc *SchedulingController) buildRosterPositionGroupData(ctx context.Context
 	if !planDate.IsZero() {
 		var crossTeamMu sync.Mutex
 		scheduling.RunConcurrently(relevantIDs, func(personID string) {
-			labels := crossTeamAssignmentsThisWeek(ctx, personID, planDate, planID)
+			labels := sc.crossTeamAssignmentsThisWeek(ctx, organizationID, personID, planDate, planID)
 			crossTeamMu.Lock()
 			crossTeamCache[personID] = labels
 			crossTeamMu.Unlock()
@@ -248,7 +247,7 @@ func (sc *SchedulingController) buildRosterPositionGroupData(ctx context.Context
 			if schedulePreferenceFor(personID) == "" {
 				return
 			}
-			dates := otherAssignmentDates(ctx, personID, teamID, teamPositionName, planID)
+			dates := sc.otherAssignmentDates(ctx, organizationID, personID, teamID, teamPositionName, planID)
 			otherDatesMu.Lock()
 			otherDatesCache[personID] = dates
 			otherDatesMu.Unlock()
@@ -394,7 +393,15 @@ func (sc *SchedulingController) buildRosterLightData(ctx context.Context, organi
 		}
 	}
 
-	names := personNameMapForIDs(ctx, assignmentPersonIDs(assignments))
+	assignedIDs := assignmentPersonIDs(assignments)
+	names := personNameMapForIDs(ctx, assignedIDs)
+
+	// See buildRosterBuilderData's identical comment - scoped here to just
+	// the assigned people, since this lighter build (deliberately, per this
+	// function's own doc comment) never loads candidates at all.
+	if any, err := sc.store.AnyPersonDataSynced(ctx, organizationID, assignedIDs); err == nil {
+		data.PersonDataSyncPending = len(assignedIDs) > 0 && !any
+	}
 
 	for _, g := range groups {
 		pg := views.PositionGroupView{

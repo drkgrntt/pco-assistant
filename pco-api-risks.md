@@ -640,3 +640,184 @@ Not addressed by this fix, and not claimed to be: team/position lists and
 team-member names (mitigation #5's still-open gap, reaffirmed by the
 addendum above) remain fetched live and uncached on every roster render -
 a separate, still-open item.
+
+## Addendum: Team Builder's per-person blockout/cross-team/frequency calls cached in a local Postgres table, backed by a paced background sync
+
+`plan.md`'s follow-up to the two addenda above: `otherAssignmentDates`/
+`crossTeamAssignmentsThisWeek`/the per-person `pco.GetBlockouts` call
+(`rosters_warnings.go`/`rosters_builder.go`/`rosters_scoped.go`) were still
+live PCO calls on every single Team Builder render, once per relevant
+person - the actual per-call-volume driver the "Team Builder's duplicate
+scoped-fetch calls" addendum above measured at 30-40 calls/click, and the
+reason `pco-api-risks.md` kept listing "team/position lists and
+team-member names remain uncached" as a still-open per-person gap. This
+closes the *per-person* half of that gap (blockouts, cross-team history,
+per-team history) - team/position *lists* and team-member *names*
+themselves are untouched by this change and remain the one deliberate
+open gap, same as before.
+
+**What's cached, and how**: three new local tables (migration `00033`),
+each a sync-marker row (`person_*_sync`, "when was this last checked")
+plus zero-or-more detail rows (`person_*`, "what was found") - the same
+shape as `song_arrangement_cache` (`00023`), minus that table's "a row's
+mere existence means checked" shortcut, which doesn't work for list-valued
+data (zero blockouts and never-synced both look like zero rows).
+`otherAssignmentDates`/`crossTeamAssignmentsThisWeek`/the new
+`personBlockouts` wrapper (`rosters_warnings.go`) are now pure reads of
+these tables - no PCO call happens in the Team Builder render path at all,
+cache hit or miss. A miss (no sync-marker row yet) renders without that
+person's warning this one render and queues a background sync; a stale
+hit (`synced_at` older than `personCacheTTL`, 4 hours - blockouts/serving
+history don't change minute-to-minute the way the song-list's 60s TTL
+target does, so a short TTL would barely help the cold case) serves the
+stale row immediately and *also* queues a refresh. Either way the render
+never blocks on PCO - the exact fix this addendum's "duplicate scoped-fetch
+calls" predecessor didn't reach, since deduping calls within one render
+still leaves every render paying full price on a cache miss.
+
+**Background sync** (`person_data_cache.go`) clones `SyncSongInfo`'s
+architecture (`song_arrangement_cache.go`) rather than inventing a new
+one: a package-level pending-request queue populated by the misses/stale
+hits above, drained by a background goroutine in `personDataSyncBatchSize`
+(`scheduling.PCOFanOutLimit`, 10) batches with a `personDataSyncBatchPause`
+(10s) pause between batches, guarded against a duplicate concurrent pass
+per organization (`personSyncInProgress`, mirroring `songSyncInProgress`).
+Each request costs exactly one PCO call (one `GetBlockouts` or
+`GetPersonPlanPeople`, vs. Song Info's two calls per song), so this
+pacing's sustained rate works out to at most 30% of the 100-requests/20s
+budget - even more headroom than Song Info's already-conservative 60%, see
+`personDataSyncBatchPause`'s doc comment for the arithmetic. Deliberately
+*not* an unattended/nightly sync (`plan.md`'s "unattended-cron question,
+revisited" explicitly defers that): this only ever runs off a live
+request's own PCO access token (`triggerPersonDataSync`, called from every
+roster-rendering handler right after building its response), so it needs
+no new token-management mechanism (borrowing/refreshing some other
+session's token for unattended use) at all - a genuinely idle org's cache
+just stays cold until someone actually opens the Team Builder page again,
+which is an acceptable trade per that plan section's own reasoning.
+
+**A render-time "still gathering data" notice** (`RosterBuilderData.
+PersonDataSyncPending`, checked via the new `scheduling.Store.
+AnyPersonDataSynced`) covers the resulting UX gap: a brand-new org's very
+first render has *nothing* synced for anyone yet, which would otherwise
+render as zero warnings - indistinguishable from "checked, nothing to
+report," a worse regression than the old always-live behavior in exactly
+the case this change most needs to look correct. Same "no new tracked
+state, recomputed live from an existing table on render" spirit as
+`nav.go`'s `songInfoNeedsSync` badge - one extra `EXISTS` query against the
+three sync-marker tables, scoped to the specific people relevant to *this*
+render (`buildRosterBuilderData`'s assigned+candidate `relevantIDs` on a
+full build, `buildRosterLightData`'s assigned-only set on a scoped
+mutation's OOB refresh), not an org-wide flag - so a large org that's
+warmed one team's cache still correctly sees the notice on a different,
+never-rendered team. Self-clearing: once any relevant person has a
+`synced_at` row in any of the three tables, `AnyPersonDataSynced` returns
+true and the notice stops appearing on its own, no dismiss/session state
+needed.
+
+**Unverified-live-check caveat, taken deliberately**: `plan.md` proposed
+merging `crossTeamAssignmentsThisWeek`'s all-teams call and
+`otherAssignmentDates`' per-team call into one shared cached table,
+contingent on live-verifying two things against the real PCO API first -
+(1) whether `GetPersonPlanPeople` accepts a `PerPage` above 25 without
+losing per-team accuracy for a multi-team volunteer, and (2) whether PCO
+exposes a global/batch blockouts listing instead of only the per-person
+nested endpoint this app already uses. **Neither could be live-verified
+this session** (blocked by sandbox tooling policy when attempting to use a
+live session token) - per `plan.md`'s own explicit fallback instruction,
+this shipped as the conservative design instead: two genuinely separate
+tables/sync passes for plan-people history (`person_plan_history` for the
+all-teams cross-team check, `person_team_plan_history` - keyed additionally
+by `team_id` - for the per-team frequency check) rather than one merged
+table filtered two ways, and the per-person nested `GetBlockouts` call
+exactly as it's always been called, not a global endpoint. Both remain
+worth a real live check in a future pass, per `plan.md`'s own framing -
+if `GetPersonPlanPeople` does tolerate a higher `PerPage` without diluting
+per-team accuracy, or PCO does expose a global blockouts listing, either
+would simplify this schema (one table instead of two, or no
+`person_blockout_sync`/`person_blockouts` tables at all) - but risking
+warning accuracy to save a table wasn't worth it without confirming first.
+
+## Addendum: two manual "refresh this one item now" actions added to the Song Info and person-data caches
+
+Both `song_arrangement_cache` (Song Info addendum above) and the
+per-person blockout/plan-history caches (previous addendum) are read-first,
+background-sync-second designs: a cache miss or stale hit never blocks a
+render on a live PCO call, but it also means a single item's correction
+(a song's key was retuned in Planning Center, a person's blockout was just
+added) only shows up once that item's own turn comes up in the paced
+background queue - `songInfoSyncBatchPause`/`personDataSyncBatchPause`
+(10s between batches of `scheduling.PCOFanOutLimit`, 10, items each), which
+for a large library/org can be minutes away. Two small, deliberately
+narrow actions close that gap for the case where someone actually needs
+one specific item fixed right now, without touching the cache's own
+read/background-sync design at all:
+
+- **Song Info: "Refresh song info"** - a button on the Build page's song
+  detail card (`songDetailCard`, `song_detail_card.templ`), next to
+  Duplicate/Remove/Replace. Handled by
+  `RefreshSetSongArrangementInfo` (`song_arrangement_cache.go`), a thin
+  wrapper that calls `fetchAndCacheArrangementInfo` - the same per-song
+  fetch-and-upsert helper both the read-through cache-miss path
+  (`resolveArrangementCacheInfo`) and `runSongInfoSync`'s batch loop
+  already share - directly and synchronously for the one song id in that
+  card. `fetchAndCacheArrangementInfo` has no "skip if already cached"
+  guard (confirmed by reading it before adding this - it's a plain
+  unconditional fetch-and-upsert), so no force variant was needed: calling
+  it always overwrites whatever's currently cached, which is the entire
+  point of this action (unlike `runSongInfoSync`'s batch backfill, which
+  deliberately skips a song that's already cached). Cost: 2 live PCO calls
+  (arrangement + key, same as any other single-song cache fill), bounded
+  to one song, triggered by an explicit click - same reasoning the
+  existing Sync-now/on-demand-warning-check actions in this doc already
+  use for a live call outside the read path.
+
+  This exists on a page that only ever shows an aggregate
+  `CachedCount`/`TotalCount` progress line (`/scheduling/song-info`, see
+  the Song Info addendum above) - there's no per-song list there to hang a
+  per-row action off, so the action instead lives wherever a single song's
+  arrangement info is actually displayed to someone building a set: the
+  Build page's own song detail card, which already shows
+  `SetSongView.ArrangementInfo` and already has a precedent for
+  per-song action buttons (Duplicate/Remove/Replace, and the Tag/Relate/
+  Mark-role quick actions).
+
+- **Person-data cache: "Refresh availability data"** - a button on the
+  Team Builder's person detail sidebar card (`personDetailCard`,
+  `person_detail_card.templ`), next to Remove from position. Handled by
+  `RefreshPersonData` (`rosters_person_data_refresh.go`), which looks up
+  the clicked assignment's person/team ids and calls the exact three
+  per-person sync functions (`syncPersonBlockouts`/`syncPersonPlanHistory`/
+  `syncPersonTeamPlanHistory`, `person_data_cache.go`) the background pass
+  already calls per person - just synchronously, for this one person,
+  right now, instead of waiting on the paced queue. Cost: 3 live PCO calls
+  (one `GetBlockouts`, two `GetPersonPlanPeople` - all-teams and
+  this-team), bounded to one person, triggered by an explicit click - same
+  reasoning as the song action above.
+
+  Re-rendering after the sync reuses the existing scoped-mutation
+  machinery (`buildRosterPositionGroupData`/`buildRosterLightData`,
+  `rosters_scoped.go`) rather than a full page rebuild, matching every
+  other Team Builder mutation in `rosters_detail.go` - the touched
+  position group's own card (whose assigned-row badges already show the
+  same Frequency/Blockout/CrossTeam warnings) is the primary swap target,
+  plus an out-of-band update to the same person's sidebar card badges
+  (`personBadgesOOB`) so that card reflects the refresh immediately too,
+  since it lives outside the position group's own DOM subtree. That OOB
+  update deliberately targets only the badges block
+  (`personBadgesElementID`), never the whole card shell - the shell
+  (`buildDetailCardShell`) always renders `hidden` by default and is only
+  ever made visible by client-side JS (`selectPersonRow`,
+  `scheduling.js`), so swapping the whole card via OOB would silently
+  re-hide whatever card the person clicking Refresh is actively looking
+  at.
+
+**Deliberately not built**: a full org-wide/"nuclear" cache reset (wipe
+every cached song's arrangement info, or every person's blockout/history
+rows, and force a full re-sync). Both actions above are scoped to exactly
+one item because that's what an explicit click naturally targets and
+because it keeps the live-PCO-call cost small and bounded regardless of
+library/org size; a bulk reset has no such natural bound and belongs on a
+settings/account-level page this app doesn't have yet, not bolted onto
+either cache's own read path. Out of scope for this change - deferred
+until that page exists.

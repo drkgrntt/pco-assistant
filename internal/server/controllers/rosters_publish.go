@@ -159,6 +159,7 @@ func (sc *SchedulingController) PublishRoster(c *fiber.Ctx) error {
 	}
 
 	data := sc.buildRosterBuilderData(ctx, orgID, serviceTypeID, planID)
+	sc.triggerPersonDataSync(c)
 	data.PublishMsg = publishMsg
 	if errMsg != "" {
 		data.ErrMsg = appendErr(errMsg, data.ErrMsg)
@@ -214,6 +215,7 @@ func (sc *SchedulingController) RevertRoster(c *fiber.Ctx) error {
 	}
 
 	data := sc.buildRosterBuilderData(ctx, orgID, serviceTypeID, planID)
+	sc.triggerPersonDataSync(c)
 	data.PublishMsg = publishMsg
 	if errMsg != "" {
 		data.ErrMsg = appendErr(errMsg, data.ErrMsg)

@@ -1,0 +1,146 @@
+package controllers
+
+// DB-backed test for RefreshSetSongArrangementInfo's actual write path -
+// fetchAndCacheArrangementInfo (scheduling.go), called directly the same
+// way the handler does, against a fake PCO server (pco.SetBaseURLForTesting,
+// same seam as song_arrangement_cache_httptest_test.go) and a real Postgres
+// store (dbTestController, defined in person_data_cache_db_test.go in this
+// same package). RefreshSetSongArrangementInfo itself is a thin *fiber.Ctx
+// wrapper around a set-song lookup plus this one call - this repo has no
+// harness anywhere for driving a full fiber handler end-to-end (see
+// rosters_scoped_httptest_test.go's own doc comment), so this proves the
+// one piece of the handler that's both DB-writing and worth a regression
+// test: that calling through actually overwrites a stale cached row with
+// whatever Planning Center returns right now, which is the entire point of
+// this action (see fetchAndCacheArrangementInfo's own doc comment - it has
+// no "skip if already cached" guard, unlike the batch sync it's shared
+// with).
+//
+// Gated behind RUN_DB_TESTS=1, same as person_data_cache_db_test.go.
+//
+// Run with: RUN_DB_TESTS=1 go test ./internal/server/controllers/... -run RefreshSongArrangement -v
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	pco "github.com/drkgrntt/go-pco"
+)
+
+// newArrangementRefreshFakeServer stands in for Planning Center's
+// arrangements/keys endpoints for one song, replying with the given key -
+// used twice in the test below with two different keys to prove a second
+// call overwrites the first.
+func newArrangementRefreshFakeServer(t *testing.T, arrangementID, key string) *httptest.Server {
+	t.Helper()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/arrangements"):
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": []map[string]any{
+					{
+						"type": "Arrangement",
+						"id":   arrangementID,
+						"attributes": map[string]any{
+							"bpm":    120.0,
+							"meter":  "4/4",
+							"length": 240,
+							"notes":  "some notes",
+						},
+					},
+				},
+			})
+		case strings.HasSuffix(r.URL.Path, "/keys"):
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": []map[string]any{
+					{
+						"type": "Key",
+						"id":   "key-" + key,
+						"attributes": map[string]any{
+							"starting_key": key,
+						},
+					},
+				},
+			})
+		default:
+			t.Errorf("unexpected request to %s", r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(server.Close)
+	return server
+}
+
+// TestFetchAndCacheArrangementInfoOverwritesStaleCacheRow proves
+// RefreshSetSongArrangementInfo's actual write path (fetchAndCacheArrangementInfo)
+// force-overwrites an already-cached row with fresh data - the whole reason
+// this manual refresh action exists (SyncSongInfo's own batch backfill
+// deliberately skips a song that's already cached; this one call must not).
+func TestFetchAndCacheArrangementInfoOverwritesStaleCacheRow(t *testing.T) {
+	_, store := dbTestController(t)
+	ctx := context.Background()
+	orgID := testScopeID("org")
+	songID := testScopeID("song")
+	t.Cleanup(func() {
+		_, _ = store.DB().ExecContext(ctx, `DELETE FROM song_arrangement_cache WHERE organization_id = $1`, orgID)
+	})
+
+	// First fetch: seed a cached row with key "G".
+	server := newArrangementRefreshFakeServer(t, "arr-1", "G")
+	restore := pco.SetBaseURLForTesting(server.URL)
+	first, err := fetchAndCacheArrangementInfo(ctx, store, orgID, songID)
+	restore()
+	if err != nil {
+		t.Fatalf("fetchAndCacheArrangementInfo (first fetch): %v", err)
+	}
+	if first.Key != "G" {
+		t.Fatalf("fetchAndCacheArrangementInfo (first fetch) key = %q, want %q", first.Key, "G")
+	}
+
+	cache, err := store.SongArrangementInfo(ctx, orgID)
+	if err != nil {
+		t.Fatalf("SongArrangementInfo (after first fetch): %v", err)
+	}
+	if got := cache[songID].Key; got != "G" {
+		t.Fatalf("cached key after first fetch = %q, want %q", got, "G")
+	}
+
+	// Second fetch, simulating the song's key having changed in Planning
+	// Center since the first cache - this is the manual-refresh scenario
+	// RefreshSetSongArrangementInfo exists for. A plain re-render (which
+	// only ever reads the cache on a hit - see resolveArrangementCacheInfo)
+	// would never call Planning Center again on its own; only this forced
+	// call does.
+	server2 := newArrangementRefreshFakeServer(t, "arr-1", "D")
+	restore2 := pco.SetBaseURLForTesting(server2.URL)
+	second, err := fetchAndCacheArrangementInfo(ctx, store, orgID, songID)
+	restore2()
+	if err != nil {
+		t.Fatalf("fetchAndCacheArrangementInfo (second fetch): %v", err)
+	}
+	if second.Key != "D" {
+		t.Fatalf("fetchAndCacheArrangementInfo (second fetch) key = %q, want %q (forced re-fetch must overwrite, not skip)", second.Key, "D")
+	}
+
+	cache, err = store.SongArrangementInfo(ctx, orgID)
+	if err != nil {
+		t.Fatalf("SongArrangementInfo (after second fetch): %v", err)
+	}
+	if got := cache[songID].Key; got != "D" {
+		t.Fatalf("cached key after second fetch = %q, want %q - stale row was not overwritten", got, "D")
+	}
+
+	var rowCount int
+	if err := store.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM song_arrangement_cache WHERE organization_id = $1 AND song_id = $2`, orgID, songID).Scan(&rowCount); err != nil {
+		t.Fatalf("counting song_arrangement_cache rows: %v", err)
+	}
+	if rowCount != 1 {
+		t.Errorf("song_arrangement_cache has %d rows for this song after two fetches, want exactly 1 (upsert, not a second insert)", rowCount)
+	}
+}
