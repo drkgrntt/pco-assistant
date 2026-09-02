@@ -316,8 +316,13 @@ func paginateUpcomingPlans(filtered []pco.PlanData, page int) (pageOfPlans []pco
 // are the one exception - fetched in bulk for the whole service type
 // (ListPlanNotesForServiceType) up front, before paginating, since search
 // needs to match against every plan's note, not just the page actually
-// shown. Returns the clamped page actually shown alongside the total page
-// count.
+// shown. The per-row status lookups themselves are fanned out concurrently
+// by buildPlanRows below rather than run one row at a time - each row's
+// planStatus/rosterStatus can fall back to a live PCO call
+// (GetItems/GetTeamMembers) when there's no local draft yet, so a full page
+// of buildPlansPageSize rows could otherwise mean up to 2*buildPlansPageSize
+// sequential round trips just to render the picker. Returns the clamped
+// page actually shown alongside the total page count.
 func (sc *SchedulingController) combinedPlansForServiceType(ctx context.Context, organizationID, serviceTypeID, search string, page int, past bool) (rows []views.PlanRow, currentPage int, totalPages int, errMsg string) {
 	fetch := fetchUpcomingPlans
 	if past {
@@ -335,18 +340,47 @@ func (sc *SchedulingController) combinedPlansForServiceType(ctx context.Context,
 	filtered := filterUpcomingPlans(plans, search, notes)
 	pageOfPlans, page, totalPages := paginateUpcomingPlans(filtered, page)
 
-	rows = make([]views.PlanRow, len(pageOfPlans))
-	for i, plan := range pageOfPlans {
+	rows = buildPlanRows(pageOfPlans, notes, func(plan pco.PlanData) (setStatus, rosterStatus string) {
+		return sc.planStatus(ctx, organizationID, serviceTypeID, plan.ID), sc.rosterStatus(ctx, organizationID, serviceTypeID, plan.ID)
+	})
+	return rows, page, totalPages, ""
+}
+
+// buildPlanRows turns one page of plans into display rows, computing each
+// row's SetStatus/RosterStatus via statusFn - split out from
+// combinedPlansForServiceType so the concurrent fan-out itself is testable
+// against a fake statusFn, without needing a real *scheduling.Store or a
+// live PCO round trip (see build_httptest_test.go).
+//
+// Each row's status is independent of every other row's, so the up-to-
+// buildPlansPageSize rows are fanned out via scheduling.RunConcurrently
+// (bounded to scheduling.PCOFanOutLimit) instead of calling statusFn one
+// row at a time - same pre-sized, index-owned-per-goroutine pattern as
+// renderServiceOrder (sets_builder.go): out is allocated up front and each
+// goroutine only ever writes its own index, so no lock is needed and rows
+// can never land on the wrong plan despite running concurrently.
+func buildPlanRows(pageOfPlans []pco.PlanData, notes map[string]string, statusFn func(plan pco.PlanData) (setStatus, rosterStatus string)) []views.PlanRow {
+	rows := make([]views.PlanRow, len(pageOfPlans))
+
+	indexes := make([]int, len(pageOfPlans))
+	for i := range pageOfPlans {
+		indexes[i] = i
+	}
+
+	scheduling.RunConcurrently(indexes, func(i int) {
+		plan := pageOfPlans[i]
+		setStatus, rosterStatus := statusFn(plan)
 		rows[i] = views.PlanRow{
 			ID:           plan.ID,
 			Title:        plan.Attributes.Title,
 			Dates:        plan.Attributes.Dates,
 			Note:         notes[plan.ID],
-			SetStatus:    sc.planStatus(ctx, organizationID, serviceTypeID, plan.ID),
-			RosterStatus: sc.rosterStatus(ctx, organizationID, serviceTypeID, plan.ID),
+			SetStatus:    setStatus,
+			RosterStatus: rosterStatus,
 		}
-	}
-	return rows, page, totalPages, ""
+	})
+
+	return rows
 }
 
 // BuildPlanPage renders one plan's combined builder - the song order of
