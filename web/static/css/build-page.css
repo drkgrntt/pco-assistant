@@ -65,10 +65,20 @@ main:has(.build-layout) {
   min-width: 0;
 }
 
+/* min-width: 0 for the same reason as .build-main above: without it, a
+   flex item's automatic minimum width is its content's min-content size,
+   not its flex-basis - so a detail card (personDetailCard/
+   songDetailCard) revealed inside here via selectSongRow/selectPersonRow
+   could silently widen this whole column past its 15rem basis (see the
+   media query below) the moment it had wider content than whatever
+   glance summary was showing before it, instead of staying a fixed
+   width and letting that content wrap/scroll like everything else in
+   here already does. */
 .build-glance {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+  min-width: 0;
 }
 
 /* Base card treatment shared with .build-publish-card (components/
