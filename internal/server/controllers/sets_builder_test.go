@@ -179,6 +179,132 @@ func TestDeriveImportRowsThenMergeRoundTrips(t *testing.T) {
 	assertRowOrder(t, merged, want)
 }
 
+// TestDeriveMergeImportRowsSkipsTrackedInsertsNew is the core MergeSet
+// scenario: a plan with a song already tracked locally (whether or not it's
+// still one of the set's active rows - see the tombstoned variant below)
+// plus one new song added directly in Planning Center. Only the new song
+// should come back for import, anchored to the tracked item that precedes
+// it - existing local rows (active or tombstoned pending changes) are never
+// this function's concern; it only ever computes what's missing.
+func TestDeriveMergeImportRowsSkipsTrackedInsertsNew(t *testing.T) {
+	items := []pco.ItemData{
+		foreignItem("i1", "Welcome", pco.ItemTypeHeader),
+		songItem("i2", "song-a", "Song A"), // already tracked (published or tombstoned)
+		songItem("i3", "song-b", "Song B"), // new, added directly in PCO
+	}
+	tracked := map[string]bool{"i2": true}
+
+	got := deriveMergeImportRows(items, tracked)
+
+	if len(got) != 1 {
+		t.Fatalf("expected exactly 1 new row, got %+v", got)
+	}
+	want := scheduling.SetSong{SongID: "song-b", PCOItemID: "i3", AnchorItemID: "i2"}
+	if got[0] != want {
+		t.Errorf("expected %+v, got %+v", want, got[0])
+	}
+}
+
+// TestDeriveMergeImportRowsTombstonedItemStillCountsAsTracked confirms a
+// PCO item id tracked via a locally tombstoned (pending-deletion) row - not
+// just an active one - is still skipped: it was deliberately removed here,
+// and re-importing it out from under that removal would silently undo a
+// real local decision.
+func TestDeriveMergeImportRowsTombstonedItemStillCountsAsTracked(t *testing.T) {
+	items := []pco.ItemData{songItem("i1", "song-a", "Song A")}
+	tracked := map[string]bool{"i1": true} // tombstoned locally, but still tracked
+
+	got := deriveMergeImportRows(items, tracked)
+
+	if len(got) != 0 {
+		t.Errorf("expected a tombstoned item to be skipped, not re-imported, got %+v", got)
+	}
+}
+
+// TestDeriveMergeImportRowsNothingNewReturnsEmpty confirms a plan where
+// every song-linked item is already tracked locally yields nothing to
+// import.
+func TestDeriveMergeImportRowsNothingNewReturnsEmpty(t *testing.T) {
+	items := []pco.ItemData{
+		foreignItem("i1", "Welcome", pco.ItemTypeHeader),
+		songItem("i2", "song-a", "Song A"),
+	}
+	tracked := map[string]bool{"i2": true}
+
+	got := deriveMergeImportRows(items, tracked)
+
+	if len(got) != 0 {
+		t.Errorf("expected nothing new to import, got %+v", got)
+	}
+}
+
+// TestDeriveMergeImportRowsAnchorsToPrecedingForeignItem confirms a new
+// song with nothing tracked before it anchors to the nearest foreign
+// (header/non-song) item, same as deriveImportRows.
+func TestDeriveMergeImportRowsAnchorsToPrecedingForeignItem(t *testing.T) {
+	items := []pco.ItemData{
+		foreignItem("i1", "Welcome", pco.ItemTypeHeader),
+		songItem("i2", "song-a", "Song A"),
+	}
+
+	got := deriveMergeImportRows(items, map[string]bool{})
+
+	want := []scheduling.SetSong{{SongID: "song-a", PCOItemID: "i2", AnchorItemID: "i1"}}
+	if len(got) != 1 || got[0] != want[0] {
+		t.Errorf("expected %+v, got %+v", want, got)
+	}
+}
+
+// TestDeriveMergeImportRowsChainsAcrossConsecutiveNewSongs confirms two new
+// songs in a row (nothing tracked or foreign between them) each anchor to
+// whatever immediately precedes them in the walk - the second to the
+// first's own PCO item id - so their relative order survives even though
+// both are new.
+func TestDeriveMergeImportRowsChainsAcrossConsecutiveNewSongs(t *testing.T) {
+	items := []pco.ItemData{
+		songItem("i1", "song-a", "Song A"),
+		songItem("i2", "song-b", "Song B"),
+	}
+
+	got := deriveMergeImportRows(items, map[string]bool{})
+
+	want := []scheduling.SetSong{
+		{SongID: "song-a", PCOItemID: "i1", AnchorItemID: ""},
+		{SongID: "song-b", PCOItemID: "i2", AnchorItemID: "i1"},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("expected %d rows, got %+v", len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("row %d: expected %+v, got %+v", i, want[i], got[i])
+		}
+	}
+}
+
+// TestMergeServiceOrderPlacesImportedRowRightAfterTrackedAnchor is the
+// rendering half of the MergeSet scenario above: a freshly-imported row
+// anchored to an already-tracked item's own PCO item id must land right
+// after that tracked item in the merged order, not get pushed to the very
+// end as a stale anchor - the fix mergeServiceOrder needed once anchoring
+// to a tracked item's id became possible (see its own doc comment).
+func TestMergeServiceOrderPlacesImportedRowRightAfterTrackedAnchor(t *testing.T) {
+	items := []pco.ItemData{
+		songItem("i1", "song-a", "Song A"), // tracked, top of service
+		songItem("i2", "song-b", "Song B"), // freshly imported, anchored to i1
+		foreignItem("i3", "Sermon", pco.ItemTypeHeader),
+	}
+	songs := []scheduling.SetSong{
+		publishedSetSong("song-a", "", 0, "i1"),
+		publishedSetSong("song-b", "i1", 0, "i2"),
+	}
+
+	got := mergeServiceOrder(items, songs)
+
+	want := []string{"song-a", "song-b", "Sermon"}
+	assertRowOrder(t, got, want)
+}
+
 func TestSongsInBothOverlapOnly(t *testing.T) {
 	a := []pco.ItemData{
 		songItem("i1", "song-a", "Song A"),

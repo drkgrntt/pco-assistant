@@ -98,7 +98,10 @@ count into Stripe as that subscription's line-item quantity.
   song comes next in the order - or mark a role, all already scoped to that
   song, no picking it out of a list again). Publish pushes everything to
   real PCO plan items in one sync; Discard reverts your local draft back to
-  whatever's live in PCO.
+  whatever's live in PCO; "Pull in from Planning Center" sits between the
+  two - it adds anything added directly in Planning Center since the draft
+  was last touched, without discarding any local change (unpublished adds,
+  removals, reordering, pending note/key edits) the way Discard would.
 
 **People**
 - **Person Relationships** - tag people as `works_well`, `mentorship`

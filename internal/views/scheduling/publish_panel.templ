@@ -152,6 +152,23 @@ templ songPublishPanelContent(data SetBuilderData) {
 				</form>
 			}
 			<!--
+				The non-destructive middle ground between Publish and Discard:
+				pulls in anything added directly in Planning Center since this
+				draft was last touched, without discarding or altering any
+				local change (unpublished adds, removals, reordering, pending
+				note/key edits) - see MergeSet. Doesn't require a published
+				song the way Re-sync below does, so it's offered any time the
+				set exists and isn't read-only.
+			-->
+			<form
+				hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/merge", data.ServiceTypeID, data.PlanID) }
+				hx-target="#set-builder-body"
+				hx-swap="outerHTML"
+				hx-confirm="Pull in any songs added directly in Planning Center since this draft was last touched? Your own local changes (adds, removals, reordering, note/key edits) are left exactly as they are - this only adds what's new."
+			>
+				<button type="submit">Pull in from Planning Center</button>
+			</form>
+			<!--
 				The low-cost alternative to Discard for when an already-
 				published song's key/length/arrangement was wrong or missing
 				at publish time (e.g. a bug since fixed, or a stale Song Info

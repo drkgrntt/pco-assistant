@@ -487,6 +487,90 @@ func (sc *SchedulingController) RefreshSongInfo(c *fiber.Ctx) error {
 	return render(c, views.SetBuilderBody(data))
 }
 
+// MergeSet is the non-destructive third sync direction, alongside
+// PublishSet ("assert what's here") and RevertSet ("conform to what's
+// there," discarding local changes): it pulls in anything added directly
+// in Planning Center since the local draft was last touched, WITHOUT
+// touching any existing local row - no local edit (an unpublished add, a
+// tombstoned removal/replacement, a reorder, a pending note/key edit) is
+// discarded or altered. It walks the plan's items the same way RevertSet's
+// deriveImportRows does (see deriveMergeImportRows), but only inserts a
+// fresh local row for a song-linked item whose PCO item id isn't already
+// tracked by an existing set_songs row here (active or tombstoned) -
+// already-tracked items are left alone entirely, whether or not they
+// happen to be one of this set's own active songs right now. Like
+// RevertSet, this never calls a PCO write endpoint - it's a pure local
+// addition from a fresh read.
+func (sc *SchedulingController) MergeSet(c *fiber.Ctx) error {
+	ctx := middleware.RequestContext(c)
+	orgID := middleware.CurrentOrganizationID(c)
+	serviceTypeID := c.Params("service_type_id")
+	planID := c.Params("plan_id")
+
+	set, err := sc.store.GetOrCreateSet(ctx, orgID, serviceTypeID, planID)
+	errMsg := ""
+	publishMsg := ""
+	if err != nil {
+		errMsg = err.Error()
+	} else {
+		setSongs, err := sc.store.ListSetSongs(ctx, set.ID)
+		if err != nil {
+			errMsg = err.Error()
+		}
+		pendingDeletions, pdErr := sc.store.ListPendingDeletions(ctx, set.ID)
+		if pdErr != nil {
+			errMsg = appendErr(errMsg, pdErr.Error())
+		}
+
+		if errMsg == "" {
+			// Every PCO item id already spoken for locally, active or
+			// tombstoned - see MergeSet's own doc comment for why a
+			// tombstoned row still counts (it was deliberately removed
+			// here; re-importing it out from under that removal would
+			// undo a real local decision, not just fill a gap).
+			trackedItemIDs := make(map[string]bool, len(setSongs)+len(pendingDeletions))
+			for _, ss := range setSongs {
+				if ss.PCOItemID != "" {
+					trackedItemIDs[ss.PCOItemID] = true
+				}
+			}
+			for _, ss := range pendingDeletions {
+				if ss.PCOItemID != "" {
+					trackedItemIDs[ss.PCOItemID] = true
+				}
+			}
+
+			items, itemsErr := pco.GetItems(ctx, serviceTypeID, planID, nil)
+			if itemsErr != nil {
+				errMsg = "loading plan items from Planning Center: " + itemsErr.Error()
+			} else {
+				sort.Slice(items.Data, func(i, j int) bool {
+					return items.Data[i].Attributes.Sequence < items.Data[j].Attributes.Sequence
+				})
+
+				importRows := deriveMergeImportRows(items.Data, trackedItemIDs)
+
+				imported, importErr := sc.store.ImportNewSongsFromPCO(ctx, set.ID, importRows)
+				if importErr != nil {
+					errMsg = importErr.Error()
+				} else if imported > 0 {
+					publishMsg = fmt.Sprintf("Pulled in %d new song(s) from Planning Center.", imported)
+				} else {
+					publishMsg = "Nothing new to pull in - already up to date."
+				}
+			}
+		}
+	}
+
+	data := sc.buildSetBuilderData(ctx, orgID, serviceTypeID, planID)
+	data.PublishMsg = publishMsg
+	if errMsg != "" {
+		data.ErrMsg = appendErr(errMsg, data.ErrMsg)
+	}
+
+	return render(c, views.SetBuilderBody(data))
+}
+
 // RevertSet is PublishSet's opposite: instead of pushing local changes to
 // Planning Center, it discards them and rebuilds the local set from
 // whatever Planning Center's plan currently has, so it's back in sync.
