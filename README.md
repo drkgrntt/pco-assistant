@@ -154,6 +154,11 @@ scheduling warnings). Explicitly non-destructive: both only delete this
 app's own locally-cached copy of Planning Center data, which gets
 transparently re-collected from Planning Center the next time it's
 needed - nothing in Planning Center, and no draft set/roster, is touched.
+It also lists everyone currently signed in, with a per-person Sign out
+button, so a departed staff member's billed seat can be freed right away
+instead of waiting out the 30-day session expiry (see the Pricing section
+above) - any signed-in person can sign any other out, since every seat is
+already, by this product's own definition, a full admin.
 
 Mobile-first, installable as a PWA, with light/dark theming.
 
