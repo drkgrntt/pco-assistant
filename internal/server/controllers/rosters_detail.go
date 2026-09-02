@@ -68,6 +68,7 @@ func (sc *SchedulingController) AddRosterAssignment(c *fiber.Ctx) error {
 	shared := fetchRosterSharedPCOData(ctx, serviceTypeID, planID)
 	group, groupErrMsg := sc.buildRosterPositionGroupData(ctx, orgID, serviceTypeID, planID, body.TeamID, body.TeamPositionName, shared)
 	top := sc.buildRosterLightData(ctx, orgID, serviceTypeID, planID, shared)
+	sc.triggerPersonDataSync(c)
 	top.ErrMsg = appendErr(appendErr(errMsg, groupErrMsg), top.ErrMsg)
 
 	var addedView *views.AssignmentView
@@ -173,6 +174,7 @@ func (sc *SchedulingController) RemoveRosterAssignment(c *fiber.Ctx) error {
 	shared := fetchRosterSharedPCOData(ctx, serviceTypeID, planID)
 	group, groupErrMsg := sc.buildRosterPositionGroupData(ctx, orgID, serviceTypeID, planID, removed.TeamID, removed.TeamPositionName, shared)
 	top := sc.buildRosterLightData(ctx, orgID, serviceTypeID, planID, shared)
+	sc.triggerPersonDataSync(c)
 	top.ErrMsg = appendErr(appendErr(errMsg, groupErrMsg), top.ErrMsg)
 
 	return render(c, views.RosterAssignmentRemovedResponse(serviceTypeID, planID, group, top, int64(rowID)))
@@ -253,6 +255,7 @@ func (sc *SchedulingController) QuickAddPositionPreference(c *fiber.Ctx) error {
 	shared := fetchRosterSharedPCOData(ctx, serviceTypeID, planID)
 	group, groupErrMsg := sc.buildRosterPositionGroupData(ctx, orgID, serviceTypeID, planID, body.TeamID, body.TeamPositionName, shared)
 	top := sc.buildRosterLightData(ctx, orgID, serviceTypeID, planID, shared)
+	sc.triggerPersonDataSync(c)
 	top.ErrMsg = appendErr(appendErr(errMsg, groupErrMsg), top.ErrMsg)
 
 	return render(c, views.RosterPositionGroupMutationResponse(serviceTypeID, planID, group, top))

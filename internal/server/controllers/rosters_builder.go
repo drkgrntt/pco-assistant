@@ -344,21 +344,33 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 	}
 	names := personNameMapForIDs(ctx, relevantIDs)
 
-	// One GetBlockouts call per relevant person, with no PCO-side batch
-	// option: confirmed live that this endpoint (services/v2/people/{id}/
-	// blockouts) is nested per-person with can_query_by limited to
-	// group_identifier, unlike People#index's where[id]. Fanned out
-	// concurrently instead, guarded by blockoutsMu since every goroutine
-	// writes into the same map.
+	// PersonDataSyncPending: "still gathering data" notice for a render
+	// where nobody relevant here (assigned or a candidate) has ever
+	// completed a person-data-cache sync yet - see
+	// scheduling.Store.AnyPersonDataSynced's doc comment for why this needs
+	// its own live check rather than reusing the per-person maps below
+	// (those are the pure "what to show," not "should I warn that some of
+	// it might be missing"). Best-effort like every other lookup here: a
+	// failed check just leaves the notice off rather than showing it (or
+	// blocking the page) on a query error.
+	if any, err := sc.store.AnyPersonDataSynced(ctx, organizationID, relevantIDs); err == nil {
+		data.PersonDataSyncPending = len(relevantIDs) > 0 && !any
+	}
+
+	// Cache-first read per relevant person (see personBlockouts,
+	// rosters_warnings.go) - no PCO call happens here at all, cache hit or
+	// not; a miss/stale hit just queues a background sync instead. Fanned
+	// out concurrently purely for consistency with the other per-person
+	// loops here (each is a local DB read, not a PCO round trip, so the
+	// fan-out buys little wall-clock time on its own, but keeps this loop's
+	// shape identical to before), guarded by blockoutsMu since every
+	// goroutine writes into the same map.
 	blockoutsByPerson := map[string][]pco.BlockoutData{}
 	var blockoutsMu sync.Mutex
 	scheduling.RunConcurrently(relevantIDs, func(id string) {
-		bo, err := pco.GetBlockouts(ctx, id, &pco.BlockoutsParams{Filter: "future"})
-		if err != nil {
-			return
-		}
+		bo := sc.personBlockouts(ctx, organizationID, id)
 		blockoutsMu.Lock()
-		blockoutsByPerson[id] = bo.Data
+		blockoutsByPerson[id] = bo
 		blockoutsMu.Unlock()
 	})
 
@@ -418,7 +430,7 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 	crossTeamCache := map[string][]string{}
 	var crossTeamMu sync.Mutex
 	scheduling.RunConcurrently(crossTeamPersonIDList, func(personID string) {
-		labels := crossTeamAssignmentsThisWeek(ctx, personID, planDate, planID)
+		labels := sc.crossTeamAssignmentsThisWeek(ctx, organizationID, personID, planDate, planID)
 		crossTeamMu.Lock()
 		crossTeamCache[personID] = labels
 		crossTeamMu.Unlock()
@@ -434,7 +446,7 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 	otherDatesCache := map[string][]time.Time{}
 	var otherDatesMu sync.Mutex
 	scheduling.RunConcurrently(otherDatesKeyList, func(k otherDatesKey) {
-		dates := otherAssignmentDates(ctx, k.personID, k.teamID, k.teamPositionName, planID)
+		dates := sc.otherAssignmentDates(ctx, organizationID, k.personID, k.teamID, k.teamPositionName, planID)
 		otherDatesMu.Lock()
 		otherDatesCache[k.personID+"|"+k.teamID+"|"+k.teamPositionName] = dates
 		otherDatesMu.Unlock()

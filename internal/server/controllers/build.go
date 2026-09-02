@@ -426,6 +426,7 @@ func (sc *SchedulingController) BuildPlanPage(c *fiber.Ctx) error {
 	var rosterData views.RosterBuilderData
 	if activeTab == "team" {
 		rosterData = sc.buildRosterBuilderData(ctx, orgID, serviceTypeID, planID)
+		sc.triggerPersonDataSync(c)
 		setData.ServiceTypeID, setData.PlanID = serviceTypeID, planID
 		setData.PlanTitle, setData.PlanDates = rosterData.PlanTitle, rosterData.PlanDates
 		setData.ReadOnly = rosterData.ReadOnly
@@ -471,5 +472,6 @@ func (sc *SchedulingController) BuildTeamTabLazy(c *fiber.Ctx) error {
 	planID := c.Params("plan_id")
 
 	data := sc.buildRosterBuilderData(ctx, orgID, serviceTypeID, planID)
+	sc.triggerPersonDataSync(c)
 	return render(c, views.RosterBuilderBodyLazy(data))
 }

@@ -64,6 +64,18 @@ type RosterBuilderData struct {
 	// see AddRosterAssignment (rosters_detail.go), the only handler that ever
 	// sets this.
 	PersonPairPrompt *PersonPairPromptView
+
+	// PersonDataSyncPending is true when nobody relevant to this render
+	// (assigned, or - on a full build - also a candidate) has ever
+	// completed a person-data-cache sync yet (see
+	// scheduling.Store.AnyPersonDataSynced) - a brand-new org's very first
+	// render would otherwise show zero blockout/frequency/cross-team
+	// warnings with no indication that's "still warming up" rather than
+	// "checked, nothing to report." Drives a plain informational notice
+	// (see rosterTopContent, roster_builder.templ) that disappears on its
+	// own once the background sync (person_data_cache.go) catches up - no
+	// dismiss/session state needed.
+	PersonDataSyncPending bool
 }
 
 // PersonPairPromptView is RosterBuilderData.PersonPairPrompt's payload -

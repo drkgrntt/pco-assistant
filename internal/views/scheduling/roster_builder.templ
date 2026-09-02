@@ -151,6 +151,9 @@ templ rosterTopContent(data RosterBuilderData) {
 	if data.PublishMsg != "" {
 		<p class="success">{ data.PublishMsg }</p>
 	}
+	if data.PersonDataSyncPending {
+		<p class="muted">Availability and conflict warnings are still loading for this team - check back in a couple of minutes.</p>
+	}
 	@RosterStatusSummary(data)
 	for _, msg := range data.ExistingConflicts {
 		<div class="warning">{ msg }</div>
