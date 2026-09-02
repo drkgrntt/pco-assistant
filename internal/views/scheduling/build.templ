@@ -246,6 +246,7 @@ templ PlanNoteFormFragment(serviceTypeID, planID, note string) {
 			placeholder="Add a note (e.g. the one with the guest speaker)..."
 			class="plan-note-input"
 			autocomplete="off"
+			aria-label="Note"
 		/>
 		<button type="submit" class="icon-btn" aria-label="Save note" title="Save note">
 			@components.IconEdit()
@@ -257,23 +258,27 @@ templ PlanNoteFormFragment(serviceTypeID, planID, note string) {
 // local at-a-glance note (see plan_notes/GetPlanNote) - moved here, once,
 // from the plan-list row it used to render in (see PlanNoteFormFragment's
 // prior doc comment in git history) since there's exactly one note per
-// plan, not one per row-in-a-list-of-many or one per Songs/Team tab.
-// Placed near the top of BuildPlan, above the tab switcher, so it isn't
-// duplicated inside either tab. Gated by readOnly the same way this page's
-// other mutating actions are (see SetBuilderData.ReadOnly) - a past plan
-// shows the note as plain text (planNoteText) instead of an editable form;
-// a blank note on a read-only plan renders nothing, same as the plan-list
-// row's own "nothing if blank" behavior.
+// plan, not one per row-in-a-list-of-many or one per Songs/Team tab. Placed
+// below build-page-nav, after the title/dates/quick-links, rather than
+// competing with them for the very top of the page - and collapsed by
+// default (via collapsibleSection, same primitive songDetailCard's own
+// "Category notes" uses) since most weeks there's nothing here at all;
+// open=true only when a note already exists, so it's still visible on load
+// rather than hidden behind a click. Gated by readOnly the same way this
+// page's other mutating actions are (see SetBuilderData.ReadOnly) - a past
+// plan shows the note as plain text (planNoteText) instead of an editable
+// form, uncollapsed since there's no form interaction to hide; a blank
+// note on a read-only plan renders nothing, same as the plan-list row's
+// own "nothing if blank" behavior.
 templ planNoteSection(serviceTypeID, planID, note string, readOnly bool) {
 	if readOnly {
 		if note != "" {
 			<p class="plan-note-readonly"><strong>Note:</strong> { note }</p>
 		}
 	} else {
-		<div class="plan-note-section">
-			<label for="build-plan-note">Note</label>
+		@collapsibleSection("plan-note-section", "Note", note != "") {
 			@PlanNoteFormFragment(serviceTypeID, planID, note)
-		</div>
+		}
 	}
 }
 
@@ -321,7 +326,6 @@ templ BuildPlan(personName, organizationName string, setData SetBuilderData, ros
 		if setData.ReadOnly {
 			<p>@components.BadgeTitled("status-pending", "Past plan - read only", "This plan has already happened - shown for reference, no Publish/Discard/PCO-sync actions available")</p>
 		}
-		@planNoteSection(setData.ServiceTypeID, setData.PlanID, note, setData.ReadOnly)
 		<div class="build-page-nav">
 			<a href="/scheduling/build">&larr; Choose a different plan</a>
 			<div class="build-page-nav-links">
@@ -329,6 +333,7 @@ templ BuildPlan(personName, organizationName string, setData SetBuilderData, ros
 				<a href={ templ.URL(fmt.Sprintf("/scheduling/build/%s/%s/run-sheet", setData.ServiceTypeID, setData.PlanID)) } target="_blank" rel="noopener">Run sheet ↗</a>
 			</div>
 		</div>
+		@planNoteSection(setData.ServiceTypeID, setData.PlanID, note, setData.ReadOnly)
 		<!--
 			Songs and Team are two independently-interactive builders (each
 			with its own htmx swap target, see SetBuilderBody/RosterBuilderBody)

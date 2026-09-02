@@ -523,22 +523,7 @@ func (sc *SchedulingController) MergeSet(c *fiber.Ctx) error {
 		}
 
 		if errMsg == "" {
-			// Every PCO item id already spoken for locally, active or
-			// tombstoned - see MergeSet's own doc comment for why a
-			// tombstoned row still counts (it was deliberately removed
-			// here; re-importing it out from under that removal would
-			// undo a real local decision, not just fill a gap).
-			trackedItemIDs := make(map[string]bool, len(setSongs)+len(pendingDeletions))
-			for _, ss := range setSongs {
-				if ss.PCOItemID != "" {
-					trackedItemIDs[ss.PCOItemID] = true
-				}
-			}
-			for _, ss := range pendingDeletions {
-				if ss.PCOItemID != "" {
-					trackedItemIDs[ss.PCOItemID] = true
-				}
-			}
+			trackedItemIDs := trackedPCOItemIDs(setSongs, pendingDeletions)
 
 			items, itemsErr := pco.GetItems(ctx, serviceTypeID, planID, nil)
 			if itemsErr != nil {

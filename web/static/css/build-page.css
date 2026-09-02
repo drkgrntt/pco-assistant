@@ -145,24 +145,13 @@ main:has(.build-layout) {
   }
 }
 
-/* Backs planNoteSection/PlanNoteFormFragment (build.templ) - the plan
-   builder page's one editable spot for its local at-a-glance note (see
-   plan_notes/GetPlanNote), placed once near the top of the page rather
-   than repeated per row in the plan list or per Songs/Team tab. */
-.plan-note-section {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  margin-block: var(--space-2);
-}
-
-.plan-note-section label {
-  font-size: var(--text-sm);
-  font-weight: var(--font-medium);
-  color: var(--muted);
-}
-
+/* Backs PlanNoteFormFragment (build.templ) - the plan builder page's one
+   editable spot for its local at-a-glance note (see plan_notes/
+   GetPlanNote), placed once below build-page-nav rather than repeated per
+   row in the plan list or per Songs/Team tab. The section itself
+   (planNoteSection) is a collapsibleSection - see collapsible.templ/
+   collapsible.css for its own styling; only the form inside it is styled
+   here. */
 .plan-note-form {
   display: flex;
   align-items: center;

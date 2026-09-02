@@ -122,6 +122,19 @@ type SetBuilderData struct {
 	// service instead of just seeing it read-only.
 	ImportableSongCount int
 
+	// MergeAvailableCount is how many of this plan's Planning Center songs
+	// aren't tracked by any local row yet (active or tombstoned) - unlike
+	// ImportableSongCount, this stays meaningful after the set already has
+	// its own songs, since it's tracking songs added directly in Planning
+	// Center *since* the local draft was last touched, not just "does this
+	// set have anything of its own at all." Computed the same way MergeSet
+	// itself would (see deriveMergeImportRows), reusing the same pcoItems
+	// fetch buildSetBuilderData already does for ServiceOrder - no extra
+	// PCO call. Gates the "Pull in from Planning Center" button in
+	// publish_panel.templ, so it only shows when it would actually do
+	// something.
+	MergeAvailableCount int
+
 	// SongPairPrompt, when set, offers a one-shot inline "remember that
 	// these two go together?" relationship capture right after adding a
 	// song that landed right after another one - see SongPairPromptView

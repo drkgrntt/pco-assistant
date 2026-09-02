@@ -238,6 +238,34 @@ func TestDeriveMergeImportRowsNothingNewReturnsEmpty(t *testing.T) {
 	}
 }
 
+// TestTrackedPCOItemIDsIncludesActiveAndTombstoned confirms
+// trackedPCOItemIDs (shared by MergeSet and buildSetBuilderData's
+// MergeAvailableCount) counts a set song's PCOItemID whether it's still
+// active or already tombstoned as a pending deletion, and skips any row
+// with no PCOItemID at all (never published, so there's no PCO item id to
+// track).
+func TestTrackedPCOItemIDsIncludesActiveAndTombstoned(t *testing.T) {
+	setSongs := []scheduling.SetSong{
+		publishedSetSong("song-a", "", 0, "i1"),
+		setSong("song-b", "", 1), // unpublished - no PCOItemID yet
+	}
+	pendingDeletions := []scheduling.SetSong{
+		publishedSetSong("song-c", "", 0, "i2"),
+	}
+
+	got := trackedPCOItemIDs(setSongs, pendingDeletions)
+
+	want := map[string]bool{"i1": true, "i2": true}
+	if len(got) != len(want) {
+		t.Fatalf("trackedPCOItemIDs() = %+v, want %+v", got, want)
+	}
+	for id := range want {
+		if !got[id] {
+			t.Errorf("trackedPCOItemIDs() missing %q, got %+v", id, got)
+		}
+	}
+}
+
 // TestDeriveMergeImportRowsAnchorsToPrecedingForeignItem confirms a new
 // song with nothing tracked before it anchors to the nearest foreign
 // (header/non-song) item, same as deriveImportRows.

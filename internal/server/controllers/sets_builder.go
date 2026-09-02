@@ -282,6 +282,13 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 				}
 			}
 		}
+
+		// MergeAvailableCount: same untracked-item walk MergeSet itself
+		// does (deriveMergeImportRows), reusing pcoItems/setSongs/
+		// pendingDeletions already in hand here - see its own doc comment
+		// on SetBuilderData for why this doesn't collapse into
+		// ImportableSongCount above.
+		data.MergeAvailableCount = len(deriveMergeImportRows(pcoItems.Data, trackedPCOItemIDs(setSongs, pendingDeletions)))
 	}
 
 	// candidateConflicts/existing and repeated (below) are fetched up front,
@@ -846,6 +853,27 @@ func deriveImportRows(items []pco.ItemData) []scheduling.SetSong {
 		anchor = item.ID
 	}
 	return rows
+}
+
+// trackedPCOItemIDs is every PCO item id already spoken for by this set's
+// local rows, active or tombstoned - shared by MergeSet (to know what NOT
+// to re-import) and buildSetBuilderData's own MergeAvailableCount below (to
+// know whether MergeSet would find anything at all). A tombstoned row still
+// counts: it was deliberately removed here, so re-importing it out from
+// under that removal would undo a real local decision, not just fill a gap.
+func trackedPCOItemIDs(setSongs, pendingDeletions []scheduling.SetSong) map[string]bool {
+	tracked := make(map[string]bool, len(setSongs)+len(pendingDeletions))
+	for _, ss := range setSongs {
+		if ss.PCOItemID != "" {
+			tracked[ss.PCOItemID] = true
+		}
+	}
+	for _, ss := range pendingDeletions {
+		if ss.PCOItemID != "" {
+			tracked[ss.PCOItemID] = true
+		}
+	}
+	return tracked
 }
 
 // deriveMergeImportRows is MergeSet's core: given a plan's items (already
