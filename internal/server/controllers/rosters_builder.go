@@ -39,6 +39,25 @@ func assignmentPersonIDs(assignments []scheduling.RosterAssignment) []string {
 	return ids
 }
 
+// candidatePersonView builds one CandidatePersonView for the roster
+// builder's eager render path (buildRosterBuilderData and
+// buildRosterPositionGroupData, rosters_scoped.go - the only two callers)
+// - the single choke point both routes through, so
+// TestCandidatePersonViewLeavesWarningsEmpty (rosters_builder_test.go) can
+// guarantee the invariant this file's other comments describe: candidates
+// deliberately never get FrequencyWarning/BlockoutWarning/CrossTeamWarning
+// computed eagerly (see pco-api-risks.md's cold-start-eligibility-pool
+// addendum) - a candidate's warnings are fetched on demand instead, only
+// when someone clicks "Check availability" on that one row (CandidateWarnings,
+// rosters_candidate_warnings.go).
+func candidatePersonView(personID, name, schedulePreference string) views.CandidatePersonView {
+	return views.CandidatePersonView{
+		PersonID:           personID,
+		Name:               name,
+		SchedulePreference: schedulePreference,
+	}
+}
+
 // positionGroup is one open slot - a team + position name, how many are
 // needed, and which local assignments fill it. This is the roster page's
 // equivalent of mergedRow: PCO's needed-position data merged with local
@@ -326,27 +345,48 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 		candidatesByGroup[i] = people.Data
 	})
 
+	// relevantPersonIDs (and every other per-person warning fetch below) is
+	// deliberately scoped to people actually assigned to a position on this
+	// roster, NOT every candidate in a position's PCO eligibility pool - see
+	// pco-api-risks.md's "cold-start eligibility-pool" addendum for why the
+	// eligibility pool, not the (small, plan-bounded) assigned roster, was
+	// the real driver of this page's call-count risk. The names map below
+	// still covers candidates too (their names render either way); only the
+	// three PCO-backed warning fetches (blockouts, cross-team, other-dates)
+	// narrow to assigned-only. Candidates get their warnings on demand
+	// instead, via CandidateWarnings (rosters_candidate_warnings.go).
 	relevantPersonIDs := map[string]bool{}
 	for _, ra := range assignments {
 		relevantPersonIDs[ra.PersonID] = true
 	}
-	for _, candidates := range candidatesByGroup {
-		for _, pa := range candidates {
-			if pa.Relationships.Person.Data != nil {
-				relevantPersonIDs[pa.Relationships.Person.Data.ID] = true
-			}
-		}
-	}
-
 	var relevantIDs []string
 	for id := range relevantPersonIDs {
 		relevantIDs = append(relevantIDs, id)
 	}
-	names := personNameMapForIDs(ctx, relevantIDs)
 
-	// One GetBlockouts call per relevant person, with no PCO-side batch
-	// option: confirmed live that this endpoint (services/v2/people/{id}/
-	// blockouts) is nested per-person with can_query_by limited to
+	// namedPersonIDs is relevantPersonIDs plus every candidate - names still
+	// render for candidates even though their warnings don't get computed
+	// eagerly, so this one lookup stays unscoped.
+	namedPersonIDs := map[string]bool{}
+	for id := range relevantPersonIDs {
+		namedPersonIDs[id] = true
+	}
+	for _, candidates := range candidatesByGroup {
+		for _, pa := range candidates {
+			if pa.Relationships.Person.Data != nil {
+				namedPersonIDs[pa.Relationships.Person.Data.ID] = true
+			}
+		}
+	}
+	var namedIDs []string
+	for id := range namedPersonIDs {
+		namedIDs = append(namedIDs, id)
+	}
+	names := personNameMapForIDs(ctx, namedIDs)
+
+	// One GetBlockouts call per relevant (assigned) person, with no PCO-side
+	// batch option: confirmed live that this endpoint (services/v2/people/
+	// {id}/blockouts) is nested per-person with can_query_by limited to
 	// group_identifier, unlike People#index's where[id]. Fanned out
 	// concurrently instead, guarded by blockoutsMu since every goroutine
 	// writes into the same map.
@@ -381,12 +421,12 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 	// concurrency mitigation (the fan-out below).
 	//
 	// Every key either loop needs is collected up front in this pass -
-	// mirroring the assigned/candidates walk below, minus the "already
-	// assigned in this group" skip (a candidate who turns out to be
-	// assigned just means one warmed-but-unread cache entry, harmless) -
-	// so both caches can be filled by a bounded concurrent fetch instead of
-	// a live PCO call on every miss inside the sequential view-building
-	// loop that follows. That loop below only ever reads these two maps.
+	// scoped to assigned people only (see relevantPersonIDs' own comment
+	// above) - so both caches can be filled by a bounded concurrent fetch
+	// instead of a live PCO call on every miss inside the sequential
+	// view-building loop that follows. That loop below only ever reads
+	// these two maps for assigned people; candidates read neither (their
+	// warnings are fetched on demand instead - see CandidateWarnings).
 	type otherDatesKey struct{ personID, teamID, teamPositionName string }
 	crossTeamPersonIDs := map[string]bool{}
 	otherDatesKeys := map[otherDatesKey]bool{}
@@ -396,16 +436,6 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 				crossTeamPersonIDs[ra.PersonID] = true
 				if schedulePreferenceFor(candidatesByGroup[i], ra.PersonID) != "" {
 					otherDatesKeys[otherDatesKey{ra.PersonID, g.TeamID, g.TeamPositionName}] = true
-				}
-			}
-			for _, pa := range candidatesByGroup[i] {
-				if pa.Relationships.Person.Data == nil {
-					continue
-				}
-				personID := pa.Relationships.Person.Data.ID
-				crossTeamPersonIDs[personID] = true
-				if pa.Attributes.SchedulePreference != "" {
-					otherDatesKeys[otherDatesKey{personID, g.TeamID, g.TeamPositionName}] = true
 				}
 			}
 		}
@@ -482,6 +512,14 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 			})
 		}
 
+		// Candidates deliberately don't get FrequencyWarning/BlockoutWarning/
+		// CrossTeamWarning computed here - unlike the assigned loop above,
+		// this walks PCO's full eligibility pool for the position, which can
+		// be large for a well-staffed church (see pco-api-risks.md's
+		// cold-start addendum). Their warnings are fetched on demand instead,
+		// only for a candidate someone actually clicks "Check availability"
+		// on (CandidateWarnings, rosters_candidate_warnings.go) - left as
+		// their zero value ("") here.
 		for _, pa := range candidatesByGroup[i] {
 			if pa.Relationships.Person.Data == nil {
 				continue
@@ -491,23 +529,7 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 				continue
 			}
 
-			var freqWarn string
-			var crossWarn string
-			if !planDate.IsZero() {
-				if pa.Attributes.SchedulePreference != "" {
-					freqWarn = frequencyWarning(pa.Attributes.SchedulePreference, planDate, otherAssignmentDatesFor(personID, g.TeamID, g.TeamPositionName))
-				}
-				crossWarn = crossTeamWarning(crossTeamWarningsFor(personID))
-			}
-
-			pg.Candidates = append(pg.Candidates, views.CandidatePersonView{
-				PersonID:           personID,
-				Name:               titleOrID(names, personID),
-				SchedulePreference: pa.Attributes.SchedulePreference,
-				FrequencyWarning:   freqWarn,
-				BlockoutWarning:    blockoutWarningIfKnown(planDate, blockoutsByPerson[personID]),
-				CrossTeamWarning:   crossWarn,
-			})
+			pg.Candidates = append(pg.Candidates, candidatePersonView(personID, titleOrID(names, personID), pa.Attributes.SchedulePreference))
 		}
 
 		if len(pg.Assigned) < pg.Quantity {
