@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"pco-assistant/internal/auth"
+	"pco-assistant/internal/scheduling"
 	"pco-assistant/internal/server/middleware"
 	"pco-assistant/internal/views"
 
@@ -67,8 +68,7 @@ func (hc *HomeController) Index(c *fiber.Ctx) error {
 func (hc *HomeController) buildHomeData(ctx context.Context, organizationID string) views.HomeData {
 	var data views.HomeData
 
-	if serviceTypes, err := pco.GetServiceTypes(ctx, nil); err == nil {
-		sts := serviceTypes.Data
+	if sts, err := scheduling.FetchServiceTypes(ctx, organizationID); err == nil {
 		if len(sts) > homeServiceTypesCap {
 			sts = sts[:homeServiceTypesCap]
 		}

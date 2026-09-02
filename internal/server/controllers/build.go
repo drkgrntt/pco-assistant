@@ -52,18 +52,18 @@ func (sc *SchedulingController) BuildPage(c *fiber.Ctx) error {
 	orgID := middleware.CurrentOrganizationID(c)
 
 	ctx := middleware.RequestContext(c)
-	serviceTypes, err := pco.GetServiceTypes(ctx, nil)
+	serviceTypes, err := scheduling.FetchServiceTypes(ctx, orgID)
 	if err != nil {
 		return render(c, views.Build(personName, orgName, nil, "", nil, 1, 1, "upcoming", err.Error()))
 	}
 
-	if len(serviceTypes.Data) == 1 {
-		serviceTypeID := serviceTypes.Data[0].ID
+	if len(serviceTypes) == 1 {
+		serviceTypeID := serviceTypes[0].ID
 		rows, page, totalPages, errMsg := sc.combinedPlansForServiceType(ctx, orgID, serviceTypeID, "", 1, false)
-		return render(c, views.Build(personName, orgName, serviceTypes.Data, serviceTypeID, rows, page, totalPages, "upcoming", errMsg))
+		return render(c, views.Build(personName, orgName, serviceTypes, serviceTypeID, rows, page, totalPages, "upcoming", errMsg))
 	}
 
-	return render(c, views.Build(personName, orgName, serviceTypes.Data, "", nil, 1, 1, "upcoming", ""))
+	return render(c, views.Build(personName, orgName, serviceTypes, "", nil, 1, 1, "upcoming", ""))
 }
 
 // BuildPlans lists a freshly-chosen service type's plans (search blank,

@@ -156,14 +156,15 @@ func (sc *SchedulingController) PositionPreferencesPage(c *fiber.Ctx) error {
 	orgName := middleware.CurrentOrganization(c)
 
 	ctx := middleware.RequestContext(c)
-	serviceTypes, err := pco.GetServiceTypes(ctx, nil)
+	orgID := middleware.CurrentOrganizationID(c)
+	serviceTypes, err := scheduling.FetchServiceTypes(ctx, orgID)
 	if err != nil {
 		return render(c, views.PositionPreferences(personName, orgName, nil, nil, "", err.Error()))
 	}
 
 	serviceTypeID := c.Query("service_type_id")
-	if serviceTypeID == "" && len(serviceTypes.Data) == 1 {
-		serviceTypeID = serviceTypes.Data[0].ID
+	if serviceTypeID == "" && len(serviceTypes) == 1 {
+		serviceTypeID = serviceTypes[0].ID
 	}
 
 	positionGroups, err := fetchTeamPositions(ctx, serviceTypeID)
@@ -172,7 +173,7 @@ func (sc *SchedulingController) PositionPreferencesPage(c *fiber.Ctx) error {
 		errMsg = "loading teams from Planning Center: " + err.Error()
 	}
 
-	return render(c, views.PositionPreferences(personName, orgName, serviceTypes.Data, positionGroups, serviceTypeID, errMsg))
+	return render(c, views.PositionPreferences(personName, orgName, serviceTypes, positionGroups, serviceTypeID, errMsg))
 }
 
 // fetchTeamPositions lists every position across every team on a service

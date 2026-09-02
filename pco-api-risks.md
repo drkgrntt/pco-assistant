@@ -375,3 +375,28 @@ cache (unlike #5) - all three are pure wall-clock fixes, same category as
 team-member names (see #5) remain uncached, same as before this addendum
 - this only fixed how those calls are scheduled relative to each other,
 not whether they happen at all.
+
+## Addendum: GetServiceTypes cached, matching FetchActiveSongs' pattern
+
+Low severity, broad reach: `build.go`'s `BuildPage`, `home.go`'s
+`buildHomeData`, and `people.go`'s `PositionPreferencesPage` each called
+`pco.GetServiceTypes` independently, with no caching between them - cheap
+individually (a service type list is small, no pagination involved,
+unlike the song library), but three uncached live calls across three
+different pages that can all be hit in normal navigation.
+
+Fixed by `internal/scheduling/pco_service_types.go`'s `FetchServiceTypes`
+- an org-scoped, 60s-TTL cache, same shape as `FetchActiveSongs`
+(including reusing its `songCacheEntryFresh` pure freshness check
+directly, since both live in the `scheduling` package - no need to
+duplicate it the way `nav.go`'s copy is duplicated across the
+`middleware`/`scheduling` package boundary). All three call sites now go
+through it instead of calling `pco.GetServiceTypes` directly. The `/pco`
+dev-only exploration group (`pco.go`, gated behind `APP_ENV=local`, not
+real production traffic) was deliberately left alone - not worth
+threading org-scoping through a debug-only endpoint for.
+
+`httptest`-backed tests (`pco_service_types_httptest_test.go`, same
+`pco.SetBaseURLForTesting` seam as `pco_songs_httptest_test.go`) prove a
+second call within the TTL window costs zero additional PCO requests, and
+that the cache is genuinely per-organization.
