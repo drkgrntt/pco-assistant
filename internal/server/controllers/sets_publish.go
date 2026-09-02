@@ -142,7 +142,7 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 
 		if err := pco.DeleteItem(ctx, serviceTypeID, planID, ss.PCOItemID); err != nil {
 			failuresMu.Lock()
-			failures = append(failures, fmt.Sprintf("removing %s: %s", title, err.Error()))
+			failures = append(failures, fmt.Sprintf("removing %s: %s", title, friendlyPCOErr(err)))
 			failuresMu.Unlock()
 			return
 		}
@@ -169,7 +169,7 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 	if len(setSongs) > 0 {
 		existingItems, err := pco.GetItems(ctx, serviceTypeID, planID, nil)
 		if err != nil {
-			failures = append(failures, "loading existing plan items from Planning Center: "+err.Error())
+			failures = append(failures, "loading existing plan items from Planning Center: "+friendlyPCOErr(err))
 			reorderSucceeded = false
 		} else {
 			sort.Slice(existingItems.Data, func(i, j int) bool {
@@ -256,7 +256,7 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 					})
 					if err != nil {
 						failuresMu.Lock()
-						failures = append(failures, fmt.Sprintf("%s: %s", title, err.Error()))
+						failures = append(failures, fmt.Sprintf("%s: %s", title, friendlyPCOErr(err)))
 						failuresMu.Unlock()
 						return
 					}
@@ -298,7 +298,7 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 							KeyID:         &keyID,
 						}); err != nil {
 							failuresMu.Lock()
-							failures = append(failures, fmt.Sprintf("%s: %s", title, err.Error()))
+							failures = append(failures, fmt.Sprintf("%s: %s", title, friendlyPCOErr(err)))
 							failuresMu.Unlock()
 						} else {
 							_ = sc.store.ClearInfoPending(ctx, set.ID, ss.ID)
@@ -335,7 +335,7 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 				}
 
 				if err := pco.ReorderItems(ctx, serviceTypeID, planID, finalOrder); err != nil {
-					failures = append(failures, "reordering plan items: "+err.Error())
+					failures = append(failures, "reordering plan items: "+friendlyPCOErr(err))
 					updated = 0 // the reorder that would have applied this failed
 					reorderSucceeded = false
 				}
