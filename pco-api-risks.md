@@ -400,3 +400,56 @@ threading org-scoping through a debug-only endpoint for.
 `pco.SetBaseURLForTesting` seam as `pco_songs_httptest_test.go`) prove a
 second call within the TTL window costs zero additional PCO requests, and
 that the cache is genuinely per-organization.
+
+## Addendum: publish-path loops parallelized - writes, not reads, extra care taken
+
+Low-medium severity, but a different risk shape than every fix above:
+`PublishSet`'s deletion loop and create/update loop (`sets_publish.go`),
+`RefreshSongInfo`'s PATCH loop (`sets_publish.go`), and `PublishRoster`'s
+deletion and creation loops (`rosters_publish.go`) all called PCO
+sequentially, one write per song/assignment. Real, but only on an
+explicit Publish/Refresh click, not render time, and already
+self-throttling by virtue of being sequential - the same reason this
+mattered less urgently than the read-side fixes above.
+
+Fanned out via `scheduling.RunConcurrently`, same as every other fix in
+this doc, but writes need more care than reads:
+
+- **Ordering invariants preserved structurally, not just by convention**:
+  `RunConcurrently` blocks until every goroutine in one fan-out returns
+  before the caller continues, so `PublishSet`'s "deletions fully finish
+  before any create/update starts" and `PublishRoster`'s equivalent still
+  hold exactly as they did sequentially - each loop is its own fan-out,
+  not one fan-out spanning both phases.
+- **`PublishSet`'s create/update loop is the one with a real subtlety**: a
+  song that fails to create must be excluded from `publishable` (the list
+  fed to `mergeServiceOrder` for the reorder call) - the sequential
+  version did this with a bare `continue`. The concurrent version uses a
+  pre-sized, index-matched `results []publishResult` slice with an
+  `include` flag, defaulting to `false` (excluded) unless the goroutine
+  reaches the point where it would have fallen through to `publishable =
+  append(...)` in the original. Confirmed safe to reorder in whatever
+  order the fan-out finishes in: `mergeServiceOrder` groups by each
+  `SetSong`'s stored `AnchorItemID`/`Position`, not by input list order
+  (see `TestMergeServiceOrderGroupOrderedByPosition`,
+  `sets_builder_test.go`) - `publishable`'s own element order was never
+  load-bearing, sequential or concurrent.
+- **Failure/counter collection made goroutine-safe**: every `failures =
+  append(...)` is now guarded by a `sync.Mutex`; every `deleted`/
+  `created`/`updated`/`refreshed` counter is a `sync/atomic` `int32`,
+  converted back to a plain `int` only after its fan-out has fully
+  returned. Same per-item error messages and best-effort tolerance as
+  before - purely a concurrency-safety change, not a behavior change.
+
+**Not covered by an automated test** - unlike every other fix in this
+doc, none of `PublishSet`/`RefreshSongInfo`/`PublishRoster` have any
+existing test coverage (or an `httptest`-only path to it): they need a
+real `*scheduling.Store`, and this codebase has no DB-backed test harness
+anywhere yet (confirmed - no other controller test needing a live Store
+exists either). Verified instead by careful manual review of the ordering
+invariants above, plus the existing `mergeServiceOrder`/pure-helper tests
+that already cover the assumptions this change leans on. Recommended: a
+manual Publish/Refresh/PublishRoster smoke test against a real (dev) PCO
+plan before leaning on this in production, given the higher stakes of a
+mistake here (real writes to a church's live service order) versus every
+read-only fix above.

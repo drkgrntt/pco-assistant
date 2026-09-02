@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"pco-assistant/internal/scheduling"
 	"pco-assistant/internal/server/middleware"
@@ -93,7 +95,19 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 		return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(ctx, orgID, serviceTypeID, planID, err.Error())))
 	}
 
+	// failures is appended from concurrent goroutines below (the deletion
+	// fan-out and the create/update fan-out further down), guarded by
+	// failuresMu throughout - a plain slice append isn't safe for
+	// concurrent writers on its own. deleted/created/updated are tallied
+	// via atomic counters for the same reason, converted back to plain
+	// ints once both fan-outs have fully returned (RunConcurrently blocks
+	// until every goroutine finishes, so deletions always finish
+	// completely before any create/update starts - the same ordering the
+	// sequential version had, and what "1. Deletions... before creating or
+	// reordering anything else" below still means).
 	var failures []string
+	var failuresMu sync.Mutex
+	var deletedCount, createdCount, updatedCount int32
 	deleted, created, updated := 0, 0, 0
 
 	songs, _ := fetchActiveSongs(middleware.RequestContext(c), orgID)
@@ -123,19 +137,24 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 
 	// 1. Deletions - clear out what was removed/replaced locally before
 	// creating or reordering anything else.
-	for _, ss := range pendingDeletions {
+	scheduling.RunConcurrently(pendingDeletions, func(ss scheduling.SetSong) {
 		title := titleOrID(titles, ss.SongID)
 
 		if err := pco.DeleteItem(ctx, serviceTypeID, planID, ss.PCOItemID); err != nil {
+			failuresMu.Lock()
 			failures = append(failures, fmt.Sprintf("removing %s: %s", title, err.Error()))
-			continue
+			failuresMu.Unlock()
+			return
 		}
 		if err := sc.store.DeleteSetSongRow(ctx, ss.ID); err != nil {
+			failuresMu.Lock()
 			failures = append(failures, fmt.Sprintf("removed %s from Planning Center but failed to clear it locally: %s", title, err.Error()))
-			continue
+			failuresMu.Unlock()
+			return
 		}
-		deleted++
-	}
+		atomic.AddInt32(&deletedCount, 1)
+	})
+	deleted = int(deletedCount)
 
 	// 2. Creates, then a single reorder call covering the whole plan - see
 	// mergeServiceOrder for how each song's anchor places it relative to
@@ -167,9 +186,29 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 			// publishable ends up holding every song that has (or now
 			// has) a real pco_item_id, for the merge below - one that
 			// fails to create is left out, since there's no item id to
-			// place in the reorder.
-			var publishable []scheduling.SetSong
-			for i, ss := range setSongs {
+			// place in the reorder. Each setSongs[i] is independent of
+			// every other's create/update call, so this fans out via
+			// scheduling.RunConcurrently instead of one call at a time -
+			// results is pre-sized and index-matched to setSongs (each
+			// goroutine writes only its own index, no lock needed for
+			// that part), with include=false meaning "leave this one out
+			// of publishable" (mirroring the sequential version's
+			// continue on a failed create - see mergeServiceOrder's own
+			// doc comment for why publishable's list order here doesn't
+			// need to match setSongs' order: it groups by each SetSong's
+			// stored AnchorItemID/Position, not by input order).
+			type publishResult struct {
+				ss      scheduling.SetSong
+				include bool
+			}
+			results := make([]publishResult, len(setSongs))
+			indexes := make([]int, len(setSongs))
+			for i := range indexes {
+				indexes[i] = i
+			}
+
+			scheduling.RunConcurrently(indexes, func(i int) {
+				ss := setSongs[i]
 				title := titleOrID(titles, ss.SongID)
 
 				if ss.PCOItemID == "" {
@@ -216,12 +255,16 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 						Length:        info.LengthSeconds,
 					})
 					if err != nil {
+						failuresMu.Lock()
 						failures = append(failures, fmt.Sprintf("%s: %s", title, err.Error()))
-						continue
+						failuresMu.Unlock()
+						return
 					}
 					if err := sc.store.MarkSetSongPublished(ctx, set.ID, ss.ID, item.Data.ID); err != nil {
+						failuresMu.Lock()
 						failures = append(failures, fmt.Sprintf("%s: created in Planning Center but failed to record locally: %s", title, err.Error()))
-						continue
+						failuresMu.Unlock()
+						return
 					}
 					// Best-effort, same tolerance as ClearMovedFlags below -
 					// whatever Description/KeyOverride this create just
@@ -229,7 +272,7 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 					// call happens to succeed.
 					_ = sc.store.ClearInfoPending(ctx, set.ID, ss.ID)
 					ss.PCOItemID = item.Data.ID
-					created++
+					atomic.AddInt32(&createdCount, 1)
 				} else {
 					// Already published - nothing to create, but a pending
 					// note/key edit (see SetSong.InfoPending) still needs to
@@ -254,15 +297,31 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 							ArrangementID: &info.ArrangementID,
 							KeyID:         &keyID,
 						}); err != nil {
+							failuresMu.Lock()
 							failures = append(failures, fmt.Sprintf("%s: %s", title, err.Error()))
+							failuresMu.Unlock()
 						} else {
 							_ = sc.store.ClearInfoPending(ctx, set.ID, ss.ID)
 						}
 					}
-					updated++
+					atomic.AddInt32(&updatedCount, 1)
 				}
-				publishable = append(publishable, ss)
+				// results[i] is this goroutine's own, exclusive index into
+				// a pre-sized slice - no lock needed (see RunConcurrently's
+				// doc comment). A failed create returned above without
+				// reaching here, so its zero-value publishResult
+				// (include=false) is what excludes it from publishable
+				// below, same as the sequential version's continue.
+				results[i] = publishResult{ss: ss, include: true}
+			})
+
+			var publishable []scheduling.SetSong
+			for _, r := range results {
+				if r.include {
+					publishable = append(publishable, r.ss)
+				}
 			}
+			created, updated = int(createdCount), int(updatedCount)
 
 			if len(publishable) > 0 {
 				merged := mergeServiceOrder(existingItems.Data, publishable)
@@ -361,12 +420,23 @@ func (sc *SchedulingController) RefreshSongInfo(c *fiber.Ctx) error {
 	resolveMissingTitles(ctx, titles, setSongIDs)
 	arrangementCache, _ := sc.store.SongArrangementInfo(ctx, orgID)
 
+	// Every song's PATCH is independent of every other's (never creates,
+	// deletes, or reorders anything - see this function's own doc
+	// comment), so fanned out via scheduling.RunConcurrently instead of
+	// one call at a time. failures/refreshedCount follow the same
+	// mutex/atomic pattern as PublishSet's own fan-outs above.
 	var failures []string
-	refreshed := 0
+	var failuresMu sync.Mutex
+	var refreshedCount int32
+
+	toRefresh := make([]scheduling.SetSong, 0, len(setSongs))
 	for _, ss := range setSongs {
-		if ss.PCOItemID == "" {
-			continue
+		if ss.PCOItemID != "" {
+			toRefresh = append(toRefresh, ss)
 		}
+	}
+
+	scheduling.RunConcurrently(toRefresh, func(ss scheduling.SetSong) {
 		title := titleOrID(titles, ss.SongID)
 
 		info, ok := arrangementCache[ss.SongID]
@@ -385,15 +455,18 @@ func (sc *SchedulingController) RefreshSongInfo(c *fiber.Ctx) error {
 			ArrangementID: &info.ArrangementID,
 			KeyID:         &keyID,
 		}); err != nil {
+			failuresMu.Lock()
 			failures = append(failures, fmt.Sprintf("%s: %s", title, err.Error()))
-			continue
+			failuresMu.Unlock()
+			return
 		}
 		// Best-effort, same as ClearInfoPending's other call site (PublishSet) -
 		// this song's Description/KeyOverride genuinely just reached
 		// Planning Center, whether or not this particular call succeeds.
 		_ = sc.store.ClearInfoPending(ctx, set.ID, ss.ID)
-		refreshed++
-	}
+		atomic.AddInt32(&refreshedCount, 1)
+	})
+	refreshed := int(refreshedCount)
 
 	publishMsg := fmt.Sprintf("Refreshed %d song(s).", refreshed)
 	if refreshed == 0 && len(failures) == 0 {
