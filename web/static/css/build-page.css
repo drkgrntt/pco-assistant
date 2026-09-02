@@ -151,13 +151,23 @@ main:has(.build-layout) {
    row in the plan list or per Songs/Team tab. The section itself
    (planNoteSection) is a collapsibleSection - see collapsible.templ/
    collapsible.css for its own styling; only the form inside it is styled
-   here. */
+   here.
+
+   collapsibleSection's own .collapsible-body is a plain block box (no
+   flex parent, no padding of its own - see collapsible.css), unlike this
+   form's old home (.plan-note-section, a flex row that used to cap it at
+   flex-basis:20rem alongside a label). Without a width cap here this
+   .plan-note-form, itself a flex container, just stretches to the full
+   width of that block box - max-width keeps it a compact single-line
+   form instead of a bar spanning the whole page; margin-top gives it
+   breathing room under the toggle above it, since .collapsible-body
+   itself contributes none. */
 .plan-note-form {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  flex: 1 1 20rem;
-  margin: 0;
+  max-width: 28rem;
+  margin-top: var(--space-2);
 }
 
 .plan-note-input {
