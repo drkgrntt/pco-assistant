@@ -283,3 +283,53 @@ needed: `buildSongInfoData`'s `CachedCount`/`TotalCount` already recompute
 live from the DB on every render, so reloading the Song Info page shows
 the sync's progress for free, and `nav.go`'s existing `songInfoNeedsSync`
 badge already clears itself within a minute of the cache filling in.
+
+## Addendum: three residual sequential loops found by a later audit
+
+Found by two independent audit passes well after "nothing else is
+currently open" above - #2 and #6 fixed the *worst* sequential/duplicate
+loops, but three smaller ones of the same shape survived both passes:
+
+- **`personNameMap`** (`internal/server/controllers/scheduling.go`) - the
+  song/person Preferences page's own name resolver, a near-duplicate of
+  the `personNameMapForIDs` #2 fixed, except this one still ran one
+  `pco.GetPerson` call per distinct person id in the preferences list. Not
+  caught by #2 because it's a separate function serving a separate page,
+  not a call site of `personNameMapForIDs` itself. Fixed by rewriting it
+  to collect its distinct ids and delegate to `personNameMapForIDs`
+  directly - it's now a ~10-line wrapper, same batched `where[id]=...`
+  calls, same leave-it-out-of-the-map fallback for an id that fails to
+  resolve.
+- **`combinedPlansForServiceType`** (`internal/server/controllers/
+  build.go`) - the Build page's plan-picker: after paginating to at most
+  `buildPlansPageSize` (10) rows, ran `planStatus`/`rosterStatus` for each
+  row in a sequential loop. Each of those falls back to a live
+  `GetItems`/`GetTeamMembers` call when the row has no local draft yet, so
+  a full page of rows could mean up to 20 sequential round trips just to
+  render the picker - the same "independent per-row PCO calls, run one at
+  a time" shape #6 fixed elsewhere in `sets_builder.go`/
+  `rosters_builder.go`, just not caught in that pass since this loop lives
+  in `build.go` itself rather than the two builder files #6 focused on.
+  Fixed by fanning the per-row status computation out via
+  `scheduling.RunConcurrently` (`buildPlanRows`, pulled out as its own
+  function so the fan-out is testable against a fake status callback
+  without a real `*scheduling.Store` or PCO round trip) - pre-sized,
+  index-owned-per-goroutine, same pattern as `renderServiceOrder`.
+- **`fetchTeamPositions`** (`internal/server/controllers/people.go`) - the
+  position-preferences page's team/position walk: one `GetTeamPositions`
+  call per team on the service type, sequentially. Same fix, fanned out
+  via `scheduling.RunConcurrently` into a pre-sized, index-matched slice
+  so team order (`GetTeams`' own `OrderBy: "name"`) survives the fan-out;
+  "first error wins" (via `sync.Once`) replaces the old sequential loop's
+  literal first error, since concurrent completion order no longer
+  guarantees the same team "loses" the race every time - documented at
+  the call site as "an" error rather than strictly the first one, which
+  is fine given the caller only ever shows a single generic "loading
+  teams from Planning Center" message either way.
+
+None of these change PCO call *count* (unlike #2) or introduce a new
+cache (unlike #5) - all three are pure wall-clock fixes, same category as
+#6, just for loops #6's pass didn't reach. Team/position lists and
+team-member names (see #5) remain uncached, same as before this addendum
+- this only fixed how those calls are scheduled relative to each other,
+not whether they happen at all.
