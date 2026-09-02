@@ -328,3 +328,35 @@ func (s *Store) AnyPersonDataSynced(ctx context.Context, organizationID string, 
 	err := s.db.QueryRowContext(ctx, query, args...).Scan(&any)
 	return any, err
 }
+
+// ClearPersonDataCache deletes every row this package's person-data cache
+// tables hold for organizationID - all three detail tables and their sync
+// markers (migration 00033) - see AccountController.ClearPersonDataCache
+// (internal/server/controllers/account.go), the Account page's "nuclear"
+// cache-clear action. Non-destructive to real PCO data: the next roster
+// render simply re-syncs blockouts/plan history from Planning Center as
+// needed, the same as a brand-new org that's never synced yet (see
+// AnyPersonDataSynced's own "never synced" case above). One transaction
+// across all six tables, same delete-in-a-tx idiom as
+// ReplacePersonBlockouts/ReplacePersonPlanHistory/
+// ReplacePersonTeamPlanHistory above, just spanning every person/team for
+// this org at once instead of one person(/team) at a time.
+func (s *Store) ClearPersonDataCache(ctx context.Context, organizationID string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	for _, table := range []string{
+		"person_blockouts", "person_blockout_sync",
+		"person_plan_history", "person_plan_history_sync",
+		"person_team_plan_history", "person_team_plan_history_sync",
+	} {
+		if _, err := tx.ExecContext(ctx, fmt.Sprintf(`DELETE FROM %s WHERE organization_id = $1`, table), organizationID); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}

@@ -310,3 +310,86 @@ func TestAnyPersonDataSynced(t *testing.T) {
 		t.Error("AnyPersonDataSynced (empty personIDs) = true, want false")
 	}
 }
+
+func TestClearPersonDataCache(t *testing.T) {
+	store := dbTestStore(t)
+	ctx := context.Background()
+	orgID := testScopeID("org")
+	personA := testScopeID("person")
+	teamID := testScopeID("team")
+	cleanupPersonDataCache(t, store, orgID)
+
+	// Populate all three caches for this org.
+	if err := store.ReplacePersonBlockouts(ctx, orgID, personA, []PersonBlockout{
+		{PCOBlockoutID: "b1", StartsAt: time.Now(), EndsAt: time.Now().Add(time.Hour)},
+	}); err != nil {
+		t.Fatalf("ReplacePersonBlockouts: %v", err)
+	}
+	if err := store.ReplacePersonPlanHistory(ctx, orgID, personA, []PersonPlanHistoryEntry{
+		{PCOPlanPersonID: "pp1", TeamID: teamID, TeamName: "Worship", TeamPositionName: "Vocals", PlanID: "plan-1", SortDate: time.Now()},
+	}); err != nil {
+		t.Fatalf("ReplacePersonPlanHistory: %v", err)
+	}
+	if err := store.ReplacePersonTeamPlanHistory(ctx, orgID, personA, teamID, []PersonTeamPlanHistoryEntry{
+		{PCOPlanPersonID: "pp1", TeamPositionName: "Vocals", PlanID: "plan-1", SortDate: time.Now()},
+	}); err != nil {
+		t.Fatalf("ReplacePersonTeamPlanHistory: %v", err)
+	}
+
+	if any, err := store.AnyPersonDataSynced(ctx, orgID, []string{personA}); err != nil {
+		t.Fatalf("AnyPersonDataSynced (before clear): %v", err)
+	} else if !any {
+		t.Fatal("AnyPersonDataSynced (before clear) = false, want true")
+	}
+
+	// A different org's cache must survive - this is an org-scoped delete,
+	// not a table wipe.
+	otherOrgID := testScopeID("org")
+	cleanupPersonDataCache(t, store, otherOrgID)
+	if err := store.ReplacePersonBlockouts(ctx, otherOrgID, personA, []PersonBlockout{
+		{PCOBlockoutID: "b-other", StartsAt: time.Now(), EndsAt: time.Now().Add(time.Hour)},
+	}); err != nil {
+		t.Fatalf("ReplacePersonBlockouts (other org): %v", err)
+	}
+
+	if err := store.ClearPersonDataCache(ctx, orgID); err != nil {
+		t.Fatalf("ClearPersonDataCache: %v", err)
+	}
+
+	if any, err := store.AnyPersonDataSynced(ctx, orgID, []string{personA}); err != nil {
+		t.Fatalf("AnyPersonDataSynced (after clear): %v", err)
+	} else if any {
+		t.Error("AnyPersonDataSynced (after clear) = true, want false - every sync marker for this org should be gone")
+	}
+
+	blockouts, _, ok, err := store.PersonBlockoutCache(ctx, orgID, personA)
+	if err != nil {
+		t.Fatalf("PersonBlockoutCache (after clear): %v", err)
+	}
+	if ok || len(blockouts) != 0 {
+		t.Errorf("PersonBlockoutCache (after clear) ok=%v blockouts=%d, want ok=false and 0 rows", ok, len(blockouts))
+	}
+
+	entries, _, ok, err := store.PersonPlanHistoryCache(ctx, orgID, personA)
+	if err != nil {
+		t.Fatalf("PersonPlanHistoryCache (after clear): %v", err)
+	}
+	if ok || len(entries) != 0 {
+		t.Errorf("PersonPlanHistoryCache (after clear) ok=%v entries=%d, want ok=false and 0 rows", ok, len(entries))
+	}
+
+	teamEntries, _, ok, err := store.PersonTeamPlanHistoryCache(ctx, orgID, personA, teamID)
+	if err != nil {
+		t.Fatalf("PersonTeamPlanHistoryCache (after clear): %v", err)
+	}
+	if ok || len(teamEntries) != 0 {
+		t.Errorf("PersonTeamPlanHistoryCache (after clear) ok=%v entries=%d, want ok=false and 0 rows", ok, len(teamEntries))
+	}
+
+	// The other org's cache must be untouched.
+	if any, err := store.AnyPersonDataSynced(ctx, otherOrgID, []string{personA}); err != nil {
+		t.Fatalf("AnyPersonDataSynced (other org, after clearing orgID): %v", err)
+	} else if !any {
+		t.Error("AnyPersonDataSynced (other org) = false after clearing a different org, want true (untouched)")
+	}
+}

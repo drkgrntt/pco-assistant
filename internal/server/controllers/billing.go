@@ -45,8 +45,21 @@ func (bc *BillingController) BillingPage(c *fiber.Ctx) error {
 
 // buildBillingData resolves the signed-in org's current billing/trial
 // state - shared by every handler below so each one's error/success
-// re-render reflects the same real state, not a stale copy.
+// re-render reflects the same real state, not a stale copy. Thin wrapper
+// around the package-level buildBillingData so every other call site
+// (BillingController's own handlers) doesn't need to change - see that
+// function's doc comment for why it's not a method.
 func (bc *BillingController) buildBillingData(c *fiber.Ctx) views.BillingData {
+	return buildBillingData(c, bc.authStore)
+}
+
+// buildBillingData is BillingController.buildBillingData's actual logic,
+// factored out as a package-level function (rather than duplicated) so
+// AccountController.buildAccountData can build the exact same
+// views.BillingData the standalone /billing page renders, both reflecting
+// identical real state. Takes authStore explicitly rather than a
+// receiver since it's shared across two different controller structs.
+func buildBillingData(c *fiber.Ctx, authStore *auth.Store) views.BillingData {
 	orgID := middleware.CurrentOrganizationID(c)
 
 	data := views.BillingData{
@@ -54,7 +67,7 @@ func (bc *BillingController) buildBillingData(c *fiber.Ctx) views.BillingData {
 		MultiCampusPlan: billing.PlanMultiCampus,
 	}
 
-	org, err := bc.authStore.GetOrganization(c.Context(), orgID)
+	org, err := authStore.GetOrganization(c.Context(), orgID)
 	if err != nil {
 		data.ErrMsg = "loading your organization: " + err.Error()
 		return data
@@ -73,7 +86,7 @@ func (bc *BillingController) buildBillingData(c *fiber.Ctx) views.BillingData {
 	// Best-effort, same tolerance as every other lookup on this page - a
 	// failure here just means the seat count/nag doesn't show, not a
 	// broken page.
-	if counts, err := bc.authStore.SeatCounts(c.Context()); err == nil {
+	if counts, err := authStore.SeatCounts(c.Context()); err == nil {
 		data.SeatCount = counts[orgID]
 	}
 	data.StandardOverLimit = org.Plan == billing.PlanStandard && data.SeatCount > billing.SeatsIncludedStandard

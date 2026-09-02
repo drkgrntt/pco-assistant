@@ -1,0 +1,97 @@
+package views
+
+import (
+	"pco-assistant/internal/views/components"
+)
+
+// Account is the one persistent page for account/organization identity,
+// billing (BillingBody, same markup /billing itself renders - see
+// billing.templ), and local-cache maintenance - see layout.templ's
+// site-actions doc comment for why this replaced /billing as the nav
+// link.
+templ Account(personName, organizationName string, data AccountData) {
+	@Layout("Account", personName, organizationName) {
+		<h1>Account</h1>
+		@components.Card("Identity") {
+			<p class="muted">Signed in as { personName }.</p>
+			<p class="muted">Organization: { organizationName }.</p>
+			if data.OrganizationID != "" {
+				<p class="muted">Planning Center organization id: { data.OrganizationID }.</p>
+			}
+		}
+		<h2>Billing</h2>
+		@BillingBody(data.Billing)
+		<h2>Data &amp; Caches</h2>
+		@AccountCacheBody(data)
+	}
+}
+
+// AccountCacheBody is both the initial-render fragment and the htmx swap
+// target (id="account-cache-body") for the two cache-clear actions below -
+// same shape as SongInfoBody (internal/views/scheduling/song_info.templ).
+//
+// Both actions are deliberately NOT styled "danger" (see publish_panel.templ
+// for what that class is reserved for - a genuinely irreversible action
+// like Discard): clearing one of these caches touches nothing in Planning
+// Center and no draft set/roster - it only deletes this app's own local
+// copy of PCO data, which gets transparently re-collected the next time
+// it's needed. Framed here, and in each confirm prompt, as "unmistakably
+// not destructive" per the page's actual intent.
+templ AccountCacheBody(data AccountData) {
+	<div id="account-cache-body">
+		<p class="muted">
+			These only clear data this app has cached locally from Planning
+			Center - they don't touch Planning Center itself, or any draft set
+			or roster. Whatever gets cleared here is just removed from local
+			storage; it's automatically re-collected from Planning Center the
+			next time it's actually needed.
+		</p>
+		@components.Card("Song info cache") {
+			if data.SongInfoCacheErr != "" {
+				<p class="error">{ data.SongInfoCacheErr }</p>
+			}
+			if data.SongInfoCacheMsg != "" {
+				<p class="success">{ data.SongInfoCacheMsg }</p>
+			}
+			<p class="muted">
+				Clears every song's cached key, tempo, meter, and length info
+				(from the Song Info page). Not destructive - it's just removing
+				some data we have sitting on top so it can be re-collected from
+				PCO, either automatically as sets get built or right away from
+				the <a href="/scheduling/song-info">Song Info</a> page's Sync
+				action.
+			</p>
+			<form
+				hx-post="/account/cache/song-info"
+				hx-target="#account-cache-body"
+				hx-swap="outerHTML"
+				hx-confirm="This only clears this app's local cache of song key/tempo/meter/length info - it does not touch Planning Center or any real scheduling data. Everything gets automatically re-collected from Planning Center the next time it's needed. Continue?"
+			>
+				<button type="submit">Clear song info cache</button>
+			</form>
+		}
+		@components.Card("Person data cache") {
+			if data.PersonDataCacheErr != "" {
+				<p class="error">{ data.PersonDataCacheErr }</p>
+			}
+			if data.PersonDataCacheMsg != "" {
+				<p class="success">{ data.PersonDataCacheMsg }</p>
+			}
+			<p class="muted">
+				Clears every person's cached blockout and assignment-history
+				info used for scheduling warnings on the Team roster. Not
+				destructive - it's just removing some data we have sitting on
+				top so it can be re-collected from PCO the next time it's
+				needed.
+			</p>
+			<form
+				hx-post="/account/cache/person-data"
+				hx-target="#account-cache-body"
+				hx-swap="outerHTML"
+				hx-confirm="This only clears this app's local cache of per-person blockout/assignment-history info - it does not touch Planning Center or any real scheduling data. Everything gets automatically re-collected from Planning Center the next time it's needed. Continue?"
+			>
+				<button type="submit">Clear person data cache</button>
+			</form>
+		}
+	</div>
+}

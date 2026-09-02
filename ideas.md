@@ -124,13 +124,11 @@ for other volunteer-heavy ministries on the same backend.
   real usage data suggesting the lighter integrations aren't enough.
 - When Phase 2 (non-worship ministries) actually starts - deliberately not
   scheduled yet; the plan is "after worship PMF," not a fixed date.
-- A "nuclear" full-wipe-and-resync button for the Song Info / person-data
-  caches (see `pco-api-risks.md`'s cache addenda), for the rare case
-  someone suspects the whole cache has gone wrong rather than one item.
-  Deliberately not built alongside the per-item refresh actions (2026-09-02)
-  because there's no natural settings/account-level page to put an
-  org-wide destructive action like this on yet - revisit once one exists,
-  don't bolt it onto an unrelated page in the meantime.
+- ~~A "nuclear" full-wipe-and-resync button for the Song Info / person-data
+  caches~~ - **shipped**, on the new `/account` page's "Data & Caches"
+  section (`internal/views/account.templ`'s `AccountCacheBody`,
+  `scheduling.Store.ClearSongArrangementCache`/`ClearPersonDataCache`),
+  once that page existed to put an org-wide action like this on.
 
 ## Planning annotations
 
