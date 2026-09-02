@@ -1,0 +1,80 @@
+package views
+
+// Pricing is the public "/pricing" marketing page - a standalone,
+// linkable page for exactly what the homepage's own pricing section (see
+// landing.templ) only teases: full tier detail plus the seat/trial FAQ,
+// so someone deciding on behalf of a church can send this one URL to
+// whoever else needs to sign off, without the rest of the pitch attached.
+// Same chrome as Landing (marketingHeader/marketingFooter, landing.css) -
+// content lives in `docs/ideas.md`'s Vision/positioning section and the
+// README's pricing table; keep this in sync with those if pricing ever
+// changes.
+templ Pricing() {
+	<!DOCTYPE html>
+	<html lang="en">
+		@Head("Pricing - Resonance") {
+			<link rel="stylesheet" href={ "/static/css/landing.css?v=" + AssetVersion }/>
+		}
+		<body class="landing">
+			@marketingHeader()
+			<main>
+				<section class="landing-hero">
+					<p class="landing-eyebrow">Pricing</p>
+					<h1>Seat-based, and only admins count.</h1>
+					<p class="landing-lede">
+						Every organization gets a 30-day free trial automatically the
+						first time it signs in - no credit card up front. A "seat" is a
+						distinct admin: whoever's actually building sets and rosters
+						here. Everyone else - the whole team receiving a published
+						schedule - is always free, no matter how many people that is.
+					</p>
+				</section>
+				<section class="landing-pricing">
+					<div class="landing-feature-grid landing-pricing-tiers">
+						<div class="landing-feature-card">
+							<h3>Standard</h3>
+							<p class="landing-price">$14<span>/mo</span></p>
+							<p>2 admin seats included. Single campus, small-to-mid church.</p>
+							<p>Go over 2 seats and nothing breaks - it just shows a non-blocking upsell nudge on the billing page.</p>
+						</div>
+						<div class="landing-feature-card landing-feature-card-accent">
+							<h3>Multi-Campus</h3>
+							<p class="landing-price">$28<span>/mo</span></p>
+							<p>5 admin seats included, plus $5/mo per additional seat. Multi-site or a larger team.</p>
+							<p>Overage bills for real: a daily job keeps your actual seat count in sync with Stripe automatically.</p>
+						</div>
+					</div>
+					<a class="button primary landing-cta" href="/auth/pco/start">Start your free trial</a>
+					<p class="landing-reassurance">Uses your existing Planning Center login - no separate account, no credit card.</p>
+				</section>
+				<section class="landing-features">
+					<h2>Common questions</h2>
+					<div class="landing-feature-grid">
+						<div class="landing-feature-card">
+							<h3>What counts as a seat?</h3>
+							<p>Anyone who signs in and actually builds a set or roster here. Team members who only see the published schedule - in Planning Center or a printed run sheet - never count, and there's no limit on how many of them there are.</p>
+						</div>
+						<div class="landing-feature-card">
+							<h3>What happens when the trial ends?</h3>
+							<p>You'll be prompted to choose a plan from the billing page. Nothing you've built is at risk either way - your draft sets and rosters stay exactly where they are, and everything already published is already live in real Planning Center data regardless of this app's own status.</p>
+						</div>
+						<div class="landing-feature-card">
+							<h3>Can I change or cancel a plan?</h3>
+							<p>Yes, any time, from the billing page - it hands off to Stripe's own billing portal, so there's no separate cancellation flow to hunt for.</p>
+						</div>
+						<div class="landing-feature-card">
+							<h3>Do I need a credit card to try it?</h3>
+							<p>No. Sign in with the Planning Center login you already use and the 30-day trial starts automatically - a card is only needed once you pick a plan.</p>
+						</div>
+					</div>
+				</section>
+				<section class="landing-final-cta">
+					<h2>Ready to run through it before it goes live?</h2>
+					<a class="button primary landing-cta" href="/auth/pco/start">Sign in with Planning Center</a>
+					<p class="landing-reassurance">Your schedule stays live in Planning Center the whole time, so there's nothing to migrate back if you stop.</p>
+				</section>
+			</main>
+			@marketingFooter()
+		</body>
+	</html>
+}

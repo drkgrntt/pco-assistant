@@ -9,7 +9,12 @@ import "pco-assistant/internal/views/components"
 // signed in yet, and the early-preview warning banner isn't the first
 // thing someone deciding whether to try the product should see. Still
 // shares Layout's <head> (Head, layout.templ) for the same cache-busted
-// assets/favicon/fonts, plus this page's own stylesheet.
+// assets/favicon/fonts, plus this page's own stylesheet. Pricing and
+// HowItWorks (pricing.templ, how_it_works.templ) are this page's two
+// companion pages - same chrome (marketingHeader/marketingFooter below),
+// same stylesheet - for the two things this single page deliberately
+// doesn't go deep on: a linkable pricing page, and a scenario-driven walk
+// through what the product actually does day to day.
 templ Landing() {
 	<!DOCTYPE html>
 	<html lang="en">
@@ -17,16 +22,7 @@ templ Landing() {
 			<link rel="stylesheet" href={ "/static/css/landing.css?v=" + AssetVersion }/>
 		}
 		<body class="landing">
-			<header class="landing-header">
-				<strong class="landing-brand">Resonance</strong>
-				<div class="landing-header-actions">
-					<button type="button" class="theme-toggle" onclick="toggleTheme()" aria-label="Switch between light and dark theme" title="Switch between light and dark theme">
-						@components.IconSun()
-						@components.IconMoon()
-					</button>
-					<a href="/login">Sign in</a>
-				</div>
-			</header>
+			@marketingHeader()
 			<main>
 				<section class="landing-hero">
 					<p class="landing-eyebrow">A rehearsal studio for Planning Center Services</p>
@@ -74,6 +70,7 @@ templ Landing() {
 							<p>Nothing lives only here. Publishing writes straight back to real PCO plan items and assignments - respected everywhere else in Planning Center too.</p>
 						</div>
 					</div>
+					<p class="landing-more-link"><a href="/how-it-works">See how it actually fits into your week &rarr;</a></p>
 				</section>
 				<section class="landing-studio">
 					<div class="landing-studio-side">
@@ -96,16 +93,7 @@ templ Landing() {
 						everyone viewing or receiving a published schedule is always
 						free, no matter how many people that is.
 					</p>
-					<div class="landing-feature-grid">
-						<div class="landing-feature-card">
-							<h3>Standard</h3>
-							<p>$14/mo - 2 admin seats. Single campus, small-to-mid church.</p>
-						</div>
-						<div class="landing-feature-card">
-							<h3>Multi-Campus</h3>
-							<p>$28/mo - 5 admin seats (+$5/mo per extra seat). Multi-site or large team.</p>
-						</div>
-					</div>
+					<a class="button" href="/pricing">See full pricing</a>
 				</section>
 				<section class="landing-final-cta">
 					<h2>Ready to run through it before it goes live?</h2>
@@ -114,10 +102,42 @@ templ Landing() {
 					<p class="landing-reassurance">Your schedule stays live in Planning Center the whole time, so there's nothing to migrate back if you stop.</p>
 				</section>
 			</main>
-			<footer class="landing-footer">
-				<span>Resonance · built on Planning Center Services</span>
-				<a href="/login">Sign in</a>
-			</footer>
+			@marketingFooter()
 		</body>
 	</html>
+}
+
+// marketingHeader is the shared top bar for all three public marketing
+// pages (Landing, Pricing, HowItWorks) - brand, cross-page nav, theme
+// toggle, sign-in. Unexported since it's only ever called from within this
+// package's own marketing pages, same "single-package shell stays
+// unexported" pattern the Build page's own card shells follow (see
+// CLAUDE.md's Architecture section).
+templ marketingHeader() {
+	<header class="landing-header">
+		<a href="/" class="landing-brand">Resonance</a>
+		<nav class="landing-nav">
+			<a href="/how-it-works">How it works</a>
+			<a href="/pricing">Pricing</a>
+		</nav>
+		<div class="landing-header-actions">
+			<button type="button" class="theme-toggle" onclick="toggleTheme()" aria-label="Switch between light and dark theme" title="Switch between light and dark theme">
+				@components.IconSun()
+				@components.IconMoon()
+			</button>
+			<a href="/login">Sign in</a>
+		</div>
+	</header>
+}
+
+// marketingFooter mirrors marketingHeader - see its doc comment.
+templ marketingFooter() {
+	<footer class="landing-footer">
+		<span>Resonance · built on Planning Center Services</span>
+		<nav class="landing-footer-nav">
+			<a href="/how-it-works">How it works</a>
+			<a href="/pricing">Pricing</a>
+			<a href="/login">Sign in</a>
+		</nav>
+	</footer>
 }

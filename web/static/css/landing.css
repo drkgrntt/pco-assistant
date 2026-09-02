@@ -18,12 +18,38 @@
 .landing-brand {
   font-size: var(--text-xl);
   color: var(--accent);
+  text-decoration: none;
 }
 
 .landing-header-actions {
   display: flex;
   align-items: center;
   gap: var(--space-3);
+}
+
+/* Cross-page nav (marketingHeader/marketingFooter, landing.templ) - shared
+   by Landing, Pricing, and HowItWorks so all three feel like one site
+   rather than three one-offs. */
+.landing-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  font-size: var(--text-sm);
+}
+
+.landing-nav a {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.landing-nav a:hover {
+  color: var(--text);
+}
+
+@media (max-width: 560px) {
+  .landing-nav {
+    display: none;
+  }
 }
 
 /* === Hero & final CTA - the two "convert now" moments, same treatment =========== */
@@ -99,29 +125,38 @@
   margin-bottom: var(--space-6);
 }
 
+/* Flexbox rather than CSS grid on purpose: a grid's last row leaves an
+   awkward gap whenever the card count isn't a multiple of the column
+   count (5 cards, 3 columns -> a lonely stretched pair on row two). Flex-
+   wrap plus justify-content: center groups each wrapped line independently,
+   so an incomplete last row centers itself at the same card width as
+   every full row above it, for any card count - no per-page tuning
+   needed when a page's card count changes. */
 .landing-feature-grid {
-  display: grid;
-  grid-template-columns: 1fr;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: var(--space-4);
 }
 
-@media (min-width: 640px) {
-  .landing-feature-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (min-width: 900px) {
-  .landing-feature-grid {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
 .landing-feature-card {
+  flex: 0 1 100%;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: var(--space-5);
+}
+
+@media (min-width: 640px) {
+  .landing-feature-card {
+    flex-basis: calc((100% - var(--space-4)) / 2);
+  }
+}
+
+@media (min-width: 900px) {
+  .landing-feature-card {
+    flex-basis: calc((100% - 2 * var(--space-4)) / 3);
+  }
 }
 
 .landing-feature-card h3 {
@@ -136,6 +171,23 @@
   margin-bottom: 0;
 }
 
+.landing-feature-card p + p {
+  margin-top: var(--space-3);
+}
+
+/* The Pricing tier accent (landing-feature-card-accent) and the "See how
+   it works"/"See full pricing" plain-text links each section below the
+   homepage's condensed teasers ends on. */
+.landing-feature-card-accent {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+
+.landing-more-link {
+  text-align: center;
+  margin-top: var(--space-6);
+  font-size: var(--text-sm);
+}
+
 /* === Pricing ====================================================================== */
 
 .landing-pricing {
@@ -147,6 +199,34 @@
   max-width: 40rem;
   margin-inline: auto;
   text-align: left;
+}
+
+/* Pricing page's own two tier cards (pricing.templ) - a bit more room and
+   a real price display than the homepage's plain teaser cards get. There
+   are always exactly two, never three, so - unlike every other card grid
+   on these pages - they should stay a fixed even split rather than
+   sizing themselves for a row of three that never comes. */
+.landing-pricing-tiers {
+  margin-bottom: var(--space-6);
+}
+
+@media (min-width: 640px) {
+  .landing-pricing-tiers .landing-feature-card {
+    flex-basis: calc((100% - var(--space-4)) / 2);
+  }
+}
+
+.landing-price {
+  font-size: var(--text-2xl);
+  font-weight: var(--font-semibold);
+  color: var(--text);
+  margin: var(--space-1) 0 var(--space-3);
+}
+
+.landing-price span {
+  font-size: var(--text-md);
+  font-weight: var(--font-normal);
+  color: var(--muted);
 }
 
 /* === "Rehearsal studio" comparison ============================================== */
@@ -191,12 +271,20 @@
 
 .landing-footer {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
+  gap: var(--space-3);
   max-width: 60rem;
   margin: 0 auto;
   padding: var(--space-6) var(--space-4);
   border-top: 1px solid var(--border);
   color: var(--muted);
   font-size: var(--text-sm);
+}
+
+.landing-footer-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
 }
