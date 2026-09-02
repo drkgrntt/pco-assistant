@@ -23,10 +23,11 @@ package components
 // shape set_builder.templ's own .song-meta uses for a set song's own row.
 // class carries the optional "candidate-row" modifier (suggestion/
 // assignment rows leave it ""); attrs carries whatever data-*/onclick
-// attributes that particular row needs (assignment rows' data-row-id+
-// onclick for selectPersonRow()) - nil where a row needs none. Candidate
-// rows themselves no longer carry any (search/role-filtering happens
-// server-side now - see CandidateSearchResults, set_builder.templ).
+// attributes that particular row needs (assignment and candidate rows'
+// own data-row-id+onclick for selectPersonRow() - roster_builder.templ) -
+// nil where a row needs none (suggestion rows, and song candidate rows,
+// whose search/role-filtering happens server-side - see
+// CandidateSearchResults, set_builder.templ).
 templ ListItem(class string, attrs templ.Attributes, title string) {
 	<li class={ class } { attrs... }>
 		<span>{ title }</span>

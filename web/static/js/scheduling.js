@@ -211,10 +211,14 @@ function closeSongDetail() {
 }
 
 // The people equivalent of selectSongRow/closeSongDetail above - clicking
-// an assigned person's row in a position's assignment list
-// (roster_builder.templ) opens their detail card (person_detail_card.templ)
-// in the sidebar. Ignores clicks on the row's own Remove button, same
-// reasoning as selectSongRow ignoring its actions cell.
+// a row in a position's assignment list OR candidate list
+// (roster_builder.templ) opens that person's detail card
+// (person_detail_card.templ: personDetailCard for an assigned row,
+// candidateDetailCard for a candidate row - both share the same
+// buildDetailCardShell, so this doesn't need to know which kind of row it
+// was clicked from) in the sidebar. Ignores clicks on the row's own
+// Remove/Add button, same reasoning as selectSongRow ignoring its actions
+// cell.
 function selectPersonRow(row, event) {
   if (event.target.closest("button")) {
     return;
@@ -235,7 +239,7 @@ function selectPersonRow(row, event) {
 }
 
 function closePersonDetail() {
-  document.querySelectorAll(".assignment-list li.selected").forEach(function (row) {
+  document.querySelectorAll(".assignment-list li.selected, .candidate-list li.selected").forEach(function (row) {
     row.classList.remove("selected");
   });
   document.querySelectorAll("#build-detail-team .build-detail-card").forEach(function (card) {
@@ -253,7 +257,11 @@ document.addEventListener("click", function (event) {
   if (!event.target.closest("tr.song-row") && !event.target.closest(".build-detail-card")) {
     closeSongDetail();
   }
-  if (!event.target.closest(".assignment-list li") && !event.target.closest(".build-detail-card")) {
+  if (
+    !event.target.closest(".assignment-list li") &&
+    !event.target.closest(".candidate-list li") &&
+    !event.target.closest(".build-detail-card")
+  ) {
     closePersonDetail();
   }
 });

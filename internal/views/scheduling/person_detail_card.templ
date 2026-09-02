@@ -6,18 +6,21 @@ import (
 	"pco-assistant/internal/views/components"
 )
 
-// PersonDetailCards is every assigned person's own detail card, stacked in
-// the Build page's sidebar (see build.templ) right below the Team publish
-// card - the people equivalent of SongDetailCards, which this mirrors in
-// full (including the OOB/non-OOB split and the "one card visible at a
-// time" idiom - see personDetailCard below and selectPersonRow,
-// scheduling.js).
+// PersonDetailCards is every assigned person's own detail card, plus every
+// still-open position's own cluster of candidate detail cards
+// (candidateDetailGroup below), stacked in the Build page's sidebar (see
+// build.templ) right below the Team publish card - the people equivalent
+// of SongDetailCards, which this mirrors in full (including the OOB/
+// non-OOB split and the "one card visible at a time" idiom - see
+// personDetailCard/candidateDetailCard below and selectPersonRow,
+// scheduling.js, which both row types share).
 templ PersonDetailCards(data RosterBuilderData, hidden bool) {
 	@buildDetailGroupShell("build-detail-team", hidden) {
 		for _, pos := range data.Positions {
 			for _, a := range pos.Assigned {
 				@personDetailCard(data, a)
 			}
+			@candidateDetailGroup(data.ServiceTypeID, data.PlanID, pos)
 		}
 	}
 }
@@ -28,6 +31,7 @@ templ personDetailCardsOOB(data RosterBuilderData) {
 			for _, a := range pos.Assigned {
 				@personDetailCard(data, a)
 			}
+			@candidateDetailGroup(data.ServiceTypeID, data.PlanID, pos)
 		}
 	}
 }
@@ -40,6 +44,7 @@ templ personDetailCardsLazyOOB(data RosterBuilderData) {
 			for _, a := range pos.Assigned {
 				@personDetailCard(data, a)
 			}
+			@candidateDetailGroup(data.ServiceTypeID, data.PlanID, pos)
 		}
 	}
 }
@@ -113,6 +118,68 @@ templ personDetailCard(data RosterBuilderData, a AssignmentView) {
 			</div>
 		}
 	}
+}
+
+// candidateDetailCard is one not-yet-assigned candidate's own detail card -
+// hidden until selectPersonRow (scheduling.js, shared with the assigned-
+// row side above) reveals it, in response to clicking that candidate's own
+// row in a position's candidate list (positionGroupCard, roster_builder.
+// templ). The row itself only shows name/schedule preference/Add - this
+// card holds the on-demand conflict check ("Check for conflicts" and the
+// warning badges it fills in), the candidate equivalent of personDetailCard's
+// own card-only "Refresh availability data" above: neither is safe to
+// compute for every row on the page without an explicit click (see
+// candidateWarningsElementID's own doc comment, and pco-api-risks.md's
+// cold-start addendum), so both stay behind an explicit open + click
+// instead of running passively.
+templ candidateDetailCard(serviceTypeID, planID string, pos PositionGroupView, cand CandidatePersonView) {
+	@buildDetailCardShell(candidateCardElementID(pos.TeamID, pos.TeamPositionName, cand.PersonID), cand.Name, "closePersonDetail()") {
+		<p class="muted">{ pos.TeamPositionName } &middot; { cand.SchedulePreference }</p>
+		<span id={ candidateWarningsElementID(pos.TeamID, pos.TeamPositionName, cand.PersonID) } class="candidate-warnings"></span>
+		<div class="build-detail-actions">
+			<button
+				type="button"
+				aria-label="Check for scheduling conflicts"
+				title="See whether adding this person would conflict with their serving-frequency preference, a blockout date they've marked in Planning Center, or another commitment they already have this same week"
+				hx-get={ candidateWarningsURL(serviceTypeID, planID, pos.TeamID, pos.TeamPositionName, cand.PersonID, cand.SchedulePreference) }
+				hx-target={ "#" + candidateWarningsElementID(pos.TeamID, pos.TeamPositionName, cand.PersonID) }
+				hx-swap="innerHTML"
+			>
+				Check for conflicts
+			</button>
+		</div>
+	}
+}
+
+// candidateDetailGroup is one position group's own cluster of candidate
+// detail cards (candidateDetailCard above), addressable as a whole via
+// candidateGroupElementID - see that id's own doc comment for why a
+// position-scoped mutation refreshes this instead of the whole sidebar's
+// worth of candidate cards. Rendered even when Candidates is empty (the
+// wrapper div still needs to exist in the initial page render for that
+// same OOB target to find later).
+templ candidateDetailGroup(serviceTypeID, planID string, pos PositionGroupView) {
+	<div id={ candidateGroupElementID(pos.TeamID, pos.TeamPositionName) }>
+		for _, cand := range pos.Candidates {
+			@candidateDetailCard(serviceTypeID, planID, pos, cand)
+		}
+	</div>
+}
+
+// candidateDetailGroupOOB is candidateDetailGroup's out-of-band sibling -
+// see RosterAssignmentAddedResponse/RosterAssignmentRemovedResponse/
+// RosterPositionGroupMutationResponse (roster_builder.templ), each of
+// which already has this one position's freshly-recomputed Candidates in
+// hand (the same group value their own primary positionGroupCard swap
+// renders from) and passes it straight through here to keep this
+// position's candidate cards in sync with its candidate-list rows, without
+// touching any other position's own cards.
+templ candidateDetailGroupOOB(serviceTypeID, planID string, pos PositionGroupView) {
+	<div id={ candidateGroupElementID(pos.TeamID, pos.TeamPositionName) } hx-swap-oob="true">
+		for _, cand := range pos.Candidates {
+			@candidateDetailCard(serviceTypeID, planID, pos, cand)
+		}
+	</div>
 }
 
 // personBadgesElementID is the stable HTML id for one assignment's own
