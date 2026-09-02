@@ -73,18 +73,37 @@ func (hc *HomeController) buildHomeData(ctx context.Context, organizationID stri
 			sts = sts[:homeServiceTypesCap]
 		}
 
-		for _, st := range sts {
+		// Each service type's own GetPlans + planStatus/rosterStatus is
+		// independent of every other's, and both status checks fall back to
+		// a live GetItems/GetTeamMembers call whenever there's no local
+		// draft yet (see planStatus/rosterStatus's own doc comments) - so a
+		// church with homeServiceTypesCap-many service types could pay up
+		// to 3 sequential PCO round trips each, one after another, on
+		// every single home page load. Fanned out the same way
+		// build.go's buildPlanRows already does for the Build page's own
+		// plan picker (see pco-api-risks.md's concurrency mitigation) -
+		// rows is pre-sized and index-owned per goroutine, with a nil entry
+		// meaning "no upcoming plan/error, leave it out", filtered below to
+		// preserve service-type order regardless of completion order.
+		rows := make([]*views.HomePlanRow, len(sts))
+		indexes := make([]int, len(sts))
+		for i := range sts {
+			indexes[i] = i
+		}
+
+		scheduling.RunConcurrently(indexes, func(i int) {
+			st := sts[i]
 			plans, err := pco.GetPlans(ctx, st.ID, &pco.PlansParams{
 				Filter:  "future",
 				OrderBy: "sort_date",
 				PerPage: 1,
 			})
 			if err != nil || len(plans.Data) == 0 {
-				continue
+				return
 			}
 
 			plan := plans.Data[0]
-			data.UpcomingPlans = append(data.UpcomingPlans, views.HomePlanRow{
+			rows[i] = &views.HomePlanRow{
 				ServiceTypeID:   st.ID,
 				PlanID:          plan.ID,
 				ServiceTypeName: st.Attributes.Name,
@@ -92,7 +111,13 @@ func (hc *HomeController) buildHomeData(ctx context.Context, organizationID stri
 				Dates:           plan.Attributes.Dates,
 				SetStatus:       hc.schedulingController.planStatus(ctx, organizationID, st.ID, plan.ID),
 				RosterStatus:    hc.schedulingController.rosterStatus(ctx, organizationID, st.ID, plan.ID),
-			})
+			}
+		})
+
+		for _, row := range rows {
+			if row != nil {
+				data.UpcomingPlans = append(data.UpcomingPlans, *row)
+			}
 		}
 	}
 
