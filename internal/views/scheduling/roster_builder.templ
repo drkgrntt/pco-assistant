@@ -41,7 +41,7 @@ func candidateWarningsElementID(teamID, teamPositionName, personID string) strin
 }
 
 // candidateWarningsURL builds the CandidateWarnings (rosters_candidate_
-// warnings.go) endpoint URL for one candidate row's "Check availability"
+// warnings.go) endpoint URL for one candidate row's "Check for conflicts"
 // button - team_id/team_position_name/schedule_preference travel as query
 // params (url.Values, not fmt.Sprintf, since team_position_name/
 // schedule_preference can contain spaces and other characters that aren't
@@ -404,13 +404,13 @@ templ positionGroupCard(serviceTypeID, planID string, schedulePreferenceOptions 
 							<span id={ candidateWarningsElementID(pos.TeamID, pos.TeamPositionName, cand.PersonID) } class="candidate-warnings"></span>
 							<button
 								type="button"
-								aria-label="Check availability"
-								title="Check this candidate's frequency/blockout/cross-team warnings"
+								aria-label="Check for scheduling conflicts"
+								title="See whether adding this person would conflict with their serving-frequency preference, a blockout date they've marked in Planning Center, or another commitment they already have this same week"
 								hx-get={ candidateWarningsURL(serviceTypeID, planID, pos.TeamID, pos.TeamPositionName, cand.PersonID, cand.SchedulePreference) }
 								hx-target={ "#" + candidateWarningsElementID(pos.TeamID, pos.TeamPositionName, cand.PersonID) }
 								hx-swap="innerHTML"
 							>
-								Check availability
+								Check for conflicts
 							</button>
 							<form hx-post={ fmt.Sprintf("/scheduling/rosters/%s/%s/assignments", serviceTypeID, planID) } hx-target={ "#" + PositionGroupElementID(pos.TeamID, pos.TeamPositionName) } hx-swap="outerHTML">
 								<input type="hidden" name="person_id" value={ cand.PersonID }/>
@@ -575,7 +575,7 @@ templ RosterTopMutationResponse(top RosterBuilderData) {
 // (rosters_candidate_warnings.go) - just the one candidate's own
 // frequency/blockout/cross-team badges, swapped into that candidate row's
 // own placeholder span (candidateWarningsElementID) via hx-swap="innerHTML"
-// when a director clicks "Check availability". Mirrors the exact badge
+// when a director clicks "Check for conflicts". Mirrors the exact badge
 // pattern the assigned/candidate rows above already render - no wrapper
 // element, since it swaps straight into a span the row already provides.
 templ CandidateWarningsFragment(view CandidatePersonView) {

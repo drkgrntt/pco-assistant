@@ -105,11 +105,17 @@ templ SongNoteFormFragment(data SetBuilderData, song SetSongView, note SongNoteV
 }
 
 // SongArrangementInfoRefreshFragment is RefreshSetSongArrangementInfo's
-// (song_arrangement_cache.go) htmx response - a single song's own "Refresh
-// song info" button forcing a live re-fetch of its cached arrangement info,
-// overwriting whatever's currently cached (unlike SyncSongInfo's bulk
-// backfill, which only fills gaps - see fetchAndCacheArrangementInfo's own
-// doc comment for why this one action always re-fetches instead). Mirrors
+// (song_arrangement_cache.go) htmx response - a single song's own "Update
+// from Planning Center" button forcing a live re-fetch of its cached
+// arrangement info, overwriting whatever's currently cached (unlike
+// SyncSongInfo's bulk backfill, which only fills gaps - see
+// fetchAndCacheArrangementInfo's own doc comment for why this one action
+// always re-fetches instead). Deliberately not called "Refresh song info"
+// (a phrase this page's own Publish panel already uses for the opposite-
+// direction action, pushing local key/length/arrangement values out to
+// Planning Center - see publish_panel.templ's "Re-sync key, length &
+// arrangement" button) - two same-named buttons moving data in opposite
+// directions is exactly the kind of thing worth a distinct name for. Mirrors
 // KeyFormFragment's own multi-piece update: the card's own arrangement-info
 // paragraph is the primary (non-OOB) swap target, since that's what the
 // button itself points hx-target at, plus the same three OOB pieces
@@ -235,12 +241,12 @@ templ songDetailCard(data SetBuilderData, song SetSongView) {
 				}
 				<button
 					type="button"
-					title="Re-fetch this song's key/tempo/meter/length from Planning Center, overwriting the cached copy"
+					title="Pull this song's key, tempo, meter, and length from Planning Center right now, overwriting whatever's cached here - use this if one of those was just changed directly in Planning Center. This is the opposite direction from Re-sync key, length &amp; arrangement on the Publish panel, which pushes this app's own values out to Planning Center."
 					hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/refresh-arrangement-info", data.ServiceTypeID, data.PlanID, song.ID) }
 					hx-target={ fmt.Sprintf("#song-arrangement-info-%d", song.ID) }
 					hx-swap="outerHTML"
 				>
-					Refresh song info
+					Update from Planning Center
 				</button>
 				<button type="button" data-row-id={ fmt.Sprintf("%d", song.ID) } onclick="openQuickAction(this, 'tag')">
 					@components.IconTag()

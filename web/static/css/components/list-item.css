@@ -38,10 +38,23 @@
 
 .plan-list li:hover,
 .suggestion-list li:hover,
-.candidate-row:hover,
 .assignment-list li:hover {
   background: var(--surface-hover);
 }
+
+/* .candidate-row is deliberately left out of the hover-highlight rule
+   above (and never gets builder-rows.css's .assignment-list li
+   cursor:pointer either) - a candidate row's name isn't clickable the way
+   an assigned row's is (see roster_builder.templ/selectPersonRow,
+   scheduling.js: only assigned rows open a sidebar detail card on click,
+   since only they have a real roster_assignment - notes, a remove
+   action - for a card to show). Giving it the same "this whole row
+   responds to a click" highlight as assignment-list rows right next to it
+   in the same position card looked identical but behaved differently,
+   which is exactly the confusion this split avoids - a candidate's only
+   real actions (Check for conflicts, the add button) already look
+   clickable on their own as buttons, without the row itself pretending to
+   be. */
 
 /* The title (the li's first child, always a <span> - see ListItem's own
    doc comment) grows to fill whatever width its trailing siblings (badges,
