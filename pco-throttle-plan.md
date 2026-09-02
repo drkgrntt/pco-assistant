@@ -1,5 +1,16 @@
 # Plan: a priority-aware, opt-in request throttle for go-pco
 
+**Status: shipped 2026-09-02.** Implemented in `go-pco` `v0.18.0`
+(`ConfigureThrottle`/`WithPriority`, per-token priority queue + token
+bucket) and adopted in this repo (`go.mod` bumped, both background syncs
+tagged at priority 20) - see `pco-api-risks.md`'s "priority-aware request
+throttle" addendum for what actually shipped vs. this design, including
+one deliberate deviation (default rate landed at 60/20s, not this doc's
+originally-proposed 80/20s) and what's still deliberately left off
+(the throttle itself stays disabled, `PCO_THROTTLE_ENABLED` unset, until
+there's a real reason to turn it on). This doc is kept as-is below as the
+original design record, not edited to match the final shipped shape.
+
 Written 2026-09-02, prompted by a conversation during the roster
 cold-start rate-limit fix (see `plan.md`, now shipped as two branches) -
 that work surfaced a coordination gap this doc exists to close: Song
