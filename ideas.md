@@ -412,6 +412,66 @@ pattern as `song_tags`/`song_relationships`:**
   the past-plans archive build (user chose the smaller browsable-list scope
   first); worth reconsidering once the archive's been used for a while and
   there's a concrete sense of what's actually worth aggregating.
+- **Multi-week matrix view (people x dates, cross-plan)** - prompted by a
+  worship pastor's own feedback: PCO's matrix (Services > a team >
+  Schedule > Matrix - a grid of people down one axis, upcoming plan dates
+  across the other, cells showing scheduled/declined/needs-response per
+  position) is apparently where he basically lives day to day. Nothing
+  here today gives that season's-eye view - the Team Builder
+  (`internal/views/scheduling/roster_builder.templ`) is deliberately
+  scoped to one plan at a time, so getting the multi-week picture means
+  tabbing back to PCO, exactly the second-tab friction "Reducing friction
+  vs. Planning Center" above is about. Two very different builds hide
+  under one name, though:
+  - **A bare clone** (who's scheduled where, across N weeks) would just
+    re-render data PCO already shows better, natively, live-updating - it
+    doesn't protect the team or the service, it's pure navigation
+    convenience, and re-implementing PCO's own UI is a weaker bet than the
+    deep-linking/narrow-layout ideas already above aimed at that same
+    friction.
+  - **An annotated matrix** - the same grid, but with this app's own
+    signals layered onto each cell/row instead of PCO's plain
+    scheduled/declined status - is a real, unduped win. A season laid out
+    at a glance would surface a frequency-preference violation
+    (`frequencyWarning`), a blockout conflict (`blockoutWarning`), a
+    same-week cross-team commitment (`crossTeamWarning`), an avoid-pairing
+    conflict, and (once built) a thin-bench position - all of which today
+    only surface one plan at a time, inside the roster builder, for
+    whichever plan happens to be open. That's both promises at once:
+    burnout/friction patterns invisible one week at a time jump out across
+    a grid, and staffing gaps get caught with lead time to fix them
+    instead of the week of. This is the wedge PCO's own matrix
+    structurally can't have - it has no idea any of this app's
+    relationship/preference data exists.
+
+  Cost is the real gate, and it's a bigger fan-out than anything shipped
+  so far - `pco-api-risks.md` already flags the single-plan roster builder
+  as ~100-200 sequential PCO calls before mitigation; a matrix is N plans
+  x M people of exactly that same shape (blockouts, frequency history,
+  cross-team checks), not one plan's worth. Bounded scope needs to be
+  there from the start, not retrofitted under load the way the roster
+  builder was: default to a small fixed window (next 6-8 weeks, roughly a
+  planning horizon) rather than a whole season, build on
+  `scheduling.RunConcurrently`/`PCOFanOutLimit` from day one, and cache
+  per-person blockout/history data across the whole grid render - a person
+  appearing in 6 weeks' worth of cells today means 6x the calls it
+  actually needs. Likely the single most expensive read-only page this app
+  would build - worth prototyping against a real multi-team dev org before
+  committing to the full cross-plan version, not just estimating from the
+  single-plan numbers above.
+
+  Distinct from two existing ideas worth not conflating: the **vocal
+  range/key matrix** (Songs, above) is a person x song grid about vocal
+  fit - unrelated axis, same word by coincidence. The **browser extension
+  HUD** (Reducing friction, above) is the alternate way to deliver this
+  same idea - injecting these same annotations directly onto PCO's own
+  live matrix UI instead of building a native page here - worth weighing
+  against a native page once this is actually prioritized: the HUD keeps
+  the director inside PCO's own real-time grid (arguably a stronger
+  version of "protect the team/service without leaving the workflow they
+  already live in") but was already flagged as the highest-effort,
+  highest-ceiling item on that list, gated on adoption data from the
+  lighter integrations first.
 
 ## Run sheet (day-of output)
 
