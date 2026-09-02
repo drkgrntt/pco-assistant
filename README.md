@@ -34,6 +34,15 @@ non-blocking upsell nudge on `/billing`. Multi-Campus bills overage for
 real: a daily cron (`jobs.BillingJobs`) pushes each org's actual seat
 count into Stripe as that subscription's line-item quantity.
 
+Signing in also requires the PCO account to have some access to the
+Services product in Planning Center - a login with zero Services access
+is blocked at sign-in with a message asking them to have their church's
+Planning Center admin grant it. This check is coarse: PCO's API exposes
+no clean permission-level field, so it can only tell "has some access" from
+"has none" (a live probe call that succeeds vs. 401/403s) - it can't tell
+PCO's own Viewer/Scheduler/Editor/Administrator levels apart, so anyone
+with at least Viewer access can still sign in.
+
 ## Features
 
 **Songs**
