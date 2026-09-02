@@ -372,6 +372,7 @@ func (sc *SchedulingController) RegisterRoutes(router fiber.Router) {
 
 	group.Post("/rosters/:service_type_id/:plan_id/assignments", sc.AddRosterAssignment)
 	group.Delete("/rosters/:service_type_id/:plan_id/assignments/:assignment_id", sc.RemoveRosterAssignment)
+	group.Post("/rosters/:service_type_id/:plan_id/assignments/:assignment_id/refresh-data", sc.RefreshPersonData)
 	group.Post("/rosters/:service_type_id/:plan_id/publish", sc.PublishRoster)
 	group.Post("/rosters/:service_type_id/:plan_id/revert", sc.RevertRoster)
 
@@ -382,6 +383,7 @@ func (sc *SchedulingController) RegisterRoutes(router fiber.Router) {
 	group.Post("/sets/:service_type_id/:plan_id/set-songs/:set_song_id/duplicate", sc.DuplicateSetSong)
 	group.Post("/sets/:service_type_id/:plan_id/set-songs/:set_song_id/description", sc.UpdateSetSongDescription)
 	group.Post("/sets/:service_type_id/:plan_id/set-songs/:set_song_id/key", sc.UpdateSetSongKey)
+	group.Post("/sets/:service_type_id/:plan_id/set-songs/:set_song_id/refresh-arrangement-info", sc.RefreshSetSongArrangementInfo)
 	group.Post("/sets/:service_type_id/:plan_id/items/:item_id/notes", sc.UpdateSongNote)
 	group.Post("/sets/:service_type_id/:plan_id/publish", sc.PublishSet)
 	group.Post("/sets/:service_type_id/:plan_id/refresh-info", sc.RefreshSongInfo)

@@ -484,6 +484,42 @@ templ RosterPositionGroupMutationResponse(serviceTypeID, planID string, group Po
 	@rosterGlanceOOB(top)
 }
 
+// personBadgesOOB is RefreshPersonData's (rosters_person_data_refresh.go)
+// own OOB piece of its htmx response - re-renders just the refreshed
+// assignment's badge set in place on its sidebar detail card
+// (personDetailCard, person_detail_card.templ), matching by
+// personBadgesElementID rather than replacing the whole card (see that
+// id's own doc comment for why: the card shell always renders `hidden` by
+// default, so an OOB replace of the whole card would silently re-hide
+// whatever card the person clicking Refresh is actively looking at).
+// refreshed's FrequencyWarning/BlockoutWarning/CrossTeamWarning reflect
+// whatever buildRosterPositionGroupData just recomputed against the
+// freshly-synced cache - see RefreshPersonData for how it's built.
+templ personBadgesOOB(refreshed AssignmentView) {
+	<div class="build-detail-badges" id={ personBadgesElementID(refreshed.ID) } hx-swap-oob="true">
+		@personBadgeSpans(refreshed)
+	</div>
+}
+
+// RosterPersonDataRefreshResponse is RefreshPersonData's htmx response
+// (rosters_person_data_refresh.go) - a director clicking "Refresh
+// availability data" on one person's own sidebar detail card. Same primary
+// swap target as RosterPositionGroupMutationResponse (the touched position
+// group's own card, whose assigned-row badges already show the same
+// Frequency/Blockout/CrossTeam warnings - see positionGroupCard), plus an
+// OOB update to that same person's own sidebar card badges (personBadgesOOB
+// above), since that card lives outside #build-detail-team's own
+// mutation-response scope and wouldn't otherwise reflect the refresh
+// immediately. No rosterPublishPanelOOB/rosterGlanceOOB here, unlike the
+// group-only mutation above - this action never adds, removes, or
+// publishes anything, only refreshes cached warning inputs, so neither
+// fragment's own content could have changed.
+templ RosterPersonDataRefreshResponse(serviceTypeID, planID string, group PositionGroupView, top RosterBuilderData, refreshed AssignmentView) {
+	@positionGroupCard(serviceTypeID, planID, top.SchedulePreferenceOptions, group, top.ReadOnly)
+	@rosterTopOOB(top)
+	@personBadgesOOB(refreshed)
+}
+
 // RosterTopMutationResponse is QuickAddPersonRelationship's htmx response -
 // creating a relationship never touches any specific position's
 // assignments or candidates, only the shared roster-top banners (existing-

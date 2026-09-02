@@ -221,6 +221,68 @@ func (sc *SchedulingController) SyncSongInfo(c *fiber.Ctx) error {
 	return render(c, views.SongInfoBody(data))
 }
 
+// RefreshSetSongArrangementInfo force-refreshes one song's cached
+// arrangement info (key/BPM/meter/length) from Planning Center right now,
+// synchronously, overwriting whatever's currently cached for it - the
+// single-song counterpart to SyncSongInfo's whole-library backfill above.
+// Unlike that batch sync (which only fills gaps - see runSongInfoSync's own
+// "already cached" skip), this always re-fetches: it's for the case where a
+// song's arrangement was actually edited in Planning Center after this app
+// cached it (key changed, tempo retuned, ...) and the cached copy is now
+// stale, with no way to tell that apart from "never synced" short of asking
+// Planning Center again. fetchAndCacheArrangementInfo itself has no
+// "skip if already cached" guard (confirmed by reading it - it's a plain
+// unconditional fetch-and-upsert), so no separate force variant is needed
+// here, unlike a hypothetical "skip-if-cached" helper would require.
+//
+// A single live PCO call here is fine - this is a small, deliberate,
+// user-triggered action bounded to one song (the Build page's song detail
+// card - see songDetailCard, song_detail_card.templ), not a hot render
+// path, same reasoning as SyncSongInfo above and the roster builder's
+// on-demand candidate-availability check (pco-api-risks.md's manual-
+// refresh addendum).
+func (sc *SchedulingController) RefreshSetSongArrangementInfo(c *fiber.Ctx) error {
+	ctx := middleware.RequestContext(c)
+	orgID := middleware.CurrentOrganizationID(c)
+	serviceTypeID := c.Params("service_type_id")
+	planID := c.Params("plan_id")
+
+	rowID, err := c.ParamsInt("set_song_id")
+	if err != nil {
+		return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(ctx, orgID, serviceTypeID, planID, "set_song_id must be an integer")))
+	}
+
+	errMsg := ""
+	set, err := sc.store.GetOrCreateSet(ctx, orgID, serviceTypeID, planID)
+	if err != nil {
+		errMsg = err.Error()
+	} else if setSongs, err := sc.store.ListSetSongs(ctx, set.ID); err != nil {
+		errMsg = err.Error()
+	} else {
+		found := false
+		for _, ss := range setSongs {
+			if ss.ID == int64(rowID) {
+				found = true
+				if _, err := fetchAndCacheArrangementInfo(ctx, sc.store, orgID, ss.SongID); err != nil {
+					errMsg = "refreshing song info from Planning Center: " + err.Error()
+				}
+				break
+			}
+		}
+		if !found {
+			errMsg = appendErr(errMsg, "song is no longer in this set")
+		}
+	}
+
+	data := sc.buildSetBuilderData(ctx, orgID, serviceTypeID, planID)
+	song, ok := findSongViewByRowID(data, int64(rowID))
+	if !ok {
+		data.ErrMsg = appendErr(errMsg, data.ErrMsg)
+		return render(c, views.SetBuilderBody(data))
+	}
+	return render(c, views.SongArrangementInfoRefreshFragment(data, song, errMsg))
+}
+
 // runPacedBatches runs fn once for every item across batches, one batch at
 // a time: each batch's items run concurrently via scheduling.RunConcurrently
 // (bounded to scheduling.PCOFanOutLimit at once), with a pause of

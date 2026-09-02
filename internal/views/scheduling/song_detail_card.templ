@@ -104,6 +104,36 @@ templ SongNoteFormFragment(data SetBuilderData, song SetSongView, note SongNoteV
 	@songNoteForm(data, song, note, errMsg)
 }
 
+// SongArrangementInfoRefreshFragment is RefreshSetSongArrangementInfo's
+// (song_arrangement_cache.go) htmx response - a single song's own "Refresh
+// song info" button forcing a live re-fetch of its cached arrangement info,
+// overwriting whatever's currently cached (unlike SyncSongInfo's bulk
+// backfill, which only fills gaps - see fetchAndCacheArrangementInfo's own
+// doc comment for why this one action always re-fetches instead). Mirrors
+// KeyFormFragment's own multi-piece update: the card's own arrangement-info
+// paragraph is the primary (non-OOB) swap target, since that's what the
+// button itself points hx-target at, plus the same three OOB pieces
+// KeyFormFragment already pushes whenever a song's effective key can
+// change - the order-of-service row's #song-meta-<id> summary (which shows
+// the *effective* key, arrangement default or override - see
+// renderServiceOrder), this song's own Tags-column badges, and the
+// warnings banner (a refreshed key can flip keyTransitionWarnings' verdict
+// against this song's neighbors, same as an edited key override would).
+templ SongArrangementInfoRefreshFragment(data SetBuilderData, song SetSongView, errMsg string) {
+	<p class="muted" id={ fmt.Sprintf("song-arrangement-info-%d", song.ID) }>
+		if errMsg != "" {
+			<span class="error">{ errMsg }</span>
+		} else if song.ArrangementInfo != "" {
+			{ song.ArrangementInfo }
+		} else {
+			No arrangement info cached yet.
+		}
+	</p>
+	<div class="muted song-meta" id={ fmt.Sprintf("song-meta-%d", song.ID) } hx-swap-oob="true">{ song.ArrangementInfo }</div>
+	@songBadgesOOB(song)
+	@songWarningsOOB(data)
+}
+
 // songDetailCard is one song's detail card - hidden until selectSongRow
 // (scheduling.js) reveals it, in response to clicking that song's own row
 // in the order of service (set_builder.templ). Its content mirrors what
@@ -124,9 +154,13 @@ templ SongNoteFormFragment(data SetBuilderData, song SetSongView, note SongNoteV
 // (scheduling.js), which already knows how to find that row by id.
 templ songDetailCard(data SetBuilderData, song SetSongView) {
 	@buildDetailCardShell(fmt.Sprintf("%d", song.ID), song.Title, "closeSongDetail()") {
-		if song.ArrangementInfo != "" {
-			<p class="muted">{ song.ArrangementInfo }</p>
-		}
+		<p class="muted" id={ fmt.Sprintf("song-arrangement-info-%d", song.ID) }>
+			if song.ArrangementInfo != "" {
+				{ song.ArrangementInfo }
+			} else {
+				No arrangement info cached yet.
+			}
+		</p>
 		<div class="build-detail-badges">
 			for _, role := range song.Roles {
 				@components.Badge("", role.Label)
@@ -199,6 +233,15 @@ templ songDetailCard(data SetBuilderData, song SetSongView) {
 						</button>
 					</form>
 				}
+				<button
+					type="button"
+					title="Re-fetch this song's key/tempo/meter/length from Planning Center, overwriting the cached copy"
+					hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/refresh-arrangement-info", data.ServiceTypeID, data.PlanID, song.ID) }
+					hx-target={ fmt.Sprintf("#song-arrangement-info-%d", song.ID) }
+					hx-swap="outerHTML"
+				>
+					Refresh song info
+				</button>
 				<button type="button" data-row-id={ fmt.Sprintf("%d", song.ID) } onclick="openQuickAction(this, 'tag')">
 					@components.IconTag()
 					Tag this song
