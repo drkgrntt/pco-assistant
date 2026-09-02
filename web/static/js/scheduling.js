@@ -642,7 +642,7 @@ function cancelSetupEdit(button) {
 // live in the DOM (itself already reconciled with localStorage by the
 // time any swap can happen).
 //
-// filterCandidates()/toggleRoleFilter() below force a section open by
+// openCandidatesSection()/toggleRoleFilter() below force a section open by
 // touching its classList/aria-expanded directly rather than calling this
 // function, specifically so that force-open never gets recorded here as
 // an explicit "open" choice - and, symmetrically, a stored "closed" state
@@ -748,55 +748,62 @@ document.addEventListener("htmx:afterSwap", function () {
   });
 });
 
-// Client-side filtering for the set builder's "find songs to add" list (see
-// set_builder.templ) - the whole candidate pool is already rendered on the
-// page (song libraries are small enough to fetch in full, unlike people),
-// so filtering by typed text and/or an active role button doesn't need a
-// round trip. Typed text matches either the song title or its tags
-// (data-tags - see CandidateSongView.TagsAttr), so searching a sermon theme
-// or scripture reference surfaces songs tagged with it even when the title
-// itself doesn't mention it.
-function filterCandidates() {
-  var search = (document.getElementById("candidate-search").value || "").toLowerCase();
-  var activeFilter = document.querySelector(".role-filter.active");
-  var role = activeFilter ? activeFilter.dataset.role : "";
+// The set builder's "find songs to add" list (see set_builder.templ) is
+// search-driven, not client-side filtered: #candidate-search's own
+// hx-get/hx-trigger (set_builder.templ) fires the actual request to
+// BuildCandidatesSearch as the user types, debounced. What's left here is
+// just the role-filter buttons' toggle behavior and the "open this section
+// the moment it's actually used" nicety - both used to live inside
+// filterCandidates, back when filtering ran entirely in the browser against
+// an already-rendered list.
 
-  // The list itself is collapsed by default (see set_builder.templ) - but
-  // actually searching or filtering it is the whole point of typing/
-  // clicking here, so open it the moment either one is used instead of
-  // making that a separate click.
-  if (search || role) {
-    var candidates = document.getElementById("find-songs-candidates");
-    if (candidates && !candidates.classList.contains("open")) {
-      candidates.classList.add("open");
-      var toggle = candidates.querySelector(".collapsible-toggle");
-      if (toggle) {
-        toggle.setAttribute("aria-expanded", "true");
-      }
+// openCandidatesSection opens the "Browse all songs" collapsible the moment
+// a search term is typed or a role filter is clicked - called from
+// #candidate-search's oninput and from toggleRoleFilter below, since either
+// one can be the first interaction. The list itself defaults open already
+// (see collapsibleSection's own param in set_builder.templ), but someone
+// who's explicitly collapsed it shouldn't have to reopen it by hand just to
+// see search results land.
+function openCandidatesSection() {
+  var candidates = document.getElementById("find-songs-candidates");
+  if (candidates && !candidates.classList.contains("open")) {
+    candidates.classList.add("open");
+    var toggle = candidates.querySelector(".collapsible-toggle");
+    if (toggle) {
+      toggle.setAttribute("aria-expanded", "true");
     }
   }
-
-  document.querySelectorAll("#set-candidates .candidate-row").forEach(function (row) {
-    var haystack = row.dataset.title.toLowerCase() + " " + (row.dataset.tags || "").toLowerCase();
-    var matchesSearch = !search || haystack.indexOf(search) !== -1;
-    var matchesRole = !role || (" " + row.dataset.roles + " ").indexOf(" " + role + " ") !== -1;
-    row.style.display = matchesSearch && matchesRole ? "" : "none";
-  });
 }
 
 // Role filter buttons behave like a toggle: clicking the active one turns
 // it back off, clicking another switches to it. Only one is active at a
 // time since a song's roles are shown, not exclusively filtered by an
-// AND/OR combination.
+// AND/OR combination. The active role has no form control of its own, so
+// it's mirrored into the hidden #candidate-role-filter input (pulled into
+// the search request via hx-include - see set_builder.templ) before
+// re-triggering that same request via a synthetic "search" event, the way
+// clicking Search normally would.
 function toggleRoleFilter(el) {
   var wasActive = el.classList.contains("active");
   document.querySelectorAll(".role-filter").forEach(function (btn) {
     btn.classList.remove("active");
   });
+  var roleInput = document.getElementById("candidate-role-filter");
   if (!wasActive) {
     el.classList.add("active");
+    if (roleInput) {
+      roleInput.value = el.dataset.role;
+    }
+  } else if (roleInput) {
+    roleInput.value = "";
   }
-  filterCandidates();
+
+  openCandidatesSection();
+
+  var searchInput = document.getElementById("candidate-search");
+  if (searchInput && window.htmx) {
+    htmx.trigger(searchInput, "search");
+  }
 }
 
 // Sortable admin tables (relationships/preferences/song roles - marked

@@ -490,3 +490,55 @@ manual Publish/Refresh/PublishRoster smoke test against a real (dev) PCO
 plan before leaning on this in production, given the higher stakes of a
 mistake here (real writes to a church's live service order) versus every
 read-only fix above.
+
+## Addendum: "Browse all songs" made search-driven; a new hot path caught and cached along the way
+
+Different risk shape again: a rendering/CPU cost, not a PCO call-count
+problem by itself - `buildSetBuilderData`'s Candidates loop
+(`sets_builder.go`) used to compute a full `views.CandidateSongView`
+(conflict titles, tags, roles, arrangement info) for *every* active,
+not-yet-added song in the library, unconditionally, on every single Build
+page render - whether or not the "Browse all songs" section was even open.
+The underlying song list itself was already the cached, filtered
+`FetchActiveSongs` call (#5 above) - this didn't add a new PCO call, but a
+few hundred songs still meant a few hundred rich rows computed and
+rendered every time, most of it thrown away unseen.
+
+Fixed by making that list search-driven: `BuildCandidatesSearch` (new
+route, `/scheduling/build/:service_type_id/:plan_id/candidates/search`)
+computes `CandidateSongView` rows only for songs actually matching a typed
+query/role filter, capped at 50, via the exact same per-song computation
+factored into `candidateLookups.candidateSongView` (shared with
+`buildSetBuilderData`'s much smaller remaining use of it - see below).
+With no search term and no role filter, nothing is fetched or computed at
+all: the list shows a plain "type to search" prompt. `buildSetBuilderData`
+itself now only builds a lightweight `[]views.SongOptionView` (id+title)
+for the whole library, for the replace-form `<select>` pickers - cheap,
+no PCO or per-song local-DB lookups beyond what's already fetched. Its
+`SongsToReinforce` pass still needs the rich per-song computation, but
+only for songs that are actually reinforcement-eligible (tracked-new,
+sung once or twice) - a small fraction of a real library - so the loop
+now checks that cheap map lookup first and skips straight past everything
+else.
+
+**The one genuinely new PCO-facing risk this introduced**: search requests
+are debounced (300ms) but still fire on every real pause while typing, and
+`searchCandidates` (backing `BuildCandidatesSearch`) needed
+`fetchRecentPlanHistory`'s repeat-song/average-length data (same as
+`buildSetBuilderData` already did) - which, until this change, was an
+uncached live `GetPlans` + 2x `GetItems` on *every* call. Turning one
+call-per-full-render into one call-per-debounced-keystroke would have
+meaningfully multiplied a previously-rare live PCO round trip. Caught
+before shipping (this is exactly the "does this touch how often the app
+calls PCO" question this file exists to keep asking) and fixed the same
+way as #5/the `GetServiceTypes` addendum above: `fetchRecentPlanHistory`
+now caches per service type (a PCO service type id is already
+org-scoped, so no separate org key is needed), 60s TTL matching
+`FetchActiveSongs`' own. A genuine PCO failure is never cached (only a
+successful fetch - including the legitimate "fewer than two past plans
+exist yet" zero-value result - gets stored), same fail-safe convention as
+every other cache in this doc. `sets_builder_history_cache_test.go`
+(`httptest`-backed, same `pco.SetBaseURLForTesting` seam as the other
+tests in this doc) proves a second call within the TTL costs zero
+additional requests, a failed call is never cached, and two different
+service types never share an entry.
