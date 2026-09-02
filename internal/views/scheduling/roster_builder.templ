@@ -3,6 +3,7 @@ package scheduling
 import (
 	"fmt"
 	"hash/fnv"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -25,6 +26,32 @@ func PositionGroupElementID(teamID, teamPositionName string) string {
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(teamID + "\x00" + teamPositionName))
 	return fmt.Sprintf("position-group-%08x", h.Sum32())
+}
+
+// candidateWarningsElementID is the stable HTML id for one candidate row's
+// on-demand warnings placeholder span (see the candidate-list rendering in
+// positionGroupCard below) - hashed like PositionGroupElementID rather than
+// built from the raw ids, since the same person can appear as a candidate
+// on more than one position group on this same page (once per position
+// they're eligible for), so personID alone wouldn't be a unique HTML id.
+func candidateWarningsElementID(teamID, teamPositionName, personID string) string {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(teamID + "\x00" + teamPositionName + "\x00" + personID))
+	return fmt.Sprintf("candidate-warnings-%08x", h.Sum32())
+}
+
+// candidateWarningsURL builds the CandidateWarnings (rosters_candidate_
+// warnings.go) endpoint URL for one candidate row's "Check availability"
+// button - team_id/team_position_name/schedule_preference travel as query
+// params (url.Values, not fmt.Sprintf, since team_position_name/
+// schedule_preference can contain spaces and other characters that aren't
+// safe to drop into a query string unescaped).
+func candidateWarningsURL(serviceTypeID, planID, teamID, teamPositionName, personID, schedulePreference string) string {
+	q := url.Values{}
+	q.Set("team_id", teamID)
+	q.Set("team_position_name", teamPositionName)
+	q.Set("schedule_preference", schedulePreference)
+	return fmt.Sprintf("/scheduling/rosters/%s/%s/candidates/%s/warnings?%s", serviceTypeID, planID, url.PathEscape(personID), q.Encode())
 }
 
 // assignedNamesSummary joins every assigned person's name for display right
@@ -362,15 +389,26 @@ templ positionGroupCard(serviceTypeID, planID string, schedulePreferenceOptions 
 					for _, cand := range pos.Candidates {
 						@components.ListItem("candidate-row", nil, cand.Name) {
 							<span class="muted">{ cand.SchedulePreference }</span>
-							if cand.FrequencyWarning != "" {
-								@components.ConflictBadge(cand.FrequencyWarning)
-							}
-							if cand.BlockoutWarning != "" {
-								@components.ConflictBadge(cand.BlockoutWarning)
-							}
-							if cand.CrossTeamWarning != "" {
-								@components.ConflictBadge(cand.CrossTeamWarning)
-							}
+							<!--
+								Candidate warnings aren't computed eagerly (see
+								buildRosterBuilderData's own comment on why -
+								pco-api-risks.md's cold-start addendum) - this
+								span starts empty and is only ever filled by an
+								explicit click below, never a passive trigger,
+								so a fully-expanded card with many candidates
+								never bursts a fetch per row on its own.
+							-->
+							<span id={ candidateWarningsElementID(pos.TeamID, pos.TeamPositionName, cand.PersonID) } class="candidate-warnings"></span>
+							<button
+								type="button"
+								aria-label="Check availability"
+								title="Check this candidate's frequency/blockout/cross-team warnings"
+								hx-get={ candidateWarningsURL(serviceTypeID, planID, pos.TeamID, pos.TeamPositionName, cand.PersonID, cand.SchedulePreference) }
+								hx-target={ "#" + candidateWarningsElementID(pos.TeamID, pos.TeamPositionName, cand.PersonID) }
+								hx-swap="innerHTML"
+							>
+								Check availability
+							</button>
 							<form hx-post={ fmt.Sprintf("/scheduling/rosters/%s/%s/assignments", serviceTypeID, planID) } hx-target={ "#" + PositionGroupElementID(pos.TeamID, pos.TeamPositionName) } hx-swap="outerHTML">
 								<input type="hidden" name="person_id" value={ cand.PersonID }/>
 								<input type="hidden" name="team_id" value={ pos.TeamID }/>
@@ -492,4 +530,23 @@ templ RosterTopMutationResponse(top RosterBuilderData) {
 	@rosterTop(top)
 	@rosterPublishPanelOOB(top)
 	@rosterGlanceOOB(top)
+}
+
+// CandidateWarningsFragment is CandidateWarnings' htmx response
+// (rosters_candidate_warnings.go) - just the one candidate's own
+// frequency/blockout/cross-team badges, swapped into that candidate row's
+// own placeholder span (candidateWarningsElementID) via hx-swap="innerHTML"
+// when a director clicks "Check availability". Mirrors the exact badge
+// pattern the assigned/candidate rows above already render - no wrapper
+// element, since it swaps straight into a span the row already provides.
+templ CandidateWarningsFragment(view CandidatePersonView) {
+	if view.FrequencyWarning != "" {
+		@components.ConflictBadge(view.FrequencyWarning)
+	}
+	if view.BlockoutWarning != "" {
+		@components.ConflictBadge(view.BlockoutWarning)
+	}
+	if view.CrossTeamWarning != "" {
+		@components.ConflictBadge(view.CrossTeamWarning)
+	}
 }

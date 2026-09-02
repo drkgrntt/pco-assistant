@@ -181,20 +181,35 @@ func (sc *SchedulingController) buildRosterPositionGroupData(ctx context.Context
 		}
 	}
 
+	// relevantPersonIDs is scoped to people actually assigned to this
+	// position, NOT every candidate in PCO's eligibility pool for it - same
+	// principle as buildRosterBuilderData's identical comment (rosters_builder.go)
+	// and pco-api-risks.md's cold-start-eligibility-pool addendum. namedIDs
+	// stays unscoped (candidates' names still render) since only the
+	// PCO-backed warning fetches below narrow.
 	relevantPersonIDs := map[string]bool{}
 	for _, ra := range g.Assignments {
 		relevantPersonIDs[ra.PersonID] = true
-	}
-	for _, pa := range candidates {
-		if pa.Relationships.Person.Data != nil {
-			relevantPersonIDs[pa.Relationships.Person.Data.ID] = true
-		}
 	}
 	relevantIDs := make([]string, 0, len(relevantPersonIDs))
 	for id := range relevantPersonIDs {
 		relevantIDs = append(relevantIDs, id)
 	}
-	names := personNameMapForIDs(ctx, relevantIDs)
+
+	namedPersonIDs := map[string]bool{}
+	for id := range relevantPersonIDs {
+		namedPersonIDs[id] = true
+	}
+	for _, pa := range candidates {
+		if pa.Relationships.Person.Data != nil {
+			namedPersonIDs[pa.Relationships.Person.Data.ID] = true
+		}
+	}
+	namedIDs := make([]string, 0, len(namedPersonIDs))
+	for id := range namedPersonIDs {
+		namedIDs = append(namedIDs, id)
+	}
+	names := personNameMapForIDs(ctx, namedIDs)
 
 	blockoutsByPerson := map[string][]pco.BlockoutData{}
 	var blockoutsMu sync.Mutex
@@ -277,6 +292,11 @@ func (sc *SchedulingController) buildRosterPositionGroupData(ctx context.Context
 		})
 	}
 
+	// Candidates deliberately don't get FrequencyWarning/BlockoutWarning/
+	// CrossTeamWarning computed here - see buildRosterBuilderData's identical
+	// comment (rosters_builder.go) and pco-api-risks.md's cold-start
+	// addendum. Fetched on demand instead via CandidateWarnings
+	// (rosters_candidate_warnings.go).
 	for _, pa := range candidates {
 		if pa.Relationships.Person.Data == nil {
 			continue
@@ -286,22 +306,7 @@ func (sc *SchedulingController) buildRosterPositionGroupData(ctx context.Context
 			continue
 		}
 
-		var freqWarn, crossWarn string
-		if !planDate.IsZero() {
-			if pa.Attributes.SchedulePreference != "" {
-				freqWarn = frequencyWarning(pa.Attributes.SchedulePreference, planDate, otherDatesCache[personID])
-			}
-			crossWarn = crossTeamWarning(crossTeamCache[personID])
-		}
-
-		pg.Candidates = append(pg.Candidates, views.CandidatePersonView{
-			PersonID:           personID,
-			Name:               titleOrID(names, personID),
-			SchedulePreference: pa.Attributes.SchedulePreference,
-			FrequencyWarning:   freqWarn,
-			BlockoutWarning:    blockoutWarningIfKnown(planDate, blockoutsByPerson[personID]),
-			CrossTeamWarning:   crossWarn,
-		})
+		pg.Candidates = append(pg.Candidates, candidatePersonView(personID, titleOrID(names, personID), pa.Attributes.SchedulePreference))
 	}
 
 	return pg, errMsg

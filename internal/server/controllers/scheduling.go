@@ -372,6 +372,7 @@ func (sc *SchedulingController) RegisterRoutes(router fiber.Router) {
 
 	group.Post("/rosters/:service_type_id/:plan_id/assignments", sc.AddRosterAssignment)
 	group.Delete("/rosters/:service_type_id/:plan_id/assignments/:assignment_id", sc.RemoveRosterAssignment)
+	group.Get("/rosters/:service_type_id/:plan_id/candidates/:person_id/warnings", sc.CandidateWarnings)
 	group.Post("/rosters/:service_type_id/:plan_id/publish", sc.PublishRoster)
 	group.Post("/rosters/:service_type_id/:plan_id/revert", sc.RevertRoster)
 

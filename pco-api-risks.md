@@ -580,3 +580,63 @@ HomePlanRow` slice (a nil entry means "no upcoming plan, or a fetch
 failed" and is filtered out afterward), preserving service-type order
 regardless of which goroutine finishes first. No behavior change beyond
 wall-clock time - same best-effort tolerance, same data, same order.
+
+## Addendum: Team Builder's cold-start risk was the candidate eligibility pool, not the assigned roster
+
+A closer read of `buildRosterBuilderData`/`buildRosterPositionGroupData`
+found the real driver behind this doc's own "6 position groups, ~40
+people" estimate (mitigation #6, the addendum above): "person involved in
+the roster" was never "person assigned to the plan" - it was every person
+PCO's `GetPersonTeamPositionAssignments` reports as *eligible* for any open
+position on the team, whether or not they were actually scheduled.
+`views.CandidatePersonView` (the "who could be added" list shown per
+position) had its `FrequencyWarning`/`BlockoutWarning`/`CrossTeamWarning`
+computed eagerly for *every* eligible candidate on *every* open position,
+fanned out via `scheduling.RunConcurrently` alongside the assigned roster's
+own (small, plan-bounded) warnings. A plan only ever assigns a small number
+of people, but a well-staffed volunteer church can have a large eligibility
+pool *per position* - and that pool, not the assigned roster, is what
+actually scales with "hundreds of people." Concurrency only compresses
+wall-clock time, not call count, so a large pool could throw a few hundred
+requests at PCO within a single rolling 20-second window - and because
+every one of these fetches already used the existing best-effort `if err
+== nil` handling, a 429 partway through didn't surface as an error: a
+director would just see candidates with no warnings at all, indistinguishable
+from "no conflicts."
+
+**Fixed by no longer computing candidate warnings eagerly at all** - same
+move as the "Browse all songs" addendum above (compute rich per-item data
+only for what's actually being looked at, not the whole pool).
+`buildRosterBuilderData` and `buildRosterPositionGroupData`
+(`rosters_scoped.go`) now scope every PCO-backed warning fetch
+(`pco.GetBlockouts`, `crossTeamAssignmentsThisWeek`, `otherAssignmentDates`)
+down to people actually assigned to a position (`AssignmentView`'s own
+warnings are unaffected - inherently bounded by the plan, not the
+eligibility pool). Every `CandidatePersonView` both functions build now
+routes through one shared constructor, `candidatePersonView` (rosters_
+builder.go), which only ever sets `PersonID`/`Name`/`SchedulePreference` -
+names still resolve for every candidate (`personNameMapForIDs` stays
+unscoped), just not their warnings.
+
+A candidate's own warnings are now fetched **on demand** instead: a new
+route, `GET /scheduling/rosters/:service_type_id/:plan_id/candidates/
+:person_id/warnings` (`CandidateWarnings`, `rosters_candidate_warnings.go`),
+computes one person's three warnings via the exact same pure functions and
+thin PCO-calling wrappers the old eager path used, returning a small
+fragment (`CandidateWarningsFragment`, `roster_builder.templ`) swapped into
+that one candidate row's own placeholder span. The trigger is a plain
+`<button>` ("Check availability") on each candidate row - a real UI
+constraint ruled out anything passive (`mouseenter`/on-visible/on-load):
+`positionGroupCard`'s `collapsibleCard` already expands a position by
+default whenever it's short-staffed (the common case for an open
+position), and an expanded card renders every one of its candidate rows at
+once with no per-row disclosure - a passive trigger firing for every row
+the instant such a card opens would reintroduce exactly the burst this fix
+removes, just moved from render-time to open-time. A `<button>`'s default
+htmx trigger is a real click, so this can't fire without someone actually
+asking for that one person's warnings.
+
+Not addressed by this fix, and not claimed to be: team/position lists and
+team-member names (mitigation #5's still-open gap, reaffirmed by the
+addendum above) remain fetched live and uncached on every roster render -
+a separate, still-open item.

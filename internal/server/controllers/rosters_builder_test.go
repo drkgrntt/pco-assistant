@@ -131,3 +131,34 @@ func TestPositionTeamSequenceUnknownTeamSortsLast(t *testing.T) {
 		t.Errorf("expected the unknown team's sequence (%d) to sort after every known team (%v)", got, seq)
 	}
 }
+
+// TestCandidatePersonViewLeavesWarningsEmpty confirms candidatePersonView -
+// the single choke point buildRosterBuilderData and
+// buildRosterPositionGroupData (rosters_scoped.go) both route every
+// candidate row through - never populates FrequencyWarning/BlockoutWarning/
+// CrossTeamWarning, regardless of what's passed in. Neither build function
+// can be exercised end-to-end here (both need a real *scheduling.Store -
+// see rosters_scoped_httptest_test.go's own doc comment on why this
+// package has no DB test harness), so this is the practical way to pin the
+// "candidates never get eager warnings" invariant described in
+// pco-api-risks.md's cold-start-eligibility-pool addendum: as long as both
+// build functions only ever construct a CandidatePersonView via this one
+// function (confirmed by reading rosters_builder.go/rosters_scoped.go), a
+// regression that made this helper populate a warning field would be
+// caught here.
+func TestCandidatePersonViewLeavesWarningsEmpty(t *testing.T) {
+	got := candidatePersonView("p1", "Alice", pco.SchedulePreferenceEveryWeek)
+
+	if got.FrequencyWarning != "" {
+		t.Errorf("expected FrequencyWarning to stay empty, got %q", got.FrequencyWarning)
+	}
+	if got.BlockoutWarning != "" {
+		t.Errorf("expected BlockoutWarning to stay empty, got %q", got.BlockoutWarning)
+	}
+	if got.CrossTeamWarning != "" {
+		t.Errorf("expected CrossTeamWarning to stay empty, got %q", got.CrossTeamWarning)
+	}
+	if got.PersonID != "p1" || got.Name != "Alice" || got.SchedulePreference != pco.SchedulePreferenceEveryWeek {
+		t.Errorf("expected PersonID/Name/SchedulePreference to still be set, got %+v", got)
+	}
+}
