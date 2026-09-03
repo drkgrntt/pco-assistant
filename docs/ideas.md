@@ -35,10 +35,39 @@ promises:
 - **Protect the service** - prevent song-repetition fatigue, catch a
   broken set flow, surface conflicts before the plan goes out, not after.
 
+The True North above is a marketing/positioning test - it answers *which*
+features earn a place on the roadmap. **Friction reduction is not a
+third promise to add to that list** - it's a separate, standing
+*development* discipline that applies to *how* every feature gets built,
+regardless of which promise it serves: fewer clicks, no new UI pattern to
+learn where an existing one already works, no reason to leave PCO or
+double-check something across two tabs when the app could just handle it.
+This app only earns its second-tab, second-login tax if reaching for it
+stays close to free - so friction is a question to ask at build time on
+every feature ("is this the fast, obvious way to do the thing"), not a
+gate on whether a feature belongs on the roadmap in the first place. See
+"Reducing friction vs. Planning Center" below for where that shows up
+concretely.
+
 PCO is the system of record - it stores what's already decided. This app
 is where the decision actually gets made: nothing here replaces PCO, it
 just means PCO never sees the set/roster until it's already been checked
 against everything PCO itself has no way to know.
+
+A concrete implication of the friction discipline above: features that
+duplicate something PCO can already do directly - setting a song's key,
+building the order of service itself - aren't disqualified by that
+duplication, and don't need to justify themselves as something new PCO
+can't do. They're the point. The whole premise is plan here, then let
+Publish hand PCO a *complete* result, so PCO can go on being the actual
+logistics engine and nobody has to open PCO afterward to clean anything
+up by hand. That makes these specific, PCO-mirroring actions the
+highest-friction-bar features in the app, not the lowest - any gap in
+what Publish actually pushes (a field this app lets someone set but
+doesn't sync, a PCO state that ends up not matching what was planned)
+turns "plan here" into "plan here, then also go fix it in PCO," which is
+worse than not having the feature at all. See CLAUDE.md's Sync model
+section for what Publish/Discard/MergeSet actually cover today.
 
 The wedge is worship teams specifically, not "volunteer scheduling" in
 general - see [Expansion strategy](#expansion-strategy) for why, and why
@@ -78,6 +107,25 @@ the builder page's "Open in Planning Center" link.)
    has to leave PCO at all. A real product bet, not a quick add - decide
    this only after the lighter-weight items above are in and adoption data
    says it's worth it (also see Open questions below).
+5. **Bring the plan-page layout closer to PCO's own.** Less decision
+   fatigue if the layout a director already knows from PCO transfers
+   directly - order of service, song rows, where actions live - rather
+   than asking them to learn a second layout from scratch just to get at
+   the checks this app adds on top.
+6. **In-place warnings instead of a top-of-page alert list.** Key-change,
+   repeat-song, and length warnings currently render as a stack of alerts
+   above the set (`PlanWarnings`, `keyTransitionWarnings`/
+   `serviceLengthWarning` in `sets_builder.go`). Moving each one inline -
+   a tooltip/badge on the specific song row it's actually about - would
+   put it where the eye already is instead of a separate list to
+   cross-reference against the set below it.
+
+**A related but distinct problem: discoverability, not friction.** A fair
+amount of what actually pays off here (tag/relate suggestions, preference
+notes, avoid-pairing) only helps once someone's found it - it's not on the
+beaten path of "open a plan, drag songs around." Worth a lighter-weight
+onboarding nudge or empty-state prompt pointing at the highest-leverage
+features rather than leaving them to be discovered by accident.
 
 **Framing that's live in onboarding copy:** PCO is the live broadcast;
 this app is the private rehearsal studio - a safe place to test lineups
@@ -122,6 +170,10 @@ for other volunteer-heavy ministries on the same backend.
 
 - Whether the browser-extension HUD is worth building at all before there's
   real usage data suggesting the lighter integrations aren't enough.
+- Whether Planning Center exposes any real third-party plugin/embed
+  surface (vs. just its public API) - would change the calculus on the
+  browser-extension HUD above; not yet checked against PCO's developer
+  docs.
 - When Phase 2 (non-worship ministries) actually starts - deliberately not
   scheduled yet; the plan is "after worship PMF," not a fixed date.
 - ~~A "nuclear" full-wipe-and-resync button for the Song Info / person-data
@@ -200,6 +252,13 @@ pattern as `song_tags`/`song_relationships`:**
   raw published `KeyName`, so it reacts to an in-progress edit immediately.
   The "all one key/tempo family, needs contrast" half of this idea isn't
   built.
+- **Key-change tip surfaced inline** - a step past the key-transition
+  warning above: once it fires, suggest the actual move that makes the
+  transition work - e.g. hit the V7 (dominant seventh) of the *next* key
+  right before the change, which pulls strongly toward that key's tonic.
+  Cheap: a static lookup off the same interval the warning already
+  computes (`parseKeyPitchClass`), not new music-theory code - just a
+  message per interval size shown alongside the existing warning.
 - ~~Import/merge/revert seeding the wrong key for a multi-arrangement
   song~~ - **the display bug fixed** (a plan with real Planning Center keys
   "B A A A" was showing "B A Bb A" after a revert): `deriveImportRows`/
@@ -321,6 +380,28 @@ pattern as `song_tags`/`song_relationships`:**
   not storage - flag when a role/occasion-tagged song hasn't shown up at a
   matching service in a while, or turns up somewhere it shouldn't (e.g. a
   Christmas Eve tag in July).
+- **Sermon topic/passage matching** - one of the original seed ideas
+  behind song tags in the first place: given a sermon's topic, passage, or
+  theme, surface which songs in the library actually speak to it.
+  `song_tag_categories` is already fully dynamic (see README), so a
+  `topic`/`theme` category costs nothing new to store - the real gap is
+  the *picking* UX, not storage: search/filter the library by topic tag
+  while building a set, not just view tags on a song row after the fact.
+  Two angles worth chasing before committing to scope:
+  - **Scripture reference as a structured field**, not a free-text tag -
+    would let "what covers Romans 8" work as a real filter instead of
+    hoping someone tagged it consistently. A bigger schema lift than a
+    tag category, only worth it if topic tags alone feel too loose in
+    practice.
+  - **Lyric-derived tags** - whether Planning Center's API exposes
+    song lyrics/chord chart text at all (so a topic/word could be pulled
+    automatically instead of tagged by hand) needs checking against the
+    live API before promising it - not yet verified.
+
+  Worth treating as more than a brainstorm bullet if it gets built: the
+  current UX (view tags on a song, filter by an existing tag) doesn't yet
+  deliver the "start from a sermon, work backward to songs" workflow that
+  was the actual point of building tags at all.
 
 ## People
 
@@ -520,17 +601,27 @@ were.
   this is throwaway-after-Sunday info that currently lives in a text
   thread or nowhere. Smallest new storage in this file: one note field
   tied to the local `sets` row.
-- **Post-service debrief log** - distinct from the ephemeral note above,
-  which is throwaway; this is meant to be found again. A 60-second
-  post-Sunday note ("the bridge in Gratitude ran long," "transition out of
-  communion felt abrupt") tagged to a song or a specific song-to-song
-  transition, that resurfaces automatically the next time that song (or
-  that pairing back-to-back) shows up in a draft set - so the same mistake
-  doesn't get repeated three months later because nobody remembered the
-  conversation. Needs a new table (note text plus what it's keyed to - a
-  song id, or a song-pair for transition-specific notes) and, for the
-  pairing case, matching logic that recognizes "these two songs are
-  adjacent again" while building a set.
+- **Post-service debrief log / transition notes** - distinct from the
+  ephemeral note above, which is throwaway; these are meant to be found
+  again. Two related but distinct kinds of note, both keyed to a song or a
+  specific song-to-song transition and both meant to resurface
+  automatically the next time that song (or that pairing back-to-back)
+  shows up in a draft set, so nothing has to be rediscovered by trial and
+  error three months later:
+  - **Debrief (retrospective)** - a 60-second post-Sunday note ("the
+    bridge in Gratitude ran long," "transition out of communion felt
+    abrupt") capturing what happened, for next time.
+  - **Talking points (prospective)** - what to actually say bridging out
+    of one song into the next (or into/out of a specific song) - carried
+    into the service, not just a lesson learned after it. Worth
+    prefilling/suggesting from whatever was used last time the same song
+    or pairing came up, same as the debrief note.
+
+  Needs a new table (note text plus what it's keyed to - a song id, or a
+  song-pair for transition-specific notes, plus a kind so debrief and
+  talking-point don't collide) and, for the pairing case, matching logic
+  that recognizes "these two songs are adjacent again" while building a
+  set.
 
 ## Rough leverage-to-cost read
 
