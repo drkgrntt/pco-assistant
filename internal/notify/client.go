@@ -63,7 +63,7 @@ func (c *Client) hasCredentials() bool {
 // instead of sending anything - see New's doc comment.
 func (c *Client) SendFeedback(ctx context.Context, submitterEmail, message string) error {
 	if !c.hasCredentials() {
-		logger.Info("feedback received (Mailgun not configured - logging instead of emailing)", "from", submitterEmail, "message", message)
+		logger.InfoContext(ctx, "feedback received (Mailgun not configured - logging instead of emailing)", "from", submitterEmail, "message", message)
 		return nil
 	}
 

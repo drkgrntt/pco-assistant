@@ -220,9 +220,31 @@ than pulling locals directly: `middleware.CurrentPerson`,
 `middleware.CurrentOrganization`, `middleware.CurrentOrganizationID`,
 `middleware.RequestContext(c)` (use this instead of `c.Context()` any time
 you're about to call into `go-pco`, so the call authenticates as the
-signed-in person), `middleware.CurrentRequestID(c)` (include as a
-`request_id` field in a log line so it can be traced back to the
-`X-Request-ID` response header whoever hit the route can report).
+signed-in person - it also carries this request's id, see next).
+
+**Logging**: `internal/logger` wraps a package-level `slog.Logger`.
+Anywhere a `context.Context` is already in scope (a handler via
+`middleware.RequestContext(c)`, or a function that already takes one),
+log through the `*Context` variants (`logger.ErrorContext(ctx, ...)`,
+`InfoContext`/`WarnContext`/`DebugContext` likewise) rather than the plain
+ones - they fold in a `request_id` field automatically when the context
+carries one (`logger.WithRequestID`, or `RequestContext`'s own wrapping),
+so a WARN/ERROR line can be traced back to the `X-Request-ID` response
+header whoever hit the route can report. A goroutine a handler kicks off
+and returns without waiting on (a background PCO sync, an outbound email)
+needs its own `context.Background()`-derived context anyway (the request's
+own is cancelled the moment the handler returns) - wrap that with
+`logger.WithRequestID(context.Background(), middleware.CurrentRequestID(c))`
+the same way `song_arrangement_cache.go`/`person_data_cache.go`/
+`feedback.go` already do, so its own logging still carries the id. The
+plain (non-`Context`) functions stay for genuinely request-less call sites
+- cron jobs (`internal/server/jobs/`), CLI tools (`cmd/dbseed`, etc.),
+and process startup/shutdown - there's nothing to correlate there. One
+known gap: `pco_observability.go`'s go-pco response hook is a single
+process-wide callback with no per-call context (go-pco's `ResponseInfo`
+carries none), so a PCO 429/failure logged there doesn't carry a
+request_id today - closing that would mean adding a context field to
+go-pco's `ResponseInfo` itself (a separate repo/module), not done here.
 
 **Organization scoping**: this is multi-tenant - every `scheduling.Store`
 query that touches org-owned data takes an organization id

@@ -150,7 +150,7 @@ func (bc *BillingController) Portal(c *fiber.Ctx) error {
 func (bc *BillingController) Webhook(c *fiber.Ctx) error {
 	sig := c.Get("Stripe-Signature")
 	if err := bc.billingClient.HandleWebhook(c.Context(), bc.authStore, c.Body(), sig); err != nil {
-		logger.Error("stripe webhook error", "error", err)
+		logger.ErrorContext(middleware.RequestContext(c), "stripe webhook error", "error", err)
 		return c.Status(fiber.StatusBadRequest).SendString(err.Error())
 	}
 

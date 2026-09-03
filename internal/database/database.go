@@ -17,8 +17,11 @@ import (
 // Service represents a service that interacts with a database.
 type Service interface {
 	// Health returns a map of health status information.
-	// The keys and values in the map are service-specific.
-	Health() map[string]string
+	// The keys and values in the map are service-specific. ctx is used
+	// only to tag a "down" log line with the caller's request id (see
+	// logger.ErrorContext) - Health still does its own 1s-bounded ping
+	// regardless of ctx's own deadline.
+	Health(ctx context.Context) map[string]string
 
 	// Close terminates the database connection.
 	// It returns an error if the connection cannot be closed.
@@ -92,14 +95,18 @@ func (s *service) DB() *sql.DB {
 
 // Health checks the health of the database connection by pinging the database.
 // It returns a map with keys indicating various health statistics.
-func (s *service) Health() map[string]string {
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+func (s *service) Health(ctx context.Context) map[string]string {
+	// WithTimeout, not a fresh context.Background() - keeps ctx's request
+	// id (see logger.WithRequestID) for the "down" log line below, while
+	// still bounding the ping itself to 1s regardless of ctx's own
+	// deadline.
+	pingCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
 	defer cancel()
 
 	stats := make(map[string]string)
 
 	// Ping the database
-	err := s.db.PingContext(ctx)
+	err := s.db.PingContext(pingCtx)
 	if err != nil {
 		stats["status"] = "down"
 		stats["error"] = fmt.Sprintf("db down: %v", err)
@@ -107,10 +114,10 @@ func (s *service) Health() map[string]string {
 		// GET /health endpoint (see health.go) on every request to it, not
 		// just at startup - os.Exit(1) here would let anyone kill the whole
 		// process by hitting /health during a transient DB blip (or just a
-		// query slower than ctx's 1s timeout under load). Report "down" in
-		// the response and let the caller (an uptime monitor, a human) decide
-		// what to do about it.
-		logger.Error("db down", "error", err)
+		// query slower than pingCtx's 1s timeout under load). Report "down"
+		// in the response and let the caller (an uptime monitor, a human)
+		// decide what to do about it.
+		logger.ErrorContext(ctx, "db down", "error", err)
 		return stats
 	}
 

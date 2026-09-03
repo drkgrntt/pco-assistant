@@ -211,14 +211,17 @@ func (sc *SchedulingController) SyncSongInfo(c *fiber.Ctx) error {
 	// keep running well after that. context.Background() plus this same
 	// access token (see go-pco.WithAccessToken via middleware.AccessToken's
 	// doc comment) gives the goroutine an equivalent, independently-lived
-	// authenticated context.
+	// authenticated context - logger.WithRequestID carries this request's
+	// id along the same way, so runSongInfoSync's own logging can still be
+	// traced back to whichever SyncSongInfo click started it.
 	accessToken := middleware.AccessToken(c)
+	requestID := middleware.CurrentRequestID(c)
 	store := sc.store
 	// Priority 20: an unattended background sync should never delay this
 	// same token's interactive traffic if go-pco's throttle is enabled
 	// (PCO_THROTTLE_ENABLED - off by default, see go-pco's README) - see
 	// docs/pco-api-risks.md's throttle-adoption addendum.
-	syncCtx := pco.WithPriority(pco.WithAccessToken(context.Background(), accessToken), 20)
+	syncCtx := pco.WithPriority(pco.WithAccessToken(logger.WithRequestID(context.Background(), requestID), accessToken), 20)
 	go runSongInfoSync(syncCtx, store, orgID)
 
 	data := sc.buildSongInfoData(ctx, orgID)
@@ -345,13 +348,13 @@ func runSongInfoSync(ctx context.Context, store *scheduling.Store, organizationI
 
 	songs, err := scheduling.FetchActiveSongs(ctx, organizationID)
 	if err != nil {
-		logger.Error("background song info sync: fetching active songs failed", "organization_id", organizationID, "error", err)
+		logger.ErrorContext(ctx, "background song info sync: fetching active songs failed", "organization_id", organizationID, "error", err)
 		return
 	}
 
 	cache, err := store.SongArrangementInfo(ctx, organizationID)
 	if err != nil {
-		logger.Error("background song info sync: loading arrangement cache failed", "organization_id", organizationID, "error", err)
+		logger.ErrorContext(ctx, "background song info sync: loading arrangement cache failed", "organization_id", organizationID, "error", err)
 		return
 	}
 
@@ -376,14 +379,14 @@ func runSongInfoSync(ctx context.Context, store *scheduling.Store, organizationI
 	var applied, failed atomic.Int64
 	runPacedBatches(batches, songInfoSyncBatchPause, func(songID string) {
 		if _, err := fetchAndCacheArrangementInfo(ctx, store, organizationID, songID); err != nil {
-			logger.Error("background song info sync: caching arrangement failed", "organization_id", organizationID, "song_id", songID, "error", err)
+			logger.ErrorContext(ctx, "background song info sync: caching arrangement failed", "organization_id", organizationID, "song_id", songID, "error", err)
 			failed.Add(1)
 			return
 		}
 		applied.Add(1)
 	})
 
-	logger.Info("background song info sync complete",
+	logger.InfoContext(ctx, "background song info sync complete",
 		"organization_id", organizationID,
 		"total_songs", len(songs),
 		"newly_cached", applied.Load(),

@@ -222,7 +222,7 @@ func fetchPlansByFilter(ctx context.Context, serviceTypeID, filter, orderBy stri
 	}
 
 	if totalPages > buildPlansFetchSanityMaxPages {
-		logger.Error("PCO plan list page count exceeds sanity ceiling - aborting fetch",
+		logger.ErrorContext(ctx, "PCO plan list page count exceeds sanity ceiling - aborting fetch",
 			"service_type_id", serviceTypeID, "filter", filter, "total_count", totalCount,
 			"total_pages", totalPages, "sanity_max_pages", buildPlansFetchSanityMaxPages)
 		return nil, fmt.Errorf("PCO reports %d plans (%d pages) for service type %s filter %q - exceeds sanity ceiling of %d pages, aborting", totalCount, totalPages, serviceTypeID, filter, buildPlansFetchSanityMaxPages)
