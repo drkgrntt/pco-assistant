@@ -200,6 +200,25 @@ pattern as `song_tags`/`song_relationships`:**
   raw published `KeyName`, so it reacts to an in-progress edit immediately.
   The "all one key/tempo family, needs contrast" half of this idea isn't
   built.
+- ~~Import/merge/revert seeding the wrong key for a multi-arrangement
+  song~~ - **the display bug fixed** (a plan with real Planning Center keys
+  "B A A A" was showing "B A Bb A" after a revert): `deriveImportRows`/
+  `deriveMergeImportRows` (`sets_builder.go`) now seed each imported row's
+  `KeyOverride` from that item's own live `KeyName` instead of leaving it
+  empty, and `PublishSet`'s pending-edit push no longer sends the cached
+  `ArrangementID` as a side effect of saving a Description/key edit
+  (`sets_publish.go`) - see the comments there for why. **Still open,
+  deliberately not tackled by that fix**: this app's whole model is "one
+  arrangement per song" - `song_arrangement_cache` caches a single
+  arrangement per song org-wide (`fetchAndCacheArrangementInfo`'s
+  `GetArrangements(PerPage: 1)`, whichever Planning Center happens to
+  return first), with no way to represent "this song has several
+  arrangements and this plan uses a non-default one." A real fix would add
+  a per-occurrence `ArrangementID`/`KeyID` to `set_songs` itself (populated
+  from the live item on import, used instead of the org-wide cache
+  wherever a song's arrangement matters), likely plus an arrangement
+  picker on the song detail card - real schema/feature work, not a
+  one-file fix.
 - **Visual flow/energy curve** - a step further than the key-transition
   warning above: plot each song's tempo (already cached - see Song Info)
   as a simple curve across the set, so a jarring energy drop (e.g. a fast

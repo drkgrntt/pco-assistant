@@ -168,12 +168,15 @@ func (sc *SchedulingController) UpdatePlanNote(c *fiber.Ctx) error {
 		// Best-effort feedback: re-render the form with whatever was
 		// actually saved (i.e. still whatever the field held before this
 		// failed save), not the attempted value, since UpsertPlanNote
-		// failing means the attempted value never actually landed.
+		// failing means the attempted value never actually landed. Flagged
+		// "error" so the form actually shows that, instead of reverting
+		// silently and leaving the user to guess why their edit didn't
+		// stick.
 		saved, _ := sc.store.GetPlanNote(c.Context(), orgID, serviceTypeID, planID)
-		return render(c, views.PlanNoteFormFragment(serviceTypeID, planID, saved))
+		return render(c, views.PlanNoteFormFragment(serviceTypeID, planID, saved, "error"))
 	}
 
-	return render(c, views.PlanNoteFormFragment(serviceTypeID, planID, note))
+	return render(c, views.PlanNoteFormFragment(serviceTypeID, planID, note, "saved"))
 }
 
 // fetchPlansByFilter pages through a service type's plans matching PCO's

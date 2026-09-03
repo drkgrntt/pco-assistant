@@ -18,6 +18,15 @@ func songItem(id, songID, title string) pco.ItemData {
 	return item
 }
 
+// songItemKeyed is songItem plus a live KeyName, for exercising
+// deriveImportRows/deriveMergeImportRows' capture of a plan item's own
+// current key - see TestDeriveImportRowsCapturesLiveKey.
+func songItemKeyed(id, songID, title, key string) pco.ItemData {
+	item := songItem(id, songID, title)
+	item.Attributes.KeyName = key
+	return item
+}
+
 func setSong(songID, anchor string, position int) scheduling.SetSong {
 	return scheduling.SetSong{SongID: songID, AnchorItemID: anchor, Position: position}
 }
@@ -179,6 +188,34 @@ func TestDeriveImportRowsThenMergeRoundTrips(t *testing.T) {
 	assertRowOrder(t, merged, want)
 }
 
+// TestDeriveImportRowsCapturesLiveKey guards against the real bug this
+// covers for: a plan with keys "B A A A" in Planning Center was showing up
+// in the app as "B A Bb A" after a revert, because the imported row never
+// captured the item's own live key at all - display fell back to
+// song_arrangement_cache's single org-wide cached key for that song,
+// which is only correct when the song has one arrangement. Every imported
+// row's KeyOverride must come from its own item, not be left empty.
+func TestDeriveImportRowsCapturesLiveKey(t *testing.T) {
+	items := []pco.ItemData{
+		songItemKeyed("i1", "song-a", "Song A", "B"),
+		songItemKeyed("i2", "song-b", "Song B", "A"),
+		songItemKeyed("i3", "song-b", "Song B", "A"),
+		songItemKeyed("i4", "song-b", "Song B", "A"),
+	}
+
+	got := deriveImportRows(items)
+
+	want := []string{"B", "A", "A", "A"}
+	if len(got) != len(want) {
+		t.Fatalf("expected %d rows, got %d: %+v", len(want), len(got), got)
+	}
+	for i, row := range got {
+		if row.KeyOverride != want[i] {
+			t.Errorf("row %d: expected key %q, got %q", i, want[i], row.KeyOverride)
+		}
+	}
+}
+
 // TestDeriveMergeImportRowsSkipsTrackedInsertsNew is the core MergeSet
 // scenario: a plan with a song already tracked locally (whether or not it's
 // still one of the set's active rows - see the tombstoned variant below)
@@ -202,6 +239,26 @@ func TestDeriveMergeImportRowsSkipsTrackedInsertsNew(t *testing.T) {
 	want := scheduling.SetSong{SongID: "song-b", PCOItemID: "i3", AnchorItemID: "i2"}
 	if got[0] != want {
 		t.Errorf("expected %+v, got %+v", want, got[0])
+	}
+}
+
+// TestDeriveMergeImportRowsCapturesLiveKey is deriveMergeImportRows' half
+// of TestDeriveImportRowsCapturesLiveKey - a merged-in row must carry its
+// own item's live key too, not just deriveImportRows' full-revert path.
+func TestDeriveMergeImportRowsCapturesLiveKey(t *testing.T) {
+	items := []pco.ItemData{
+		songItem("i1", "song-a", "Song A"), // already tracked
+		songItemKeyed("i2", "song-b", "Song B", "A"),
+	}
+	tracked := map[string]bool{"i1": true}
+
+	got := deriveMergeImportRows(items, tracked)
+
+	if len(got) != 1 {
+		t.Fatalf("expected exactly 1 new row, got %+v", got)
+	}
+	if got[0].KeyOverride != "A" {
+		t.Errorf("expected key %q, got %q", "A", got[0].KeyOverride)
 	}
 }
 

@@ -7,15 +7,67 @@
    builder-rows.css for the set/roster builder tables' own row-level
    styling. */
 
+/* The title row (see BuildPlan) - the plan's H1/date on the left, the
+   Previous/Next plan stepper on the right, vertically centered against
+   each other. Kept out of .build-page-nav below on purpose: "browse to an
+   adjacent plan" reads as acting on the title itself (like a calendar
+   header's month stepper), not as one more link in the secondary nav
+   row's "jump elsewhere" list. */
+.build-page-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+}
+
+.build-page-title-row h1 {
+  margin-block-end: 0;
+}
+
+/* Paired prev/next icon buttons, joined into one pill (shared border,
+   divider between the two halves) rather than two independent
+   .icon-btn's - reads as a single stepper control, not two unrelated
+   actions. The disabled half (no adjacent plan - first/last in the
+   service type) renders as the same-shaped <span> rather than being
+   omitted, so the pill never lopsidedly shrinks to one button. */
+.plan-stepper {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.plan-stepper-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-height);
+  height: var(--control-height);
+  color: var(--text);
+}
+
+.plan-stepper-btn:not(.plan-stepper-btn-disabled):hover {
+  background: var(--surface-hover);
+}
+
+.plan-stepper-btn + .plan-stepper-btn {
+  border-inline-start: 1px solid var(--border);
+}
+
+.plan-stepper-btn-disabled {
+  color: var(--muted);
+  opacity: 0.4;
+  cursor: default;
+}
+
 /* The Build page's top-of-page nav row (see BuildPlan) - "Choose a
-   different plan" plus Previous/Next plan (all three navigate within this
-   app, to another builder page) grouped on the left, "Open in Planning
-   Center"/"Run sheet" (both open a different site/page in a new tab)
-   grouped on the right. Splitting the groups apart, rather than one flat
-   list of five equally-weighted links, reads as "navigate here" vs. "jump
-   elsewhere" - the smaller/muted styling on the right-hand group
-   reinforces that they're secondary to the actual builder below, not
-   another primary action. */
+   different plan" (navigates within this app, to the plan picker) on the
+   left, "Open in Planning Center"/"Run sheet" (both open a different
+   site/page in a new tab) grouped on the right. Splitting the groups
+   apart reads as "navigate here" vs. "jump elsewhere" - the smaller/muted
+   styling on the right-hand group reinforces that they're secondary to
+   the actual builder below, not another primary action. */
 .build-page-nav {
   display: flex;
   align-items: center;
@@ -180,6 +232,7 @@ main:has(.build-layout) {
    itself contributes none. */
 .plan-note-form {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
   max-width: 28rem;
@@ -191,10 +244,47 @@ main:has(.build-layout) {
   min-width: 0;
 }
 
-/* planNoteSection's read-only rendering (a past plan) - plain text, no
-   input/button, same spot the editable form would otherwise occupy. */
-.plan-note-readonly {
-  margin-block: var(--space-2);
+/* PlanNoteFormFragment's post-save feedback (see its own doc comment for
+   why status exists at all) - flex-basis:100% drops it onto its own line
+   below the input/button rather than squeezing in beside them.
+   .plan-note-status-saved fades itself out with a plain CSS animation
+   (no JS/timer) - it's swapped fresh into the DOM on every successful
+   save (hx-swap="outerHTML" on the form), so the animation always
+   restarts from full opacity. animation-fill-mode:forwards holds it at
+   opacity 0 (rather than snapping back to 1) once the animation ends,
+   and it's not display:none instead purely so it keeps a screen reader's
+   role="status" announcement audible for its full visible span, not just
+   an instant. .plan-note-status-error does not fade - a failed save is
+   the one case worth making the user actually notice and retry, not
+   something to reassure-and-dismiss. */
+.plan-note-status {
+  flex: 1 1 100%;
+  font-size: var(--text-sm);
+}
+
+.plan-note-status-saved {
+  color: var(--success);
+  animation: plan-note-status-fade 2.5s var(--ease-standard) forwards;
+  animation-delay: 1s;
+}
+
+.plan-note-status-error {
+  color: var(--danger);
+}
+
+@keyframes plan-note-status-fade {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plan-note-status-saved {
+    animation: none;
+  }
 }
 
 /* planNoteText's rendering in the plan-list row (BuildPlansResults) - the
