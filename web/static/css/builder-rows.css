@@ -140,6 +140,25 @@ tr.song-row.selected {
   padding: 0.3rem var(--space-2);
 }
 
+/* The row's replace-form now lives inside its own row-menu popover
+   (set_builder.templ's replaceMenuItems - collapsed from an
+   always-visible inline select+button into the same reveal-on-click
+   idiom as the dot menu) rather than sitting inline next to the other
+   row actions, so it no longer needs to fit a cramped horizontal
+   sliver: stack select above button and let the select use the
+   popover's full width instead of the 8rem cap above (that cap was
+   sized for the old inline layout). The submit button's own look comes
+   from .row-menu-menu button (disclosure.css), same as the dot menu's
+   Tag/Relate/Mark role rows - no separate styling needed here. */
+.row-menu-menu .replace-form {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.row-menu-menu .replace-form select {
+  max-width: none;
+}
+
 /* The dot menu is already a DOM sibling of .set-song-actions-wrap (not
    nested inside it), so it's structurally excluded from that
    sub-container's own wrap/shrink behavior. flex-shrink:0 here is just a

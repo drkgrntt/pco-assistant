@@ -121,16 +121,23 @@ function closeMobileMenu() {
   }
 }
 
-// The set builder's per-row "more actions" menu (song rows - see
-// row-menu/row-menu-toggle in set_builder.templ) - same open/closed idiom
-// as toggleNavDropdown above, just without the edge-of-screen
-// repositioning: the actions column is already the table's rightmost
-// edge, so a plain right-anchored menu (see .row-menu-menu in app.css)
-// never needs to flip sides.
+// The set builder's per-row "more actions"/"replace" menus (song rows -
+// see row-menu/row-menu-toggle in set_builder.templ, both the dot menu
+// and the replace-song picker use this same wrapper class) - same
+// open/closed idiom as toggleNavDropdown above, just without the
+// edge-of-screen repositioning: the actions column is already the
+// table's rightmost edge, so a plain right-anchored menu (see
+// .row-menu-menu in app.css) never needs to flip sides. Closes every
+// other open row-menu first (not just this one's siblings) so a row with
+// more than one - dot menu and replace - never shows two popups at once.
 function toggleRowMenu(button) {
   var wrapper = button.closest(".row-menu");
-  var open = wrapper.classList.toggle("open");
-  button.setAttribute("aria-expanded", open ? "true" : "false");
+  var opening = !wrapper.classList.contains("open");
+  closeRowMenus();
+  if (opening) {
+    wrapper.classList.add("open");
+    button.setAttribute("aria-expanded", "true");
+  }
 }
 
 function closeRowMenus() {
