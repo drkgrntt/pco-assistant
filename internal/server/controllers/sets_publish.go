@@ -291,11 +291,27 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 						length := info.LengthSeconds
 						description := itemDescriptionFor(ss, info)
 						keyID := resolveKeyID(ctx, ss.SongID, info.ArrangementID, ss.KeyOverride, info.KeyID)
+						// Deliberately no ArrangementID here, unlike
+						// RefreshSongInfo's own UpdateItem call below - this
+						// fires as a side effect of pushing a merely pending
+						// Description/KeyOverride edit (see InfoPending
+						// above), not because anyone asked to fix this
+						// item's arrangement. info.ArrangementID is
+						// song_arrangement_cache's single org-wide cached
+						// arrangement (fetchAndCacheArrangementInfo's
+						// GetArrangements(PerPage:1) - whichever one
+						// Planning Center happens to return first for the
+						// song), which is only ever correct by luck once a
+						// song has more than one arrangement. Sending it
+						// here would silently re-point an already-linked
+						// item at that arrangement as a side effect of
+						// saving a one-time key/note - exactly the kind of
+						// surprise RefreshSongInfo exists to make an
+						// explicit, opted-into action instead.
 						if _, err := pco.UpdateItem(ctx, serviceTypeID, planID, ss.PCOItemID, &pco.UpdateItemParams{
-							Description:   &description,
-							Length:        &length,
-							ArrangementID: &info.ArrangementID,
-							KeyID:         &keyID,
+							Description: &description,
+							Length:      &length,
+							KeyID:       &keyID,
 						}); err != nil {
 							failuresMu.Lock()
 							failures = append(failures, fmt.Sprintf("%s: %s", title, friendlyPCOErr(err)))

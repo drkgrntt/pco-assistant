@@ -848,6 +848,17 @@ type mergedRow struct {
 // non-song-linked) item most recently preceded it; consecutive songs with
 // nothing foreign between them share that same anchor, ordered by Position
 // in the order they appear.
+//
+// KeyOverride is seeded from the item's own live KeyName rather than left
+// empty - without this, a freshly-reverted row falls through effectiveKey
+// to song_arrangement_cache's single org-wide cached key for that song,
+// which can easily be a different arrangement's key than the one this
+// specific item actually has (a song with more than one Planning Center
+// arrangement, or an item whose key was set by hand) - confirmed live: a
+// plan with keys "B A A A" imported as "B A Bb A" because the third item's
+// real key never got read at all. Real, not "" cleared-on-purpose, so this
+// only shows up as InfoPending on a genuine later edit (UpdateSetSong
+// KeyOverride), never on the import itself.
 func deriveImportRows(items []pco.ItemData) []scheduling.SetSong {
 	var rows []scheduling.SetSong
 	anchor := ""
@@ -858,6 +869,7 @@ func deriveImportRows(items []pco.ItemData) []scheduling.SetSong {
 				Position:     len(rows),
 				PCOItemID:    item.ID,
 				AnchorItemID: anchor,
+				KeyOverride:  item.Attributes.KeyName,
 			})
 			continue
 		}
@@ -903,6 +915,11 @@ func trackedPCOItemIDs(setSongs, pendingDeletions []scheduling.SetSong) map[stri
 // non-song items - a tracked song can sit between two new ones, and the
 // second must anchor to the first, not to whatever foreign item came
 // before both.
+//
+// KeyOverride is seeded from the item's own live KeyName, same reasoning
+// as deriveImportRows above - a merged-in song is exactly as likely to sit
+// on a non-default arrangement (or a hand-set key) as one pulled in by a
+// full revert.
 func deriveMergeImportRows(items []pco.ItemData, trackedItemIDs map[string]bool) []scheduling.SetSong {
 	var rows []scheduling.SetSong
 	anchor := ""
@@ -913,6 +930,7 @@ func deriveMergeImportRows(items []pco.ItemData, trackedItemIDs map[string]bool)
 					SongID:       item.Relationships.Song.Data.ID,
 					PCOItemID:    item.ID,
 					AnchorItemID: anchor,
+					KeyOverride:  item.Attributes.KeyName,
 				})
 			}
 			anchor = item.ID

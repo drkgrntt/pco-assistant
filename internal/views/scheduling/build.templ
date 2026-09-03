@@ -217,9 +217,10 @@ templ BuildPlansResults(plans []PlanRow, serviceTypeID, search string, page, tot
 
 // planNoteText is a plan's local at-a-glance note (see plan_notes/
 // GetPlanNote) rendered as plain, read-only text - used by the plan-list
-// row (BuildPlansResults) and, when the plan builder page itself is
-// read-only, by planNoteSection below. "" renders nothing at all, since a
-// blank note carries no information worth taking up row space for.
+// row (BuildPlansResults), where there's no room for a per-row editable
+// form (see PlanNoteFormFragment's own doc comment for where that lives
+// instead). "" renders nothing at all, since a blank note carries no
+// information worth taking up row space for.
 templ planNoteText(note string) {
 	if note != "" {
 		<span class="muted plan-note-text">{ note }</span>
@@ -233,10 +234,20 @@ templ planNoteText(note string) {
 // (song_detail_card.templ). hx-target="this" swaps only this form on save
 // (see UpdatePlanNote, build.go), so saving a note never disturbs the rest
 // of the page. Unlike Publish/Discard/PCO-sync, saving a note never
-// touches Planning Center - the only gate on it is planNoteSection's own
-// readOnly check (a past plan shows the note as plain text instead of
-// rendering this form at all).
-templ PlanNoteFormFragment(serviceTypeID, planID, note string) {
+// touches Planning Center, so it's never gated by SetBuilderData.ReadOnly
+// - this form renders (and stays editable) even on a past plan.
+//
+// status reports the outcome of the save that produced this render -
+// "" (the initial page load, no save has happened yet), "saved" (the
+// success case, UpdatePlanNote's happy path), or "error" (UpdatePlanNote's
+// upsert failed and reverted the input to whatever was actually saved
+// before). Before this, submitting the form gave no feedback at all
+// either way - a plain button click with nothing to show it had (or
+// hadn't) taken. The "saved" indicator self-dismisses (plan-note-status-
+// saved's CSS fade, no JS/timer needed - see build-page.css) since it's
+// just a confirmation of what the input already shows; the "error" one
+// doesn't, since the user needs to actually notice and retry.
+templ PlanNoteFormFragment(serviceTypeID, planID, note, status string) {
 	<form class="plan-note-form" hx-post={ fmt.Sprintf("/scheduling/build/plans/%s/%s/note", serviceTypeID, planID) } hx-target="this" hx-swap="outerHTML">
 		<input
 			type="text"
@@ -251,6 +262,12 @@ templ PlanNoteFormFragment(serviceTypeID, planID, note string) {
 		<button type="submit" class="icon-btn" aria-label="Save note" title="Save note">
 			@components.IconEdit()
 		</button>
+		if status == "saved" {
+			<span class="plan-note-status plan-note-status-saved" role="status">Saved</span>
+		}
+		if status == "error" {
+			<span class="plan-note-status plan-note-status-error" role="alert">Couldn't save - try again</span>
+		}
 	</form>
 }
 
@@ -264,21 +281,18 @@ templ PlanNoteFormFragment(serviceTypeID, planID, note string) {
 // default (via collapsibleSection, same primitive songDetailCard's own
 // "Category notes" uses) since most weeks there's nothing here at all;
 // open=true only when a note already exists, so it's still visible on load
-// rather than hidden behind a click. Gated by readOnly the same way this
-// page's other mutating actions are (see SetBuilderData.ReadOnly) - a past
-// plan shows the note as plain text (planNoteText) instead of an editable
-// form, uncollapsed since there's no form interaction to hide; a blank
-// note on a read-only plan renders nothing, same as the plan-list row's
-// own "nothing if blank" behavior.
-templ planNoteSection(serviceTypeID, planID, note string, readOnly bool) {
-	if readOnly {
-		if note != "" {
-			<p class="plan-note-readonly"><strong>Note:</strong> { note }</p>
-		}
-	} else {
-		@collapsibleSection("plan-note-section", "Note", note != "") {
-			@PlanNoteFormFragment(serviceTypeID, planID, note)
-		}
+// rather than hidden behind a click.
+//
+// Unlike this page's other mutating actions (Publish/Discard/PCO-sync,
+// gated by SetBuilderData.ReadOnly - see BuildPlan), this note stays
+// editable on a past plan too: UpsertPlanNote is purely local storage,
+// never touches PCO, and labeling a plan after the fact ("oh, that was
+// the guest speaker week") is exactly what makes the note useful for
+// finding that plan again later in the picker list - no reason to lock
+// it just because the service already happened.
+templ planNoteSection(serviceTypeID, planID, note string) {
+	@collapsibleSection("plan-note-section", "Note", note != "") {
+		@PlanNoteFormFragment(serviceTypeID, planID, note, "")
 	}
 }
 
@@ -311,37 +325,57 @@ templ planNoteSection(serviceTypeID, planID, note string, readOnly bool) {
 // replaces it.
 templ BuildPlan(personName, organizationName string, setData SetBuilderData, rosterData RosterBuilderData, activeTab, note string) {
 	@views.Layout("Build a Service", personName, organizationName) {
-		<h1>
-			if setData.PlanTitle != "" {
-				{ setData.PlanTitle }
-			} else if setData.PlanDates != "" {
-				{ setData.PlanDates }
-			} else {
-				Service
+		<div class="build-page-title-row">
+			<div>
+				<h1>
+					if setData.PlanTitle != "" {
+						{ setData.PlanTitle }
+					} else if setData.PlanDates != "" {
+						{ setData.PlanDates }
+					} else {
+						Service
+					}
+				</h1>
+				if setData.PlanTitle != "" && setData.PlanDates != "" {
+					<p class="muted">{ setData.PlanDates }</p>
+				}
+			</div>
+			if setData.PrevPlanID != "" || setData.NextPlanID != "" {
+				<div class="plan-stepper" role="group" aria-label="Adjacent plans">
+					if setData.PrevPlanID != "" {
+						<a class="plan-stepper-btn" href={ templ.URL(adjacentPlanURL(setData.ServiceTypeID, setData.PrevPlanID, activeTab)) } aria-label="Previous plan" title="Previous plan">
+							@components.IconChevronLeft()
+						</a>
+					} else {
+						<span class="plan-stepper-btn plan-stepper-btn-disabled" aria-hidden="true">
+							@components.IconChevronLeft()
+						</span>
+					}
+					if setData.NextPlanID != "" {
+						<a class="plan-stepper-btn" href={ templ.URL(adjacentPlanURL(setData.ServiceTypeID, setData.NextPlanID, activeTab)) } aria-label="Next plan" title="Next plan">
+							@components.IconChevronRight()
+						</a>
+					} else {
+						<span class="plan-stepper-btn plan-stepper-btn-disabled" aria-hidden="true">
+							@components.IconChevronRight()
+						</span>
+					}
+				</div>
 			}
-		</h1>
-		if setData.PlanTitle != "" && setData.PlanDates != "" {
-			<p class="muted">{ setData.PlanDates }</p>
-		}
+		</div>
 		if setData.ReadOnly {
 			<p>@components.BadgeTitled("status-pending", "Past plan - read only", "This plan has already happened - shown for reference, no Publish/Discard/PCO-sync actions available")</p>
 		}
 		<div class="build-page-nav">
 			<div class="build-page-nav-primary">
 				<a href={ templ.URL(fmt.Sprintf("/scheduling/build?service_type_id=%s", setData.ServiceTypeID)) }>&larr; Choose a different plan</a>
-				if setData.PrevPlanID != "" {
-					<a href={ templ.URL(adjacentPlanURL(setData.ServiceTypeID, setData.PrevPlanID, activeTab)) }>&larr; Previous plan</a>
-				}
-				if setData.NextPlanID != "" {
-					<a href={ templ.URL(adjacentPlanURL(setData.ServiceTypeID, setData.NextPlanID, activeTab)) }>Next plan &rarr;</a>
-				}
 			</div>
 			<div class="build-page-nav-links">
 				<a href={ templ.URL(pcoPlanURL(setData.PlanID)) } target="_blank" rel="noopener">Open in Planning Center ↗</a>
 				<a href={ templ.URL(fmt.Sprintf("/scheduling/build/%s/%s/run-sheet", setData.ServiceTypeID, setData.PlanID)) } target="_blank" rel="noopener">Run sheet ↗</a>
 			</div>
 		</div>
-		@planNoteSection(setData.ServiceTypeID, setData.PlanID, note, setData.ReadOnly)
+		@planNoteSection(setData.ServiceTypeID, setData.PlanID, note)
 		<!--
 			Songs and Team are two independently-interactive builders (each
 			with its own htmx swap target, see SetBuilderBody/RosterBuilderBody)
