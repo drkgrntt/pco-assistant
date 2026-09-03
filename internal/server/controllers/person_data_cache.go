@@ -183,14 +183,18 @@ func (sc *SchedulingController) triggerPersonDataSync(c *fiber.Ctx) {
 	// SyncSongInfo's identical reasoning in song_arrangement_cache.go) -
 	// middleware.RequestContext(c)'s context is cancelled the moment this
 	// handler returns, so a fresh context.Background()-derived context
-	// carrying the same token is built instead.
+	// carrying the same token is built instead - logger.WithRequestID
+	// carries this request's id along the same way, so runPersonDataSync's
+	// own logging can still be traced back to whichever request triggered
+	// it.
 	accessToken := middleware.AccessToken(c)
+	requestID := middleware.CurrentRequestID(c)
 	store := sc.store
 	// Priority 20: an unattended background sync should never delay this
 	// same token's interactive traffic if go-pco's throttle is enabled
 	// (PCO_THROTTLE_ENABLED - off by default, see go-pco's README) - see
 	// docs/pco-api-risks.md's throttle-adoption addendum.
-	syncCtx := pco.WithPriority(pco.WithAccessToken(context.Background(), accessToken), 20)
+	syncCtx := pco.WithPriority(pco.WithAccessToken(logger.WithRequestID(context.Background(), requestID), accessToken), 20)
 	go runPersonDataSync(syncCtx, store, orgID, reqs)
 }
 
@@ -214,7 +218,7 @@ func runPersonDataSync(ctx context.Context, store *scheduling.Store, organizatio
 	var applied, failed atomic.Int64
 	runPacedBatches(batches, personDataSyncBatchPause, func(req personSyncRequest) {
 		if err := syncOnePersonRequest(ctx, store, req); err != nil {
-			logger.Error("background person data sync: request failed",
+			logger.ErrorContext(ctx, "background person data sync: request failed",
 				"organization_id", organizationID, "person_id", req.personID,
 				"team_id", req.teamID, "kind", req.kind, "error", err)
 			failed.Add(1)
@@ -223,7 +227,7 @@ func runPersonDataSync(ctx context.Context, store *scheduling.Store, organizatio
 		applied.Add(1)
 	})
 
-	logger.Info("background person data sync complete",
+	logger.InfoContext(ctx, "background person data sync complete",
 		"organization_id", organizationID,
 		"requests", len(reqs),
 		"applied", applied.Load(),

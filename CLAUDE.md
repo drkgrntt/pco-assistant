@@ -206,18 +206,45 @@ actual app, split by concern rather than by feature:
   holds PWA assets (manifest, service worker, icons). Rendered live at
   `/style-guide`, which only responds when `APP_ENV=local`.
 
-**Request pipeline** (`routes.go`): every route runs through
-`RequireAuth` -> `RequireActiveOrganization` -> `PopulateNavState`, in that
-order (each depends on locals the previous one set) - see the doc comments
-on each in `internal/server/middleware/` before touching this chain.
-`RequireAuth` resolves the session cookie into `person_id`/`organization_id`
-locals *and* a PCO-authenticated context (`pco_ctx`), refreshing the PCO
-access token first if it's near expiry. Handlers should read these via the
-middleware package's accessors rather than pulling locals directly:
-`middleware.CurrentPerson`, `middleware.CurrentOrganization`,
-`middleware.CurrentOrganizationID`, `middleware.RequestContext(c)` (use
-this instead of `c.Context()` any time you're about to call into `go-pco`,
-so the call authenticates as the signed-in person).
+**Request pipeline** (`routes.go`): `RequestID` -> `Recover` run ahead of
+everything else, unconditionally (no allowlist - every response, including
+a rejected CORS preflight or a 404, gets an id and is panic-safe). Every
+route past that runs through `RequireAuth` -> `RequireActiveOrganization`
+-> `PopulateNavState`, in that order (each depends on locals the previous
+one set) - see the doc comments on each in `internal/server/middleware/`
+before touching this chain. `RequireAuth` resolves the session cookie into
+`person_id`/`organization_id` locals *and* a PCO-authenticated context
+(`pco_ctx`), refreshing the PCO access token first if it's near expiry.
+Handlers should read these via the middleware package's accessors rather
+than pulling locals directly: `middleware.CurrentPerson`,
+`middleware.CurrentOrganization`, `middleware.CurrentOrganizationID`,
+`middleware.RequestContext(c)` (use this instead of `c.Context()` any time
+you're about to call into `go-pco`, so the call authenticates as the
+signed-in person - it also carries this request's id, see next).
+
+**Logging**: `internal/logger` wraps a package-level `slog.Logger`.
+Anywhere a `context.Context` is already in scope (a handler via
+`middleware.RequestContext(c)`, or a function that already takes one),
+log through the `*Context` variants (`logger.ErrorContext(ctx, ...)`,
+`InfoContext`/`WarnContext`/`DebugContext` likewise) rather than the plain
+ones - they fold in a `request_id` field automatically when the context
+carries one (`logger.WithRequestID`, or `RequestContext`'s own wrapping),
+so a WARN/ERROR line can be traced back to the `X-Request-ID` response
+header whoever hit the route can report. A goroutine a handler kicks off
+and returns without waiting on (a background PCO sync, an outbound email)
+needs its own `context.Background()`-derived context anyway (the request's
+own is cancelled the moment the handler returns) - wrap that with
+`logger.WithRequestID(context.Background(), middleware.CurrentRequestID(c))`
+the same way `song_arrangement_cache.go`/`person_data_cache.go`/
+`feedback.go` already do, so its own logging still carries the id. The
+plain (non-`Context`) functions stay for genuinely request-less call sites
+- cron jobs (`internal/server/jobs/`), CLI tools (`cmd/dbseed`, etc.),
+and process startup/shutdown - there's nothing to correlate there.
+`pco_observability.go`'s go-pco response hook (a single process-wide
+callback, not a per-request handler) gets its request_id from
+`info.Ctx` (go-pco v0.20.0+) - the exact context every `pco.*` call in
+this app was made with - rather than from `middleware.RequestContext(c)`
+directly, since the hook has no `fiber.Ctx` of its own to read one from.
 
 **Organization scoping**: this is multi-tenant - every `scheduling.Store`
 query that touches org-owned data takes an organization id

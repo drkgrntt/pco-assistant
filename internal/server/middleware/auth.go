@@ -70,7 +70,7 @@ func RequireAuth(store *auth.Store) fiber.Handler {
 				// same "" bucket. Treat it exactly like a failed token
 				// refresh: sign out and make them sign in again properly.
 				if session.OrganizationID == "" {
-					logger.Error("session has no organization id, signing out", "person_id", session.PersonID)
+					logger.ErrorContext(RequestContext(c), "session has no organization id, signing out", "person_id", session.PersonID)
 					return signOutAndReject(c, store, token, softAuth)
 				}
 
@@ -83,12 +83,12 @@ func RequireAuth(store *auth.Store) fiber.Handler {
 						// refresh token itself expired - there's no PAT to
 						// fall back to for a specific person, so this has
 						// to be treated as session-invalid, not ignored.
-						logger.Error("refreshing PCO token failed, signing out", "error", err)
+						logger.ErrorContext(RequestContext(c), "refreshing PCO token failed, signing out", "error", err)
 						return signOutAndReject(c, store, token, softAuth)
 					}
 
 					if err := store.UpdateSessionTokens(c.Context(), token, result.AccessToken, result.RefreshToken, result.ExpiresAt); err != nil {
-						logger.Error("saving refreshed PCO token failed", "error", err)
+						logger.ErrorContext(RequestContext(c), "saving refreshed PCO token failed", "error", err)
 					}
 					accessToken = result.AccessToken
 				}
@@ -97,7 +97,7 @@ func RequireAuth(store *auth.Store) fiber.Handler {
 				c.Locals("person_name", session.PersonName)
 				c.Locals("organization_id", session.OrganizationID)
 				c.Locals("organization_name", session.OrganizationName)
-				c.Locals("pco_ctx", pco.WithAccessToken(c.Context(), accessToken))
+				c.Locals("pco_ctx", logger.WithRequestID(pco.WithAccessToken(c.Context(), accessToken), CurrentRequestID(c)))
 				c.Locals("access_token", accessToken)
 				return c.Next()
 			}
@@ -164,16 +164,20 @@ func CurrentOrganizationID(c *fiber.Ctx) string {
 
 // RequestContext returns the context RequireAuth built for this request -
 // c.Context() wrapped with the signed-in person's PCO access token (see
-// go-pco.WithAccessToken), so every pco.* call made with it authenticates
-// as them. Use this instead of c.Context() anywhere a handler is about to
-// call into go-pco. Falls back to plain c.Context() on routes RequireAuth
-// didn't run a token into (the public routes - none of which call PCO
-// today, but this keeps that safe by default rather than panicking).
+// go-pco.WithAccessToken) and this request's id (see logger.WithRequestID),
+// so every pco.* call made with it authenticates as them, and every
+// logger.*Context call made with it tags its fields with request_id. Use
+// this instead of c.Context() anywhere a handler is about to call into
+// go-pco *or* log something - both benefit. Falls back to plain c.Context()
+// (still carrying the request id, just no PCO token) on routes RequireAuth
+// didn't run a token into - the public routes, none of which call PCO
+// today, but /health and the pre-session-check path in RequireAuth itself
+// both still want their logs correlated.
 func RequestContext(c *fiber.Ctx) context.Context {
 	if ctx, ok := c.Locals("pco_ctx").(context.Context); ok {
 		return ctx
 	}
-	return c.Context()
+	return logger.WithRequestID(c.Context(), CurrentRequestID(c))
 }
 
 // AccessToken returns the signed-in person's raw PCO OAuth access token as

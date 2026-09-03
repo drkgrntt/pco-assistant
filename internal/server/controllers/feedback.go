@@ -59,9 +59,16 @@ func (fc *FeedbackController) SubmitFeedback(c *fiber.Ctx) error {
 	email := strings.TrimSpace(body.Email)
 	message := body.Message
 
+	// context.Background(), not middleware.RequestContext(c): this
+	// goroutine outlives the request (see SyncSongInfo's identical
+	// reasoning in song_arrangement_cache.go), so a fresh
+	// context.Background()-derived one is built instead - carrying just
+	// this request's id (see logger.WithRequestID) so the "failed" log
+	// below, if it fires, can still be traced back to this submission.
+	sendCtx := logger.WithRequestID(context.Background(), middleware.CurrentRequestID(c))
 	go func() {
-		if err := fc.client.SendFeedback(context.Background(), email, message); err != nil {
-			logger.Error("sending feedback email failed", "error", err)
+		if err := fc.client.SendFeedback(sendCtx, email, message); err != nil {
+			logger.ErrorContext(sendCtx, "sending feedback email failed", "error", err)
 		}
 	}()
 

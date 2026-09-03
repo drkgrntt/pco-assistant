@@ -95,7 +95,7 @@ func fetchSongsFromPCO(ctx context.Context, includeArchived bool) ([]pco.SongDat
 	}
 
 	if totalPages > pcoSongSanityMaxPages {
-		logger.Error("PCO song library page count exceeds sanity ceiling - aborting fetch",
+		logger.ErrorContext(ctx, "PCO song library page count exceeds sanity ceiling - aborting fetch",
 			"total_count", totalCount, "total_pages", totalPages, "sanity_max_pages", pcoSongSanityMaxPages)
 		return nil, fmt.Errorf("PCO reports %d songs (%d pages) - exceeds sanity ceiling of %d pages, aborting", totalCount, totalPages, pcoSongSanityMaxPages)
 	}

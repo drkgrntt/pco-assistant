@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"pco-assistant/internal/database"
+	"pco-assistant/internal/server/middleware"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -19,5 +20,5 @@ func (hc *HealthController) RegisterRoutes(router fiber.Router) {
 }
 
 func (hc *HealthController) Index(c *fiber.Ctx) error {
-	return c.JSON(hc.db.Health())
+	return c.JSON(hc.db.Health(middleware.RequestContext(c)))
 }

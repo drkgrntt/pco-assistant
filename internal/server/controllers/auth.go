@@ -122,14 +122,14 @@ func (ac *AuthController) Callback(c *fiber.Ctx) error {
 		// gives UpsertOrganization a few lines below. Only a confirmed
 		// 401/403 (definitely no access) should ever block sign-in; an
 		// ambiguous failure shouldn't lock out a legitimate admin.
-		logger.Error("checking Services access failed, allowing sign-in", "error", err)
+		logger.ErrorContext(middleware.RequestContext(c), "checking Services access failed, allowing sign-in", "error", err)
 	}
 
 	// Best-effort, unlike the org lookup above: this is account-level
 	// bookkeeping (see auth.UpsertOrganization), not something a request
 	// gets scoped by, so a failure here shouldn't block sign-in.
 	if err := ac.store.UpsertOrganization(c.Context(), org.Data.ID, org.Data.Attributes.Name); err != nil {
-		logger.Error("upserting organization failed", "error", err)
+		logger.ErrorContext(middleware.RequestContext(c), "upserting organization failed", "error", err)
 	}
 
 	token, err := ac.store.CreateSession(c.Context(), personID, personName, org.Data.ID, org.Data.Attributes.Name, tokenResult.AccessToken, tokenResult.RefreshToken, tokenResult.ExpiresAt)
