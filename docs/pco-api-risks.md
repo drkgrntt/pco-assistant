@@ -901,19 +901,29 @@ This repo now pins that tag (`go.mod`) and:
 - Leaves interactive/render-path calls untagged (default priority) -
   no evidence yet that they need elevating above the default, and the
   plan is explicit not to do this speculatively.
-- Does **not** enable the throttle itself. `PCO_THROTTLE_ENABLED` is
-  documented in `README.md`'s Setup section but left unset - no consumer
-  has hit an actual 429 yet (this doc's own mitigations above already
-  keep call volume well under budget), so this is defense-in-depth ready
-  to flip on, not a response to an observed problem. Turning it on is a
-  separate, later operational decision, not bundled into this adoption
-  step.
 - Default rate, if/when enabled: 60 requests/20s (`PCO_THROTTLE_RATE_PER_20S`,
   matching this app's own existing 60%-of-ceiling convention above) -
   deliberately more conservative than PCO's raw 100/20s ceiling or
   go-pco's own originally-proposed 80/20s default, since raising it later
   with real production signal is safer than shipping close to the wire
   and hoping it holds.
+
+**Update, 2026-09-03: enabled, both local and production, after a real
+429.** The "not bundled into this adoption step, separate later
+operational decision" above held only until someone actually hit the
+ceiling - a user paging through plans via the new Prev/Next nav
+(`e70f640`) rapidly enough to stack multiple ~100-200-call plan-page loads
+(Songs tab + Team tab both fetch on load, per mitigation #3/the earlier
+addenda) inside one rolling 20s window hit 110 requests/20s and got
+rate-limited. `PCO_THROTTLE_ENABLED=true` is now set in both the local
+`.env` and production's (`~/sites/pco-assistant/.env` on `debian`,
+container recreated to pick it up) - `PCO_THROTTLE_RATE_PER_20S` left
+unset in both, so the 60/20s default above applies. This doesn't reduce
+PCO call *count* (same category as #6's rate-limit note) - it paces
+*admission* so a burst queues instead of exceeding the ceiling, at the
+cost of some added latency under a burst like the one that triggered
+this. The background syncs' priority-20 tagging (above) means they still
+won't get starved by that queuing.
 
 **Deliberately not done** (per the plan's own "Adoption in this repo"
 step 5): the existing hand-tuned pacing this addendum's intro calls
