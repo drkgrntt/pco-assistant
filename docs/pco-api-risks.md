@@ -1012,3 +1012,14 @@ or whether the response hook's logging will show the throttle *did* wait
 (confirming the "bucket refill boundary" theory above) or show something
 else entirely - both are genuinely worth checking the next time this
 comes up, now that there's finally a log line to check.
+
+**Update, 2026-09-03: confirmed resolved.** The worship pastor (the user
+who hit both prior 429s) reported performance and rate-limiting are fine
+on his end; separately, `docker compose logs` on `debian` now show the
+retry actually firing and succeeding - direct confirmation the response
+hook (#1 above) has real signal flowing through it and the opt-in retry
+(#2) is doing its job when the throttle's admission still lets a burst
+through. No third occurrence reported. Nothing further planned unless a
+new symptom shows up - the "not yet known" questions above are answered
+by this in practice, even without digging into a specific log line to
+confirm the bucket-refill theory precisely.
