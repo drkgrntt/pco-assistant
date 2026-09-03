@@ -16,13 +16,24 @@
 :root {
   color-scheme: light dark;
 
-  /* --- Color: Canvas & Elevation --- */
-  --bg: hsl(40deg 38% 96%);
+  /* --- Color: Canvas & Elevation ---
+     Cool/slate, not warm - hue ~218 (blue-gray) rather than the ~30-40
+     (amber/mustard) these used to sit at. Not a pure hue rotation
+     anymore: a straight swap at the old warm saturation/lightness read
+     as noticeably grayer at 218 than the same numbers did at 30-40 (blue
+     reads heavier/grayer than amber at equal S/L), so --bg/--border/
+     --surface-hover got their saturation pulled back and lightness
+     nudged up in light mode to land soft rather than flat gray -
+     --text/--muted stay put, they were never the complaint. Dark mode is
+     untouched (not the complaint either). Status colors (accent/danger/
+     success/pending below) are untouched too - "pending" is deliberately
+     amber by convention, not part of this. */
+  --bg: hsl(218deg 22% 97%);
   --surface: hsl(0deg 0% 100%);
-  --surface-hover: hsl(36deg 71% 99%);
-  --text: hsl(34deg 8% 18%);
-  --border: hsl(39deg 45% 90%);
-  --muted: hsl(31deg 11% 38%);
+  --surface-hover: hsl(218deg 45% 99%);
+  --text: hsl(218deg 8% 18%);
+  --border: hsl(218deg 28% 91%);
+  --muted: hsl(218deg 11% 38%);
 
   /* --- Color: Brand & Accents --- */
   --accent: hsl(174deg 47% 32%);
@@ -116,12 +127,12 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: hsl(30deg 8% 10%); /* Slightly deeper dark for better contrast */
-    --surface: hsl(30deg 8% 14%); /* Elevated card surface */
-    --surface-hover: hsl(30deg 9% 18%);
-    --text: hsl(33deg 20% 89%);
-    --border: hsl(33deg 10% 22%);
-    --muted: hsl(32deg 10% 62%);
+    --bg: hsl(218deg 8% 10%); /* Slightly deeper dark for better contrast */
+    --surface: hsl(218deg 8% 14%); /* Elevated card surface */
+    --surface-hover: hsl(218deg 9% 18%);
+    --text: hsl(218deg 20% 89%);
+    --border: hsl(218deg 10% 22%);
+    --muted: hsl(218deg 10% 62%);
 
     --accent: hsl(173deg 43% 60%);
     --accent-subtle: hsl(172deg 29% 15%);
@@ -138,12 +149,12 @@
 }
 
 :root[data-theme="dark"] {
-  --bg: hsl(30deg 8% 10%);
-  --surface: hsl(30deg 8% 14%);
-  --surface-hover: hsl(30deg 9% 18%);
-  --text: hsl(33deg 20% 89%);
-  --border: hsl(33deg 10% 22%);
-  --muted: hsl(32deg 10% 62%);
+  --bg: hsl(218deg 8% 10%);
+  --surface: hsl(218deg 8% 14%);
+  --surface-hover: hsl(218deg 9% 18%);
+  --text: hsl(218deg 20% 89%);
+  --border: hsl(218deg 10% 22%);
+  --muted: hsl(218deg 10% 62%);
 
   --accent: hsl(173deg 43% 60%);
   --accent-subtle: hsl(172deg 29% 15%);

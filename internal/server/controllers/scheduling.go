@@ -154,24 +154,39 @@ func effectiveKey(ss scheduling.SetSong, info scheduling.SongArrangementInfo) st
 // and always re-matched here, not by relying on PCO's own minor-key
 // rendering - typing the same string back finds the same Key row again
 // rather than creating a duplicate.
-func resolveKeyID(ctx context.Context, songID, arrangementID, keyOverride, defaultKeyID string) string {
-	if keyOverride == "" || arrangementID == "" {
-		return defaultKeyID
+//
+// Returns a non-nil err whenever a real override couldn't actually be
+// resolved (no arrangement to attach a key under, or the create-under-
+// arrangement call itself failed) - keyID is still the best available
+// fallback (defaultKeyID) in that case, never "", so every caller can
+// keep using the returned id unconditionally and only needs err to decide
+// whether to also surface a publish failure. Silently swallowing this
+// used to mean a key someone explicitly set here could quietly not make
+// it into Planning Center - the item would just keep the arrangement's
+// default key with no error anywhere, including on a plain PCO 429 this
+// app already has documented history with under load (see
+// docs/pco-api-risks.md).
+func resolveKeyID(ctx context.Context, songID, arrangementID, keyOverride, defaultKeyID string) (keyID string, err error) {
+	if keyOverride == "" {
+		return defaultKeyID, nil
+	}
+	if arrangementID == "" {
+		return defaultKeyID, errors.New("no arrangement linked to attach a key to")
 	}
 
-	if keys, err := pco.GetKeys(ctx, songID, arrangementID, nil); err == nil {
+	if keys, getErr := pco.GetKeys(ctx, songID, arrangementID, nil); getErr == nil {
 		for _, k := range keys.Data {
 			if strings.EqualFold(k.Attributes.StartingKey, keyOverride) {
-				return k.ID
+				return k.ID, nil
 			}
 		}
 	}
 
-	created, err := pco.CreateKey(ctx, songID, arrangementID, &pco.CreateKeyParams{StartingKey: keyOverride})
-	if err != nil {
-		return defaultKeyID
+	created, createErr := pco.CreateKey(ctx, songID, arrangementID, &pco.CreateKeyParams{StartingKey: keyOverride})
+	if createErr != nil {
+		return defaultKeyID, createErr
 	}
-	return created.Data.ID
+	return created.Data.ID, nil
 }
 
 // resolveArrangementCacheInfo returns songID's full cached arrangement

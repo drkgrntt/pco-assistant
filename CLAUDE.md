@@ -23,7 +23,14 @@ before publish). Check a proposed feature against those two promises
 before recommending it, especially when asked to prioritize among
 docs/ideas.md's brainstorm items - "does PCO already do this" is the wrong
 test (see that section for why); "which promise does this serve, and how
-directly" is the right one.
+directly" is the right one. That test picks *which* features belong on
+the roadmap; it doesn't say anything about *how* to build one. Friction
+reduction is the separate, standing discipline for that - not a third
+promise to weigh alongside the other two, but a build-time question for
+every feature regardless of which promise it serves ("is this the fast,
+obvious way to do the thing, or does it hand the user a second UI pattern
+to learn / a reason to bounce back to PCO"). See "Reducing friction vs.
+Planning Center" in docs/ideas.md for what that looks like concretely.
 
 **Agent delegation**: not a blanket default. Spawn a subagent (general-
 purpose, isolation: worktree) for a task that's fully-specified upfront,
@@ -278,6 +285,14 @@ discarding any local change, unlike Discard's full replace. Changes here
 to PCO immediately since PCO has no "draft" concept for them; others stay
 purely local until the next Publish/Refresh. Check how an existing similar
 field behaves before adding a new one.
+
+This is the highest-friction-bar code in the app, not incidental
+plumbing - see docs/ideas.md's Vision/positioning section on why
+PCO-duplicating actions (song key, order of service) are the whole
+point, not something to skip because "PCO already does this." Any gap
+between what this app lets someone set and what Publish actually pushes
+means the user has to go clean it up by hand in PCO afterward, which
+defeats the entire premise of planning here at all.
 
 **Migrations**: goose, numbered sequentially
 (`internal/database/migrations/NNNNN_description.sql`), embedded at build

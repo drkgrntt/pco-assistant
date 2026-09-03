@@ -156,6 +156,40 @@ templ rowMenuItems() {
 	</button>
 }
 
+// replaceMenuToggle/replaceMenuItems are the "replace this song" Disclosure's
+// toggle-button content and popup contents - collapses what used to be an
+// always-visible <select> + submit button (wide enough to occasionally
+// push the row-menu toggle onto its own line at narrow widths - see the
+// .set-song-actions-wrap comment above) into the same reveal-on-click
+// idiom as the row-menu itself, reusing its row-menu/toggleRowMenu
+// machinery rather than a bespoke toggle. Needs data/row (unlike
+// rowMenuToggle/rowMenuItems above) since the candidate list and the
+// confirm/post targets are per-song.
+templ replaceMenuToggle() {
+	@components.IconReplace()
+}
+
+templ replaceMenuItems(data SetBuilderData, row ServiceOrderRow) {
+	<form
+		class="replace-form"
+		hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/replace", data.ServiceTypeID, data.PlanID, row.Song.ID) }
+		hx-target="#set-builder-body"
+		hx-swap="outerHTML"
+		hx-confirm={ fmt.Sprintf("Replace %q with the selected song?", row.Song.Title) }
+	>
+		<select name="song_id" required>
+			<option value="" selected disabled>Replace with...</option>
+			for _, cand := range data.ReplaceCandidates {
+				<option value={ cand.SongID }>{ cand.Title }</option>
+			}
+		</select>
+		<button type="submit">
+			@components.IconReplace()
+			Replace
+		</button>
+	</form>
+}
+
 // songCandidateMeta is the badge/meta cluster for one not-yet-added song -
 // shared by the candidate list ("Browse all songs") and, since both
 // reuse CandidateSongView (see SuggestionView, set_types.go), the
@@ -408,23 +442,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 													@components.IconRemove()
 												</button>
 												if len(data.ReplaceCandidates) > 0 {
-													<form
-														class="replace-form"
-														hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/replace", data.ServiceTypeID, data.PlanID, row.Song.ID) }
-														hx-target="#set-builder-body"
-														hx-swap="outerHTML"
-														hx-confirm={ fmt.Sprintf("Replace %q with the selected song?", row.Song.Title) }
-													>
-														<select name="song_id" required>
-															<option value="" selected disabled>Replace with...</option>
-															for _, cand := range data.ReplaceCandidates {
-																<option value={ cand.SongID }>{ cand.Title }</option>
-															}
-														</select>
-														<button type="submit" class="icon-btn" aria-label="Replace song" title="Replace song">
-															@components.IconEdit()
-														</button>
-													</form>
+													@components.Disclosure("row-menu", "icon-btn row-menu-toggle", "toggleRowMenu(this)", "Replace this song", "Replace", replaceMenuToggle(), replaceMenuItems(data, row))
 												}
 											</div>
 											<!--
