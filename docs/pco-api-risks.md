@@ -933,3 +933,82 @@ loops remain the real safety net until the throttle has actually run in
 production for a while with `PCO_THROTTLE_ENABLED=true`; simplifying them
 to a plain bounded fan-out before then would mean removing a working
 safety net before its replacement is even turned on, let alone proven.
+
+## Addendum: a 429 got through the throttle anyway - added a response
+## hook (real visibility) and an opt-in retry, go-pco v0.19.0
+
+The throttle addendum above closed with "enabled, both local and
+production, after a real 429" - that held for about eight minutes. The
+same user hit a second 429 (PCO's response reported ~110/100 requests)
+during a fresh Prev/Next browsing session, *after* the throttle-enabling
+container restart, not before it - confirmed by asking for the exact
+timing rather than assuming.
+
+**Investigated and found a real observability gap first**: this app logs
+*nothing* about PCO errors or throttle activity anywhere - confirmed by
+grepping every controller for `StatusCode`/`RequestError`/`429` and
+finding no log call at any of them; a 429 either gets silently swallowed
+by the existing best-effort `if err == nil` pattern (the common case) or,
+at the handful of primary-fetch call sites like
+`buildSetBuilderData`'s `GetPlan` call, surfaces only as an inline
+`ErrMsg` on the rendered page - never into `docker compose logs`. So the
+first 429 (which prompted enabling the throttle) and this second one were
+both diagnosed entirely from what the user could see on screen, with zero
+server-side corroboration either way.
+
+**Root cause, best understanding**: the throttle (previous addendum)
+bounds *sustained* rate via a token bucket that deliberately starts full
+(`newTokenLimiter` in go-pco) and refills continuously. That's correct
+for its purpose, but it isn't a hard rolling-window ceiling in every
+timing pattern - a same-token burst that drains the bucket right at the
+start of one window and hits a full refill right at the start of the
+next can, in an unlucky worst case, still clear admission and still get
+a real 429 from PCO. 60/20s (40% headroom under PCO's 100/20s) makes this
+rare, not impossible - and a long, heavy Prev/Next session is exactly the
+kind of sustained, repeated-burst usage likely to find that edge.
+
+**Fixed in two parts, both in `go-pco` (`v0.19.0`, this repo's `go.mod`
+now pinned to it) since `NewRequest` is the one choke point every
+resource function already funnels through - adding either as a per-call-
+site change here would have meant touching the same ~100+ call sites
+`docs/pco-api-risks.md`'s own mitigations #2/#6/the addenda above were
+written to avoid touching one at a time**:
+
+1. **`pco.SetResponseHook`** (`observe.go`) - a single opt-in callback
+   fired after every `NewRequest` attempt, success or failure, with
+   method/URL/status/error/`RetryAfter`/attempt number/throttle-wait/
+   duration. Wired up unconditionally (not gated by any env var) via
+   `registerPCOResponseHook` (`internal/server/pco_observability.go`),
+   called once from `server.New()`. Logs nothing on success (a single
+   Build page render legitimately makes 100-200 calls - logging every one
+   would flood the log for no benefit); any failure gets a `logger.Warn`,
+   with a 429 specifically getting its own distinct, grep-able message
+   carrying attempt count and throttle-wait, so the *next* occurrence is
+   diagnosable from `docker compose logs` alone instead of another round
+   of "what exactly did you see and when."
+2. **`pco.ConfigureRetry`/`PCO_RETRY_ON_429_*`** (`retry.go`) - an opt-in
+   bounded retry, scoped to exactly the gap #1 (the throttle) can't
+   close: on a 429, wait for PCO's own `Retry-After` header (capped at
+   `PCO_RETRY_ON_429_MAX_WAIT_SECONDS`, default 30s) and try once more
+   (`PCO_RETRY_ON_429_MAX_ATTEMPTS`, default 2 total tries) before giving
+   up. Deliberately narrow - only ever retries a 429, never a 422 (wrong
+   request, retrying just wastes a call for the same error) or a bare
+   5xx (retrying those blind is a different, broader feature involving
+   write-idempotency that nothing has asked for). `PCO_RETRY_ON_429_ENABLED=true`
+   is now set in both local and production `.env`, same rationale as the
+   throttle's own enablement above - real signal justified turning it on
+   rather than shipping it opt-in-and-unused.
+
+Both mirror `ConfigureThrottle`'s existing shape exactly (explicit config
+call wins over env vars, env read once lazily via `sync.Once`) and shipped
+with the same test rigor as the throttle itself - `retry_test.go`/
+`observe_test.go` in `go-pco` cover the pure backoff/config-precedence
+logic and drive real retried/hooked `NewRequest` calls against a local
+`httptest.Server`, including a context-cancellation test proving a caller
+with its own deadline doesn't sit through a long `Retry-After` wait.
+
+**Not yet known**: whether the retry actually prevents a third occurrence,
+or whether the response hook's logging will show the throttle *did* wait
+(confirming the "bucket refill boundary" theory above) or show something
+else entirely - both are genuinely worth checking the next time this
+comes up, now that there's finally a log line to check.

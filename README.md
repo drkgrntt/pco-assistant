@@ -235,18 +235,37 @@ Mobile-first, installable as a PWA, with light/dark theming.
    `pg_dump` on `PATH` (already in the Docker image via
    `postgresql-client`).
 
-6. **PCO request throttle (optional, off by default).** go-pco's opt-in,
+6. **PCO request throttle (enabled in production).** go-pco's opt-in,
    priority-aware request throttle (see its README) can be turned on
    purely via env var, no code change - `PCO_THROTTLE_ENABLED=true`, plus
    optional `PCO_THROTTLE_RATE_PER_20S` (defaults to 60, i.e. 60% of PCO's
    real 100-req/20s ceiling) and `PCO_THROTTLE_DEFAULT_PRIORITY` (defaults
    to 10). This app already tags its two background syncs (Song Info,
    person-data cache) at priority 20 so they never delay interactive
-   traffic once the throttle is enabled - see `docs/pco-api-risks.md`. Leave
-   unset to skip this entirely; nothing else in this app depends on it
-   being on.
+   traffic once the throttle is enabled - see `docs/pco-api-risks.md`. Set
+   `PCO_THROTTLE_ENABLED=true` to match production (enabled 2026-09-03
+   after a real 429 - see `docs/pco-api-risks.md`'s throttle addendum);
+   leave unset to skip this in local dev, since a single developer's own
+   traffic is in no danger of hitting PCO's ceiling.
 
-7. **`.env`**:
+7. **PCO 429 retry (enabled in production).** go-pco v0.19.0+'s opt-in
+   retry (see its README) is this app's other line of defense against a
+   429 - the throttle above bounds *sustained* rate but not every
+   possible burst pattern, so a caller can still get a real 429 even with
+   it on. `PCO_RETRY_ON_429_ENABLED=true`, plus optional
+   `PCO_RETRY_ON_429_MAX_ATTEMPTS` (defaults to 2, i.e. one retry) and
+   `PCO_RETRY_ON_429_MAX_WAIT_SECONDS` (defaults to 30) - a 429 waits for
+   PCO's own `Retry-After` header (capped at `MAX_WAIT_SECONDS`) and tries
+   once more before giving up. This app also registers a
+   `pco.SetResponseHook` (`internal/server/pco_observability.go`) that
+   logs any PCO failure - a 429 specifically with its attempt count and
+   throttle-wait time - through the app's own logger, since go-pco never
+   logs anything itself; this is unconditional (not gated by either env
+   var above) so a 429 leaves a trace in the logs whether or not the
+   throttle/retry are on. See `docs/pco-api-risks.md`'s throttle addendum
+   for the incident that prompted both of these.
+
+8. **`.env`**:
    ```
    PORT=8080
    APP_ENV=local
@@ -283,6 +302,10 @@ Mobile-first, installable as a PWA, with light/dark theming.
    PCO_THROTTLE_ENABLED=...
    PCO_THROTTLE_RATE_PER_20S=...
    PCO_THROTTLE_DEFAULT_PRIORITY=...
+
+   PCO_RETRY_ON_429_ENABLED=...
+   PCO_RETRY_ON_429_MAX_ATTEMPTS=...
+   PCO_RETRY_ON_429_MAX_WAIT_SECONDS=...
    ```
 
 ## Makefile

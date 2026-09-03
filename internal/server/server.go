@@ -24,6 +24,7 @@ type FiberServer struct {
 
 func New() *FiberServer {
 	db := database.New()
+	registerPCOResponseHook()
 
 	server := &FiberServer{
 		App: fiber.New(fiber.Config{
