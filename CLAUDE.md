@@ -206,18 +206,23 @@ actual app, split by concern rather than by feature:
   holds PWA assets (manifest, service worker, icons). Rendered live at
   `/style-guide`, which only responds when `APP_ENV=local`.
 
-**Request pipeline** (`routes.go`): every route runs through
-`RequireAuth` -> `RequireActiveOrganization` -> `PopulateNavState`, in that
-order (each depends on locals the previous one set) - see the doc comments
-on each in `internal/server/middleware/` before touching this chain.
-`RequireAuth` resolves the session cookie into `person_id`/`organization_id`
-locals *and* a PCO-authenticated context (`pco_ctx`), refreshing the PCO
-access token first if it's near expiry. Handlers should read these via the
-middleware package's accessors rather than pulling locals directly:
-`middleware.CurrentPerson`, `middleware.CurrentOrganization`,
-`middleware.CurrentOrganizationID`, `middleware.RequestContext(c)` (use
-this instead of `c.Context()` any time you're about to call into `go-pco`,
-so the call authenticates as the signed-in person).
+**Request pipeline** (`routes.go`): `RequestID` -> `Recover` run ahead of
+everything else, unconditionally (no allowlist - every response, including
+a rejected CORS preflight or a 404, gets an id and is panic-safe). Every
+route past that runs through `RequireAuth` -> `RequireActiveOrganization`
+-> `PopulateNavState`, in that order (each depends on locals the previous
+one set) - see the doc comments on each in `internal/server/middleware/`
+before touching this chain. `RequireAuth` resolves the session cookie into
+`person_id`/`organization_id` locals *and* a PCO-authenticated context
+(`pco_ctx`), refreshing the PCO access token first if it's near expiry.
+Handlers should read these via the middleware package's accessors rather
+than pulling locals directly: `middleware.CurrentPerson`,
+`middleware.CurrentOrganization`, `middleware.CurrentOrganizationID`,
+`middleware.RequestContext(c)` (use this instead of `c.Context()` any time
+you're about to call into `go-pco`, so the call authenticates as the
+signed-in person), `middleware.CurrentRequestID(c)` (include as a
+`request_id` field in a log line so it can be traced back to the
+`X-Request-ID` response header whoever hit the route can report).
 
 **Organization scoping**: this is multi-tenant - every `scheduling.Store`
 query that touches org-owned data takes an organization id

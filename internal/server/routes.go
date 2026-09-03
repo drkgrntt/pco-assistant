@@ -10,6 +10,12 @@ import (
 )
 
 func (s *FiberServer) RegisterFiberRoutes() {
+	// RequestID first (nothing after it needs to run without an id to tag
+	// its own logs with), then Recover right behind it, so it wraps every
+	// handler registered below - see both middlewares' own doc comments.
+	s.App.Use(middleware.RequestID())
+	s.App.Use(middleware.Recover())
+
 	// Apply CORS middleware
 	s.App.Use(cors.New(cors.Config{
 		AllowOrigins:     "*",

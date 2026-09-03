@@ -103,7 +103,14 @@ func (s *service) Health() map[string]string {
 	if err != nil {
 		stats["status"] = "down"
 		stats["error"] = fmt.Sprintf("db down: %v", err)
-		logger.Fatal("db down", "error", err) // Log the error and terminate the program
+		// Error, not Fatal: Health is called from the public, unauthenticated
+		// GET /health endpoint (see health.go) on every request to it, not
+		// just at startup - os.Exit(1) here would let anyone kill the whole
+		// process by hitting /health during a transient DB blip (or just a
+		// query slower than ctx's 1s timeout under load). Report "down" in
+		// the response and let the caller (an uptime monitor, a human) decide
+		// what to do about it.
+		logger.Error("db down", "error", err)
 		return stats
 	}
 
