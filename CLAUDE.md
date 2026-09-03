@@ -239,12 +239,12 @@ the same way `song_arrangement_cache.go`/`person_data_cache.go`/
 `feedback.go` already do, so its own logging still carries the id. The
 plain (non-`Context`) functions stay for genuinely request-less call sites
 - cron jobs (`internal/server/jobs/`), CLI tools (`cmd/dbseed`, etc.),
-and process startup/shutdown - there's nothing to correlate there. One
-known gap: `pco_observability.go`'s go-pco response hook is a single
-process-wide callback with no per-call context (go-pco's `ResponseInfo`
-carries none), so a PCO 429/failure logged there doesn't carry a
-request_id today - closing that would mean adding a context field to
-go-pco's `ResponseInfo` itself (a separate repo/module), not done here.
+and process startup/shutdown - there's nothing to correlate there.
+`pco_observability.go`'s go-pco response hook (a single process-wide
+callback, not a per-request handler) gets its request_id from
+`info.Ctx` (go-pco v0.20.0+) - the exact context every `pco.*` call in
+this app was made with - rather than from `middleware.RequestContext(c)`
+directly, since the hook has no `fiber.Ctx` of its own to read one from.
 
 **Organization scoping**: this is multi-tenant - every `scheduling.Store`
 query that touches org-owned data takes an organization id

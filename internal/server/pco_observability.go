@@ -32,6 +32,16 @@ import (
 // "priority-aware request throttle" addendum in docs/pco-api-risks.md).
 // Any other failure still gets logged, just without the 429-specific
 // detail.
+//
+// Uses logger.*Context, not the plain versions: info.Ctx (go-pco v0.20.0+)
+// is the exact context every pco.* call site in this app was made with -
+// middleware.RequestContext(c)'s own or one built via logger.WithRequestID
+// for a background goroutine (see song_arrangement_cache.go/
+// person_data_cache.go) - so it already carries a request_id
+// logger.WarnContext folds in automatically. This is the one log site that
+// needed go-pco itself to change to get a request_id at all: unlike every
+// other call site in this app, a hook registered via SetResponseHook has
+// no fiber.Ctx and no ctx param of its own to read one from.
 func registerPCOResponseHook() {
 	pco.SetResponseHook(func(info pco.ResponseInfo) {
 		if info.Err == nil {
@@ -39,7 +49,7 @@ func registerPCOResponseHook() {
 		}
 
 		if info.StatusCode == http.StatusTooManyRequests {
-			logger.Warn("PCO rate limit hit",
+			logger.WarnContext(info.Ctx, "PCO rate limit hit",
 				"method", info.Method,
 				"url", info.URL,
 				"attempt", info.Attempt,
@@ -50,7 +60,7 @@ func registerPCOResponseHook() {
 			return
 		}
 
-		logger.Warn("PCO request failed",
+		logger.WarnContext(info.Ctx, "PCO request failed",
 			"method", info.Method,
 			"url", info.URL,
 			"status_code", info.StatusCode,
