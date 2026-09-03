@@ -244,13 +244,14 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 						}
 					}
 
+					keyID, keyErr := resolveKeyID(ctx, ss.SongID, info.ArrangementID, ss.KeyOverride, info.KeyID)
 					item, err := pco.CreateItem(ctx, serviceTypeID, planID, &pco.CreateItemParams{
 						Title:         title,
 						ItemType:      pco.ItemTypeSong,
 						Sequence:      nextSequence + i,
 						SongID:        ss.SongID,
 						ArrangementID: info.ArrangementID,
-						KeyID:         resolveKeyID(ctx, ss.SongID, info.ArrangementID, ss.KeyOverride, info.KeyID),
+						KeyID:         keyID,
 						Description:   itemDescriptionFor(ss, info),
 						Length:        info.LengthSeconds,
 					})
@@ -265,6 +266,17 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 						failures = append(failures, fmt.Sprintf("%s: created in Planning Center but failed to record locally: %s", title, err.Error()))
 						failuresMu.Unlock()
 						return
+					}
+					// A KeyOverride that couldn't actually be resolved to a
+					// real PCO key (see resolveKeyID) doesn't block the
+					// create - the item still exists with the arrangement's
+					// default key - but it must not look like a clean
+					// success either, or the wrong key silently ships with
+					// no record anyone would ever see it.
+					if keyErr != nil {
+						failuresMu.Lock()
+						failures = append(failures, fmt.Sprintf("%s: created, but couldn't set key to %q - kept the arrangement's key instead: %s", title, ss.KeyOverride, friendlyPCOErr(keyErr)))
+						failuresMu.Unlock()
 					}
 					// Best-effort, same tolerance as ClearMovedFlags below -
 					// whatever Description/KeyOverride this create just
@@ -290,7 +302,7 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 						}
 						length := info.LengthSeconds
 						description := itemDescriptionFor(ss, info)
-						keyID := resolveKeyID(ctx, ss.SongID, info.ArrangementID, ss.KeyOverride, info.KeyID)
+						keyID, keyErr := resolveKeyID(ctx, ss.SongID, info.ArrangementID, ss.KeyOverride, info.KeyID)
 						// Deliberately no ArrangementID here, unlike
 						// RefreshSongInfo's own UpdateItem call below - this
 						// fires as a side effect of pushing a merely pending
@@ -318,6 +330,11 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 							failuresMu.Unlock()
 						} else {
 							_ = sc.store.ClearInfoPending(ctx, set.ID, ss.ID)
+							if keyErr != nil {
+								failuresMu.Lock()
+								failures = append(failures, fmt.Sprintf("%s: note/length updated, but couldn't set key to %q - kept the arrangement's key instead: %s", title, ss.KeyOverride, friendlyPCOErr(keyErr)))
+								failuresMu.Unlock()
+							}
 						}
 					}
 					atomic.AddInt32(&updatedCount, 1)
@@ -464,7 +481,7 @@ func (sc *SchedulingController) RefreshSongInfo(c *fiber.Ctx) error {
 
 		length := info.LengthSeconds
 		description := itemDescriptionFor(ss, info)
-		keyID := resolveKeyID(ctx, ss.SongID, info.ArrangementID, ss.KeyOverride, info.KeyID)
+		keyID, keyErr := resolveKeyID(ctx, ss.SongID, info.ArrangementID, ss.KeyOverride, info.KeyID)
 		if _, err := pco.UpdateItem(ctx, serviceTypeID, planID, ss.PCOItemID, &pco.UpdateItemParams{
 			Description:   &description,
 			Length:        &length,
@@ -480,6 +497,11 @@ func (sc *SchedulingController) RefreshSongInfo(c *fiber.Ctx) error {
 		// this song's Description/KeyOverride genuinely just reached
 		// Planning Center, whether or not this particular call succeeds.
 		_ = sc.store.ClearInfoPending(ctx, set.ID, ss.ID)
+		if keyErr != nil {
+			failuresMu.Lock()
+			failures = append(failures, fmt.Sprintf("%s: refreshed, but couldn't set key to %q - kept the arrangement's key instead: %s", title, ss.KeyOverride, friendlyPCOErr(keyErr)))
+			failuresMu.Unlock()
+		}
 		atomic.AddInt32(&refreshedCount, 1)
 	})
 	refreshed := int(refreshedCount)
