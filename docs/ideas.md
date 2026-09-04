@@ -410,6 +410,17 @@ pattern as `song_tags`/`song_relationships`:**
   `topic`/`theme` category costs nothing new to store - the real gap is
   the *picking* UX, not storage: search/filter the library by topic tag
   while building a set, not just view tags on a song row after the fact.
+  **Partially shipped**: the candidate search already matched typed text
+  against tag values as well as titles (`candidateMatchesSearch`,
+  `sets_builder.go`), but discoverability was the missing half - nobody
+  could see which tags existed without already knowing what to type. The
+  set builder's "Browse by tag" chips (`set_builder.templ`) now list
+  every distinct value actually in use, grouped by category behind a
+  collapsible section per category, and clicking one just types that
+  value into the same search box - no new filter logic. **Still open,
+  deliberately not tackled by that fix**: this only surfaces tags someone
+  already applied by hand; the two angles below (a structured scripture
+  field, lyric-derived tags) are unaffected.
   Two angles worth chasing before committing to scope:
   - **Scripture reference as a structured field**, not a free-text tag -
     would let "what covers Romans 8" work as a real filter instead of

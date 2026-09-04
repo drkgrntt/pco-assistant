@@ -160,6 +160,15 @@ type SetBuilderData struct {
 	TagCategories     []scheduling.SongTagCategory
 	RelationshipTypes []scheduling.SongRelationshipType
 	RoleTypes         []scheduling.SongRoleType
+
+	// TagValuesByCategory backs the "browse by tag" chips (SetBuilderBody,
+	// next to the role-filter row) - category code -> every distinct value
+	// actually tagged on some song in this org, sourced from
+	// DistinctSongTagValues. Purely a discoverability shortcut into the
+	// candidate search box's existing tag-substring matching
+	// (candidateMatchesSearch, sets_builder.go); clicking a chip doesn't add
+	// any new filter semantics of its own.
+	TagValuesByCategory map[string][]string
 }
 
 type SetSongView struct {

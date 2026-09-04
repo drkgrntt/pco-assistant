@@ -821,6 +821,27 @@ function toggleRoleFilter(el) {
   }
 }
 
+// applyTagFilter is the "browse by tag" chips' click handler
+// (set_builder.templ). Unlike toggleRoleFilter above, a tag chip isn't a
+// persistent exclusive toggle with a hidden filter input of its own - it's
+// a shortcut that types the clicked value straight into the existing
+// search box, reusing the search endpoint's own already-correct
+// tag-substring matching (candidateMatchesSearch, sets_builder.go) rather
+// than adding a second filtering mechanism.
+function applyTagFilter(el) {
+  var searchInput = document.getElementById("candidate-search");
+  if (!searchInput) {
+    return;
+  }
+  searchInput.value = el.dataset.value;
+
+  openCandidatesSection();
+
+  if (window.htmx) {
+    htmx.trigger(searchInput, "search");
+  }
+}
+
 // Sortable admin tables (relationships/preferences/song roles - marked
 // class="sortable" in their templates). Deliberately NOT used on the set
 // builder's order-of-service table, where row order is the actual data,
