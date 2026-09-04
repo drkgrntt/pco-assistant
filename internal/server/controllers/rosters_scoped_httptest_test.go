@@ -8,11 +8,17 @@ package controllers
 // AddRosterAssignment/RemoveRosterAssignment/QuickAddPositionPreference,
 // which call both functions back-to-back), so those three requests were
 // sent twice each - 6 calls where 3 would do. Both functions now read
-// these three resources off a *rosterSharedPCOData the caller fetches
-// once (see rosters_scoped.go's own doc comments) instead of calling PCO
-// themselves whenever one is handed in, so fetchRosterSharedPCOData is now
-// the single place these three requests originate from for that shared
-// path.
+// these resources off a *rosterSharedPCOData the caller fetches once (see
+// rosters_scoped.go's own doc comments) instead of calling PCO themselves
+// whenever one is handed in, so fetchRosterSharedPCOData is now the single
+// place these requests originate from for that shared path.
+//
+// The standalone GetTeams call itself is gone entirely as of the
+// include=team fix (see docs/pco-api-risks.md) - fetchRosterSharedPCOData
+// now costs exactly two requests (GetTeamMembers, GetNeededPositions with
+// team sideloaded), not three, so this test's own counters and assertions
+// were updated alongside that fix rather than left asserting the old
+// three-call shape.
 //
 // Same pco.SetBaseURLForTesting seam as internal/scheduling's
 // pco_songs_httptest_test.go and this package's own
@@ -44,20 +50,24 @@ import (
 )
 
 // rosterSharedFetchCounts tallies how many requests a fake PCO server saw
-// for each of the three endpoints fetchRosterSharedPCOData calls,
-// distinguished by URL path suffix (team_members/needed_positions/teams -
-// see go-pco's teamMembersPath/neededPositionsPath/teamsPath, none of
-// which collide with each other or with any other endpoint's suffix).
+// for each of the two endpoints fetchRosterSharedPCOData calls,
+// distinguished by URL path suffix (team_members/needed_positions - see
+// go-pco's teamMembersPath/neededPositionsPath, neither of which collides
+// with each other or with any other endpoint's suffix).
 type rosterSharedFetchCounts struct {
 	teamMembers     int32
 	neededPositions int32
-	teams           int32
 }
 
 // newRosterSharedFetchFakeServer stands in for Planning Center's
-// team_members/needed_positions/teams endpoints, incrementing counts's
-// matching counter per request and replying with a minimal-but-valid
-// single-page response for whichever one was hit.
+// team_members/needed_positions endpoints, incrementing counts's matching
+// counter per request and replying with a minimal-but-valid single-page
+// response for whichever one was hit. The needed_positions response
+// sideloads a Team via Included, mirroring the real include=team response
+// fetchRosterSharedPCOData now requests instead of a separate GetTeams
+// call - and fails the test outright if that request didn't actually ask
+// for it, so a regression back to a plain (un-sideloaded) call would be
+// caught here even though the fake server would still happily answer it.
 func newRosterSharedFetchFakeServer(t *testing.T, counts *rosterSharedFetchCounts) *httptest.Server {
 	t.Helper()
 
@@ -77,16 +87,22 @@ func newRosterSharedFetchFakeServer(t *testing.T, counts *rosterSharedFetchCount
 			})
 		case strings.HasSuffix(r.URL.Path, "/needed_positions"):
 			atomic.AddInt32(&counts.neededPositions, 1)
+			if got := r.URL.Query().Get("include"); got != "team" {
+				t.Errorf("expected needed_positions request to carry include=team, got include=%q", got)
+			}
 			writeJSON(w, map[string]any{
 				"data": []map[string]any{
-					{"type": "NeededPosition", "id": "np-1", "attributes": map[string]any{"team_position_name": "Drums", "quantity": 1}},
+					{
+						"type":       "NeededPosition",
+						"id":         "np-1",
+						"attributes": map[string]any{"team_position_name": "Drums", "quantity": 1},
+						"relationships": map[string]any{
+							"team": map[string]any{"data": map[string]any{"type": "Team", "id": "t-1"}},
+						},
+					},
 				},
-			})
-		case strings.HasSuffix(r.URL.Path, "/teams"):
-			atomic.AddInt32(&counts.teams, 1)
-			writeJSON(w, map[string]any{
-				"data": []map[string]any{
-					{"type": "Team", "id": "t-1", "attributes": map[string]any{"name": "Worship"}},
+				"included": []map[string]any{
+					{"type": "Team", "id": "t-1", "attributes": map[string]any{"name": "Worship", "sequence": 1}},
 				},
 			})
 		default:
@@ -99,10 +115,12 @@ func newRosterSharedFetchFakeServer(t *testing.T, counts *rosterSharedFetchCount
 }
 
 // TestFetchRosterSharedPCODataMakesOneCallEach proves a single
-// fetchRosterSharedPCOData call costs exactly one GetTeamMembers, one
-// GetNeededPositions, and one GetTeams request - the shared fetch every
-// rosters_detail.go handler that needs both build functions now performs
-// once per request, in place of each function fetching its own copy.
+// fetchRosterSharedPCOData call costs exactly one GetTeamMembers and one
+// GetNeededPositions request - the shared fetch every rosters_detail.go
+// handler that needs both build functions now performs once per request,
+// in place of each function fetching its own copy - and that TeamInfo
+// comes back resolved from that response's sideloaded Included array
+// rather than a separate GetTeams call.
 func TestFetchRosterSharedPCODataMakesOneCallEach(t *testing.T) {
 	var counts rosterSharedFetchCounts
 	server := newRosterSharedFetchFakeServer(t, &counts)
@@ -118,41 +136,36 @@ func TestFetchRosterSharedPCODataMakesOneCallEach(t *testing.T) {
 	if shared.NeededErr != nil {
 		t.Errorf("unexpected Needed fetch error: %v", shared.NeededErr)
 	}
-	if shared.TeamsErr != nil {
-		t.Errorf("unexpected Teams fetch error: %v", shared.TeamsErr)
-	}
 	if len(shared.Members.Data) != 1 || shared.Members.Data[0].ID != "pp-1" {
 		t.Errorf("expected 1 team member (pp-1), got %+v", shared.Members.Data)
 	}
 	if len(shared.Needed.Data) != 1 || shared.Needed.Data[0].ID != "np-1" {
 		t.Errorf("expected 1 needed position (np-1), got %+v", shared.Needed.Data)
 	}
-	if len(shared.Teams.Data) != 1 || shared.Teams.Data[0].ID != "t-1" {
-		t.Errorf("expected 1 team (t-1), got %+v", shared.Teams.Data)
+	if info, ok := shared.TeamInfo["t-1"]; !ok || info.Name != "Worship" || info.Sequence != 1 {
+		t.Errorf("expected TeamInfo[t-1] to be {Worship, 1} from the sideloaded Included array, got %+v (ok=%v)", info, ok)
 	}
 
 	// The regression this test exists to catch: before rosterSharedPCOData,
 	// a request that needed both buildRosterPositionGroupData and
-	// buildRosterLightData sent each of these three requests twice.
+	// buildRosterLightData sent each of these requests twice - and before
+	// the include=team fix, a third GetTeams request on top of that.
 	if got := atomic.LoadInt32(&counts.teamMembers); got != 1 {
 		t.Errorf("expected exactly 1 GetTeamMembers request, got %d", got)
 	}
 	if got := atomic.LoadInt32(&counts.neededPositions); got != 1 {
 		t.Errorf("expected exactly 1 GetNeededPositions request, got %d", got)
 	}
-	if got := atomic.LoadInt32(&counts.teams); got != 1 {
-		t.Errorf("expected exactly 1 GetTeams request, got %d", got)
-	}
 }
 
 // TestFetchRosterSharedPCODataCalledTwiceDoublesRequests models the
 // pre-fix shape - buildRosterPositionGroupData and buildRosterLightData
-// each independently calling what's now fetchRosterSharedPCOData's three
-// PCO calls - for direct contrast with
-// TestFetchRosterSharedPCODataMakesOneCallEach's single-call assertion of
-// 1 request each: two independent fetches for the same plan cost 2
-// requests per resource (6 total), exactly the duplication this fix
-// eliminates by fetching once and sharing the result instead.
+// each independently calling what's now fetchRosterSharedPCOData's calls -
+// for direct contrast with TestFetchRosterSharedPCODataMakesOneCallEach's
+// single-call assertion of 1 request each: two independent fetches for the
+// same plan cost 2 requests per resource (4 total), exactly the
+// duplication this fix eliminates by fetching once and sharing the result
+// instead.
 func TestFetchRosterSharedPCODataCalledTwiceDoublesRequests(t *testing.T) {
 	var counts rosterSharedFetchCounts
 	server := newRosterSharedFetchFakeServer(t, &counts)
@@ -169,8 +182,5 @@ func TestFetchRosterSharedPCODataCalledTwiceDoublesRequests(t *testing.T) {
 	}
 	if got := atomic.LoadInt32(&counts.neededPositions); got != 2 {
 		t.Errorf("expected 2 GetNeededPositions requests from 2 independent fetches, got %d", got)
-	}
-	if got := atomic.LoadInt32(&counts.teams); got != 2 {
-		t.Errorf("expected 2 GetTeams requests from 2 independent fetches, got %d", got)
 	}
 }

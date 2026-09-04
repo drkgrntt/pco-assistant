@@ -74,6 +74,7 @@ that first. Facts worth adding here that aren't in CLAUDE.md:
 | Team Builder candidate eligibility pool (scales with volunteer pool, not the roster) | fixed | candidate warnings computed on-demand (button click), not eagerly for every candidate |
 | Team Builder per-person blockout/cross-team/frequency (live call every render) | fixed | local Postgres cache (migration `00033`) + paced background sync, same architecture as Song Info |
 | Roster shared-fetch duplication (`GetTeamMembers`/`GetNeededPositions`/`GetTeams` fetched twice per click) | fixed | `rosterSharedPCOData` - fetch once, pass to both scoped builders |
+| Roster `GetTeams` call (a whole extra request per plan, just to resolve team ids to names) | fixed | `include=team` sideloaded on the `GetNeededPositions` call already being made - `GetTeams` eliminated, shared roster fetch now 2 calls not 3 |
 | `GetServiceTypes` (called independently by 3 pages) | fixed | cached `FetchServiceTypes`, 60s TTL, same shape as `FetchActiveSongs` |
 | `fetchRecentPlanHistory` (uncached, would've fired per debounced keystroke once candidates went search-driven) | fixed | cached per service type, 60s TTL |
 | Home page (`buildHomeData`, sequential per-service-type) | fixed | `RunConcurrently` fan-out |
@@ -123,15 +124,16 @@ that first. Facts worth adding here that aren't in CLAUDE.md:
   same call already being made, on every Set Builder render. `ItemsParams`
   has no `Include` field today - same gap as `ArrangementsParams`.
 - **NeededPositions#index and TeamMembers#index both support
-  `include=team`** (confirmed live) - not yet used:
-  `fetchRosterSharedPCOData` (`rosters_scoped.go`) makes exactly 3 calls
-  per plan (`GetTeamMembers`, `GetNeededPositions`, `GetTeams`), and
-  `GetTeams`' only use anywhere in this codebase is resolving bare team
-  IDs to names for the other two. Sideloading `team` on the
-  `NeededPositions` call already being made eliminates the standalone
-  `GetTeams` call - on every Team Builder render and every roster
+  `include=team`** (confirmed live) - now used: `fetchRosterSharedPCOData`
+  (`rosters_scoped.go`) and `buildRosterBuilderData`'s full-rebuild path
+  (`rosters_builder.go`) both call `GetNeededPositions(...,
+  &pco.NeededPositionsParams{Include: []string{"team"}})` and parse Team
+  resources out of the response's `Included` array (`teamInfoFromIncluded`,
+  `rosters_builder.go`) instead of a separate `GetTeams` call - `GetTeams`'
+  only use anywhere in this codebase was resolving bare team IDs to names/
+  display order for these two functions. Drops the shared roster fetch
+  from 3 calls to 2, on every Team Builder render and every roster
   add/remove/preference-change mutation (`rosters_detail.go`).
-  `NeededPositionsParams` has no `Include` field today either.
 - **Checked and ruled out**: `TeamMembers#index`'s `include=person` looked
   like it might replace `personNameMapForIDs`' batched name lookup, but
   that lookup already spans IDs beyond just a plan's team members
@@ -360,3 +362,16 @@ out to 100-200 sequential round trips per load.
   decisions"). **Confirmed resolved 2026-09-03**: the affected user
   reported no further issues; prod logs show the retry actually firing and
   succeeding. No third occurrence.
+- **Roster `GetTeams` call eliminated** (go-pco `v0.21.0`,
+  `docs/pco-call-efficiency-rollout-plan.md`'s Phase 1d) - go-pco's
+  `NeededPositionsParams` gained an `Include []string` field, so
+  `fetchRosterSharedPCOData` (`rosters_scoped.go`) and
+  `buildRosterBuilderData` (`rosters_builder.go`) now sideload `team` on
+  the `GetNeededPositions` call already being made instead of firing a
+  separate `GetTeams` request just to resolve team ids to names/display
+  order. Team resources are parsed out of that response's `Included`
+  array by a new `teamInfoFromIncluded` helper (`rosters_builder.go`,
+  alongside the existing `teamNamesFromIncluded`/`planSortDatesFromIncluded`
+  precedent), and `rosterSharedPCOData.Teams`/`TeamsErr` are gone -
+  replaced by a pre-parsed `TeamInfo map[string]teamInfo` field. Drops the
+  shared roster fetch from 3 calls to 2.

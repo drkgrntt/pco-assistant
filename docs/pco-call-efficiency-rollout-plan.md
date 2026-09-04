@@ -125,6 +125,9 @@ parallelize.
 
 ### 1d. This repo: `GetTeams` elimination (`rosters_scoped.go`, `rosters_builder.go`)
 
+**Status: shipped.** See `docs/pco-api-risks.md`'s changelog entry for
+what actually landed (`teamInfoFromIncluded`, `rosterSharedPCOData.TeamInfo`).
+
 Currently: `fetchRosterSharedPCOData` (`rosters_scoped.go`) makes
 `GetTeamMembers`, `GetNeededPositions`, and `GetTeams` - three calls per
 plan - purely to resolve team IDs to names (`GetTeams`' only use anywhere
