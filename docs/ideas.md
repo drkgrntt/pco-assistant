@@ -414,12 +414,12 @@ pattern as `song_tags`/`song_relationships`:**
   against tag values as well as titles (`candidateMatchesSearch`,
   `sets_builder.go`), but discoverability was the missing half - nobody
   could see which tags existed without already knowing what to type. The
-  set builder's "Browse by tag" accordion (`set_builder.templ`) now lists
-  every distinct value actually in use, one category at a time (picked
-  from a dropdown inside a single collapsible section - an earlier version
-  gave each category its own separate accordion, which read as too busy
-  once there was more than one or two), and clicking one just types that
-  value into the same search box - no new filter logic. **Still open,
+  set builder's "Browse by tag" chips (`set_builder.templ`) now list every
+  distinct value actually in use, grouped by category behind a collapsible
+  section per category (a single accordion with a category dropdown was
+  tried and reverted - it read as one more control to operate rather than
+  a shortcut), and clicking one just types that value into the same search
+  box - no new filter logic. **Still open,
   deliberately not tackled by that fix**: this only surfaces tags someone
   already applied by hand; the two angles below (a structured scripture
   field, lyric-derived tags) are unaffected.

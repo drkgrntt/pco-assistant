@@ -112,12 +112,11 @@ with at least Viewer access can still sign in.
   song, no picking it out of a list again). The "Browse all songs" search
   box already matches typed text against tag values as well as song
   titles; before typing anything, that same box shows a plain, scrollable
-  list of every song's title to skim - clicking one fills in the search box
-  the same way a tag or role filter does. Below the search box, a single
-  "Browse by tag" accordion lists every distinct tag value actually in use,
-  one category at a time (pick the category from a dropdown), so you can
-  find a tag to search for without already knowing what's been tagged -
-  clicking a chip just fills in that same search box.
+  list of every song's title to skim - clicking one adds that song
+  straight to the set. Below the search box, "Browse by tag" chips (one
+  collapsible section per tag category) list every distinct tag value
+  actually in use, so you can find a tag to search for without already
+  knowing what's been tagged - clicking a chip fills in the search box.
   Publish pushes everything to real PCO plan items in one sync; Discard
   reverts your local draft back to whatever's live in PCO; "Pull in from
   Planning Center" sits between the

@@ -241,12 +241,16 @@ templ songCandidateMeta(cand CandidateSongView) {
 //     that nothing *expensive* gets computed until someone actually
 //     searches (see BuildCandidatesSearch/searchCandidates's doc comments),
 //     but a plain list of titles is cheap enough to always show, so
-//     browsing the library doesn't require typing something first.
-//     Clicking a title fills #candidate-search with it and re-triggers the
-//     same search (browseSongTitle, scheduling.js - the same
-//     type-into-the-search-box shortcut applyTagFilter uses for tag
-//     chips), which then shows that song's full rich row via the normal
-//     search path.
+//     browsing the library doesn't require typing something first. Clicking
+//     a title adds it straight to the set (the same hx-post/#set-builder-body
+//     swap the rich rows' own Add form uses below) rather than routing
+//     through the search box first - an earlier version filled the search
+//     box and re-triggered a search instead, but that replaced this list
+//     with a single rich row (often a mostly-empty one, for a song with
+//     nothing cached yet) and left no way back to the list short of
+//     manually clearing the search box. Adding directly means the list is
+//     simply still there (minus the song just added) on the next render,
+//     same as it always is.
 //   - A query/filter that matched nothing: says so, rather than looking
 //     identical to "haven't searched yet."
 //   - Normal results.
@@ -260,7 +264,10 @@ templ CandidateSearchResults(serviceTypeID, planID string, candidates []Candidat
 				<ul class="song-title-browse">
 					for _, song := range browsable {
 						<li>
-							<button type="button" class="song-title-browse-item" onclick="browseSongTitle(this)" data-title={ song.Title }>{ song.Title }</button>
+							<form hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/songs", serviceTypeID, planID) } hx-target="#set-builder-body" hx-swap="outerHTML">
+								<input type="hidden" name="song_id" value={ song.SongID }/>
+								<button type="submit" class="song-title-browse-item">{ song.Title }</button>
+							</form>
 						</li>
 					}
 				</ul>
@@ -627,52 +634,32 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 			typed search text against tag values, not just titles, so typing an
 			exact tag value into the search box above already works; the
 			problem is nobody can see what tags exist without already knowing
-			what to type. Tag values are unbounded free text (dozens of
-			scripture references, say), and so, in principle, are the
-			categories - a separate collapsibleSection per category (the
-			original shape here) turned out to be too many independent
-			accordions once there were more than one or two. This is one
-			collapsibleSection instead, with a <select> to pick which
-			category's chips are currently showing: switchTagFilterCategory
-			(scheduling.js) toggles .hidden on every .tag-filter-group except
-			the one matching the selected category, so only one chip group is
-			ever visible at a time. The first category (in TagCategories
-			order) that actually has values is both the select's default
-			option and the one rendered visible, so the initial HTML already
-			matches what the dropdown shows without relying on a JS pass to
-			fix it up. Clicking a chip still just types that value into
-			#candidate-search and re-triggers the same search request
-			(applyTagFilter, scheduling.js); it deliberately doesn't set any
-			state of its own the way the role filter's hidden input does.
+			what to type. Unlike the role filters above (a small fixed list,
+			so an always-open button row is fine), tag values are unbounded
+			free text - dozens of scripture references, say - so each
+			category's chips sit behind their own collapsibleSection,
+			collapsed by default. (A single accordion with a category <select>
+			was tried instead and reverted - it read as one more control to
+			operate rather than a shortcut.) Clicking a chip just types that
+			value into #candidate-search and re-triggers the same search
+			request (applyTagFilter, scheduling.js); it deliberately doesn't
+			set any state of its own the way the role filter's hidden input
+			does.
 		-->
 		if len(data.TagValuesByCategory) > 0 {
-			{{ firstTagCategory := "" }}
-			for _, cat := range data.TagCategories {
-				if firstTagCategory == "" && len(data.TagValuesByCategory[cat.Code]) > 0 {
-					{{ firstTagCategory = cat.Code }}
-				}
-			}
-			@collapsibleSection("tag-filter-browse", "Browse by tag", false) {
-				<label>
-					Category
-					<select onchange="switchTagFilterCategory(this)">
-						for _, cat := range data.TagCategories {
-							if len(data.TagValuesByCategory[cat.Code]) > 0 {
-								<option value={ cat.Code } selected?={ cat.Code == firstTagCategory }>{ cat.Label }</option>
-							}
-						}
-					</select>
-				</label>
+			<div class="tag-filters">
 				for _, cat := range data.TagCategories {
 					if values := data.TagValuesByCategory[cat.Code]; len(values) > 0 {
-						<div class="role-filters tag-filter-group" data-category={ cat.Code } hidden?={ cat.Code != firstTagCategory }>
-							for _, v := range values {
-								<button type="button" class="role-filter" data-value={ v } onclick="applyTagFilter(this)">{ v }</button>
-							}
-						</div>
+						@collapsibleSection(fmt.Sprintf("tag-filter-%s", cat.Code), "Browse by "+cat.Label, false) {
+							<div class="role-filters">
+								for _, v := range values {
+									<button type="button" class="role-filter" data-value={ v } onclick="applyTagFilter(this)">{ v }</button>
+								}
+							</div>
+						}
 					}
 				}
-			}
+			</div>
 		}
 		<!--
 			The search box and role filters both feed one server-driven
@@ -689,19 +676,33 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 			since this is a plain text input, not type="search".
 		-->
 		<input type="hidden" id="candidate-role-filter" name="role" value=""/>
-		<input
-			type="text"
-			id="candidate-search"
-			name="q"
-			placeholder="Search songs or tags..."
-			autocomplete="off"
-			hx-get={ fmt.Sprintf("/scheduling/build/%s/%s/candidates/search", data.ServiceTypeID, data.PlanID) }
-			hx-trigger="input changed delay:300ms, search"
-			hx-target="#set-candidates"
-			hx-swap="innerHTML"
-			hx-include="#candidate-role-filter"
-			oninput="openCandidatesSection()"
-		/>
+		<div class="search-bar">
+			<input
+				type="text"
+				id="candidate-search"
+				name="q"
+				placeholder="Search songs or tags..."
+				autocomplete="off"
+				hx-get={ fmt.Sprintf("/scheduling/build/%s/%s/candidates/search", data.ServiceTypeID, data.PlanID) }
+				hx-trigger="input changed delay:300ms, search"
+				hx-target="#set-candidates"
+				hx-swap="innerHTML"
+				hx-include="#candidate-role-filter"
+				oninput="openCandidatesSection()"
+			/>
+			<!--
+				Clicking a role filter or tag chip fills the search box (or the
+				hidden role input) but gives no way back to the plain "browse
+				titles" list short of manually erasing what got typed in - not
+				obvious, especially once a role filter's own "active" button
+				state also needs clearing. clearCandidateSearch (scheduling.js)
+				resets both back to "" and re-triggers the same search, landing
+				back on CandidateSearchResults' empty-query-and-role state.
+			-->
+			<button type="button" class="icon-btn" aria-label="Clear search" title="Clear search" onclick="clearCandidateSearch()">
+				@components.IconX()
+			</button>
+		</div>
 		<!--
 			Open by default (see collapsibleSection's open param) - was
 			collapsed on the reasoning that the full library is "the busiest

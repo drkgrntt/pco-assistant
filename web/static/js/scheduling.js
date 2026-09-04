@@ -842,32 +842,29 @@ function applyTagFilter(el) {
   }
 }
 
-// switchTagFilterCategory is the "Browse by tag" accordion's category
-// <select> onchange handler (set_builder.templ) - one collapsibleSection
-// now holds every category's chips (data-category on each
-// .tag-filter-group), with only the selected category's group visible at a
-// time. Uses the .hidden DOM property, not style.display, matching every
-// other show/hide toggle in this file (syncBuildTabVisibility above, and
-// others).
-function switchTagFilterCategory(select) {
-  document.querySelectorAll(".tag-filter-group").forEach(function (group) {
-    group.hidden = group.dataset.category !== select.value;
-  });
-}
-
-// browseSongTitle is the empty-state "browse titles" list's click handler
-// (CandidateSearchResults, set_builder.templ) - the exact same
-// type-it-into-the-search-box-and-re-trigger-search shortcut applyTagFilter
-// above uses for tag chips, just keyed off a plain song title instead of a
-// tag value.
-function browseSongTitle(el) {
+// clearCandidateSearch is the "Browse all songs" search box's clear button
+// (set_builder.templ) - resets both the typed search text and any active
+// role filter (mirroring toggleRoleFilter's own "turn it back off" branch)
+// back to "", then re-triggers the same search request, landing back on
+// CandidateSearchResults' empty-query-and-role "browse titles" state.
+// Without this, clicking a role filter or tag chip (which both just type
+// into #candidate-search / set the hidden role input) left no way back to
+// that list short of manually erasing the search box - not obvious, and
+// didn't clear a role filter's own "active" button styling either.
+function clearCandidateSearch() {
   var searchInput = document.getElementById("candidate-search");
   if (!searchInput) {
     return;
   }
-  searchInput.value = el.dataset.title;
+  searchInput.value = "";
 
-  openCandidatesSection();
+  var roleInput = document.getElementById("candidate-role-filter");
+  if (roleInput) {
+    roleInput.value = "";
+  }
+  document.querySelectorAll(".role-filter").forEach(function (btn) {
+    btn.classList.remove("active");
+  });
 
   if (window.htmx) {
     htmx.trigger(searchInput, "search");

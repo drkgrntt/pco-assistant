@@ -41,7 +41,13 @@
   gap: var(--space-1);
 }
 
+.song-title-browse li form {
+  margin: 0;
+}
+
 .song-title-browse-item {
+  display: block;
+  width: 100%;
   background: none;
   border: none;
   text-align: left;
