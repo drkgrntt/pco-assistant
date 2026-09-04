@@ -5,6 +5,34 @@ import (
 	"testing"
 )
 
+// --- formatSongStructure ---------------------------------------------------
+
+func TestFormatSongStructurePrefersSequenceShort(t *testing.T) {
+	got := formatSongStructure([]string{"Intro", "V1", "C"}, []string{"Intro", "Verse 1", "Chorus"})
+
+	want := "Intro, V1, C"
+	if got != want {
+		t.Errorf("formatSongStructure = %q, want %q (SequenceShort should be used directly when present)", got, want)
+	}
+}
+
+func TestFormatSongStructureFallsBackToSequence(t *testing.T) {
+	got := formatSongStructure(nil, []string{"Intro", "Verse 1", "Chorus"})
+
+	want := "Intro, Verse 1, Chorus"
+	if got != want {
+		t.Errorf("formatSongStructure = %q, want %q (empty SequenceShort should fall back to Sequence)", got, want)
+	}
+}
+
+func TestFormatSongStructureBothEmpty(t *testing.T) {
+	got := formatSongStructure(nil, nil)
+
+	if got != "" {
+		t.Errorf("formatSongStructure(nil, nil) = %q, want \"\"", got)
+	}
+}
+
 // --- songSyncBatches ------------------------------------------------------
 
 func TestSongSyncBatchesSplitsEvenly(t *testing.T) {

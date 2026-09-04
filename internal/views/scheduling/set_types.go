@@ -209,6 +209,18 @@ type SetSongView struct {
 	// CandidateSongView.ArrangementInfo for why the full candidate list
 	// doesn't get the same live-fetch fallback.
 	ArrangementInfo string
+	// Structure is the arrangement's section-by-section structure ("Intro,
+	// Verse 1, Chorus...") - see scheduling.SongArrangementInfo.Structure
+	// and formatSongStructure for how it's derived. Detail-card only (see
+	// songDetailCard): unlike ArrangementInfo above, it isn't shown on the
+	// compact order-of-service row - there's no room there for a full
+	// structure list on top of the existing summary line.
+	Structure string
+	// HasChordChart mirrors scheduling.SongArrangementInfo.HasChordChart -
+	// true when the arrangement has a chord chart document attached in
+	// Planning Center. Shown as a badge on the song detail card only, same
+	// detail-card-only scope as Structure above.
+	HasChordChart bool
 	// Description is this one occurrence's local per-occurrence note (see
 	// scheduling.SetSong.Description) - "cut the bridge this week," not a
 	// persistent fact about the song. Editing this only updates the local

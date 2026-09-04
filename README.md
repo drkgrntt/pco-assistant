@@ -61,7 +61,11 @@ with at least Viewer access can still sign in.
   meter, length) is cached locally so showing it doesn't mean a live
   Planning Center request per song on every page load - a song gets
   cached automatically the first time it's added to a set, or sync your
-  whole library at once from the Song Info page
+  whole library at once from the Song Info page. A song's detail card
+  (click its row on the Build page) also shows its section-by-section
+  structure ("Intro, Verse 1, Chorus...") and a "Chord chart" badge when
+  one's attached in Planning Center - both pulled from the same cached
+  arrangement data, no extra Planning Center request
 - **Song / Person Preferences** - note who's preferred or discouraged for a
   given song
 - **Song notes** - click a song's row on the Build page to open its detail
