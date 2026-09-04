@@ -46,6 +46,8 @@ live-verified `can_include` values are in `docs/pco-api-risks.md`'s
 
 ### 1a. go-pco: add `Include []string` to three params structs
 
+**Status: shipped 2026-09-04, go-pco `v0.21.0`.**
+
 This is a change to the separate `go-pco` module
 (`/home/drkgrntt/projects/go-pco` locally), not this repo - same
 "lives in go-pco first" situation as the throttle work
@@ -83,6 +85,10 @@ Bump go-pco's version, then bump this repo's `go.mod` to it - same
 sequence as every previous go-pco version bump in this project's history.
 
 ### 1b. This repo: `fetchAndCacheArrangementInfo` (`scheduling.go`)
+
+**Status: shipped 2026-09-04.** See `docs/pco-api-risks.md`'s changelog
+entry for what landed (`keysFromIncluded`). Section left as-written below
+for reference.
 
 Currently: `GetArrangements(ctx, songID, &pco.ArrangementsParams{PerPage: 1})`
 then, on success, a second `GetKeys(ctx, songID, arrangement.ID, ...)` call.
@@ -128,6 +134,9 @@ already PCO-free), or whether the concurrency now has nothing left to
 parallelize.
 
 ### 1d. This repo: `GetTeams` elimination (`rosters_scoped.go`, `rosters_builder.go`)
+
+**Status: shipped.** See `docs/pco-api-risks.md`'s changelog entry for
+what actually landed (`teamInfoFromIncluded`, `rosterSharedPCOData.TeamInfo`).
 
 Currently: `fetchRosterSharedPCOData` (`rosters_scoped.go`) makes
 `GetTeamMembers`, `GetNeededPositions`, and `GetTeams` - three calls per

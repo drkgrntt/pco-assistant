@@ -23,47 +23,57 @@ import (
 	pco "github.com/drkgrntt/go-pco"
 )
 
-// rosterSharedPCOData holds the three Planning Center resources
+// rosterSharedPCOData holds the two Planning Center resources
 // buildRosterPositionGroupData and buildRosterLightData both independently
-// need for the same plan - GetTeamMembers, GetNeededPositions, and
-// GetTeams - fetched once by fetchRosterSharedPCOData and passed into
-// both, instead of each function repeating the same three requests when
-// they run back-to-back for one mutation. See rosters_detail.go's
+// need for the same plan - GetTeamMembers and GetNeededPositions - fetched
+// once by fetchRosterSharedPCOData and passed into both, instead of each
+// function repeating the same requests when they run back-to-back for one
+// mutation. See rosters_detail.go's
 // AddRosterAssignment/RemoveRosterAssignment/QuickAddPositionPreference,
 // the only three call sites today that use both functions together; every
 // other caller (QuickAddPersonRelationship here, buildRosterBuilderData's
 // own full-rebuild path) only ever needs one of the two and passes nil
 // instead (see each function's own nil handling below).
 //
+// A standalone GetTeams call used to be a third resource here, fetched
+// purely to resolve team ids to names/display order - eliminated by
+// sideloading team on the GetNeededPositions call below instead (see
+// docs/pco-api-risks.md's include=team finding). TeamInfo is the
+// pre-parsed result of that sideload (see teamInfoFromIncluded,
+// rosters_builder.go), so neither caller needs to touch Needed.Included
+// directly.
+//
 // Each PCO response is paired with its own fetch error rather than a
 // single combined one: buildRosterPositionGroupData and buildRosterLightData
-// don't actually agree on which of these three failures is worth surfacing
-// in their own errMsg (buildRosterPositionGroupData silently drops a
-// GetTeams failure - the team name just falls back to teamID -
-// while buildRosterLightData reports one; see each function's own use of
-// TeamsErr below) - keeping every error until each function decides for
-// itself preserves that existing difference instead of flattening it.
+// don't actually agree on which of these failures is worth surfacing in
+// their own errMsg (buildRosterPositionGroupData silently drops a missing
+// TeamInfo entry - the team name just falls back to teamID - while
+// buildRosterLightData reports NeededErr, which now also covers a failed
+// team sideload) - keeping the errors separate preserves that existing
+// difference instead of flattening it.
 type rosterSharedPCOData struct {
 	Members    pco.PlanPersonListResponse
 	MembersErr error
 	Needed     pco.NeededPositionListResponse
 	NeededErr  error
-	Teams      pco.TeamListResponse
-	TeamsErr   error
+	// TeamInfo holds each team's name/sequence, resolved from Needed's own
+	// Included array (see teamInfoFromIncluded) - empty (not nil) when
+	// NeededErr is set.
+	TeamInfo map[string]teamInfo
 }
 
-// fetchRosterSharedPCOData fetches the three PCO resources
+// fetchRosterSharedPCOData fetches the two PCO resources
 // rosterSharedPCOData holds, once each. Sequential, not fanned out via
 // scheduling.RunConcurrently - that helper exists for fan-outs sized to
 // "one call per roster member/position" (see its own doc comment), not a
-// fixed three calls, and both functions previously made these same three
+// fixed couple of calls, and both functions previously made these same
 // calls sequentially anyway, so there's no latency regression to guard
 // against here.
 func fetchRosterSharedPCOData(ctx context.Context, serviceTypeID, planID string) *rosterSharedPCOData {
 	d := &rosterSharedPCOData{}
 	d.Members, d.MembersErr = pco.GetTeamMembers(ctx, serviceTypeID, planID, nil)
-	d.Needed, d.NeededErr = pco.GetNeededPositions(ctx, serviceTypeID, planID, nil)
-	d.Teams, d.TeamsErr = pco.GetTeams(ctx, serviceTypeID, nil)
+	d.Needed, d.NeededErr = pco.GetNeededPositions(ctx, serviceTypeID, planID, &pco.NeededPositionsParams{Include: []string{"team"}})
+	d.TeamInfo = teamInfoFromIncluded(d.Needed.Included)
 	return d
 }
 
@@ -81,9 +91,10 @@ func fetchRosterSharedPCOData(ctx context.Context, serviceTypeID, planID string)
 // including groupNeededPositions' own "assignment with no matching
 // needed_position entry still gets a group" fallback.
 //
-// shared carries GetTeamMembers/GetNeededPositions/GetTeams already fetched
-// by the caller (see rosterSharedPCOData) - pass nil to have this function
-// fetch its own copy, for a caller that needs only this one function.
+// shared carries GetTeamMembers/GetNeededPositions (the latter with team
+// sideloaded) already fetched by the caller (see rosterSharedPCOData) -
+// pass nil to have this function fetch its own copy, for a caller that
+// needs only this one function.
 //
 // Returns an empty-but-valid PositionGroupView (Quantity 0, no
 // candidates) if teamID/teamPositionName can't be resolved to a real
@@ -159,17 +170,12 @@ func (sc *SchedulingController) buildRosterPositionGroupData(ctx context.Context
 	}
 
 	// One team's own name, for AssignmentView.TeamName (shown on the
-	// sidebar detail card) - GetTeams is a whole-service-type bulk call
-	// like buildRosterBuilderData's, just used here for one lookup instead
-	// of every team on the roster.
+	// sidebar detail card) - resolved from shared.TeamInfo (sideloaded on
+	// the GetNeededPositions call above), falling back to teamID itself if
+	// that team's entry didn't come through (e.g. NeededErr).
 	teamName := teamID
-	if shared.TeamsErr == nil {
-		for _, t := range shared.Teams.Data {
-			if t.ID == teamID {
-				teamName = t.Attributes.Name
-				break
-			}
-		}
+	if info, ok := shared.TeamInfo[teamID]; ok {
+		teamName = info.Name
 	}
 
 	var candidates []pco.PersonTeamPositionAssignmentData
@@ -337,10 +343,10 @@ func (sc *SchedulingController) buildRosterPositionGroupData(ctx context.Context
 // duplicate active assignment, so acting on a stale suggestion fails
 // safely (an error message) rather than corrupting the roster.
 //
-// shared carries GetTeamMembers/GetNeededPositions/GetTeams already fetched
-// by the caller (see rosterSharedPCOData) - pass nil to have this function
-// fetch its own copy, for a caller (QuickAddPersonRelationship today) that
-// needs only this one function.
+// shared carries GetTeamMembers/GetNeededPositions (the latter with team
+// sideloaded) already fetched by the caller (see rosterSharedPCOData) -
+// pass nil to have this function fetch its own copy, for a caller
+// (QuickAddPersonRelationship today) that needs only this one function.
 func (sc *SchedulingController) buildRosterLightData(ctx context.Context, organizationID, serviceTypeID, planID string, shared *rosterSharedPCOData) views.RosterBuilderData {
 	data := views.RosterBuilderData{ServiceTypeID: serviceTypeID, PlanID: planID, SchedulePreferenceOptions: schedulePreferenceOptions()}
 
@@ -382,15 +388,15 @@ func (sc *SchedulingController) buildRosterLightData(ctx context.Context, organi
 	}
 	groups := groupNeededPositions(shared.Needed.Data, assignments)
 
+	// Team names/sequence come from shared.TeamInfo (sideloaded on the
+	// GetNeededPositions call above) rather than a separate GetTeams call -
+	// a fetch failure here is already covered by shared.NeededErr, reported
+	// above.
 	teamNames := map[string]string{}
 	teamSequence := map[string]int{}
-	if shared.TeamsErr != nil {
-		data.ErrMsg = appendErr(data.ErrMsg, "loading teams from Planning Center: "+shared.TeamsErr.Error())
-	} else {
-		for _, t := range shared.Teams.Data {
-			teamNames[t.ID] = t.Attributes.Name
-			teamSequence[t.ID] = t.Attributes.Sequence
-		}
+	for id, info := range shared.TeamInfo {
+		teamNames[id] = info.Name
+		teamSequence[id] = info.Sequence
 	}
 
 	assignedIDs := assignmentPersonIDs(assignments)

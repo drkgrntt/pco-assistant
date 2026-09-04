@@ -74,6 +74,7 @@ that first. Facts worth adding here that aren't in CLAUDE.md:
 | Team Builder candidate eligibility pool (scales with volunteer pool, not the roster) | fixed | candidate warnings computed on-demand (button click), not eagerly for every candidate |
 | Team Builder per-person blockout/cross-team/frequency (live call every render) | fixed | local Postgres cache (migration `00033`) + paced background sync, same architecture as Song Info |
 | Roster shared-fetch duplication (`GetTeamMembers`/`GetNeededPositions`/`GetTeams` fetched twice per click) | fixed | `rosterSharedPCOData` - fetch once, pass to both scoped builders |
+| Roster `GetTeams` call (a whole extra request per plan, just to resolve team ids to names) | fixed | `include=team` sideloaded on the `GetNeededPositions` call already being made - `GetTeams` eliminated, shared roster fetch now 2 calls not 3 |
 | `GetServiceTypes` (called independently by 3 pages) | fixed | cached `FetchServiceTypes`, 60s TTL, same shape as `FetchActiveSongs` |
 | `fetchRecentPlanHistory` (uncached, would've fired per debounced keystroke once candidates went search-driven) | fixed | cached per service type, 60s TTL |
 | Home page (`buildHomeData`, sequential per-service-type) | fixed | `RunConcurrently` fan-out |
@@ -104,14 +105,13 @@ that first. Facts worth adding here that aren't in CLAUDE.md:
 - **Arrangements#index/#show supports `include=keys`** - confirmed live
   against a real song/arrangement (`meta.can_include` lists `keys`,
   `sections`; `?include=keys` returns the arrangement's Key resource(s)
-  sideloaded in `included`). Not yet used:
-  `fetchAndCacheArrangementInfo` (`scheduling.go`) still makes two
-  sequential calls per song (`GetArrangements` then `GetKeys`) - one
-  `include=keys` call would do both, halving Song Info's whole-library
-  sync cost (the "~200 calls for a 100-song library" figure). Needs a
-  small go-pco change first: `ArrangementsParams` has no `Include` field
-  today, unlike `PeopleParams`/`TeamMembersParams`/
-  `PersonPlanPeopleParams`, which already support one.
+  sideloaded in `included`). **Used** (2026-09-04, Phase 1b):
+  `fetchAndCacheArrangementInfo` (`scheduling.go`) now calls
+  `GetArrangements(..., &pco.ArrangementsParams{PerPage: 1, Include:
+  []string{"keys"}})` and reads the Key resource out of that response's
+  `Included` array (`keysFromIncluded`) instead of a second `GetKeys`
+  call - halves Song Info's whole-library sync cost (the "~200 calls for
+  a 100-song library" figure).
 - **Items#index supports `include=item_notes`** (also `song`,
   `arrangement`, `key`, among others - confirmed live via `meta.can_include`
   on a real plan's items) - **used** (2026-09-04, Phase 1c): `buildSetBuilderData`
@@ -121,21 +121,23 @@ that first. Facts worth adding here that aren't in CLAUDE.md:
   built once from that response's `Included` array
   (`itemNotesFromIncluded`), instead of one `GetItemNotes` call per
   published song. `buildSongNoteViews` is now a pure function with no PCO
-  call of its own; `renderServiceOrder`'s `RunConcurrently` fan-out is kept
-  regardless, since `resolveArrangementCacheInfo`'s cache-miss path
-  (`GetArrangements` + `GetKeys`, still two sequential calls per song as of
-  this change - Phase 1b not yet landed) remains a real per-row PCO call
-  worth parallelizing.
+  call of its own; `renderServiceOrder`'s `RunConcurrently` fan-out was kept
+  at the time this landed (Phase 1b, which collapsed
+  `resolveArrangementCacheInfo`'s cache-miss path to one call, hadn't
+  shipped yet) - now that both have shipped, the fan-out has no remaining
+  per-row PCO call in the common (cache-hit) case, so it may be worth
+  revisiting.
 - **NeededPositions#index and TeamMembers#index both support
-  `include=team`** (confirmed live) - not yet used:
-  `fetchRosterSharedPCOData` (`rosters_scoped.go`) makes exactly 3 calls
-  per plan (`GetTeamMembers`, `GetNeededPositions`, `GetTeams`), and
-  `GetTeams`' only use anywhere in this codebase is resolving bare team
-  IDs to names for the other two. Sideloading `team` on the
-  `NeededPositions` call already being made eliminates the standalone
-  `GetTeams` call - on every Team Builder render and every roster
+  `include=team`** (confirmed live) - now used: `fetchRosterSharedPCOData`
+  (`rosters_scoped.go`) and `buildRosterBuilderData`'s full-rebuild path
+  (`rosters_builder.go`) both call `GetNeededPositions(...,
+  &pco.NeededPositionsParams{Include: []string{"team"}})` and parse Team
+  resources out of the response's `Included` array (`teamInfoFromIncluded`,
+  `rosters_builder.go`) instead of a separate `GetTeams` call - `GetTeams`'
+  only use anywhere in this codebase was resolving bare team IDs to names/
+  display order for these two functions. Drops the shared roster fetch
+  from 3 calls to 2, on every Team Builder render and every roster
   add/remove/preference-change mutation (`rosters_detail.go`).
-  `NeededPositionsParams` has no `Include` field today either.
 - **Checked and ruled out**: `TeamMembers#index`'s `include=person` looked
   like it might replace `personNameMapForIDs`' batched name lookup, but
   that lookup already spans IDs beyond just a plan's team members
@@ -364,17 +366,39 @@ out to 100-200 sequential round trips per load.
   decisions"). **Confirmed resolved 2026-09-03**: the affected user
   reported no further issues; prod logs show the retry actually firing and
   succeeding. No third occurrence.
-- **Item notes sideloaded instead of fetched per song** (2026-09-04, Phase
-  1c of `docs/pco-call-efficiency-rollout-plan.md`, go-pco `v0.21.0`'s new
-  `ItemsParams.Include`). `buildSetBuilderData`'s one `GetItems` call now
-  passes `Include: []string{"item_notes"}`; `renderServiceOrder` no longer
-  fans a `GetItemNotes` call out per published song via `RunConcurrently` -
-  `buildSongNoteViews` reads from a `map[itemID][]pco.ItemNoteData` built
-  once (`itemNotesFromIncluded`, same `Included`-array parsing convention
-  as `teamNamesFromIncluded`/`planSortDatesFromIncluded`). Kept
-  `RunConcurrently` in `renderServiceOrder` rather than collapsing it to a
-  sequential loop: `resolveArrangementCacheInfo`'s cache-miss path
-  (`GetArrangements` + `GetKeys`) is still a real two-call-per-song fetch
-  as of this change (Phase 1b, which would fold that into one `include=
-  keys` call, hadn't landed yet) - the fan-out still has genuine
-  per-row PCO latency to parallelize.
+- **PCO call-efficiency rollout, Phase 1 (`include=` wins)** - go-pco
+  `v0.21.0` added `Include []string` to `ArrangementsParams`/`ItemsParams`/
+  `NeededPositionsParams` plus an `AccessTokenFromContext` accessor (the
+  latter for Phase 2 below), landing three sideloading fixes from this
+  file's own "Live-verified PCO API facts":
+  - **Arrangement keys sideloaded instead of a second `GetKeys` call**
+    (Phase 1b) - `fetchAndCacheArrangementInfo` (`scheduling.go`) now calls
+    `GetArrangements(..., &pco.ArrangementsParams{PerPage: 1, Include:
+    []string{"keys"}})` and reads the Key resource out of that response's
+    `Included` array (`keysFromIncluded`) instead of a separate `GetKeys`
+    call - halves Song Info's whole-library sync cost.
+  - **Item notes sideloaded instead of fetched per song** (Phase 1c) -
+    `buildSetBuilderData`'s one `GetItems` call now passes `Include:
+    []string{"item_notes"}`; `renderServiceOrder` no longer fans a
+    `GetItemNotes` call out per published song via `RunConcurrently` -
+    `buildSongNoteViews` reads from a `map[itemID][]pco.ItemNoteData` built
+    once (`itemNotesFromIncluded`, same `Included`-array parsing convention
+    as `teamNamesFromIncluded`/`planSortDatesFromIncluded`). Kept
+    `RunConcurrently` in `renderServiceOrder` rather than collapsing it to a
+    sequential loop: at the time this landed, `resolveArrangementCacheInfo`'s
+    cache-miss path was still two sequential calls per song, giving the
+    fan-out genuine per-row latency to parallelize - Phase 1b (above)
+    since folded that into one call, so the concurrency here may be worth
+    revisiting once no per-row PCO call remains in the common case.
+  - **Roster `GetTeams` call eliminated** (Phase 1d) -
+    `fetchRosterSharedPCOData` (`rosters_scoped.go`) and
+    `buildRosterBuilderData` (`rosters_builder.go`) now sideload `team` on
+    the `GetNeededPositions` call already being made instead of firing a
+    separate `GetTeams` request just to resolve team ids to names/display
+    order. Team resources are parsed out of that response's `Included`
+    array by a new `teamInfoFromIncluded` helper (`rosters_builder.go`,
+    alongside the existing `teamNamesFromIncluded`/`planSortDatesFromIncluded`
+    precedent), and `rosterSharedPCOData.Teams`/`TeamsErr` are gone -
+    replaced by a pre-parsed `TeamInfo map[string]teamInfo` field. Drops
+    the shared roster fetch from 3 calls to 2, on every Team Builder
+    render and every roster add/remove/preference-change mutation.

@@ -142,6 +142,74 @@ func TestTeamNamesFromIncludedParsesTeamEntries(t *testing.T) {
 	}
 }
 
+// TestTeamInfoFromIncludedParsesNameAndSequence confirms teamInfoFromIncluded
+// - the parser fetchRosterSharedPCOData/buildRosterBuilderData now use in
+// place of a separate GetTeams call (see docs/pco-api-risks.md's
+// include=team finding) - pulls both Name and Sequence out of a Team
+// entry, table-driven the same way TestTeamNamesFromIncludedParsesTeamEntries
+// pins the name-only case this builds on.
+func TestTeamInfoFromIncludedParsesNameAndSequence(t *testing.T) {
+	tests := []struct {
+		name     string
+		included []any
+		wantLen  int
+		wantID   string
+		want     teamInfo
+	}{
+		{
+			name: "well-formed Team entry, non-Team entries skipped",
+			included: []any{
+				map[string]any{
+					"type": "Team",
+					"id":   "t1",
+					"attributes": map[string]any{
+						"name":     "Worship",
+						"sequence": float64(2),
+					},
+				},
+				map[string]any{
+					"type": "Plan",
+					"id":   "p1",
+				},
+			},
+			wantLen: 1,
+			wantID:  "t1",
+			want:    teamInfo{Name: "Worship", Sequence: 2},
+		},
+		{
+			name: "Team entry missing a name is skipped",
+			included: []any{
+				map[string]any{
+					"type":       "Team",
+					"id":         "t2",
+					"attributes": map[string]any{"sequence": float64(1)},
+				},
+			},
+			wantLen: 0,
+		},
+		{
+			name:     "empty Included array",
+			included: nil,
+			wantLen:  0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := teamInfoFromIncluded(tt.included)
+			if len(got) != tt.wantLen {
+				t.Fatalf("expected %d team(s), got %d: %+v", tt.wantLen, len(got), got)
+			}
+			if tt.wantLen == 0 {
+				return
+			}
+			if got[tt.wantID] != tt.want {
+				t.Errorf("expected %s -> %+v, got %+v", tt.wantID, tt.want, got[tt.wantID])
+			}
+		})
+	}
+}
+
 func TestPlanSortDatesFromIncludedParsesPlanEntries(t *testing.T) {
 	included := []any{
 		map[string]any{
