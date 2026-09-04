@@ -101,6 +101,10 @@ lines ~102-113) unchanged - just source the Key data differently.
 
 ### 1c. This repo: item notes in `renderServiceOrder`/`buildSetBuilderData` (`sets_builder.go`)
 
+**Shipped 2026-09-04** - see `docs/pco-api-risks.md`'s changelog for what
+landed and the `RunConcurrently`-kept reasoning. Section left as-written
+below for reference.
+
 Currently: `buildSetBuilderData` calls `GetItems(ctx, serviceTypeID,
 planID, nil)` once, then `renderServiceOrder` fans out one `GetItemNotes`
 call per published-song row via `scheduling.RunConcurrently` (see

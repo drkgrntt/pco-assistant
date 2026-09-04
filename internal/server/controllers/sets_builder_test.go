@@ -432,6 +432,154 @@ func TestSongsInBothIgnoresNonSongItems(t *testing.T) {
 	}
 }
 
+// includedItemNote builds one "included" array entry shaped like a
+// sideloaded ItemNote (type/id/attributes/relationships.item), for
+// TestItemNotesFromIncluded - mirrors go-pco's real JSON:API shape for an
+// ItemNote resource.
+func includedItemNote(id, itemID, categoryID string) map[string]any {
+	rels := map[string]any{}
+	if itemID != "" {
+		rels["item"] = map[string]any{
+			"data": map[string]any{"type": "Item", "id": itemID},
+		}
+	}
+	if categoryID != "" {
+		rels["item_note_category"] = map[string]any{
+			"data": map[string]any{"type": "ItemNoteCategory", "id": categoryID},
+		}
+	}
+	return map[string]any{
+		"type":          "ItemNote",
+		"id":            id,
+		"attributes":    map[string]any{"content": "some note"},
+		"relationships": rels,
+	}
+}
+
+func TestItemNotesFromIncluded(t *testing.T) {
+	tests := []struct {
+		name     string
+		included []any
+		want     map[string][]string // item id -> note ids, in order
+	}{
+		{
+			name: "well-formed ItemNote entries are grouped by item id",
+			included: []any{
+				includedItemNote("n1", "item-1", "cat-1"),
+				includedItemNote("n2", "item-1", "cat-2"),
+				includedItemNote("n3", "item-2", "cat-1"),
+			},
+			want: map[string][]string{
+				"item-1": {"n1", "n2"},
+				"item-2": {"n3"},
+			},
+		},
+		{
+			name: "non-ItemNote entries are skipped",
+			included: []any{
+				includedItemNote("n1", "item-1", "cat-1"),
+				map[string]any{"type": "Song", "id": "s1"},
+			},
+			want: map[string][]string{"item-1": {"n1"}},
+		},
+		{
+			name: "an ItemNote with no item relationship is skipped",
+			included: []any{
+				includedItemNote("n1", "", "cat-1"),
+			},
+			want: map[string][]string{},
+		},
+		{
+			name:     "empty included yields an empty map",
+			included: []any{},
+			want:     map[string][]string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := itemNotesFromIncluded(tt.included)
+
+			if len(got) != len(tt.want) {
+				t.Fatalf("expected %d items with notes, got %+v", len(tt.want), got)
+			}
+			for itemID, wantIDs := range tt.want {
+				gotNotes, ok := got[itemID]
+				if !ok {
+					t.Fatalf("expected notes for item %q, got none", itemID)
+				}
+				if len(gotNotes) != len(wantIDs) {
+					t.Fatalf("item %q: expected %d notes, got %d: %+v", itemID, len(wantIDs), len(gotNotes), gotNotes)
+				}
+				for i, wantID := range wantIDs {
+					if gotNotes[i].ID != wantID {
+						t.Errorf("item %q note %d: expected id %q, got %q", itemID, i, wantID, gotNotes[i].ID)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestBuildSongNoteViews(t *testing.T) {
+	categories := []pco.ItemNoteCategoryData{
+		{ID: "cat-1", Attributes: pco.ItemNoteCategoryAttributes{Name: "Audio/Visual"}},
+		{ID: "cat-2", Attributes: pco.ItemNoteCategoryAttributes{Name: "Band"}},
+	}
+	noteForCategory := func(id, categoryID, content string) pco.ItemNoteData {
+		n := pco.ItemNoteData{ID: id, Attributes: pco.ItemNoteAttributes{Content: content}}
+		n.Relationships.ItemNoteCategory.Data = &pco.General{Type: "ItemNoteCategory", ID: categoryID}
+		return n
+	}
+
+	t.Run("unpublished song (empty itemID) returns nil without consulting itemNotes", func(t *testing.T) {
+		itemNotes := map[string][]pco.ItemNoteData{"item-1": {noteForCategory("n1", "cat-1", "should be ignored")}}
+
+		if got := buildSongNoteViews("", categories, itemNotes); got != nil {
+			t.Errorf("expected nil, got %+v", got)
+		}
+	})
+
+	t.Run("no note categories returns nil", func(t *testing.T) {
+		if got := buildSongNoteViews("item-1", nil, map[string][]pco.ItemNoteData{}); got != nil {
+			t.Errorf("expected nil, got %+v", got)
+		}
+	})
+
+	t.Run("one row per category, populated from itemNotes when present", func(t *testing.T) {
+		itemNotes := map[string][]pco.ItemNoteData{
+			"item-1": {noteForCategory("n1", "cat-1", "Turn up the click")},
+		}
+
+		got := buildSongNoteViews("item-1", categories, itemNotes)
+
+		if len(got) != 2 {
+			t.Fatalf("expected 2 note views (one per category), got %+v", got)
+		}
+		if got[0].CategoryID != "cat-1" || got[0].NoteID != "n1" || got[0].Content != "Turn up the click" {
+			t.Errorf("expected cat-1 populated from the existing note, got %+v", got[0])
+		}
+		if got[1].CategoryID != "cat-2" || got[1].NoteID != "" || got[1].Content != "" {
+			t.Errorf("expected cat-2 empty (no note on this item), got %+v", got[1])
+		}
+	})
+
+	t.Run("item with no entry in itemNotes gets every category empty", func(t *testing.T) {
+		got := buildSongNoteViews("item-missing", categories, map[string][]pco.ItemNoteData{
+			"item-1": {noteForCategory("n1", "cat-1", "not this item")},
+		})
+
+		if len(got) != 2 {
+			t.Fatalf("expected 2 note views, got %+v", got)
+		}
+		for _, v := range got {
+			if v.NoteID != "" || v.Content != "" {
+				t.Errorf("expected empty note view for an item with no notes, got %+v", v)
+			}
+		}
+	})
+}
+
 func assertRowOrder(t *testing.T, got []mergedRow, want []string) {
 	t.Helper()
 

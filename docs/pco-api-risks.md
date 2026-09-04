@@ -114,14 +114,18 @@ that first. Facts worth adding here that aren't in CLAUDE.md:
   `PersonPlanPeopleParams`, which already support one.
 - **Items#index supports `include=item_notes`** (also `song`,
   `arrangement`, `key`, among others - confirmed live via `meta.can_include`
-  on a real plan's items) - not yet used: `renderServiceOrder`
-  (`sets_builder.go`) fans a `GetItemNotes` call out per published song via
-  `RunConcurrently` (its own comment: "song's GetItemNotes/GetArrangements/
-  GetKeys latency one at a time") - a wall-clock fix, not a call-count one,
-  same distinction the "why this is a real risk" section above draws. One
-  `GetItems(..., include=item_notes)` sideloads every item's notes in the
-  same call already being made, on every Set Builder render. `ItemsParams`
-  has no `Include` field today - same gap as `ArrangementsParams`.
+  on a real plan's items) - **used** (2026-09-04, Phase 1c): `buildSetBuilderData`
+  (`sets_builder.go`) now calls `GetItems(..., &pco.ItemsParams{Include:
+  []string{"item_notes"}})` and `renderServiceOrder`/`buildSongNoteViews`
+  read every published song's notes out of a `map[itemID][]pco.ItemNoteData`
+  built once from that response's `Included` array
+  (`itemNotesFromIncluded`), instead of one `GetItemNotes` call per
+  published song. `buildSongNoteViews` is now a pure function with no PCO
+  call of its own; `renderServiceOrder`'s `RunConcurrently` fan-out is kept
+  regardless, since `resolveArrangementCacheInfo`'s cache-miss path
+  (`GetArrangements` + `GetKeys`, still two sequential calls per song as of
+  this change - Phase 1b not yet landed) remains a real per-row PCO call
+  worth parallelizing.
 - **NeededPositions#index and TeamMembers#index both support
   `include=team`** (confirmed live) - not yet used:
   `fetchRosterSharedPCOData` (`rosters_scoped.go`) makes exactly 3 calls
@@ -360,3 +364,17 @@ out to 100-200 sequential round trips per load.
   decisions"). **Confirmed resolved 2026-09-03**: the affected user
   reported no further issues; prod logs show the retry actually firing and
   succeeding. No third occurrence.
+- **Item notes sideloaded instead of fetched per song** (2026-09-04, Phase
+  1c of `docs/pco-call-efficiency-rollout-plan.md`, go-pco `v0.21.0`'s new
+  `ItemsParams.Include`). `buildSetBuilderData`'s one `GetItems` call now
+  passes `Include: []string{"item_notes"}`; `renderServiceOrder` no longer
+  fans a `GetItemNotes` call out per published song via `RunConcurrently` -
+  `buildSongNoteViews` reads from a `map[itemID][]pco.ItemNoteData` built
+  once (`itemNotesFromIncluded`, same `Included`-array parsing convention
+  as `teamNamesFromIncluded`/`planSortDatesFromIncluded`). Kept
+  `RunConcurrently` in `renderServiceOrder` rather than collapsing it to a
+  sequential loop: `resolveArrangementCacheInfo`'s cache-miss path
+  (`GetArrangements` + `GetKeys`) is still a real two-call-per-song fetch
+  as of this change (Phase 1b, which would fold that into one `include=
+  keys` call, hadn't landed yet) - the fan-out still has genuine
+  per-row PCO latency to parallelize.

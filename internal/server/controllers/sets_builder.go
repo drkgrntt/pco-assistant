@@ -6,6 +6,7 @@ package controllers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -226,7 +227,7 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 	// replaces the old song-only "current set" list, since seeing (and
 	// placing songs against) the whole order of service, template headers
 	// included, is the point.
-	if pcoItems, err := pco.GetItems(ctx, serviceTypeID, planID, nil); err != nil {
+	if pcoItems, err := pco.GetItems(ctx, serviceTypeID, planID, &pco.ItemsParams{Include: []string{"item_notes"}}); err != nil {
 		data.ErrMsg = appendErr(data.ErrMsg, "loading plan items from Planning Center: "+err.Error())
 	} else {
 		sort.Slice(pcoItems.Data, func(i, j int) bool {
@@ -236,7 +237,11 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 		// Fetched once per render, not per song - see renderServiceOrder's
 		// own doc comment on noteCategories.
 		noteCategories, _ := pco.GetItemNoteCategories(ctx, serviceTypeID, nil)
-		data.ServiceOrder = renderServiceOrder(ctx, sc.store, organizationID, serviceTypeID, planID, arrangementCache, noteCategories.Data, merged, titles, rolesBySong, roleTypeLabels)
+		// Sideloaded on the GetItems call above (Include: []string{"item_notes"})
+		// rather than one GetItemNotes call per published song - see
+		// itemNotesFromIncluded's own doc comment.
+		itemNotes := itemNotesFromIncluded(pcoItems.Included)
+		data.ServiceOrder = renderServiceOrder(ctx, sc.store, organizationID, arrangementCache, noteCategories.Data, itemNotes, merged, titles, rolesBySong, roleTypeLabels)
 
 		// PlanWarnings: whole-plan concerns, as opposed to the per-song/
 		// per-pairing warnings below - see serviceLengthWarning and
@@ -1228,20 +1233,54 @@ func keyTransitionWarnings(rows []mergedRow, arrangementCache map[string]schedul
 	return warnings
 }
 
+// itemNotesFromIncluded extracts item id -> that item's ItemNote list from
+// a GetItems response's Included array (fetched with
+// Include: []string{"item_notes"}), mirroring teamNamesFromIncluded/
+// planSortDatesFromIncluded (rosters_builder.go) - except a sideloaded
+// ItemNote is already the exact JSON:API resource shape go-pco's own
+// ItemNoteData decodes (type/id/attributes/relationships), so this decodes
+// straight into that instead of a bespoke lightweight struct. Any entry
+// that isn't a well-formed ItemNote, or has no Item relationship to key by,
+// is silently skipped - same best-effort spirit as buildSongNoteViews's
+// old per-item GetItemNotes call, which likewise just meant an empty note
+// set rather than a broken page.
+func itemNotesFromIncluded(included []any) map[string][]pco.ItemNoteData {
+	notesByItem := map[string][]pco.ItemNoteData{}
+	for _, raw := range included {
+		b, err := json.Marshal(raw)
+		if err != nil {
+			continue
+		}
+		var note pco.ItemNoteData
+		if err := json.Unmarshal(b, &note); err != nil {
+			continue
+		}
+		if note.Type != "ItemNote" || note.ID == "" {
+			continue
+		}
+		itemRef := note.Relationships.Item.Data
+		if itemRef == nil || itemRef.ID == "" {
+			continue
+		}
+		notesByItem[itemRef.ID] = append(notesByItem[itemRef.ID], note)
+	}
+	return notesByItem
+}
+
 // buildSongNoteViews resolves one views.SongNoteView per available note
 // category for a published song's plan item (itemID) - "" means
 // unpublished, and there's no item to attach a note to yet, so this
-// returns nil without a wasted PCO call. Best-effort like everything else
-// on this page: a failed GetItemNotes just means every category shows
-// empty (create-on-save) rather than a broken page.
-func buildSongNoteViews(ctx context.Context, serviceTypeID, planID, itemID string, noteCategories []pco.ItemNoteCategoryData) []views.SongNoteView {
+// returns nil. itemNotes is the whole plan's notes, keyed by item id (see
+// itemNotesFromIncluded) - sideloaded once on the GetItems call that also
+// fetched itemID itself, so this is now a pure lookup with no PCO call of
+// its own.
+func buildSongNoteViews(itemID string, noteCategories []pco.ItemNoteCategoryData, itemNotes map[string][]pco.ItemNoteData) []views.SongNoteView {
 	if itemID == "" || len(noteCategories) == 0 {
 		return nil
 	}
 
-	existing, _ := pco.GetItemNotes(ctx, serviceTypeID, planID, itemID, nil)
-	byCategory := make(map[string]pco.ItemNoteData, len(existing.Data))
-	for _, n := range existing.Data {
+	byCategory := make(map[string]pco.ItemNoteData, len(itemNotes[itemID]))
+	for _, n := range itemNotes[itemID] {
 		if n.Relationships.ItemNoteCategory.Data != nil {
 			byCategory[n.Relationships.ItemNoteCategory.Data.ID] = n
 		}
@@ -1262,21 +1301,28 @@ func buildSongNoteViews(ctx context.Context, serviceTypeID, planID, itemID strin
 // renderServiceOrder turns a merge into display rows plus the anchor
 // picker's option list (every foreign item, in order, prefixed by "Top of
 // service"). noteCategories is this service type's Planning Center note
-// categories (Audio/Visual, Band, Vocals, etc.), fetched once by the
-// caller and reused for every published song's SongNoteView (see
-// buildSongNoteViews) - a service type has few of these, so one shared
-// fetch instead of a category lookup per song.
-func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizationID, serviceTypeID, planID string, arrangementCache map[string]scheduling.SongArrangementInfo, noteCategories []pco.ItemNoteCategoryData, rows []mergedRow, titles map[string]string, rolesBySong map[string][]scheduling.SongRole, roleTypeLabels map[string]string) []views.ServiceOrderRow {
+// categories (Audio/Visual, Band, Vocals, etc.), and itemNotes is every
+// item's actual notes (see itemNotesFromIncluded) - both fetched once by
+// the caller and reused for every published song's SongNoteView (see
+// buildSongNoteViews) - a service type has few note categories, and a
+// plan's items/notes are sideloaded on one GetItems call, so there's no
+// per-song lookup left here at all.
+func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizationID string, arrangementCache map[string]scheduling.SongArrangementInfo, noteCategories []pco.ItemNoteCategoryData, itemNotes map[string][]pco.ItemNoteData, rows []mergedRow, titles map[string]string, rolesBySong map[string][]scheduling.SongRole, roleTypeLabels map[string]string) []views.ServiceOrderRow {
 	// Each row is independent of every other - a foreign item is pure local
-	// data, and a song row's PCO calls (resolveArrangementCacheInfo,
-	// buildSongNoteViews) only read arrangementCache/noteCategories, never
-	// write them (resolveArrangementCacheInfo's cache-miss path upserts to
-	// Postgres, not this in-memory map - see its own doc comment), so
-	// there's nothing here for concurrent rows to race on. out is pre-sized
-	// and each goroutine only ever writes its own index, so no lock is
-	// needed for that either. See docs/pco-api-risks.md's concurrency
-	// mitigation - this replaces a sequential per-row loop that paid every
-	// song's GetItemNotes/GetArrangements/GetKeys latency one at a time.
+	// data, and a song row's only remaining live PCO call is
+	// resolveArrangementCacheInfo's cache-miss path (GetArrangements, then
+	// GetKeys - buildSongNoteViews is now a pure map lookup, no PCO call of
+	// its own, since item notes are sideloaded once on the GetItems call
+	// above rather than fetched per row). That upserts to Postgres, not
+	// this in-memory arrangementCache map (see resolveArrangementCacheInfo's
+	// own doc comment), so there's nothing here for concurrent rows to race
+	// on. out is pre-sized and each goroutine only ever writes its own
+	// index, so no lock is needed for that either. Kept concurrent (see
+	// docs/pco-api-risks.md's concurrency mitigation) rather than collapsed
+	// back to a sequential loop: a cache miss still pays two PCO calls
+	// (GetArrangements, GetKeys), and a plan with several never-synced
+	// songs still benefits from fanning those out instead of paying their
+	// latency one row at a time.
 	out := make([]views.ServiceOrderRow, len(rows))
 
 	indexes := make([]int, len(rows))
@@ -1337,7 +1383,7 @@ func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizati
 				Description:     ss.Description,
 				Key:             key,
 				PCOItemID:       ss.PCOItemID,
-				Notes:           buildSongNoteViews(ctx, serviceTypeID, planID, ss.PCOItemID, noteCategories),
+				Notes:           buildSongNoteViews(ss.PCOItemID, noteCategories, itemNotes),
 			},
 		}
 	})
