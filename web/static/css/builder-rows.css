@@ -25,6 +25,35 @@
   margin-bottom: var(--space-2);
 }
 
+/* The "Browse all songs" empty-state title list (CandidateSearchResults) -
+   just titles, cheap enough to always render in full (unlike the rich
+   search results' candidateSearchLimit, there's no count cap here), so
+   this bounds its *visual* height instead, letting a long library scroll
+   in place rather than push the rest of the page down. */
+.song-title-browse {
+  list-style: none;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  max-height: 12rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.song-title-browse-item {
+  background: none;
+  border: none;
+  text-align: left;
+  padding: 0.2rem var(--space-2);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.song-title-browse-item:hover {
+  background: var(--surface-hover);
+}
+
 @media (min-width: 640px) {
   #candidate-search {
     width: auto;

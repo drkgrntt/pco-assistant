@@ -169,6 +169,22 @@ type SetBuilderData struct {
 	// (candidateMatchesSearch, sets_builder.go); clicking a chip doesn't add
 	// any new filter semantics of its own.
 	TagValuesByCategory map[string][]string
+
+	// BrowsableSongs is the "Browse all songs" list's empty-query-and-role
+	// state (CandidateSearchResults) - every active, not-yet-added song's
+	// id+title, in the same title order fetchActiveSongs already returns
+	// them, so someone can skim titles before typing anything. Deliberately
+	// the lightweight SongOptionView, not the rich CandidateSongView the
+	// same list's actual search results use: computing roles/tags/
+	// conflicts/arrangement info for the whole library on every page load
+	// is exactly what BuildCandidatesSearch/searchCandidates exist to avoid
+	// (see their own doc comments) - this only ever needs a title, so it
+	// skips all of that. Built once here from the same songs/inSet
+	// buildSetBuilderData already has (see buildBrowsableSongs,
+	// sets_builder.go); searchCandidates builds the identical list on its
+	// own early-return path for BuildCandidatesSearch's re-renders (e.g.
+	// clearing the search box back to empty).
+	BrowsableSongs []SongOptionView
 }
 
 type SetSongView struct {
@@ -317,10 +333,12 @@ type PlanRow struct {
 	RosterStatus string
 }
 
-// SongOptionView is a lightweight song option for a plain native <select>
-// picker - just an id and a title, unlike the richer CandidateSongView
-// below. See SetBuilderData.ReplaceCandidates, the only thing that
-// currently uses this.
+// SongOptionView is a lightweight song option - just an id and a title,
+// unlike the richer CandidateSongView below. Backs a plain native <select>
+// picker (SetBuilderData.ReplaceCandidates) and, identically, the "Browse
+// all songs" list's empty-state title-browse list
+// (SetBuilderData.BrowsableSongs) - both need nothing more than an id and a
+// title, so they share this one type rather than each growing their own.
 type SongOptionView struct {
 	SongID string
 	Title  string
