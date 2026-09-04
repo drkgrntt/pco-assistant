@@ -842,6 +842,38 @@ function applyTagFilter(el) {
   }
 }
 
+// switchTagFilterCategory is the "Browse by tag" accordion's category
+// <select> onchange handler (set_builder.templ) - one collapsibleSection
+// now holds every category's chips (data-category on each
+// .tag-filter-group), with only the selected category's group visible at a
+// time. Uses the .hidden DOM property, not style.display, matching every
+// other show/hide toggle in this file (syncBuildTabVisibility above, and
+// others).
+function switchTagFilterCategory(select) {
+  document.querySelectorAll(".tag-filter-group").forEach(function (group) {
+    group.hidden = group.dataset.category !== select.value;
+  });
+}
+
+// browseSongTitle is the empty-state "browse titles" list's click handler
+// (CandidateSearchResults, set_builder.templ) - the exact same
+// type-it-into-the-search-box-and-re-trigger-search shortcut applyTagFilter
+// above uses for tag chips, just keyed off a plain song title instead of a
+// tag value.
+function browseSongTitle(el) {
+  var searchInput = document.getElementById("candidate-search");
+  if (!searchInput) {
+    return;
+  }
+  searchInput.value = el.dataset.title;
+
+  openCandidatesSection();
+
+  if (window.htmx) {
+    htmx.trigger(searchInput, "search");
+  }
+}
+
 // Sortable admin tables (relationships/preferences/song roles - marked
 // class="sortable" in their templates). Deliberately NOT used on the set
 // builder's order-of-service table, where row order is the actual data,

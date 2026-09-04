@@ -173,6 +173,12 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 		})
 	}
 
+	// BrowsableSongs - see its own doc comment on SetBuilderData. Built once
+	// here from songs/inSet, already in hand, rather than a fresh fetch;
+	// searchCandidates builds the identical list on its own early-return
+	// path for this same list's htmx re-renders.
+	data.BrowsableSongs = buildBrowsableSongs(songs, inSet)
+
 	pendingDeletions, err := sc.store.ListPendingDeletions(ctx, set.ID)
 	if err != nil {
 		data.ErrMsg = appendErr(data.ErrMsg, err.Error())
@@ -497,6 +503,26 @@ func (l candidateLookups) candidateSongView(song pco.SongData) views.CandidateSo
 	}
 }
 
+// buildBrowsableSongs is candidateSongView's lightweight counterpart -
+// title-only, for the "Browse all songs" list's empty-query-and-role state
+// (see views.SetBuilderData.BrowsableSongs) rather than the rich search
+// results the same list shows once someone actually searches. Deliberately
+// skips every per-song lookup candidateSongView needs (roles, tags,
+// conflicts, arrangement info, reinforcement status) - none of that is
+// wanted here, so this is just an id+title filter over songs, cheap enough
+// to run on every render unconditionally. songs is expected already
+// title-ordered (fetchActiveSongs' own contract) - this doesn't re-sort.
+func buildBrowsableSongs(songs []pco.SongData, inSet map[string]bool) []views.SongOptionView {
+	browsable := make([]views.SongOptionView, 0, len(songs))
+	for _, song := range songs {
+		if inSet[song.ID] {
+			continue
+		}
+		browsable = append(browsable, views.SongOptionView{SongID: song.ID, Title: song.Attributes.Title})
+	}
+	return browsable
+}
+
 // candidateSearchLimit caps BuildCandidatesSearch's response - a broad or
 // even empty-role/broad-text query still only ever renders this many rich
 // rows, never hundreds, no matter how large the underlying library is (see
@@ -518,14 +544,14 @@ const candidateSearchLimit = 50
 // q/role come straight from the query string (search text and the
 // currently-active role-filter button's code - see toggleRoleFilter,
 // scheduling.js); "" for either means "no filter on that axis." With
-// neither set, this deliberately returns the empty-prompt state rather
-// than the first candidateSearchLimit songs in the library - not fetching
-// or computing anything until someone actually searches is the entire
-// point of this being server-driven instead of eagerly rendering
-// everything (see CandidateSearchResults' own doc comment for the four
-// states it can render). Matches are capped at candidateSearchLimit; the
-// results view shows a "showing top N of M" hint whenever that cap is
-// actually hit.
+// neither set, searchCandidates returns early with just the lightweight
+// browsable title list (see its own doc comment) rather than the rich
+// candidateSongView treatment - not computing anything expensive until
+// someone actually searches is the entire point of this being
+// server-driven instead of eagerly rendering everything (see
+// CandidateSearchResults' own doc comment for the states it can render).
+// Matches are capped at candidateSearchLimit; the results view shows a
+// "showing top N of M" hint whenever that cap is actually hit.
 func (sc *SchedulingController) BuildCandidatesSearch(c *fiber.Ctx) error {
 	organizationID := middleware.CurrentOrganizationID(c)
 	ctx := middleware.RequestContext(c)
@@ -534,34 +560,43 @@ func (sc *SchedulingController) BuildCandidatesSearch(c *fiber.Ctx) error {
 	query := c.Query("q")
 	role := c.Query("role")
 
-	candidates, totalMatches, capped := sc.searchCandidates(ctx, organizationID, serviceTypeID, planID, query, role)
-	return render(c, views.CandidateSearchResults(serviceTypeID, planID, candidates, query, role, totalMatches, capped))
+	candidates, totalMatches, capped, browsable := sc.searchCandidates(ctx, organizationID, serviceTypeID, planID, query, role)
+	return render(c, views.CandidateSearchResults(serviceTypeID, planID, candidates, query, role, totalMatches, capped, browsable))
 }
 
 // searchCandidates is BuildCandidatesSearch's actual work, split out so the
 // pure matching/capping logic below (candidateMatchesSearch/
 // candidateMatchesRole/capCandidates) can be unit tested without a live
-// PCO/DB round trip. Fetches its own copy of the same lookups
-// buildSetBuilderData gathers for its SongsToReinforce pass (roles, tags,
-// avoid-pairing conflicts, arrangement cache, repeat history, reinforcement
-// tracking) - cheaper than it sounds despite the duplication: none of
-// buildSetBuilderData's plan-item/order-of-service fetches (GetPlan,
-// GetItems, note categories) are needed here, fetchActiveSongs itself is
-// the same 60s-cached call every other Build page hit already reuses (see
-// docs/pco-api-risks.md), and - the actual point of this endpoint existing -
-// only the songs that actually match query/role ever get the full
-// candidateSongView treatment, capped at candidateSearchLimit, rather than
-// the whole library. Best-effort throughout, same convention as
-// buildSetBuilderData: a failed lookup just degrades whatever it backs
-// (e.g. no conflict badges) instead of failing the search outright.
-func (sc *SchedulingController) searchCandidates(ctx context.Context, organizationID, serviceTypeID, planID, query, role string) (results []views.CandidateSongView, totalMatches int, capped bool) {
+// PCO/DB round trip. With query and role both empty, this returns early
+// with just browsable (buildBrowsableSongs' title-only list, for the
+// "browse titles" empty state - see views.SetBuilderData.BrowsableSongs)
+// and zero results, rather than falling through to the rest of this
+// function: every lookup below this point (roles, tags, conflicts,
+// arrangement cache, repeat history, reinforcement tracking) exists only to
+// build the rich CandidateSongView results/candidateSongView is meant to
+// compute solely for matches, and with nothing to match against, every song
+// in the library would "match" and get that full treatment for nothing -
+// exactly the whole-library-on-every-render cost this endpoint exists to
+// avoid. Past that early return, fetches its own copy of the same lookups
+// buildSetBuilderData gathers for its SongsToReinforce pass - cheaper than
+// it sounds despite the duplication: none of buildSetBuilderData's
+// plan-item/order-of-service fetches (GetPlan, GetItems, note categories)
+// are needed here, fetchActiveSongs itself is the same 60s-cached call
+// every other Build page hit already reuses (see docs/pco-api-risks.md),
+// and - the actual point of this endpoint existing - only the songs that
+// actually match query/role ever get the full candidateSongView treatment,
+// capped at candidateSearchLimit, rather than the whole library.
+// Best-effort throughout, same convention as buildSetBuilderData: a failed
+// lookup just degrades whatever it backs (e.g. no conflict badges) instead
+// of failing the search outright.
+func (sc *SchedulingController) searchCandidates(ctx context.Context, organizationID, serviceTypeID, planID, query, role string) (results []views.CandidateSongView, totalMatches int, capped bool, browsable []views.SongOptionView) {
 	set, err := sc.store.GetOrCreateSet(ctx, organizationID, serviceTypeID, planID)
 	if err != nil {
-		return nil, 0, false
+		return nil, 0, false, nil
 	}
 	setSongs, err := sc.store.ListSetSongs(ctx, set.ID)
 	if err != nil {
-		return nil, 0, false
+		return nil, 0, false, nil
 	}
 	inSet := make(map[string]bool, len(setSongs))
 	for _, ss := range setSongs {
@@ -569,6 +604,11 @@ func (sc *SchedulingController) searchCandidates(ctx context.Context, organizati
 	}
 
 	songs, _ := fetchActiveSongs(ctx, organizationID)
+
+	if query == "" && role == "" {
+		return nil, 0, false, buildBrowsableSongs(songs, inSet)
+	}
+
 	titles := songTitleMap(songs)
 
 	roleTypes, _ := sc.store.ListSongRoleTypes(ctx)
@@ -626,7 +666,7 @@ func (sc *SchedulingController) searchCandidates(ctx context.Context, organizati
 
 	totalMatches = len(matches)
 	results, capped = capCandidates(matches, candidateSearchLimit)
-	return results, totalMatches, capped
+	return results, totalMatches, capped, nil
 }
 
 // candidateMatchesSearch reports whether a not-yet-added song matches a
