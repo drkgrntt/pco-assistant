@@ -56,6 +56,21 @@ func formatArrangementInfo(info scheduling.SongArrangementInfo) string {
 	return strings.Join(parts, " · ")
 }
 
+// formatSongStructure renders an arrangement's section-by-section
+// structure as a single ", "-joined display string ("Intro, Verse 1,
+// Chorus...") - preferring sequenceShort (PCO's abbreviated,
+// run-length-collapsed form, e.g. "Intro×2, V1, C") when it's non-empty,
+// falling back to the full sequence otherwise. Both come back empty for an
+// arrangement PCO hasn't had a structure entered for at all, in which case
+// this returns "" - same "just omit the line" convention as
+// formatArrangementInfo's own blank/zero-field handling.
+func formatSongStructure(sequenceShort, sequence []string) string {
+	if len(sequenceShort) > 0 {
+		return strings.Join(sequenceShort, ", ")
+	}
+	return strings.Join(sequence, ", ")
+}
+
 // fetchAndCacheArrangementInfo live-fetches songID's arrangement from
 // Planning Center and upserts it into song_arrangement_cache, returning
 // the resolved info - or an error, and no write, if the fetch failed or
@@ -105,6 +120,8 @@ func fetchAndCacheArrangementInfo(ctx context.Context, store *scheduling.Store, 
 		ArrangementID: arrangement.ID,
 		Notes:         attrs.Notes,
 		KeyID:         keyID,
+		Structure:     formatSongStructure(attrs.SequenceShort, attrs.Sequence),
+		HasChordChart: attrs.HasChordChart,
 	}
 
 	if err := store.UpsertSongArrangementInfo(ctx, organizationID, songID, info); err != nil {

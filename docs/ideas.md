@@ -227,14 +227,13 @@ somewhere to put it.
   shows up in Planning Center's own Plan view; Arrangement.Notes (above)
   didn't. See `SetSongView.Notes`/`SongNoteView`, `buildSongNoteViews`,
   `UpdateSongNote`.
-- **Song structure** - `Arrangement.Sequence`/`SequenceShort` ("Intro,
-  Verse 1, Chorus..." / "Intro×2, V1, C, V2, C, Bridge, C, Outro") -
-  already fetched alongside key/tempo, currently discarded. Read-only in
-  the SDK today (not in either Create/UpdateArrangementParams), but
-  useful for flow/pacing at a glance without opening PCO.
-- **Whether a chord chart exists** - `Arrangement.HasChordChart` - a
-  simple "has chart" badge linking into PCO, so it's known before
-  rehearsal whether one's even there.
+- ~~Song structure~~ - **shipped**, on the song detail card (Build page):
+  `Arrangement.Sequence`/`SequenceShort` joined into one display string by
+  `formatSongStructure`, preferring the abbreviated `SequenceShort` form.
+  See `SongArrangementInfo.Structure`, `SetSongView.Structure`.
+- ~~Whether a chord chart exists~~ - **shipped**, as a "Chord chart" badge
+  on the song detail card - `Arrangement.HasChordChart`. See
+  `SongArrangementInfo.HasChordChart`, `SetSongView.HasChordChart`.
 - **A lightweight reference link** - PCO's Attachment resource supports
   `linked_url`/`remote_link` (just a URL, no file upload) - "here's the
   recording to learn this from." Much cheaper than the full file-upload

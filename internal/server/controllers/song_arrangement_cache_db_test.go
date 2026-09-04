@@ -48,10 +48,12 @@ func newArrangementRefreshFakeServer(t *testing.T, arrangementID, key string) *h
 						"type": "Arrangement",
 						"id":   arrangementID,
 						"attributes": map[string]any{
-							"bpm":    120.0,
-							"meter":  "4/4",
-							"length": 240,
-							"notes":  "some notes",
+							"bpm":             120.0,
+							"meter":           "4/4",
+							"length":          240,
+							"notes":           "some notes",
+							"sequence_short":  []string{"Intro", "V1", "C"},
+							"has_chord_chart": true,
 						},
 					},
 				},
@@ -102,6 +104,12 @@ func TestFetchAndCacheArrangementInfoOverwritesStaleCacheRow(t *testing.T) {
 	if first.Key != "G" {
 		t.Fatalf("fetchAndCacheArrangementInfo (first fetch) key = %q, want %q", first.Key, "G")
 	}
+	if first.Structure != "Intro, V1, C" {
+		t.Errorf("fetchAndCacheArrangementInfo (first fetch) structure = %q, want %q", first.Structure, "Intro, V1, C")
+	}
+	if !first.HasChordChart {
+		t.Error("fetchAndCacheArrangementInfo (first fetch) HasChordChart = false, want true")
+	}
 
 	cache, err := store.SongArrangementInfo(ctx, orgID)
 	if err != nil {
@@ -109,6 +117,12 @@ func TestFetchAndCacheArrangementInfoOverwritesStaleCacheRow(t *testing.T) {
 	}
 	if got := cache[songID].Key; got != "G" {
 		t.Fatalf("cached key after first fetch = %q, want %q", got, "G")
+	}
+	if got := cache[songID].Structure; got != "Intro, V1, C" {
+		t.Errorf("cached structure after first fetch = %q, want %q", got, "Intro, V1, C")
+	}
+	if !cache[songID].HasChordChart {
+		t.Error("cached HasChordChart after first fetch = false, want true")
 	}
 
 	// Second fetch, simulating the song's key having changed in Planning

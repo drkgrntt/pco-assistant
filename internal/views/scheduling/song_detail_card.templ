@@ -125,6 +125,17 @@ templ SongNoteFormFragment(data SetBuilderData, song SetSongView, note SongNoteV
 // renderServiceOrder), this song's own Tags-column badges, and the
 // warnings banner (a refreshed key can flip keyTransitionWarnings' verdict
 // against this song's neighbors, same as an edited key override would).
+//
+// Also pushes Structure/HasChordChart (song-structure-<id>, song-chord-
+// chart-badge-<id>) via the same OOB mechanism - both can change on a real
+// refresh (an arrangement's structure edited, or a chord chart added/
+// removed, directly in Planning Center) same as key/BPM/meter/length can.
+// Each is only ever rendered (in songDetailCard, initially) when it has
+// something to show, so an OOB update here only actually appears once that
+// element already exists in the DOM - a song going from "no structure yet"
+// to "has one" on this same click needs a full page reload to show it the
+// first time, same trade-off as everywhere else in this app that only
+// re-renders a fragment rather than the whole page.
 templ SongArrangementInfoRefreshFragment(data SetBuilderData, song SetSongView, errMsg string) {
 	<p class="muted" id={ fmt.Sprintf("song-arrangement-info-%d", song.ID) }>
 		if errMsg != "" {
@@ -136,6 +147,14 @@ templ SongArrangementInfoRefreshFragment(data SetBuilderData, song SetSongView, 
 		}
 	</p>
 	<div class="muted song-meta" id={ fmt.Sprintf("song-meta-%d", song.ID) } hx-swap-oob="true">{ song.ArrangementInfo }</div>
+	if song.Structure != "" {
+		<p class="muted" id={ fmt.Sprintf("song-structure-%d", song.ID) } hx-swap-oob="true"><strong>Structure:</strong> { song.Structure }</p>
+	}
+	if song.HasChordChart {
+		<span id={ fmt.Sprintf("song-chord-chart-badge-%d", song.ID) } hx-swap-oob="true">
+			@components.Badge("", "Chord chart")
+		</span>
+	}
 	@songBadgesOOB(song)
 	@songWarningsOOB(data)
 	@songRefreshStatusOOB(song.ID, errMsg)
@@ -192,6 +211,9 @@ templ songDetailCard(data SetBuilderData, song SetSongView) {
 				No arrangement info cached yet.
 			}
 		</p>
+		if song.Structure != "" {
+			<p class="muted" id={ fmt.Sprintf("song-structure-%d", song.ID) }><strong>Structure:</strong> { song.Structure }</p>
+		}
 		<div class="build-detail-badges">
 			for _, role := range song.Roles {
 				@components.Badge("", role.Label)
@@ -201,6 +223,11 @@ templ songDetailCard(data SetBuilderData, song SetSongView) {
 			}
 			if song.Moved {
 				@components.BadgeTitled("status-pending", "Moved", "Moved since it was last published")
+			}
+			if song.HasChordChart {
+				<span id={ fmt.Sprintf("song-chord-chart-badge-%d", song.ID) }>
+					@components.Badge("", "Chord chart")
+				</span>
 			}
 		</div>
 		<div class="build-detail-notes-group">

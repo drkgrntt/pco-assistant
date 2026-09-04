@@ -1291,6 +1291,8 @@ func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizati
 				Moved:           ss.Moved,
 				InfoPending:     ss.InfoPending,
 				ArrangementInfo: formatArrangementInfo(displayInfo),
+				Structure:       displayInfo.Structure,
+				HasChordChart:   displayInfo.HasChordChart,
 				Description:     ss.Description,
 				Key:             key,
 				PCOItemID:       ss.PCOItemID,
