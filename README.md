@@ -105,9 +105,15 @@ with at least Viewer access can still sign in.
   the build page, not just the dedicated setup pages, or from each song
   row's own "more actions" menu (tag it, relate it - defaulting to whichever
   song comes next in the order - or mark a role, all already scoped to that
-  song, no picking it out of a list again). Publish pushes everything to
-  real PCO plan items in one sync; Discard reverts your local draft back to
-  whatever's live in PCO; "Pull in from Planning Center" sits between the
+  song, no picking it out of a list again). The "Browse all songs" search
+  box already matches typed text against tag values as well as song
+  titles; "Browse by tag" chips below it list every distinct tag value
+  actually in use, grouped by category behind a collapsible section per
+  category, so you can find a tag to search for without already knowing
+  what's been tagged - clicking one just fills in that same search box.
+  Publish pushes everything to real PCO plan items in one sync; Discard
+  reverts your local draft back to whatever's live in PCO; "Pull in from
+  Planning Center" sits between the
   two - it adds anything added directly in Planning Center since the draft
   was last touched, without discarding any local change (unpublished adds,
   removals, reordering, pending note/key edits) the way Discard would.

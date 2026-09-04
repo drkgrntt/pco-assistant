@@ -168,6 +168,37 @@ func (s *Store) ListSongTags(ctx context.Context, organizationID, songID, catego
 	return tags, rows.Err()
 }
 
+// DistinctSongTagValues returns every distinct tag value actually in use
+// for this org, grouped by category code - the source list for the
+// "browse by tag" picker (set_builder.templ), so someone filtering the
+// library sees real, currently-used values instead of having to guess
+// what's been tagged. Not organization-scoped the way ListSongTagCategories
+// is unscoped (categories are shared vocabulary; the *values* under them
+// are this org's own data, same scoping as ListSongTags).
+func (s *Store) DistinctSongTagValues(ctx context.Context, organizationID string) (map[string][]string, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT DISTINCT category, value
+		FROM song_tags
+		WHERE organization_id = $1
+		ORDER BY category, value
+	`, organizationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	values := map[string][]string{}
+	for rows.Next() {
+		var category, value string
+		if err := rows.Scan(&category, &value); err != nil {
+			return nil, err
+		}
+		values[category] = append(values[category], value)
+	}
+
+	return values, rows.Err()
+}
+
 func (s *Store) DeleteSongTag(ctx context.Context, organizationID string, id int64) error {
 	result, err := s.db.ExecContext(ctx, `DELETE FROM song_tags WHERE id = $1 AND organization_id = $2`, id, organizationID)
 	if err != nil {

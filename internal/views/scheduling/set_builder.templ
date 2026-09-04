@@ -603,6 +603,36 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 			}
 		</div>
 		<!--
+			"Browse by tag" - pure discoverability, not a new filter
+			mechanism. candidateMatchesSearch (sets_builder.go) already matches
+			typed search text against tag values, not just titles, so typing an
+			exact tag value into the search box above already works; the
+			problem is nobody can see what tags exist without already knowing
+			what to type. Unlike the role filters above (a small fixed list,
+			so an always-open button row is fine), tag values are unbounded
+			free text - dozens of scripture references, say - so each
+			category's chips sit behind their own collapsibleSection,
+			collapsed by default. Clicking a chip just types that value into
+			#candidate-search and re-triggers the same search request
+			(applyTagFilter, scheduling.js); it deliberately doesn't set any
+			state of its own the way the role filter's hidden input does.
+		-->
+		if len(data.TagValuesByCategory) > 0 {
+			<div class="tag-filters">
+				for _, cat := range data.TagCategories {
+					if values := data.TagValuesByCategory[cat.Code]; len(values) > 0 {
+						@collapsibleSection(fmt.Sprintf("tag-filter-%s", cat.Code), "Browse by "+cat.Label, false) {
+							<div class="role-filters">
+								for _, v := range values {
+									<button type="button" class="role-filter" data-value={ v } onclick="applyTagFilter(this)">{ v }</button>
+								}
+							</div>
+						}
+					}
+				}
+			</div>
+		}
+		<!--
 			The search box and role filters both feed one server-driven
 			search request (BuildCandidatesSearch) rather than filtering an
 			already-rendered list client-side - see that handler's doc

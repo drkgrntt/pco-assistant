@@ -145,6 +145,7 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 	data.TagCategories = tagCategories
 	data.RelationshipTypes, _ = sc.store.ListSongRelationshipTypes(ctx)
 	data.RoleTypes = roleTypes
+	data.TagValuesByCategory, _ = sc.store.DistinctSongTagValues(ctx, organizationID)
 
 	inSet := make(map[string]bool, len(setSongs))
 	for _, ss := range setSongs {
