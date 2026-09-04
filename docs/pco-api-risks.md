@@ -101,6 +101,75 @@ that first. Facts worth adding here that aren't in CLAUDE.md:
   eliminate the per-person blockout cache entirely if it exists.
 - Songs#index supports server-side `where[hidden]` filtering - confirmed
   `true`/`false` return different, correct `total_count`s.
+- **Arrangements#index/#show supports `include=keys`** - confirmed live
+  against a real song/arrangement (`meta.can_include` lists `keys`,
+  `sections`; `?include=keys` returns the arrangement's Key resource(s)
+  sideloaded in `included`). Not yet used:
+  `fetchAndCacheArrangementInfo` (`scheduling.go`) still makes two
+  sequential calls per song (`GetArrangements` then `GetKeys`) - one
+  `include=keys` call would do both, halving Song Info's whole-library
+  sync cost (the "~200 calls for a 100-song library" figure). Needs a
+  small go-pco change first: `ArrangementsParams` has no `Include` field
+  today, unlike `PeopleParams`/`TeamMembersParams`/
+  `PersonPlanPeopleParams`, which already support one.
+- **Items#index supports `include=item_notes`** (also `song`,
+  `arrangement`, `key`, among others - confirmed live via `meta.can_include`
+  on a real plan's items) - not yet used: `renderServiceOrder`
+  (`sets_builder.go`) fans a `GetItemNotes` call out per published song via
+  `RunConcurrently` (its own comment: "song's GetItemNotes/GetArrangements/
+  GetKeys latency one at a time") - a wall-clock fix, not a call-count one,
+  same distinction the "why this is a real risk" section above draws. One
+  `GetItems(..., include=item_notes)` sideloads every item's notes in the
+  same call already being made, on every Set Builder render. `ItemsParams`
+  has no `Include` field today - same gap as `ArrangementsParams`.
+- **NeededPositions#index and TeamMembers#index both support
+  `include=team`** (confirmed live) - not yet used:
+  `fetchRosterSharedPCOData` (`rosters_scoped.go`) makes exactly 3 calls
+  per plan (`GetTeamMembers`, `GetNeededPositions`, `GetTeams`), and
+  `GetTeams`' only use anywhere in this codebase is resolving bare team
+  IDs to names for the other two. Sideloading `team` on the
+  `NeededPositions` call already being made eliminates the standalone
+  `GetTeams` call - on every Team Builder render and every roster
+  add/remove/preference-change mutation (`rosters_detail.go`).
+  `NeededPositionsParams` has no `Include` field today either.
+- **Checked and ruled out**: `TeamMembers#index`'s `include=person` looked
+  like it might replace `personNameMapForIDs`' batched name lookup, but
+  that lookup already spans IDs beyond just a plan's team members
+  (candidates, local roster assignments too) and is already one batched
+  `where[id]=` call - `include` doesn't beat a call that's already
+  collapsed via batching.
+- JSON:API `include` sideloading is real and already used once
+  (`GetPersonPlanPeople`'s `include=plan,team` - see `person_data_cache.go`)
+  but has a real limit, worth stating precisely after the two finds above:
+  it only sideloads a resource's *own* relationships in the same request,
+  it can't merge two genuinely independent top-level list endpoints into
+  one call. That's why it can shrink the three-call roster fetch above to
+  two (`team` is a relationship of `needed_positions`) but can't merge
+  `team_members` and `needed_positions` themselves into one call (neither
+  is a relationship of the other) - the still-open Team/position/member
+  gap's real fix stays caching, this only trims it from 3 calls to 2.
+- **`include` swept exhaustively across every PCO endpoint this app calls**
+  (not just the hot paths above) - 2026-09-04, prompted by "is there
+  really nothing else." Checked live (`meta.can_include`) against every
+  `pco.Get*` this codebase uses. Nothing beyond the three finds above:
+  `GetTeamPositions` (`can_include`: `tags`, `team`) has no redundant
+  call next to it to cut - its job is resolving a position *name* to an
+  *id*, which nothing else fetched carries (`NeededPositionAttributes.
+  TeamPositionName` is plain text, not a relationship - see that
+  struct's own comment). `GetPersonTeamPositionAssignments` (`person`,
+  `team_position`) hits the same "already batched" dead end as
+  `TeamMembers`/`person` above - `personNameMapForIDs` right after it
+  already covers a broader ID set in one `where[id]=` call.
+  `People#index` (`emails`, `tags`, `team_leaders`), `Plans`/`Plan#show`
+  (`contributors`, `my_schedules`, `plan_times`, `series`), and
+  `ServiceTypes#index` (`time_preference_options`) all have real
+  `can_include` values, but none of those relationships are consumed
+  anywhere in this app - nothing to gain because nothing downstream
+  wants the data. `Songs#index`/`Song#show`, `GetBlockouts`,
+  `GetOrganization`, `GetItemNoteCategories` have no `can_include` at
+  all; `GetKeys`' is moot once the arrangement fix above ships (that
+  call goes away entirely). Don't re-sweep this without a new call site
+  appearing first.
 - No JSONB precedent anywhere in this codebase's migrations - every table,
   including the caches above, uses normalized rows, not a blob column.
 
