@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -71,6 +72,45 @@ func formatSongStructure(sequenceShort, sequence []string) string {
 	return strings.Join(sequence, ", ")
 }
 
+// includedKey is the Key equivalent of includedTeam/includedPlan
+// (rosters_builder.go) - just enough of a Key resource's shape (see
+// go-pco's KeyData) to read its id and starting key out of a
+// GetArrangements response's Included array when fetched with
+// Include: []string{"keys"}.
+type includedKey struct {
+	Type       string `json:"type"`
+	ID         string `json:"id"`
+	Attributes struct {
+		StartingKey string `json:"starting_key"`
+	} `json:"attributes"`
+}
+
+// keysFromIncluded extracts Key entries from a GetArrangements response's
+// Included array, mirroring teamNamesFromIncluded/planSortDatesFromIncluded
+// (rosters_builder.go). Any entry that isn't a well-formed Key is silently
+// skipped. Returned in Included's own order, since
+// fetchAndCacheArrangementInfo only ever reads the first entry - the same
+// "first row wins" behavior the former direct
+// GetKeys(..., &pco.KeysParams{PerPage: 1}) call had.
+func keysFromIncluded(included []any) []includedKey {
+	var keys []includedKey
+	for _, raw := range included {
+		b, err := json.Marshal(raw)
+		if err != nil {
+			continue
+		}
+		var k includedKey
+		if err := json.Unmarshal(b, &k); err != nil {
+			continue
+		}
+		if k.Type != "Key" || k.ID == "" {
+			continue
+		}
+		keys = append(keys, k)
+	}
+	return keys
+}
+
 // fetchAndCacheArrangementInfo live-fetches songID's arrangement from
 // Planning Center and upserts it into song_arrangement_cache, returning
 // the resolved info - or an error, and no write, if the fetch failed or
@@ -89,7 +129,7 @@ func formatSongStructure(sequenceShort, sequence []string) string {
 // ChordChartKey blank. ChordChartKey is used only as a fallback for the
 // rarer case where a chord chart's own key is set but no Key row exists.
 func fetchAndCacheArrangementInfo(ctx context.Context, store *scheduling.Store, organizationID, songID string) (scheduling.SongArrangementInfo, error) {
-	resp, err := pco.GetArrangements(ctx, songID, &pco.ArrangementsParams{PerPage: 1})
+	resp, err := pco.GetArrangements(ctx, songID, &pco.ArrangementsParams{PerPage: 1, Include: []string{"keys"}})
 	if err != nil {
 		return scheduling.SongArrangementInfo{}, err
 	}
@@ -101,15 +141,15 @@ func fetchAndCacheArrangementInfo(ctx context.Context, store *scheduling.Store, 
 	attrs := arrangement.Attributes
 	key := attrs.ChordChartKey
 	keyID := ""
-	if keys, err := pco.GetKeys(ctx, songID, arrangement.ID, &pco.KeysParams{PerPage: 1}); err == nil && len(keys.Data) > 0 && keys.Data[0].Attributes.StartingKey != "" {
-		key = keys.Data[0].Attributes.StartingKey
+	if keys := keysFromIncluded(resp.Included); len(keys) > 0 && keys[0].Attributes.StartingKey != "" {
+		key = keys[0].Attributes.StartingKey
 		// A genuinely separate relationship from the arrangement, not
 		// implied by it (confirmed live: an item with only its
 		// arrangement linked still shows no key at all) - only set when
 		// there's a real Key row to point at, same condition as the
 		// display string above, so the two stay consistent with each
 		// other.
-		keyID = keys.Data[0].ID
+		keyID = keys[0].ID
 	}
 
 	info := scheduling.SongArrangementInfo{

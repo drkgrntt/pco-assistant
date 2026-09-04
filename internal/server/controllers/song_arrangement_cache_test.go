@@ -33,6 +33,72 @@ func TestFormatSongStructureBothEmpty(t *testing.T) {
 	}
 }
 
+// --- keysFromIncluded -------------------------------------------------
+
+// TestKeysFromIncludedParsesKeyEntries mirrors
+// TestTeamNamesFromIncludedParsesTeamEntries/
+// TestPlanSortDatesFromIncludedParsesPlanEntries (rosters_builder_test.go)
+// - a non-Key entry in Included (an Arrangement, here - the resource this
+// response's Data actually carries) must be silently skipped, not mistaken
+// for a Key.
+func TestKeysFromIncludedParsesKeyEntries(t *testing.T) {
+	included := []any{
+		map[string]any{
+			"type": "Key",
+			"id":   "key-1",
+			"attributes": map[string]any{
+				"starting_key": "G",
+			},
+		},
+		map[string]any{
+			"type": "Arrangement",
+			"id":   "arr-1",
+		},
+	}
+
+	got := keysFromIncluded(included)
+
+	if len(got) != 1 {
+		t.Fatalf("expected exactly 1 key (the Arrangement entry should be skipped), got %+v", got)
+	}
+	if got[0].ID != "key-1" {
+		t.Errorf("expected key id %q, got %q", "key-1", got[0].ID)
+	}
+	if got[0].Attributes.StartingKey != "G" {
+		t.Errorf("expected starting key %q, got %q", "G", got[0].Attributes.StartingKey)
+	}
+}
+
+// TestKeysFromIncludedSkipsEntriesMissingID confirms a malformed Key entry
+// (no id) is dropped rather than surfaced as a usable-looking zero-value
+// key - same "silently skip, don't fail the page" spirit as
+// teamNamesFromIncluded/planSortDatesFromIncluded.
+func TestKeysFromIncludedSkipsEntriesMissingID(t *testing.T) {
+	included := []any{
+		map[string]any{
+			"type": "Key",
+			"attributes": map[string]any{
+				"starting_key": "G",
+			},
+		},
+	}
+
+	got := keysFromIncluded(included)
+
+	if len(got) != 0 {
+		t.Errorf("expected no keys (missing id should be skipped), got %+v", got)
+	}
+}
+
+// TestKeysFromIncludedEmptyInput confirms an empty/nil Included array
+// (no include=keys sideload, or an arrangement with no Key row at all)
+// comes back as no keys rather than panicking.
+func TestKeysFromIncludedEmptyInput(t *testing.T) {
+	if got := keysFromIncluded(nil); len(got) != 0 {
+		t.Errorf("keysFromIncluded(nil) = %+v, want empty", got)
+	}
+}
+
 // --- songSyncBatches ------------------------------------------------------
 
 func TestSongSyncBatchesSplitsEvenly(t *testing.T) {

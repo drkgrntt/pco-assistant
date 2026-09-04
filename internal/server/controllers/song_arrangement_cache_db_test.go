@@ -32,9 +32,13 @@ import (
 )
 
 // newArrangementRefreshFakeServer stands in for Planning Center's
-// arrangements/keys endpoints for one song, replying with the given key -
-// used twice in the test below with two different keys to prove a second
-// call overwrites the first.
+// arrangements endpoint (now the only call fetchAndCacheArrangementInfo
+// makes - see its own doc comment on the include=keys sideload), replying
+// with the given key as a sideloaded Key resource in "included" - used
+// twice in the test below with two different keys to prove a second call
+// overwrites the first. A request to /keys would mean
+// fetchAndCacheArrangementInfo regressed back to its old two-call shape,
+// so one arriving here fails the test loudly instead of silently passing.
 func newArrangementRefreshFakeServer(t *testing.T, arrangementID, key string) *httptest.Server {
 	t.Helper()
 
@@ -57,10 +61,7 @@ func newArrangementRefreshFakeServer(t *testing.T, arrangementID, key string) *h
 						},
 					},
 				},
-			})
-		case strings.HasSuffix(r.URL.Path, "/keys"):
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"data": []map[string]any{
+				"included": []map[string]any{
 					{
 						"type": "Key",
 						"id":   "key-" + key,
@@ -71,7 +72,7 @@ func newArrangementRefreshFakeServer(t *testing.T, arrangementID, key string) *h
 				},
 			})
 		default:
-			t.Errorf("unexpected request to %s", r.URL.Path)
+			t.Errorf("unexpected request to %s (fetchAndCacheArrangementInfo should make exactly one call, with include=keys)", r.URL.Path)
 			w.WriteHeader(http.StatusNotFound)
 		}
 	}))
