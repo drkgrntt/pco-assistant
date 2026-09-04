@@ -150,7 +150,18 @@ someone has to remember to ask for:
 - A change touches how often or how heavily this app calls PCO's API (a
   new hot-path call, a fix to one, a newly-discovered risk) ->
   `docs/pco-api-risks.md`, and this file's "PCO API calls" callout in
-  Architecture if the reference pattern itself changes.
+  Architecture if the reference pattern itself changes. Add new fixes to
+  that doc's Changelog as a compact entry (what/why/how, a few lines), not
+  a full narrative addendum - and if its "current state"/"live-verified
+  facts" tables go stale relative to what you just shipped, update those
+  too rather than only appending to the changelog. That doc was
+  restructured once already (2026-09-04) specifically to stop it growing
+  as an unbounded append-only history - don't let it drift back into that
+  shape.
+- A point-in-time design doc (`docs/*-plan.md`) gets fully shipped -> add a
+  `**Status: shipped.**` line at its top pointing at where it landed (see
+  `docs/pco-throttle-plan.md` for the convention), same spirit as marking
+  a `docs/ideas.md` item struck.
 
 ## Architecture
 
@@ -255,16 +266,16 @@ which. When adding a new scheduling table/method, match the existing
 pattern in its file rather than guessing.
 
 **PCO API calls: rate limits & performance** - this has already caused a
-real production bug, not a hypothetical one: a church's ~900-song PCO
-library (mostly archived, never cleaned up) was being pulled live,
-unfiltered, and uncached on nearly every page view, and the app was
-hitting PCO's rate limit (100 requests/20 seconds, per user token) on
-basically every screen. `docs/pco-api-risks.md` is the living risk-assessment
-doc - ranked mitigations, which have shipped, which were explicitly
-declined and why, which are still open. Read it, and update it, any time
-a change touches how often or how heavily this app calls PCO - don't let
-it silently drift stale the way this file's own "Keeping the docs
-current" section warns about for `docs/ideas.md`/`README.md`.
+real production bug, not a hypothetical one (see `docs/pco-api-risks.md`'s
+changelog for the original incident and every fix since). PCO's rate limit
+is 100 requests/20 seconds, per user token. `docs/pco-api-risks.md` is the
+living reference - current state of what's mitigated vs. still open,
+live-verified facts about which PCO endpoints batch, and a compact
+changelog of every fix and why it was shaped the way it was. Read it, and
+update it, any time a change touches how often or how heavily this app
+calls PCO - don't let it silently drift stale the way this file's own
+"Keeping the docs current" section warns about for `docs/ideas.md`/
+`README.md`.
 `internal/scheduling/pco_songs.go`'s `FetchActiveSongs` is the reference
 pattern for "PCO data that's expensive to fetch and doesn't change
 mid-session": org-scoped, cached in-process for 60s (mirrors

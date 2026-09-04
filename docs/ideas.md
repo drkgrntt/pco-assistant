@@ -106,7 +106,15 @@ the builder page's "Open in Planning Center" link.)
    overlay on PCO's own UI, so the native PCO drag-and-drop workflow never
    has to leave PCO at all. A real product bet, not a quick add - decide
    this only after the lighter-weight items above are in and adoption data
-   says it's worth it (also see Open questions below).
+   says it's worth it (also see Open questions below). Two things to design
+   for whenever this is actually picked up, neither a blocker today: (a) an
+   extension calling PCO live from inside the PCO tab competes for the same
+   per-user-token rate budget this app's own page loads already push close
+   to the ceiling on - see `docs/pco-api-risks.md` - so it needs its own
+   request budget, not an assumption of headroom; (b) this app's seat-based
+   billing (README) is keyed to its own OAuth session, which activity
+   happening inside PCO's own tab doesn't naturally attribute to - unsolved
+   design question, not just an implementation detail.
 5. **Bring the plan-page layout closer to PCO's own.** Less decision
    fatigue if the layout a director already knows from PCO transfers
    directly - order of service, song rows, where actions live - rather
@@ -170,10 +178,24 @@ for other volunteer-heavy ministries on the same backend.
 
 - Whether the browser-extension HUD is worth building at all before there's
   real usage data suggesting the lighter integrations aren't enough.
-- Whether Planning Center exposes any real third-party plugin/embed
-  surface (vs. just its public API) - would change the calculus on the
-  browser-extension HUD above; not yet checked against PCO's developer
-  docs.
+- ~~Whether Planning Center exposes any real third-party plugin/embed
+  surface (vs. just its public API)~~ - **checked**: PCO's official
+  "Add-Ons" program (`api.planningcenteronline.com/docs/overview/add-ons`,
+  the `@planningcenter/add-ons`/`add-ons-cli` packages) is real - OAuth
+  apps with React UI rendered into PCO's web app at defined "insertion
+  points," in a sandboxed remote-ui/Web Worker environment (not an iframe,
+  but the same practical limit: no access to PCO's own DOM or drag-and-
+  drop, can't annotate an existing item card). More importantly for us:
+  the only insertion points that exist publicly today are in **People**
+  (`people.profile.custom_tab`, `people.profile.info_section`) - there is
+  no Services/Plans insertion point at all yet, which is the surface our
+  warnings/set-builder would actually need. New insertion points are added
+  via public PR against PCO's own repo, but getting an add-on itself
+  approved still starts with reaching out to PCO directly per their docs.
+  Net: the browser-extension HUD above remains the only currently-viable
+  way to put this app's warnings on PCO's live plan UI; the "official
+  embedded add-on" path isn't gated on this app's traction, it's gated on
+  PCO shipping a Services insertion point they haven't announced.
 - When Phase 2 (non-worship ministries) actually starts - deliberately not
   scheduled yet; the plan is "after worship PMF," not a fixed date.
 - ~~A "nuclear" full-wipe-and-resync button for the Song Info / person-data
@@ -313,6 +335,8 @@ pattern as `song_tags`/`song_relationships`:**
   mechanism as the instrumentation idea above), but `song_tags` has no notes
   column, so capturing *why* it was retired needs either a small schema
   addition or a new table with notes, not a free ride on tags alone.
+  - Note from Derek, perhaps to reevaluate next time you see this,
+    could we not just leverage PCO's existing archive functionality?
 - **Per-person key fit** - "this key works for Sarah, too low for Mike."
   A different axis than the existing preferred/discouraged binary (that's
   about *wanting* to sing it, not *being able to* in that arrangement's
@@ -625,51 +649,30 @@ were.
 
 ## Rough leverage-to-cost read
 
-Item notes and arrangement notes (Planning annotations, above) were the
-cheapest ideas in this whole file, and are now shipped - both fields
-already existed and were already writable in the SDK, so it was
-display/edit UI, not new plumbing. Service length + key transitions are
-now shipped too, same zero-new-PCO-calls shape as the reinforcement
-feature they're cousins of. First-time-position pairing is
-probably the most valuable of the rest but costs a PCO call per
-assignment, same tier as today's serving-frequency check.
+Shipped items' cost/leverage tradeoffs are noted inline at their own
+`~~struck~~` bullets above, not repeated here - this section is scoped to
+what's still open. Cheapest remaining: **per-person key fit** (a new
+`song_person_preferences` code - the free-text `notes` column already
+exists) and **occasion reservation** (`song_roles`/`song_tag_categories`
+already model the storage; the gap is the warning, not the data).
+**First-time-position pairing** is probably the most valuable of the rest,
+but unlike those two, it costs a real PCO call per assignment (same tier
+as today's serving-frequency check).
 
-Of the later additions, the **run sheet** was the standout - no new
-storage, just a view over data that already exists, directly replacing
-the paper artifact a worship leader builds by hand - and is now shipped,
-same as **cross-team burnout** below on the People side (one new PCO call
-per assigned/candidate person, same cost tier as the existing frequency/
-blockout checks). **Per-person key fit** is nearly as cheap - `song_person_preferences` already has a
-free-text `notes` column sitting next to its dynamic preference type, so a
-new preference code is most of the work. **Occasion reservation** barely
-needs building at all today, since `song_roles`/`song_tag_categories`
-already model most of it - the gap is a warning, not storage. Everything
-on the People side added above (pastoral flag, call-first list, flexibility
-inventory, growth notes) is genuinely new local storage with no existing
-table to lean on, and the pastoral flag specifically needs a visibility
-decision before it needs any code.
+**Vocal range** splits by half: per-person range is cheap and standalone
+(one small new table, useful even with zero song data). Per-song range
+costs more - needs a real key engine factored out of the key-transition
+warning's one-off pitch-class parser - and its crowdsourced-default piece
+is the priciest single item in this file: the first genuinely cross-org
+data pattern this app would have, needing a reliable join key and a real
+consent story before it's shippable. The eventual key matrix is
+presentation-only once both ranges exist.
 
-A later round of additions splits the same way. **Surfacing per-person key
-fit at assignment time** is nearly free, same as the preference row it
-extends - it's UI over data described above, not new plumbing, unless
-auto-flagging a mismatch turns out to matter enough to warrant a
-structured key field over free text. **Rehearsal complexity budget** sits
-in the middle: every input it'd sum from already exists elsewhere in this
-file, so the real cost is designing the scoring formula and adding a
-rehearsal-length field, not fetching new data. **Stage density/band-balance
-checking** and the **post-service debrief log** are the priciest of the
-group - density needs a genuinely new capability/profile axis on both
-people and services with nothing to extend, and the debrief log needs new
-storage plus adjacency-matching logic to resurface a note at the right
-moment, not just store it.
-
-**Vocal range** splits the same way its own writeup does. Per-person range
-is cheap and standalone - one small new table, useful on its own before
-anything else here exists. Per-song range costs more: it needs a real key
-engine factored out of the one-off pitch-class parser the key-transition
-warning already has, and the crowdsourced-default piece is the priciest
-single thing in this file to do properly - the first genuinely cross-org
-data pattern the app would have, needing a reliable join key and an actual
-consent story before it's shippable, not just a schema addition. The
-eventual key matrix is presentation only once both exist, so its cost is
-whatever's left after the two range ideas actually ship.
+Priciest of the rest: **stage density/band-balance checking** (a new
+capability/profile axis on both people and services, nothing existing to
+extend) and the **post-service debrief log** (new storage plus
+adjacency-matching logic to resurface a note at the right moment).
+Everything on the People side not covered above (pastoral flag,
+call-first list, flexibility inventory, growth notes) is genuinely new
+local storage with no existing table to lean on - the pastoral flag
+specifically also needs a visibility decision before it needs any code.

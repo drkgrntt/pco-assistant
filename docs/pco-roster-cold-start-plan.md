@@ -1,5 +1,17 @@
 # Plan: fix Team/Roster Builder's per-person PCO call volume
 
+**Status: shipped.** Implemented as the local Postgres cache + paced
+background sync described below (migration `00033`, `person_data_cache.go`)
+- see `docs/pco-api-risks.md`'s changelog entry "Per-person blockout/
+cross-team/frequency data cached in Postgres" for what actually shipped.
+One deviation from this doc's original design: the `GetPersonPlanPeople`
+merge-into-one-table fork (see "One design fork this unlocks" below) could
+**not** be live-verified (blocked by sandbox tooling policy at the time),
+so it shipped as the conservative two-table fallback this doc already
+specified for that case - still worth a real live check per the two open
+questions at the bottom of this doc. This doc is kept as-is below as the
+original design record, not edited to match the final shipped shape.
+
 Written 2026-09-02, revised same day after a correction: the first draft
 of this plan proposed caching as *the* fix. Caching only helps a *second*
 hit within its TTL - it does nothing for the very first render of a given
