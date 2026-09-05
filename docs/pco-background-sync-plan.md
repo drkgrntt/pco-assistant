@@ -4,16 +4,22 @@
 (`internal/server/jobs/pco.go`, hourly) plus `controllers.RunOrgBackgroundSync`
 (`internal/server/controllers/pco_background_sync.go`) - see
 `docs/pco-api-risks.md`'s changelog entry ("PCO call-efficiency rollout,
-Phase 3") for exactly what landed, including the two deliberate deviations
+Phase 3") for exactly what landed, including the deliberate deviations
 from this doc's exact wording: no new "discovery already ran up through
 plan X" marker table (the "Open questions" section's alternative - a fixed
-5-plan-per-service-type window is simply re-walked every tick instead,
-since the existence check already skips everyone previously discovered),
-and `triggerPersonDataSync` was split into a `*fiber.Ctx` wrapper plus a
+5-plan-per-service-type window is simply re-walked instead, since the
+existence check already skips everyone previously discovered);
+`triggerPersonDataSync` was split into a `*fiber.Ctx` wrapper plus a
 new `triggerPersonDataSyncCtx` ctx/store/org-based core (mirroring
 `triggerSongInfoQueueSync`'s existing shape) rather than left as a
 fiber-only function, so this cron could call the identical drain-and-run
-logic without needing a `*fiber.Ctx` of its own. Section below left
+logic without needing a `*fiber.Ctx` of its own; and, added 2026-09-04
+shortly after initial ship, the discovery walk itself doesn't actually run
+on every hourly tick - it's gated to once per 24h per org
+(`discoveryDue`, `backgroundSyncDiscoveryInterval`), since unlike Song
+Info/person-data refresh it isn't time-sensitive staleness, just "has
+anyone new shown up" - re-walking hourly would have been 24 near-identical
+PCO calls for every one that could find something. Section below left
 as-written for reference.
 
 Written 2026-09-04, prompted by a conversation about whether Song Info's

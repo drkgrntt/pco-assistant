@@ -469,15 +469,28 @@ out to 100-200 sequential round trips per load.
   (service type count), not volunteer-pool size, so independent of org
   size unlike the full-eligibility-pool problem this deliberately still
   leaves open (see the "still open" row above). No new migration: the
-  discovery window is deliberately re-walked every tick rather than
-  gated behind a new "already discovered up through plan X" marker table
-  (an alternative the plan doc considered) - `PersonSyncMarkerStatus`'s
-  existence check already skips everyone previously discovered, so the
-  only recurring cost of re-walking is a small, constant number of
-  `GetPlans`/`GetTeamMembers` calls per org per hour, not reprocessing
-  already-known people; revisit if that ever actually shows up as
-  expensive. `middleware.AccessToken(c)` (the fiber-locals token accessor
-  `triggerPersonDataSync` used before this refactor) was removed as dead
-  code once nothing called it any more - `pco.AccessTokenFromContext` on
-  the already-carried `pco_ctx` context does the same job for every
-  remaining caller.
+  discovery window is simply re-walked (rather than gated behind a new
+  "already discovered up through plan X" marker table, an alternative the
+  plan doc considered) - `PersonSyncMarkerStatus`'s existence check already
+  skips everyone previously discovered, so a re-walk's only recurring cost
+  is the `GetPlans`/`GetTeamMembers` calls themselves, not reprocessing
+  already-known people (see the follow-up entry below on how often that
+  re-walk actually runs). `middleware.AccessToken(c)` (the fiber-locals
+  token accessor `triggerPersonDataSync` used before this refactor) was
+  removed as dead code once nothing called it any more -
+  `pco.AccessTokenFromContext` on the already-carried `pco_ctx` context
+  does the same job for every remaining caller.
+- **Phase 3's discovery walk throttled to once/24h per org, not every
+  hourly tick** - the rest of the per-org pass (Song Info/person-data
+  refresh) is genuinely time-sensitive staleness and already self-limits
+  via the paced-batch sync it triggers, but step 6's discovery walk
+  (`discoverRecentPersonTeamPairs`) was re-running its full
+  `GetPlans`+`GetTeamMembers` walk on every hourly tick regardless of
+  whether anything had changed - 24 near-identical PCO calls for every one
+  that could actually find something new, for a dataset (plan/team
+  membership) that doesn't change hour to hour. Gated behind a new
+  `discoveryDue`/`backgroundSyncDiscoveryInterval` (24h) check, keyed by
+  organization, in-memory only (a restart just means one extra walk,
+  already a cheap no-op for anyone previously discovered) - no new table,
+  same reasoning the plan doc used to decline a persistent marker for the
+  window itself.
