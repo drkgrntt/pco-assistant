@@ -107,10 +107,11 @@ templ SongNoteFormFragment(data SetBuilderData, song SetSongView, note SongNoteV
 // SongArrangementInfoRefreshFragment is RefreshSetSongArrangementInfo's
 // (song_arrangement_cache.go) htmx response - a single song's own "Update
 // from Planning Center" button forcing a live re-fetch of its cached
-// arrangement info, overwriting whatever's currently cached (unlike
-// SyncSongInfo's bulk backfill, which only fills gaps - see
-// fetchAndCacheArrangementInfo's own doc comment for why this one action
-// always re-fetches instead). Deliberately not called "Refresh song info"
+// arrangement info, overwriting whatever's currently cached (unlike the
+// background queue-on-miss sync, which only fills gaps and never re-fetches
+// an already-cached song - see fetchAndCacheArrangementInfo's own doc
+// comment for why this one action always re-fetches instead). Deliberately
+// not called "Refresh song info"
 // (a phrase this page's own Publish panel already uses for the opposite-
 // direction action, pushing local key/length/arrangement values out to
 // Planning Center - see publish_panel.templ's "Re-sync key, length &

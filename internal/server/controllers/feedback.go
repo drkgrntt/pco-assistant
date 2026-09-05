@@ -60,8 +60,8 @@ func (fc *FeedbackController) SubmitFeedback(c *fiber.Ctx) error {
 	message := body.Message
 
 	// context.Background(), not middleware.RequestContext(c): this
-	// goroutine outlives the request (see SyncSongInfo's identical
-	// reasoning in song_arrangement_cache.go), so a fresh
+	// goroutine outlives the request (see triggerPersonDataSync's identical
+	// reasoning in person_data_cache.go), so a fresh
 	// context.Background()-derived one is built instead - carrying just
 	// this request's id (see logger.WithRequestID) so the "failed" log
 	// below, if it fires, can still be traced back to this submission.

@@ -79,6 +79,21 @@ func withRequestIDArg(ctx context.Context, args []any) []any {
 	return append([]any{"request_id", id}, args...)
 }
 
+// RequestIDFromContext returns the request id WithRequestID stored on ctx,
+// if any. Exists so a caller holding a context built earlier in a request
+// (rather than the *fiber.Ctx itself, e.g. middleware.CurrentRequestID)
+// can still correlate work it kicks off with the request that triggered
+// it - the logging-side counterpart to go-pco's AccessTokenFromContext,
+// added for the identical need. See pco-assistant's Song Info queue-on-miss
+// sync (triggerSongInfoQueueSync, internal/server/controllers/
+// song_arrangement_cache.go) for the motivating call site: it only has the
+// context.Context buildSetBuilderData was called with, not the original
+// *fiber.Ctx, and needs the request id to tag its own background logging.
+func RequestIDFromContext(ctx context.Context) (string, bool) {
+	id, ok := ctx.Value(requestIDKey{}).(string)
+	return id, ok
+}
+
 // InfoContext, WarnContext, DebugContext, and ErrorContext are the
 // request-aware counterparts of Info/Warn/Debug/Error above: same
 // signature plus a leading ctx, which - if it's one WithRequestID (or

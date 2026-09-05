@@ -79,7 +79,11 @@ func (ac *AccountController) AccountPage(c *fiber.Ctx) error {
 // org (scheduling.Store.ClearSongArrangementCache) - see that method's
 // doc comment for why this is non-destructive. Re-renders just the cache
 // fragment (id="account-cache-body"), same htmx-target pattern as
-// SyncSongInfo's own re-render.
+// ClearPersonDataCache's own re-render below. The wiped cache refills
+// itself automatically, in the background, the next time a set builder
+// render touches one of these songs (triggerSongInfoQueueSync,
+// song_arrangement_cache.go) - there's no separate "resync now" action
+// here on purpose, see that function's own doc comment.
 func (ac *AccountController) ClearSongInfoCache(c *fiber.Ctx) error {
 	ctx := middleware.RequestContext(c)
 	orgID := middleware.CurrentOrganizationID(c)

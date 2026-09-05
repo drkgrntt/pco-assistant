@@ -83,8 +83,9 @@ func newArrangementRefreshFakeServer(t *testing.T, arrangementID, key string) *h
 // TestFetchAndCacheArrangementInfoOverwritesStaleCacheRow proves
 // RefreshSetSongArrangementInfo's actual write path (fetchAndCacheArrangementInfo)
 // force-overwrites an already-cached row with fresh data - the whole reason
-// this manual refresh action exists (SyncSongInfo's own batch backfill
-// deliberately skips a song that's already cached; this one call must not).
+// this manual refresh action exists (the background queue-on-miss sync,
+// runSongInfoQueueSync, deliberately never re-fetches a song that's already
+// cached; this one call must).
 func TestFetchAndCacheArrangementInfoOverwritesStaleCacheRow(t *testing.T) {
 	_, store := dbTestController(t)
 	ctx := context.Background()

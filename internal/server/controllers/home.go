@@ -22,9 +22,8 @@ const homeServiceTypesCap = 5
 type HomeController struct {
 	// schedulingController is shared (constructed once in routes.go, not
 	// duplicated) so Home can reuse its private page-builder methods
-	// (planStatus, rosterStatus, buildSongTagSuggestionsData,
-	// buildSongInfoData) instead of re-implementing any of them - see
-	// buildHomeData.
+	// (planStatus, rosterStatus, buildSongTagSuggestionsData) instead of
+	// re-implementing any of them - see buildHomeData.
 	schedulingController *SchedulingController
 	authStore            *auth.Store
 }
@@ -60,11 +59,13 @@ func (hc *HomeController) Index(c *fiber.Ctx) error {
 // plan per service type (capped, see homeServiceTypesCap) with its real
 // song/team status exactly like the Build page's own plan list computes
 // per-row (combinedPlansForServiceType, build.go); the Song Tag
-// Suggestions count and Song Info cache coverage, straight from those
-// pages' own data-builders; and trial/plan status from organizations,
-// same calculation buildBillingData already does. Every piece is
-// best-effort - a failed lookup just leaves that section empty, never
-// breaks the page.
+// Suggestions count, straight from that page's own data-builder; and
+// trial/plan status from organizations, same calculation buildBillingData
+// already does. Every piece is best-effort - a failed lookup just leaves
+// that section empty, never breaks the page. No Song Info cache coverage
+// here any more - that nudge is gone now that a miss syncs itself in the
+// background instead of needing anyone to notice and click something (see
+// docs/pco-call-efficiency-rollout-plan.md's Phase 2).
 func (hc *HomeController) buildHomeData(ctx context.Context, organizationID string) views.HomeData {
 	var data views.HomeData
 
@@ -123,10 +124,6 @@ func (hc *HomeController) buildHomeData(ctx context.Context, organizationID stri
 
 	suggestions := hc.schedulingController.buildSongTagSuggestionsData(ctx, organizationID)
 	data.SuggestionCount = len(suggestions.Suggestions)
-
-	songInfo := hc.schedulingController.buildSongInfoData(ctx, organizationID)
-	data.SongInfoCached = songInfo.CachedCount
-	data.SongInfoTotal = songInfo.TotalCount
 
 	if org, err := hc.authStore.GetOrganization(ctx, organizationID); err == nil {
 		data.OrgStatus = org.Status

@@ -214,10 +214,13 @@ func FetchAllSongsIncludingArchived(ctx context.Context) ([]pco.SongData, error)
 // InvalidateActiveSongsCache clears organizationID's cached active-song
 // list, if any, so the next FetchActiveSongs call for that org is
 // guaranteed a fresh live fetch rather than a possibly-stale cache hit.
-// Exported for SyncSongInfo's "sync now" action (see
-// internal/server/controllers/song_arrangement_cache.go) - the one place a
-// user explicitly expects a guaranteed-fresh pull from PCO, not a
-// possibly-60s-stale cached one.
+// Exported for any action that explicitly expects a guaranteed-fresh pull
+// from PCO, not a possibly-60s-stale cached one - no current production
+// call site (the Song Info "sync now" action this originally backed was
+// removed along with the rest of the button/nag it was part of, see
+// docs/pco-call-efficiency-rollout-plan.md's Phase 2), kept exported as a
+// small, already-tested piece of FetchActiveSongs' own cache API rather
+// than deleted purely for lack of a caller today.
 func InvalidateActiveSongsCache(organizationID string) {
 	songCacheMu.Lock()
 	delete(songCache, organizationID)

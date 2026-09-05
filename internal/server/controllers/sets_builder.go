@@ -35,7 +35,21 @@ func (sc *SchedulingController) buildSetBuilderDataWithErr(ctx context.Context, 
 // based on the last song added, avoid_pairing conflicts, and the full
 // not-yet-added song pool annotated with opener/response tags and any
 // conflicts, for the search/browse list.
+//
+// Also triggers the Song Info background queue-drain sync
+// (triggerSongInfoQueueSync, song_arrangement_cache.go) right before
+// returning, covering every render this function backs - including
+// buildSetBuilderDataWithErr's, which just wraps this one - rather than
+// requiring each of this function's ~20-plus call sites to remember to
+// call the trigger themselves the way person_data_cache.go's
+// triggerPersonDataSync requires of its own, much smaller set of callers.
+// See triggerSongInfoQueueSync's own doc comment for the full reasoning
+// (docs/pco-call-efficiency-rollout-plan.md's Phase 2 "trigger mechanism"
+// decision). Deferred so it still runs on this function's several early
+// "loading X failed" returns below, not just the final one.
 func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organizationID, serviceTypeID, planID string) views.SetBuilderData {
+	defer triggerSongInfoQueueSync(ctx, sc.store, organizationID)
+
 	data := views.SetBuilderData{ServiceTypeID: serviceTypeID, PlanID: planID}
 
 	if plan, err := pco.GetPlan(ctx, serviceTypeID, planID); err == nil {
@@ -1308,30 +1322,19 @@ func buildSongNoteViews(itemID string, noteCategories []pco.ItemNoteCategoryData
 // plan's items/notes are sideloaded on one GetItems call, so there's no
 // per-song lookup left here at all.
 func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizationID string, arrangementCache map[string]scheduling.SongArrangementInfo, noteCategories []pco.ItemNoteCategoryData, itemNotes map[string][]pco.ItemNoteData, rows []mergedRow, titles map[string]string, rolesBySong map[string][]scheduling.SongRole, roleTypeLabels map[string]string) []views.ServiceOrderRow {
-	// Each row is independent of every other - a foreign item is pure local
-	// data, and a song row's only remaining live PCO call is
-	// resolveArrangementCacheInfo's cache-miss path (GetArrangements, then
-	// GetKeys - buildSongNoteViews is now a pure map lookup, no PCO call of
-	// its own, since item notes are sideloaded once on the GetItems call
-	// above rather than fetched per row). That upserts to Postgres, not
-	// this in-memory arrangementCache map (see resolveArrangementCacheInfo's
-	// own doc comment), so there's nothing here for concurrent rows to race
-	// on. out is pre-sized and each goroutine only ever writes its own
-	// index, so no lock is needed for that either. Kept concurrent (see
-	// docs/pco-api-risks.md's concurrency mitigation) rather than collapsed
-	// back to a sequential loop: a cache miss still pays two PCO calls
-	// (GetArrangements, GetKeys), and a plan with several never-synced
-	// songs still benefits from fanning those out instead of paying their
-	// latency one row at a time.
+	// A plain sequential loop, not scheduling.RunConcurrently - unlike
+	// before Phase 2 (docs/pco-call-efficiency-rollout-plan.md), a song
+	// row's only per-row lookup, resolveArrangementCacheInfo, no longer
+	// makes a live PCO call on a cache miss: it enqueues a background sync
+	// request and returns immediately (see its own doc comment), so there's
+	// no per-row latency left here to fan out - buildSongNoteViews is
+	// likewise a pure map lookup, since item notes are sideloaded once on
+	// the GetItems call above rather than fetched per row. Concurrency
+	// bought nothing once neither per-row lookup can block on Planning
+	// Center any more.
 	out := make([]views.ServiceOrderRow, len(rows))
 
-	indexes := make([]int, len(rows))
-	for i := range rows {
-		indexes[i] = i
-	}
-
-	scheduling.RunConcurrently(indexes, func(i int) {
-		row := rows[i]
+	for i, row := range rows {
 		if row.Item != nil {
 			label := row.Item.Attributes.Title
 			if label == "" {
@@ -1343,7 +1346,7 @@ func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizati
 				ItemTitle: label,
 				ItemType:  row.Item.Attributes.ItemType,
 			}
-			return
+			continue
 		}
 
 		ss := row.Song
@@ -1386,7 +1389,7 @@ func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizati
 				Notes:           buildSongNoteViews(ss.PCOItemID, noteCategories, itemNotes),
 			},
 		}
-	})
+	}
 
 	return out
 }

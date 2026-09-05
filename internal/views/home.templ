@@ -55,13 +55,6 @@ templ Home(personName, organizationName string, data HomeData) {
 			</p>
 		}
 
-		if data.SongInfoTotal > 0 && data.SongInfoCached < data.SongInfoTotal {
-			<p>
-				{ fmt.Sprintf("%d of %d song(s) have cached key/tempo info.", data.SongInfoCached, data.SongInfoTotal) }
-				<a href="/scheduling/song-info">Finish syncing</a>
-			</p>
-		}
-
 		<h2>Workflows</h2>
 		<p class="muted">Where you'll spend most of your time week to week.</p>
 		<nav class="quick-links">
@@ -90,22 +83,15 @@ templ Home(personName, organizationName string, data HomeData) {
 				<span class="muted">Theme, scripture, and idea tags for search and filtering.</span>
 			</li>
 			<!--
-				Both hidden once there's nothing pending there - the exact
-				same SuggestionCount/SongInfoCached-vs-Total facts the nudge
-				lines above already compute, not a second lookup. Mirrors
-				the nav dropdown's own version of this (see layout.templ,
-				middleware.PopulateNavState).
+				Hidden once there's nothing pending there - the exact same
+				SuggestionCount fact the nudge line above already computes,
+				not a second lookup. Mirrors the nav dropdown's own version
+				of this (see layout.templ, middleware.PopulateNavState).
 			-->
 			if data.SuggestionCount > 0 {
 				<li>
 					<a href="/scheduling/song-tag-suggestions">Song tag suggestions</a>
 					<span class="muted">Review songs sharing a title word and tag them together.</span>
-				</li>
-			}
-			if data.SongInfoTotal > 0 && data.SongInfoCached < data.SongInfoTotal {
-				<li>
-					<a href="/scheduling/song-info">Song info</a>
-					<span class="muted">Sync each song's key, tempo, and length from Planning Center.</span>
 				</li>
 			}
 			<li>
