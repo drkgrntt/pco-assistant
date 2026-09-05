@@ -1,5 +1,15 @@
 # Plan: live sync reflection
 
+**Status: in progress (2026-09-05).** Option C (poll-while-open banner, no
+auto-merge) and `MergeSet`'s already-tracked-item reconciliation - this
+doc's "Suggested build order" steps 2 and 3 - are built: see `SyncCheck`
+and the extended `MergeSet` in `internal/server/controllers/sets_publish.go`,
+`pcoItemsFingerprint` in `internal/server/controllers/sets_builder.go`, and
+the poll wiring in `internal/views/scheduling/set_builder.templ`. Option A
+(real PCO webhooks) and the harder order-diff/multi-viewer questions in
+"Open questions" below remain open - deliberately deferred per this doc's
+own "C now, A later" framing, not overlooked.
+
 Written 2026-09-05, expanding `docs/ideas.md`'s "Reducing friction vs.
 Planning Center" item 1 ("Live sync reflection") into an actual design.
 Not built yet - written up for later, same spirit as

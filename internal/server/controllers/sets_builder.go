@@ -6,6 +6,8 @@ package controllers
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -247,6 +249,13 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 		sort.Slice(pcoItems.Data, func(i, j int) bool {
 			return pcoItems.Data[i].Attributes.Sequence < pcoItems.Data[j].Attributes.Sequence
 		})
+
+		// PCOSyncFingerprint - see its own doc comment on SetBuilderData.
+		// Computed from this exact pcoItems response, already in hand for
+		// ServiceOrder below - no extra PCO call, same reasoning as
+		// MergeAvailableCount further down.
+		data.PCOSyncFingerprint = pcoItemsFingerprint(pcoItems.Data)
+
 		merged := mergeServiceOrder(pcoItems.Data, setSongs)
 		// Fetched once per render, not per song - see renderServiceOrder's
 		// own doc comment on noteCategories.
@@ -957,6 +966,41 @@ func trackedPCOItemIDs(setSongs, pendingDeletions []scheduling.SetSong) map[stri
 		}
 	}
 	return tracked
+}
+
+// pcoItemsFingerprint returns a deterministic fingerprint of a plan's live
+// items - the poll-while-open live-sync check's comparison value (see
+// SetBuilderData.PCOSyncFingerprint and SyncCheck, sets_publish.go; design
+// in docs/plans/in-progress/live-sync-reflection-plan.md). Two
+// fingerprints are equal iff the same set of item ids exist with the same
+// Sequence and UpdatedAt values each - which covers every kind of change
+// the poll needs to catch:
+//   - an add/remove (the set of ids itself changes);
+//   - a reorder (Sequence) - live-verified against the dev PCO org that a
+//     pure pco.ReorderItems call does NOT bump the moved items' own
+//     UpdatedAt, so Sequence has to be included explicitly rather than
+//     inferred from UpdatedAt alone;
+//   - any attribute edit, title/description/key included (UpdatedAt) -
+//     live-verified that Item.UpdatedAt does bump on any such edit, unlike
+//     Plan.UpdatedAt, which doesn't reflect item-level changes at all (see
+//     docs/pco-api-risks.md) - which is why this fingerprints items, never
+//     the plan itself.
+//
+// Sorted by ID first so the order items happen to come back from the API
+// in never affects the result - only Sequence itself is meant to encode
+// order.
+func pcoItemsFingerprint(items []pco.ItemData) string {
+	sorted := make([]pco.ItemData, len(items))
+	copy(sorted, items)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].ID < sorted[j].ID })
+
+	var b strings.Builder
+	for _, item := range sorted {
+		fmt.Fprintf(&b, "%s:%d:%d|", item.ID, item.Attributes.Sequence, item.Attributes.UpdatedAt.Unix())
+	}
+
+	sum := sha256.Sum256([]byte(b.String()))
+	return hex.EncodeToString(sum[:])
 }
 
 // deriveMergeImportRows is MergeSet's core: given a plan's items (already

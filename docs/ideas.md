@@ -85,11 +85,12 @@ leverage vs. build effort, not commitment order. (Deep linking - the
 lowest-effort item on this list - already shipped: see `pcoPlanURL` and
 the builder page's "Open in Planning Center" link.)
 
-1. **Live sync reflection.** Right now sync is one-directional at publish
-   time (this app → PCO). If someone edits a plan directly in PCO while a
-   draft is open here, nothing reflects that until the next load. PCO
-   webhooks + htmx's existing swap model could close that loop so the app
-   never shows stale-vs-PCO state.
+1. **Live sync reflection.** Partially built (poll-while-open banner + the
+   `MergeSet` reconciliation it drives) - see
+   `docs/plans/in-progress/live-sync-reflection-plan.md`. Real PCO webhooks
+   (a push-based close to this loop instead of a 30s poll while a Build
+   page is open) remain open, along with the harder order-diff/
+   multi-viewer questions that doc's "Open questions" section lays out.
 2. **Pre-publish nudges.** Automated summary 24-48h before a service -
    open positions remaining, unresolved song-pairing conflicts - via email
    or a Slack/Discord webhook, so checking this app isn't something someone

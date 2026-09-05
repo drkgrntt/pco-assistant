@@ -83,10 +83,29 @@ that first. Facts worth adding here that aren't in CLAUDE.md:
 | A 429 that gets through anyway | enabled (prod) | go-pco `ConfigureRetry`, `PCO_RETRY_ON_429_ENABLED=true`, waits `Retry-After`, 1 retry |
 | Visibility into PCO failures | shipped | `pco.SetResponseHook` logs every failure (never a success) through this app's logger |
 | Unattended sync (Song Info + person-data refresh + person-data recent-history discovery) | shipped | hourly `jobs.PCOJobs` cron, one org at a time, borrowing and refreshing that org's own idle session token - reuses the exact same paced/guarded sync entry points (`triggerSongInfoQueueSync`, `triggerPersonDataSyncCtx`) an ordinary render already triggers, low-priority (`pco.WithPriority`, 20) |
+| Live-sync poll-while-open (`SyncCheck`, one `GetItems` per open Build-page Songs tab per 30s) | shipped | poll-while-open only (option C) - bounded by concurrent viewers, not total org/plan count; tagged `pco.WithPriority(ctx, 20)` so a poll tick never contends with interactive traffic on the same token; a failed poll tick is treated as "no change," never surfaced as an error |
 | **Team/position lists and team-member names** | **still open** | fetched live, uncached, on every roster render - no reported symptom yet, not fixed speculatively |
 
 ## Live-verified PCO API facts (worth not re-checking)
 
+- **`Plan.updated_at` does NOT reflect item-level changes** - confirmed
+  live (2026-09-05, live-sync-reflection plan) via a PATCH-and-check round
+  trip: editing an item's title/description/key does not bump the plan's
+  own `updated_at`. go-pco's `PlanAttributes` (`v0.21.0`, `plans.go`)
+  doesn't even map this field. **Don't use `GetPlan` for any kind of
+  item-level change detection** - `Plan.ItemsCount` (`PlanAttributes.
+  ItemsCount`) only moves on item add/remove, not edits or reorders
+  either. The only reliable signal is a real `GetItems` call - see
+  `pcoItemsFingerprint` (`sets_builder.go`) below.
+- **A pure reorder does NOT bump the moved items' own `updated_at`** -
+  confirmed live (2026-09-05): reordering two items via
+  `pco.ReorderItems` (the `item_reorder` plan action) left both items'
+  `Item.UpdatedAt` unchanged. `Item.UpdatedAt` DOES bump on any actual
+  attribute edit (title/description/key/etc). **Used**: the live-sync
+  poll-while-open check's fingerprint (`pcoItemsFingerprint`,
+  `sets_builder.go`) hashes every item's `(ID, Sequence, UpdatedAt)`
+  together, not `UpdatedAt` alone, specifically because a reorder is
+  invisible to `UpdatedAt` by itself.
 - People#index (`GetPeople`) supports batched `where[id]=1,2,3` -
   `PeopleParams.IDs` in go-pco `v0.15.0`+.
 - **`PersonAttributes.Avatar`** (a real uploaded photo, or PCO's own
@@ -505,3 +524,29 @@ out to 100-200 sequential round trips per load.
   already a cheap no-op for anyone previously discovered) - no new table,
   same reasoning the plan doc used to decline a persistent marker for the
   window itself.
+- **Live-sync reflection, option C (poll-while-open banner)** - full design
+  in `docs/plans/in-progress/live-sync-reflection-plan.md`. New traffic:
+  one `GetItems` call per open Build-page Songs tab every 30s
+  (`SyncCheck`, `sets_publish.go`), tagged `pco.WithPriority(ctx, 20)` so
+  it never contends with interactive traffic sharing the same token - cost
+  scales with concurrent open tabs, not total org/plan count, per option
+  C's own tradeoff table in the plan doc. Live-verified first (both facts
+  now in "Live-verified PCO API facts" above): `Plan.updated_at` doesn't
+  reflect item-level changes at all, and a pure `pco.ReorderItems` reorder
+  doesn't bump the moved items' own `updated_at` either - so there's no
+  cheaper check than a real `GetItems` call, and the comparison
+  fingerprint (`pcoItemsFingerprint`) has to hash each item's `Sequence`
+  explicitly rather than relying on `UpdatedAt` alone. A poll tick that
+  finds a difference responds with two `hx-swap-oob="true"` fragments (a
+  banner offering the existing `MergeSet` endpoint, and the updated
+  fingerprint) rather than auto-applying anything - per the plan's
+  banner-not-silent-auto-merge decision. `MergeSet` itself was extended in
+  the same change (step 3 of the plan) to reconcile already-tracked items,
+  not just import net-new ones: an already-published row's
+  Description/KeyName is pulled in from PCO only when it has no pending
+  local edit (`InfoPending` false - a pending edit always wins), a row
+  whose PCO item was deleted gets its `PCOItemID` cleared back to `""`
+  rather than the local row being deleted, and a detected reorder among
+  tracked items surfaces as a plain warning rather than an automatic
+  reorder reconciliation. Option A (real PCO webhooks) and the harder
+  order-diff/multi-viewer questions remain open per the plan doc.

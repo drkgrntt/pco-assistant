@@ -95,6 +95,32 @@ func mergeSortedUnique(a, b []string) []string {
 	return out
 }
 
+// SyncCheckBanner is SyncCheck's (sets_publish.go) response the one time
+// its poll tick actually finds a difference - two hx-swap-oob="true"
+// fragments and nothing else, matching SetBuilderBodyContent's own
+// #pco-sync-banner/#pco-sync-fp ids exactly (see that templ's own doc
+// comment on the poll wiring). The banner offers the existing MergeSet
+// endpoint - the same "Pull in changes" action the manual Merge button
+// already runs - rather than any new auto-apply path, per the
+// live-sync-reflection plan's banner-not-silent-auto-merge decision.
+// Dismissible (see ImportBanner's dismissible param): dismissing removes
+// just the inner .import-banner, leaving the #pco-sync-banner wrapper in
+// place so a later poll tick can still find it by id.
+templ SyncCheckBanner(serviceTypeID, planID, fingerprint string) {
+	<div id="pco-sync-banner" hx-swap-oob="true">
+		@components.ImportBanner("Planning Center has changes since you opened this page.", true) {
+			<form
+				hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/merge", serviceTypeID, planID) }
+				hx-target="#set-builder-body"
+				hx-swap="outerHTML"
+			>
+				<button type="submit" class="primary">Pull in changes</button>
+			</form>
+		}
+	</div>
+	<input type="hidden" id="pco-sync-fp" value={ fingerprint } hx-swap-oob="true"/>
+}
+
 templ SetBuilderBody(data SetBuilderData) {
 	@SetBuilderBodyContent(data)
 	@songPublishPanelOOB(data)
@@ -378,6 +404,36 @@ templ CandidateSearchResults(serviceTypeID, planID string, candidates []Candidat
 // being relocated anywhere.
 templ SetBuilderBodyContent(data SetBuilderData) {
 	<div id="set-builder-body">
+		<!--
+			Poll-while-open live-sync check (option C,
+			docs/plans/in-progress/live-sync-reflection-plan.md) - only while
+			there's something to publish toward (!data.ReadOnly, mirroring
+			every other publish/discard/merge action on this page). #pco-sync-fp
+			carries the fingerprint this render's own GetItems call captured
+			(see data.PCOSyncFingerprint/pcoItemsFingerprint); the poll element
+			below re-fetches it every 30s via hx-vals' js: expression, so it
+			always sends whatever value SyncCheck's own OOB response last wrote
+			there, not this page load's stale value. #pco-sync-banner is a
+			persistent empty wrapper SyncCheck outerHTML-replaces
+			(hx-swap-oob="true") when it finds a difference - it has to
+			survive being replaced (unlike ImportBanner's dismiss button, which
+			only removes the inner .import-banner) so a later poll tick can
+			still find it by id to show a fresh banner. hx-swap="none" on the
+			poll element itself is deliberate: the only content that should
+			ever change from this request arrives as those two OOB fragments,
+			never as this element's own body.
+		-->
+		if !data.ReadOnly {
+			<input type="hidden" id="pco-sync-fp" value={ data.PCOSyncFingerprint }/>
+			<div id="pco-sync-banner"></div>
+			<div
+				id="pco-sync-poll"
+				hx-get={ fmt.Sprintf("/scheduling/sets/%s/%s/sync-check", data.ServiceTypeID, data.PlanID) }
+				hx-trigger="every 30s"
+				hx-swap="none"
+				hx-vals="js:{fp: document.getElementById('pco-sync-fp').value}"
+			></div>
+		}
 		if data.ErrMsg != "" {
 			<p class="error">{ data.ErrMsg }</p>
 		}
