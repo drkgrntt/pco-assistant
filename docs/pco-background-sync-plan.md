@@ -1,5 +1,21 @@
 # Plan: unattended cache warming via borrowed idle session tokens
 
+**Status: shipped 2026-09-04.** Implemented as `jobs.PCOJobs`
+(`internal/server/jobs/pco.go`, hourly) plus `controllers.RunOrgBackgroundSync`
+(`internal/server/controllers/pco_background_sync.go`) - see
+`docs/pco-api-risks.md`'s changelog entry ("PCO call-efficiency rollout,
+Phase 3") for exactly what landed, including the two deliberate deviations
+from this doc's exact wording: no new "discovery already ran up through
+plan X" marker table (the "Open questions" section's alternative - a fixed
+5-plan-per-service-type window is simply re-walked every tick instead,
+since the existence check already skips everyone previously discovered),
+and `triggerPersonDataSync` was split into a `*fiber.Ctx` wrapper plus a
+new `triggerPersonDataSyncCtx` ctx/store/org-based core (mirroring
+`triggerSongInfoQueueSync`'s existing shape) rather than left as a
+fiber-only function, so this cron could call the identical drain-and-run
+logic without needing a `*fiber.Ctx` of its own. Section below left
+as-written for reference.
+
 Written 2026-09-04, prompted by a conversation about whether Song Info's
 "cache all" button + home-page nag are still pulling their weight. That
 conversation converged on two separable pieces:

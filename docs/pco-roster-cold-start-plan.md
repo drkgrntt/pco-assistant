@@ -330,6 +330,13 @@ request, so it needs no new token-management mechanism at all. Revisit
 the unattended version only if staleness genuinely proves to matter for
 orgs that go a long time between visits - not speculatively.
 
+**Revisited and built 2026-09-04** - see `docs/pco-background-sync-plan.md`
+(shipped) for why both objections above stopped holding up (the token
+mechanism turned out smaller than it looked, and the priority-aware
+throttle built in the meantime already solves the contention risk) and
+`docs/pco-api-risks.md`'s changelog for what actually landed
+(`jobs.PCOJobs`, hourly).
+
 ## Testing
 
 **Scope-reduction piece**: add/extend coverage confirming

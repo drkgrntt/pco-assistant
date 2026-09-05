@@ -312,6 +312,11 @@ miss branch at all).
 
 ## Phase 3: background-sync cron (only if explicitly requested)
 
+**Status: shipped 2026-09-04**, on explicit user request (the "not urgent"
+gating below applied until then). Full design in
+`docs/pco-background-sync-plan.md` (now marked shipped there too) - see
+`docs/pco-api-risks.md`'s changelog entry for exactly what landed.
+
 Full design already written: `docs/pco-background-sync-plan.md`. Nothing
 to add here beyond the gating already stated at the top of this doc and
 in that plan's own opening section - re-read its "not urgent" framing

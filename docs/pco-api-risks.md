@@ -82,6 +82,7 @@ that first. Facts worth adding here that aren't in CLAUDE.md:
 | Sustained-rate ceiling across all traffic on one token | enabled (prod) | go-pco `ConfigureThrottle`, `PCO_THROTTLE_ENABLED=true`, 60 req/20s default, background syncs tagged low-priority |
 | A 429 that gets through anyway | enabled (prod) | go-pco `ConfigureRetry`, `PCO_RETRY_ON_429_ENABLED=true`, waits `Retry-After`, 1 retry |
 | Visibility into PCO failures | shipped | `pco.SetResponseHook` logs every failure (never a success) through this app's logger |
+| Unattended sync (Song Info + person-data refresh + person-data recent-history discovery) | shipped | hourly `jobs.PCOJobs` cron, one org at a time, borrowing and refreshing that org's own idle session token - reuses the exact same paced/guarded sync entry points (`triggerSongInfoQueueSync`, `triggerPersonDataSyncCtx`) an ordinary render already triggers, low-priority (`pco.WithPriority`, 20) |
 | **Team/position lists and team-member names** | **still open** | fetched live, uncached, on every roster render - no reported symptom yet, not fixed speculatively |
 
 ## Live-verified PCO API facts (worth not re-checking)
@@ -433,3 +434,50 @@ out to 100-200 sequential round trips per load.
   Account - the existing `ClearSongInfoCache` action already covers "force
   a fresh state" (wipe, then queue-on-miss refills it as songs are actually
   touched).
+- **PCO call-efficiency rollout, Phase 3 (background-sync cron)** - full
+  design in `docs/pco-background-sync-plan.md` (now marked shipped). New
+  `jobs.PCOJobs` (`internal/server/jobs/pco.go`), registered alongside
+  `AuthJobs`/`BillingJobs` in `crons.go`, ticks hourly: for every
+  organization with at least one live session
+  (`auth.Store.SessionForBackgroundSync` - most-recently-created wins, any
+  live session has equivalent PCO access), refreshes that session's token
+  (`auth.RefreshAccessToken`), persists it back
+  (`UpdateSessionTokensByID`), and calls the new
+  `controllers.RunOrgBackgroundSync` (`pco_background_sync.go`) with a
+  low-priority context built from it. A dead refresh token deletes the
+  session on the spot (`DeleteSessionByID`) - an earlier, stronger signal
+  than `deleteExpiredSessions`' 30-day sweep - and skips that org for the
+  tick; no live session at all is unchanged from today (simply skipped).
+  `RunOrgBackgroundSync` deliberately reuses every existing sync mechanic
+  unchanged rather than inventing new ones: it computes what an idle org
+  needs (a `FetchActiveSongs`-vs-cache diff for Song Info, a new
+  `scheduling.Store.StalePersonSyncTargets` query across migration
+  `00033`'s three tables for person-data refresh), enqueues it the same
+  way an organic render-time miss would
+  (`enqueueSongSync`/`enqueuePersonSync`), and triggers the same paced,
+  guarded drain-and-run path a render already uses
+  (`triggerSongInfoQueueSync` unchanged; `triggerPersonDataSync` split into
+  a `*fiber.Ctx` wrapper and a new ctx/store/org-based
+  `triggerPersonDataSyncCtx` core so both a request and this cron can
+  drive it) - so this can never race a concurrent organic sync for the
+  same org, and adds no second rate-limit budget to reason about. Also
+  added: a bounded "recent-history discovery" pass (5 most recent past
+  plans per service type, `GetPlans`+`GetTeamMembers`) that seeds
+  person-data sync requests for anyone with **no** sync-marker row at all
+  yet (`scheduling.Store.PersonSyncMarkerStatus`) - the "just-connected
+  org with hundreds of volunteers" case - bounded by (recent plan count) x
+  (service type count), not volunteer-pool size, so independent of org
+  size unlike the full-eligibility-pool problem this deliberately still
+  leaves open (see the "still open" row above). No new migration: the
+  discovery window is deliberately re-walked every tick rather than
+  gated behind a new "already discovered up through plan X" marker table
+  (an alternative the plan doc considered) - `PersonSyncMarkerStatus`'s
+  existence check already skips everyone previously discovered, so the
+  only recurring cost of re-walking is a small, constant number of
+  `GetPlans`/`GetTeamMembers` calls per org per hour, not reprocessing
+  already-known people; revisit if that ever actually shows up as
+  expensive. `middleware.AccessToken(c)` (the fiber-locals token accessor
+  `triggerPersonDataSync` used before this refactor) was removed as dead
+  code once nothing called it any more - `pco.AccessTokenFromContext` on
+  the already-carried `pco_ctx` context does the same job for every
+  remaining caller.
