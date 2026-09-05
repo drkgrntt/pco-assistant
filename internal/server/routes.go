@@ -53,8 +53,8 @@ func (s *FiberServer) RegisterFiberRoutes() {
 
 	// Constructed once and shared with HomeController below (rather than a
 	// second instance) so Home can reuse its private page-builder methods
-	// (planStatus, rosterStatus, buildSongTagSuggestionsData,
-	// buildSongInfoData) - see HomeController.buildHomeData.
+	// (planStatus, rosterStatus, buildSongTagSuggestionsData) - see
+	// HomeController.buildHomeData.
 	schedulingController := controllers.NewSchedulingController(s.schedulingStore)
 
 	controllers.NewHealthController(s.db).RegisterRoutes(s.App)

@@ -28,8 +28,7 @@ type AccountData struct {
 	Billing BillingData
 
 	// SongInfoCacheMsg/SongInfoCacheErr report the result of the last
-	// POST /account/cache/song-info on this render - mirrors
-	// scheduling.SongInfoData's SyncMsg/ErrMsg fields/doc-comment style.
+	// POST /account/cache/song-info on this render.
 	SongInfoCacheMsg string
 	SongInfoCacheErr string
 

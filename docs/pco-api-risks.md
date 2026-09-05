@@ -70,7 +70,7 @@ that first. Facts worth adding here that aren't in CLAUDE.md:
 | `personNameMapForIDs` (1 call/person) | fixed | batched `where[id]=...`, 100/call |
 | Cross-team/frequency checks (1 call per person-per-group) | fixed | deduped to 1 call per person, then per (person, team, position) |
 | Sequential per-item loops (candidates, blockouts, item notes, ...) | fixed | `scheduling.RunConcurrently`, bounded to `PCOFanOutLimit` (10) |
-| Song Info bulk sync (~200 calls for a 100-song library) | fixed | detached to a background goroutine, paced batches (10/batch, 10s pause, ~60% of budget) |
+| Song Info sync (blocked a render on a cache miss; also had a whole-library "sync now" button/nag) | fixed | queue-on-miss: a miss enqueues and returns immediately, `buildSetBuilderData` drains the queue in a background goroutine (paced batches, 10/batch, 10s pause, ~60% of budget) - no more button/page, see Phase 2 changelog entry |
 | Team Builder candidate eligibility pool (scales with volunteer pool, not the roster) | fixed | candidate warnings computed on-demand (button click), not eagerly for every candidate |
 | Team Builder per-person blockout/cross-team/frequency (live call every render) | fixed | local Postgres cache (migration `00033`) + paced background sync, same architecture as Song Info |
 | Roster shared-fetch duplication (`GetTeamMembers`/`GetNeededPositions`/`GetTeams` fetched twice per click) | fixed | `rosterSharedPCOData` - fetch once, pass to both scoped builders |
@@ -124,9 +124,8 @@ that first. Facts worth adding here that aren't in CLAUDE.md:
   call of its own; `renderServiceOrder`'s `RunConcurrently` fan-out was kept
   at the time this landed (Phase 1b, which collapsed
   `resolveArrangementCacheInfo`'s cache-miss path to one call, hadn't
-  shipped yet) - now that both have shipped, the fan-out has no remaining
-  per-row PCO call in the common (cache-hit) case, so it may be worth
-  revisiting.
+  shipped yet) - collapsed to a plain sequential loop in Phase 2 below,
+  once that cache-miss path stopped making any PCO call at all.
 - **NeededPositions#index and TeamMembers#index both support
   `include=team`** (confirmed live) - now used: `fetchRosterSharedPCOData`
   (`rosters_scoped.go`) and `buildRosterBuilderData`'s full-rebuild path
@@ -388,8 +387,9 @@ out to 100-200 sequential round trips per load.
     sequential loop: at the time this landed, `resolveArrangementCacheInfo`'s
     cache-miss path was still two sequential calls per song, giving the
     fan-out genuine per-row latency to parallelize - Phase 1b (above)
-    since folded that into one call, so the concurrency here may be worth
-    revisiting once no per-row PCO call remains in the common case.
+    since folded that into one call. Revisited and collapsed to a plain
+    sequential loop in Phase 2 below, once the cache-miss path stopped
+    making any PCO call at all (queue-on-miss).
   - **Roster `GetTeams` call eliminated** (Phase 1d) -
     `fetchRosterSharedPCOData` (`rosters_scoped.go`) and
     `buildRosterBuilderData` (`rosters_builder.go`) now sideload `team` on
@@ -402,3 +402,34 @@ out to 100-200 sequential round trips per load.
     replaced by a pre-parsed `TeamInfo map[string]teamInfo` field. Drops
     the shared roster fetch from 3 calls to 2, on every Team Builder
     render and every roster add/remove/preference-change mutation.
+- **PCO call-efficiency rollout, Phase 2 (Song Info queue-on-miss)** -
+  `resolveArrangementCacheInfo`'s (`scheduling.go`) cache-miss path no
+  longer blocks a render on a live `fetchAndCacheArrangementInfo` call: it
+  enqueues a `songSyncRequest` (`enqueueSongSync`) and returns a zero-value
+  immediately, mirroring `person_data_cache.go`'s
+  personSyncPending/triggerPersonDataSync architecture exactly (see that
+  file's own header comment). `buildSetBuilderData`/
+  `buildSetBuilderDataWithErr` (`sets_builder.go`) call
+  `triggerSongInfoQueueSync` once, right before returning, which drains
+  whatever's pending for the org into a background goroutine
+  (`runSongInfoQueueSync`) in the same paced-batch shape as the old
+  whole-library sync. Trigger mechanism (the plan's own "2c" decision):
+  called from *inside* the shared builder function rather than from each of
+  its ~20-plus call sites, using a new `pco.AccessTokenFromContext`
+  accessor (go-pco `v0.21.0`, added alongside Phase 1's `Include` fields)
+  and a new `logger.RequestIDFromContext` counterpart to pull the access
+  token/request id back out of the plain `context.Context`
+  `buildSetBuilderData` already has, rather than threading either through
+  as new parameters - a context with no token (never happens for a real
+  signed-in request today) makes the trigger a no-op. `renderServiceOrder`'s
+  `RunConcurrently` fan-out (kept in Phase 1c above) was collapsed to a
+  plain sequential loop once this shipped, since no per-row PCO call
+  remains in the common case any more. Also removed: the standalone
+  `/scheduling/song-info` page and its "Sync now" button
+  (`SongInfoPage`/`SyncSongInfo`), the home-page "Finish syncing"
+  nudge/Setup-list item (`HomeData.SongInfoCached`/`SongInfoTotal`), and the
+  matching nav-dropdown nag (`PopulateNavState`'s `songInfoNeedsSync`
+  flag). Deliberately **not added**: a whole-library "resync" button on
+  Account - the existing `ClearSongInfoCache` action already covers "force
+  a fresh state" (wipe, then queue-on-miss refills it as songs are actually
+  touched).

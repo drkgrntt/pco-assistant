@@ -20,7 +20,6 @@ const navStateTTL = 60 * time.Second
 // cachedNavState is one organization's last computed nav booleans, plus
 // when they were computed.
 type cachedNavState struct {
-	songInfoNeedsSync  bool
 	suggestionsPending bool
 	computedAt         time.Time
 }
@@ -33,31 +32,36 @@ func cacheEntryFresh(computedAt time.Time, now time.Time, ttl time.Duration) boo
 	return now.Sub(computedAt) < ttl
 }
 
-// PopulateNavState computes whether the nav's Song Tag Suggestions / Song
-// Info entries have anything actually pending, so Layout (and Home's own
-// Setup list) can hide either one once there's nothing left to do there.
-// Both checks need the org's full PCO song library - there's no cheaper
-// way to know "is everything synced" without knowing the real total -
-// fetched once here and reused for both rather than twice.
+// PopulateNavState computes whether the nav's Song Tag Suggestions entry
+// has anything actually pending, so Layout (and Home's own Setup list) can
+// hide it once there's nothing left to do there. The check needs the org's
+// full PCO song library, fetched once here.
 //
 // This runs on every authenticated page view (registered after
-// RequireActiveOrganization in routes.go) since the nav these flags
-// control is part of every page's shared Layout, not just Home. Rather
-// than pay the PCO song-library fetch (plus the store queries) on every
+// RequireActiveOrganization in routes.go) since the nav this flag
+// controls is part of every page's shared Layout, not just Home. Rather
+// than pay the PCO song-library fetch (plus the store query) on every
 // request, results are cached per organization for navStateTTL: a cache
-// hit just replays the last computed booleans and skips the live lookups
+// hit just replays the last computed boolean and skips the live lookup
 // entirely, so under real traffic this costs roughly one PCO fetch per
 // org per navStateTTL window rather than one per request. The cache lives
 // in the closure created here, which happens exactly once at startup
 // (see routes.go), so it persists for the life of the process.
 //
+// Used to also compute a second flag (whether any of an org's songs lacked
+// cached Song Info, driving a matching nav nag link) - removed along with
+// that page/button once a cache miss started syncing itself in the
+// background instead of needing anyone to notice and click something (see
+// docs/pco-call-efficiency-rollout-plan.md's Phase 2). The PCO song-library
+// fetch stays either way, since Song Tag Suggestions still needs it.
+//
 // Best-effort like every other page-builder in this codebase: a failed
-// lookup just leaves the corresponding flag unset (ctx.Value comes back
-// false, nudge hidden) rather than blocking the page - see
-// views.navSuggestionsPending/navSongInfoNeedsSync's fail-safe direction.
-// A failed lookup is also never cached, so a transient failure doesn't get
-// pinned in as the answer for the rest of the TTL window - the next
-// request just retries the live lookup.
+// lookup just leaves the flag unset (ctx.Value comes back false, nudge
+// hidden) rather than blocking the page - see
+// views.navSuggestionsPending's fail-safe direction. A failed lookup is
+// also never cached, so a transient failure doesn't get pinned in as the
+// answer for the rest of the TTL window - the next request just retries
+// the live lookup.
 func PopulateNavState(schedulingStore *scheduling.Store) fiber.Handler {
 	var mu sync.Mutex
 	cache := make(map[string]cachedNavState)
@@ -72,7 +76,6 @@ func PopulateNavState(schedulingStore *scheduling.Store) fiber.Handler {
 		entry, ok := cache[orgID]
 		mu.Unlock()
 		if ok && cacheEntryFresh(entry.computedAt, time.Now(), navStateTTL) {
-			c.Locals(views.NavSongInfoNeedsSyncKey, entry.songInfoNeedsSync)
 			c.Locals(views.NavSuggestionsPendingKey, entry.suggestionsPending)
 			return c.Next()
 		}
@@ -84,39 +87,15 @@ func PopulateNavState(schedulingStore *scheduling.Store) fiber.Handler {
 			return c.Next()
 		}
 
-		// The two checks below stay independent, exactly as before caching
-		// was added: either can fail on its own without affecting the
-		// other's local. Caching the pair only happens once both succeed,
-		// so a transient failure in one never pins a stale/empty value for
-		// the other into the cache for the rest of the TTL window.
-		var songInfoNeedsSync, suggestionsPending bool
-		songInfoOK, suggestionsOK := false, false
-
-		if songInfoCache, err := schedulingStore.SongArrangementInfo(ctx, orgID); err == nil {
-			cachedCount := 0
-			for _, s := range songs {
-				if _, ok := songInfoCache[s.ID]; ok {
-					cachedCount++
-				}
-			}
-			songInfoNeedsSync = cachedCount < len(songs)
-			songInfoOK = true
-			c.Locals(views.NavSongInfoNeedsSyncKey, songInfoNeedsSync)
-		}
-
 		tags, tagsErr := schedulingStore.ListSongTags(ctx, orgID, "", "")
 		ignored, ignoredErr := schedulingStore.ListIgnoredSongTagSuggestionWords(ctx, orgID)
 		if tagsErr == nil && ignoredErr == nil {
 			groups := scheduling.SongTagSuggestions(songs, tags, ignored)
-			suggestionsPending = len(groups) > 0
-			suggestionsOK = true
+			suggestionsPending := len(groups) > 0
 			c.Locals(views.NavSuggestionsPendingKey, suggestionsPending)
-		}
 
-		if songInfoOK && suggestionsOK {
 			mu.Lock()
 			cache[orgID] = cachedNavState{
-				songInfoNeedsSync:  songInfoNeedsSync,
 				suggestionsPending: suggestionsPending,
 				computedAt:         time.Now(),
 			}

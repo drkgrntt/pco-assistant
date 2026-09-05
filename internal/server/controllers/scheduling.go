@@ -116,9 +116,12 @@ func keysFromIncluded(included []any) []includedKey {
 // the resolved info - or an error, and no write, if the fetch failed or
 // the song genuinely has no arrangement at all (PCO auto-creates one for
 // every song via the API, so this should be rare in practice). Shared by
-// resolveArrangementInfo's cache-miss path and SyncSongInfo's bulk
-// backfill (song_arrangement_cache.go), so there's exactly one place that
-// knows how to turn a PCO arrangement into a cache row.
+// runSongInfoQueueSync's background queue-drain sync and
+// RefreshSetSongArrangementInfo's manual single-song refresh
+// (song_arrangement_cache.go), so there's exactly one place that knows how
+// to turn a PCO arrangement into a cache row. resolveArrangementCacheInfo's
+// own cache-miss path (below) deliberately does NOT call this directly -
+// see its own doc comment for why it enqueues instead.
 //
 // Key comes from the arrangement's Key sub-resource (its StartingKey),
 // not the arrangement's own ChordChartKey attribute - confirmed live
@@ -249,29 +252,34 @@ func resolveKeyID(ctx context.Context, songID, arrangementID, keyOverride, defau
 // resolveArrangementCacheInfo returns songID's full cached arrangement
 // info (not just the formatted display string - see resolveArrangementInfo
 // below for that), preferring the already-loaded cache (zero Planning
-// Center calls) and falling back to fetchAndCacheArrangementInfo on a
-// miss. This is the "song-by-song" catch-up the cache relies on: a song
-// added to a library after the last sync (or never synced at all) still
-// shows correct info the first time it's actually rendered, same as
-// before this cache existed, and every render after that is a cache hit.
-// Best-effort: a failed fetch/backfill just means a zero-value info for
-// this render and another live attempt next time, not a broken page.
+// Center calls) and never blocking on a miss: a miss enqueues a background
+// sync request (enqueueSongSync, song_arrangement_cache.go) and returns a
+// zero-value info immediately instead, matching person_data_cache.go's own
+// cache-first read paths - see rosters_warnings.go's otherAssignmentDates/
+// crossTeamAssignmentsThisWeek/personBlockouts for the pattern this
+// mirrors. A song added to a library after the last sync (or never synced
+// at all) shows blank arrangement info on the render that first discovers
+// it, then correct info on the next - buildSetBuilderData/
+// buildSetBuilderDataWithErr (sets_builder.go) trigger the queued sync
+// right before they return, so "the next render" typically means "the next
+// time this plan/set is opened", not an indefinite wait.
+//
+// ctx/store are still threaded through - unused on this miss path itself,
+// since enqueueSongSync takes neither - so this keeps one signature for
+// both branches and for resolveArrangementInfo's own pass-through below;
+// the actual PCO fetch a miss used to make inline now happens later, out
+// of band, in runSongInfoQueueSync.
 //
 // Split out from resolveArrangementInfo so a caller needing more than the
 // formatted string (e.g. renderServiceOrder's song detail card, which also
-// wants the arrangement's raw Notes) can get everything from one lookup
-// instead of fetching the same song's arrangement twice on a cache miss.
+// wants the arrangement's raw Notes) can get everything from one lookup.
 func resolveArrangementCacheInfo(ctx context.Context, store *scheduling.Store, organizationID string, cache map[string]scheduling.SongArrangementInfo, songID string) scheduling.SongArrangementInfo {
 	if info, ok := cache[songID]; ok {
 		return info
 	}
 
-	info, err := fetchAndCacheArrangementInfo(ctx, store, organizationID, songID)
-	if err != nil {
-		return scheduling.SongArrangementInfo{}
-	}
-
-	return info
+	enqueueSongSync(songSyncRequest{organizationID: organizationID, songID: songID})
+	return scheduling.SongArrangementInfo{}
 }
 
 // resolveArrangementInfo returns songID's display-ready arrangement info -
@@ -408,9 +416,6 @@ func (sc *SchedulingController) RegisterRoutes(router fiber.Router) {
 	group.Get("/song-tag-suggestions", sc.SongTagSuggestionsPage)
 	group.Post("/song-tag-suggestions/apply", sc.ApplySongTagSuggestion)
 	group.Post("/song-tag-suggestions/ignore", sc.IgnoreSongTagSuggestion)
-
-	group.Get("/song-info", sc.SongInfoPage)
-	group.Post("/song-info/sync", sc.SyncSongInfo)
 
 	group.Get("/person-relationships", sc.PersonRelationshipsPage)
 	group.Post("/person-relationships", sc.CreatePersonRelationship)

@@ -3,25 +3,31 @@ package controllers
 // Background sync for the Team Builder's per-person PCO caches (blockouts,
 // cross-team plan-people history, per-team plan-people history) - see
 // rosters_warnings.go for the cache-first read path this backfills, and
-// SyncSongInfo/runSongInfoSync (song_arrangement_cache.go) for the
-// architecture this deliberately clones rather than reinventing: a queue of
-// pending sync requests, drained by a background goroutine in paced
-// batches, guarded against a duplicate concurrent pass per organization.
+// triggerSongInfoQueueSync/runSongInfoQueueSync (song_arrangement_cache.go)
+// for the architecture this deliberately clones rather than reinventing: a
+// queue of pending sync requests, drained by a background goroutine in
+// paced batches, guarded against a duplicate concurrent pass per
+// organization.
 //
-// Unlike Song Info, there's no dedicated page/button that kicks this off -
-// requests are collected as a side effect of otherAssignmentDates/
-// crossTeamAssignmentsThisWeek/personBlockouts finding a miss or a stale hit
-// during an ordinary Team Builder render (rosters_warnings.go), and
-// triggerPersonDataSync (called from each roster-rendering handler right
-// after building its response data) starts a background pass whenever
-// there's something pending and nothing already running for this org. This
-// is deliberately the "render-triggered" design
-// docs/pco-roster-cold-start-plan.md settled on, not an
+// There's no dedicated page/button that kicks this off (nor, since Phase 2
+// of docs/pco-call-efficiency-rollout-plan.md, is there one for Song Info
+// any more either) - requests are collected as a side effect of
+// otherAssignmentDates/crossTeamAssignmentsThisWeek/personBlockouts finding
+// a miss or a stale hit during an ordinary Team Builder render
+// (rosters_warnings.go), and triggerPersonDataSync (called from each
+// roster-rendering handler right after building its response data) starts
+// a background pass whenever there's something pending and nothing already
+// running for this org. Song Info's own trigger (triggerSongInfoQueueSync)
+// differs only in *where* it's called from - once, inside the shared
+// buildSetBuilderData builder function itself, rather than from each of
+// this package's ~6 roster handlers the way this one is - see that
+// function's own doc comment for why. Both are deliberately the "render-
+// triggered" design docs/pco-roster-cold-start-plan.md settled on, not an
 // unattended/nightly sync - see that plan's "unattended-cron question,
-// revisited" section for why: this only ever runs using a live request's
-// own PCO access token (via middleware.AccessToken), so it needs no new
-// token-management mechanism (borrowing/refreshing some other session's
-// token for unattended use) at all.
+// revisited" section for why: both only ever run using a live request's
+// own PCO access token (via middleware.AccessToken/pco.AccessTokenFromContext),
+// so neither needs a new token-management mechanism (borrowing/refreshing
+// some other session's token for unattended use) at all.
 
 import (
 	"context"
@@ -180,10 +186,11 @@ func (sc *SchedulingController) triggerPersonDataSync(c *fiber.Ctx) {
 	personSyncMu.Unlock()
 
 	// accessToken, not ctx: this goroutine outlives the request (see
-	// SyncSongInfo's identical reasoning in song_arrangement_cache.go) -
-	// middleware.RequestContext(c)'s context is cancelled the moment this
-	// handler returns, so a fresh context.Background()-derived context
-	// carrying the same token is built instead - logger.WithRequestID
+	// triggerSongInfoQueueSync's identical reasoning in
+	// song_arrangement_cache.go) - middleware.RequestContext(c)'s context
+	// is cancelled the moment this handler returns, so a fresh
+	// context.Background()-derived context carrying the same token is
+	// built instead - logger.WithRequestID
 	// carries this request's id along the same way, so runPersonDataSync's
 	// own logging can still be traced back to whichever request triggered
 	// it.
@@ -199,7 +206,7 @@ func (sc *SchedulingController) triggerPersonDataSync(c *fiber.Ctx) {
 }
 
 // runPersonDataSync is triggerPersonDataSync's actual work, run in a
-// background goroutine - see runSongInfoSync (song_arrangement_cache.go)
+// background goroutine - see runSongInfoQueueSync (song_arrangement_cache.go)
 // for the identical pacing rationale this mirrors: reqs is split into
 // personDataSyncBatchSize batches, each fanned out concurrently via
 // runPacedBatches with a personDataSyncBatchPause pause between batches,

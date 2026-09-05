@@ -169,6 +169,14 @@ needed - this phase touches PCO parsing only, not caching/storage.
 
 ## Phase 2: Song Info queue-on-miss (kills the button/nag)
 
+**Status: shipped 2026-09-04.** See `docs/pco-api-risks.md`'s changelog
+entry for what landed - the queue/trigger architecture below was followed
+exactly, including the "trigger mechanism" decision (2c): the recommended
+in-function approach (`buildSetBuilderData`/`buildSetBuilderDataWithErr`
+calling `triggerSongInfoQueueSync` once via `pco.AccessTokenFromContext`/
+`logger.RequestIDFromContext`), not the ~20-call-site fallback. Section
+left as-written below for reference.
+
 Converts `resolveArrangementCacheInfo`'s cache-miss path
 (`scheduling.go`) from block-and-fetch-inline to queue-and-batch,
 mirroring `person_data_cache.go`'s architecture exactly - see that
