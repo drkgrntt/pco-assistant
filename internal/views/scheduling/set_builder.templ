@@ -2,6 +2,7 @@ package scheduling
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"pco-assistant/internal/scheduling"
@@ -20,6 +21,80 @@ import (
 // cards, and "Songs, at a glance" card in sync (see each one's own doc
 // comment) - every htmx handler that used to just render SetBuilderBody
 // keeps doing exactly that, unchanged, and gets the sync for free.
+// tagFilterGroup is one "Browse by ..." accordion in the candidate panel
+// below - see groupedTagFilters for why Theme and Idea render as a single
+// group while every other category stays its own.
+type tagFilterGroup struct {
+	ID     string
+	Label  string
+	Values []string
+}
+
+// groupedTagFilters folds the Theme and Idea tag categories into a single
+// "Browse by Theme/Idea" group (values merged, deduped, sorted) - see the
+// "Browse by tag" doc comment at its call site for why. Every other
+// category (Scripture, plus anything a future migration adds to
+// song_tag_categories - see that file's own "no special algorithmic
+// meaning" note) still gets its own group, unchanged. Group order follows
+// the categories' own sort_order, with the merged group taking Theme's
+// slot; Idea's own slot is skipped, unless Theme doesn't exist at all (a
+// category was removed), in which case Idea is left standalone rather
+// than silently dropped.
+func groupedTagFilters(categories []scheduling.SongTagCategory, valuesByCategory map[string][]string) []tagFilterGroup {
+	hasTheme := false
+	labelFor := make(map[string]string, len(categories))
+	for _, cat := range categories {
+		labelFor[cat.Code] = cat.Label
+		if cat.Code == scheduling.TagCategoryTheme {
+			hasTheme = true
+		}
+	}
+
+	groups := make([]tagFilterGroup, 0, len(categories))
+	for _, cat := range categories {
+		if cat.Code == scheduling.TagCategoryIdea && hasTheme {
+			continue // folded into Theme's group below
+		}
+
+		id, label, values := cat.Code, cat.Label, valuesByCategory[cat.Code]
+		if cat.Code == scheduling.TagCategoryTheme {
+			id = cat.Code + "-" + scheduling.TagCategoryIdea
+			values = mergeSortedUnique(values, valuesByCategory[scheduling.TagCategoryIdea])
+			if ideaLabel, ok := labelFor[scheduling.TagCategoryIdea]; ok {
+				label = label + "/" + ideaLabel
+			}
+		}
+
+		if len(values) == 0 {
+			continue
+		}
+		groups = append(groups, tagFilterGroup{ID: id, Label: label, Values: values})
+	}
+	return groups
+}
+
+// mergeSortedUnique combines two already-distinct value lists (both are -
+// see DistinctSongTagValues) into one deduped, alphabetically sorted list,
+// for groupedTagFilters' merged Theme/Idea chip set.
+func mergeSortedUnique(a, b []string) []string {
+	seen := make(map[string]bool, len(a)+len(b))
+	out := make([]string, 0, len(a)+len(b))
+	for _, v := range a {
+		if !seen[v] {
+			seen[v] = true
+			out = append(out, v)
+		}
+	}
+	for _, v := range b {
+		if !seen[v] {
+			seen[v] = true
+			out = append(out, v)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
 templ SetBuilderBody(data SetBuilderData) {
 	@SetBuilderBodyContent(data)
 	@songPublishPanelOOB(data)
@@ -637,26 +712,30 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 			what to type. Unlike the role filters above (a small fixed list,
 			so an always-open button row is fine), tag values are unbounded
 			free text - dozens of scripture references, say - so each
-			category's chips sit behind their own collapsibleSection,
-			collapsed by default. (A single accordion with a category <select>
-			was tried instead and reverted - it read as one more control to
+			group's chips sit behind their own collapsibleSection, collapsed
+			by default. (A single accordion with a category <select> was
+			tried instead and reverted - it read as one more control to
 			operate rather than a shortcut.) Clicking a chip just types that
 			value into #candidate-search and re-triggers the same search
 			request (applyTagFilter, scheduling.js); it deliberately doesn't
 			set any state of its own the way the role filter's hidden input
 			does.
+
+			Categories map 1:1 to a group here except Theme and Idea, merged
+			into one "Browse by Theme/Idea" group by groupedTagFilters (at
+			Derek's request, 2026-09-05: to someone browsing tags, "theme"
+			and "idea" read as the same kind of loose descriptive tag, not
+			two things worth separate accordions for).
 		-->
 		if len(data.TagValuesByCategory) > 0 {
 			<div class="tag-filters">
-				for _, cat := range data.TagCategories {
-					if values := data.TagValuesByCategory[cat.Code]; len(values) > 0 {
-						@collapsibleSection(fmt.Sprintf("tag-filter-%s", cat.Code), "Browse by "+cat.Label, false) {
-							<div class="role-filters">
-								for _, v := range values {
-									<button type="button" class="role-filter" data-value={ v } onclick="applyTagFilter(this)">{ v }</button>
-								}
-							</div>
-						}
+				for _, group := range groupedTagFilters(data.TagCategories, data.TagValuesByCategory) {
+					@collapsibleSection(fmt.Sprintf("tag-filter-%s", group.ID), "Browse by "+group.Label, false) {
+						<div class="role-filters">
+							for _, v := range group.Values {
+								<button type="button" class="role-filter" data-value={ v } onclick="applyTagFilter(this)">{ v }</button>
+							}
+						</div>
 					}
 				}
 			</div>
