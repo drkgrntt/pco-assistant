@@ -176,6 +176,11 @@ scheduling warnings). Explicitly non-destructive: both only delete this
 app's own locally-cached copy of Planning Center data, which gets
 transparently re-collected from Planning Center the next time it's
 needed - nothing in Planning Center, and no draft set/roster, is touched.
+Both caches also top themselves up in the background roughly once an
+hour for any organization with someone currently signed in, so a church
+that doesn't open this app every day still finds its Song Info and
+roster warnings already warm next time someone does, rather than only
+ever catching up the moment a page is opened.
 It also lists everyone currently signed in, with a per-person Sign out
 button, so a departed staff member's billed seat can be freed right away
 instead of waiting out the 30-day session expiry (see the Pricing section

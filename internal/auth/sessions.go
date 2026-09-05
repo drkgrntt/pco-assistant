@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
@@ -15,6 +16,17 @@ import (
 const SessionTTL = 30 * 24 * time.Hour
 
 type Session struct {
+	// ID is this session's hashed primary key (hashToken of the raw cookie
+	// token) - only populated by SessionForBackgroundSync, which reads it
+	// straight out of the sessions table. Every other lookup here
+	// (GetSession, MostRecentSession) is keyed by the raw token itself and
+	// has no need to hand this back out; those leave it "". Exists because
+	// UpdateSessionTokens/DeleteSession are keyed by the *raw* token (they
+	// hash it themselves) - a caller that found this session by querying
+	// the table directly, not from a live request's own cookie, never has
+	// that raw token to hash, so UpdateSessionTokensByID/DeleteSessionByID
+	// (below) take this instead.
+	ID         string
 	PersonID   string
 	PersonName string
 	// OrganizationName is the signed-in person's PCO organization (church)
@@ -116,6 +128,47 @@ func (s *Store) MostRecentSession(ctx context.Context) (Session, error) {
 	return session, nil
 }
 
+// SessionForBackgroundSync returns organizationID's most-recently-created
+// still-valid session, if any - the token-source for the background-sync
+// cron's per-org pass (see jobs.PCOJobs and
+// docs/pco-background-sync-plan.md's "Per-org pass" section). Unlike
+// MostRecentSession (global, read-only, used by dev tooling),
+// this is org-scoped and returns Session.ID so the caller can act on this
+// session afterward (RefreshAccessToken, then UpdateSessionTokensByID or
+// DeleteSessionByID) without ever having its raw cookie token.
+//
+// Which live session gets picked doesn't matter much when more than one
+// exists for the org - every signed-in person is a full admin with
+// equivalent PCO access (see SignOutPerson's doc comment, account.go) -
+// but "most recently created" is a deliberate, documented choice rather
+// than an arbitrary LIMIT 1: it's the same tiebreak MostRecentSession
+// already uses, and skews toward whichever session is most likely to
+// still be in active use (and therefore least likely to have a refresh
+// token PCO has already stopped honoring - see this plan's own "Open
+// questions" section on unverified idle-refresh-token lifetime).
+//
+// ok is false (with a nil error) when the org has no live session at all -
+// not a failure, just nothing to borrow a token from this tick.
+func (s *Store) SessionForBackgroundSync(ctx context.Context, organizationID string) (session Session, ok bool, err error) {
+	err = s.db.QueryRowContext(ctx, `
+		SELECT id, person_id, person_name, organization_id, organization_name, created_at, expires_at, access_token, refresh_token, token_expires_at
+		FROM sessions
+		WHERE organization_id = $1 AND expires_at > now()
+		ORDER BY created_at DESC
+		LIMIT 1
+	`, organizationID).Scan(
+		&session.ID, &session.PersonID, &session.PersonName, &session.OrganizationID, &session.OrganizationName, &session.CreatedAt, &session.ExpiresAt,
+		&session.AccessToken, &session.RefreshToken, &session.TokenExpiresAt,
+	)
+	if err == sql.ErrNoRows {
+		return Session{}, false, nil
+	}
+	if err != nil {
+		return Session{}, false, err
+	}
+	return session, true, nil
+}
+
 // UpdateSessionTokens overwrites a session's PCO OAuth token after a
 // refresh (see RequireAuth) - the session itself (its id, expiry, person)
 // is unaffected, only which PCO credentials it authenticates API calls
@@ -130,6 +183,31 @@ func (s *Store) UpdateSessionTokens(ctx context.Context, token, accessToken, ref
 
 func (s *Store) DeleteSession(ctx context.Context, token string) error {
 	_, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE id = $1`, hashToken(token))
+	return err
+}
+
+// UpdateSessionTokensByID is UpdateSessionTokens' counterpart for a caller
+// that already has the session's hashed id (Session.ID, from
+// SessionForBackgroundSync) rather than its raw cookie token - the
+// background-sync cron's own case, since it never has (and shouldn't need)
+// a live browser session's actual cookie value. Skips the hashToken step
+// UpdateSessionTokens does internally; everything else is identical.
+func (s *Store) UpdateSessionTokensByID(ctx context.Context, id, accessToken, refreshToken string, tokenExpiresAt time.Time) error {
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE sessions SET access_token = $2, refresh_token = $3, token_expires_at = $4
+		WHERE id = $1
+	`, id, accessToken, refreshToken, tokenExpiresAt)
+	return err
+}
+
+// DeleteSessionByID is DeleteSession's counterpart for a caller that
+// already has the session's hashed id rather than its raw cookie token -
+// see UpdateSessionTokensByID's identical reasoning. The background-sync
+// cron uses this when a session's refresh token is no longer honored by
+// PCO (see jobs.PCOJobs): a stronger, earlier "this session is actually
+// useless" signal than deleteExpiredSessions' 30-day TTL sweep alone.
+func (s *Store) DeleteSessionByID(ctx context.Context, id string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE id = $1`, id)
 	return err
 }
 

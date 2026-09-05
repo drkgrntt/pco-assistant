@@ -21,13 +21,18 @@ package controllers
 // differs only in *where* it's called from - once, inside the shared
 // buildSetBuilderData builder function itself, rather than from each of
 // this package's ~6 roster handlers the way this one is - see that
-// function's own doc comment for why. Both are deliberately the "render-
-// triggered" design docs/pco-roster-cold-start-plan.md settled on, not an
-// unattended/nightly sync - see that plan's "unattended-cron question,
-// revisited" section for why: both only ever run using a live request's
-// own PCO access token (via middleware.AccessToken/pco.AccessTokenFromContext),
-// so neither needs a new token-management mechanism (borrowing/refreshing
-// some other session's token for unattended use) at all.
+// function's own doc comment for why. Both pull the access token/request id
+// they need for their own independently-lived background context back out
+// of a plain context.Context (pco.AccessTokenFromContext/
+// logger.RequestIDFromContext) rather than a *fiber.Ctx directly - see
+// triggerPersonDataSyncCtx/triggerSongInfoQueueSync - which is also what
+// lets the exact same drain-and-run logic be triggered by a context that
+// was never a live request's at all: docs/pco-background-sync-plan.md's
+// background-sync cron (jobs.PCOJobs, via RunOrgBackgroundSync in
+// pco_background_sync.go) builds an equivalent context from a borrowed,
+// refreshed idle session token instead of a request's, closing the gap
+// docs/pco-roster-cold-start-plan.md's "unattended-cron question,
+// revisited" section originally left open for exactly this reason.
 
 import (
 	"context"
@@ -150,26 +155,51 @@ func personSyncTryStart(inProgress map[string]bool, organizationID string) bool 
 // QuickAddPositionPreference) right after building its response data, which
 // is what populates personSyncPending in the first place (see
 // otherAssignmentDates/crossTeamAssignmentsThisWeek/personBlockouts in
-// rosters_warnings.go).
+// rosters_warnings.go). Thin wrapper over triggerPersonDataSyncCtx (below) -
+// see that function's own doc comment for why the actual logic lives there
+// instead.
+func (sc *SchedulingController) triggerPersonDataSync(c *fiber.Ctx) {
+	triggerPersonDataSyncCtx(middleware.RequestContext(c), sc.store, middleware.CurrentOrganizationID(c))
+}
+
+// triggerPersonDataSyncCtx is triggerPersonDataSync's ctx/store/
+// organizationID-based core, factored out so a non-fiber caller - the
+// background-sync cron (see RunOrgBackgroundSync, pco_background_sync.go)
+// - can trigger the identical check-in-progress-then-drain-pending-then-run
+// sequence, under the identical personSyncTryStart/personSyncInProgress
+// guard, without duplicating any of this logic or needing a *fiber.Ctx of
+// its own. Mirrors triggerSongInfoQueueSync's exact shape
+// (song_arrangement_cache.go): the access token and request id come back
+// out of ctx itself (pco.AccessTokenFromContext/
+// logger.RequestIDFromContext) rather than being threaded through as
+// separate parameters - a ctx built without a token (never happens for a
+// real signed-in request, since middleware.RequestContext(c) always
+// carries one after RequireAuth) makes this a no-op, matching every other
+// best-effort PCO pattern in this codebase.
 //
 // The in-progress check and the pending drain happen under one lock
-// (personSyncMu) so two requests racing this call can't both see "nothing
+// (personSyncMu) so two callers racing this (two requests, or a request
+// racing this tick's cron pass for the same org) can't both see "nothing
 // running yet" and both start a pass, or both drain the same pending
 // entries into two separate passes.
-func (sc *SchedulingController) triggerPersonDataSync(c *fiber.Ctx) {
-	orgID := middleware.CurrentOrganizationID(c)
-	if orgID == "" {
+func triggerPersonDataSyncCtx(ctx context.Context, store *scheduling.Store, organizationID string) {
+	if organizationID == "" {
 		return
 	}
+	accessToken, ok := pco.AccessTokenFromContext(ctx)
+	if !ok {
+		return
+	}
+	requestID, _ := logger.RequestIDFromContext(ctx)
 
 	personSyncMu.Lock()
-	if !personSyncTryStart(personSyncInProgress, orgID) {
+	if !personSyncTryStart(personSyncInProgress, organizationID) {
 		personSyncMu.Unlock()
 		return
 	}
 	var reqs []personSyncRequest
 	for req := range personSyncPending {
-		if req.organizationID == orgID {
+		if req.organizationID == organizationID {
 			reqs = append(reqs, req)
 			delete(personSyncPending, req)
 		}
@@ -179,30 +209,24 @@ func (sc *SchedulingController) triggerPersonDataSync(c *fiber.Ctx) {
 		// guard immediately rather than leaving it held with nothing to do,
 		// which would block a genuine future request from ever starting a
 		// pass.
-		delete(personSyncInProgress, orgID)
+		delete(personSyncInProgress, organizationID)
 		personSyncMu.Unlock()
 		return
 	}
 	personSyncMu.Unlock()
 
-	// accessToken, not ctx: this goroutine outlives the request (see
-	// triggerSongInfoQueueSync's identical reasoning in
-	// song_arrangement_cache.go) - middleware.RequestContext(c)'s context
-	// is cancelled the moment this handler returns, so a fresh
-	// context.Background()-derived context carrying the same token is
-	// built instead - logger.WithRequestID
-	// carries this request's id along the same way, so runPersonDataSync's
-	// own logging can still be traced back to whichever request triggered
-	// it.
-	accessToken := middleware.AccessToken(c)
-	requestID := middleware.CurrentRequestID(c)
-	store := sc.store
-	// Priority 20: an unattended background sync should never delay this
-	// same token's interactive traffic if go-pco's throttle is enabled
+	// context.Background(), not ctx: this goroutine outlives whatever
+	// called triggerPersonDataSyncCtx (a request's own context is cancelled
+	// the moment its handler returns) - see triggerSongInfoQueueSync's
+	// identical reasoning. logger.WithRequestID carries the same request id
+	// along, so runPersonDataSync's own logging can still be traced back to
+	// whichever request (or cron pass) triggered it. Priority 20: an
+	// unattended background sync should never delay this same token's
+	// interactive traffic if go-pco's throttle is enabled
 	// (PCO_THROTTLE_ENABLED - off by default, see go-pco's README) - see
 	// docs/pco-api-risks.md's throttle-adoption addendum.
 	syncCtx := pco.WithPriority(pco.WithAccessToken(logger.WithRequestID(context.Background(), requestID), accessToken), 20)
-	go runPersonDataSync(syncCtx, store, orgID, reqs)
+	go runPersonDataSync(syncCtx, store, organizationID, reqs)
 }
 
 // runPersonDataSync is triggerPersonDataSync's actual work, run in a
