@@ -233,10 +233,34 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 	// service-length warning below - one GetPlans/GetItems round trip
 	// against this service type's two most recent past plans serves both,
 	// rather than fetching the same history twice. Moved up here (rather
-	// than fetched right where RepeatWarnings gets built) so
-	// history.AverageLength is already in hand by the time the
-	// ServiceOrder block below needs it.
+	// than fetched right where the repeat check gets built) so
+	// history.AverageLength/RepeatedSongs are already in hand by the time
+	// the ServiceOrder block below needs them.
 	history := fetchRecentPlanHistory(ctx, serviceTypeID)
+
+	// candidateConflicts/existing are fetched up front too - moved from
+	// where this used to be fetched (right before the Suggestions loop
+	// further down, where candidateConflicts is still needed unchanged) so
+	// existing's same-set avoid-pairing conflicts can be attributed onto
+	// each song's own row (see conflictTitlesBySong and
+	// SetSongView.ConflictTitles, and docs/plans/shipped/
+	// in-place-set-warnings-plan.md) instead of a separate top-of-page
+	// list, before ServiceOrder is built below.
+	candidateConflicts, existing, err := sc.store.AvoidPairings(ctx, organizationID, set.ID)
+	if err != nil {
+		data.ErrMsg = appendErr(data.ErrMsg, err.Error())
+	}
+	// conflictTitlesBySong attributes each same-set avoid-pairing conflict
+	// back to *both* songs in the pair, by title - existing reports each
+	// pair once (SongID < ConflictsWith, see computeAvoidPairings), but a
+	// per-row badge needs to render on either side naming the other, the
+	// same shape CandidateSongView.ConflictTitles already gives a
+	// not-yet-added candidate (see candidateSongView).
+	conflictTitlesBySong := map[string][]string{}
+	for _, ex := range existing {
+		conflictTitlesBySong[ex.SongID] = append(conflictTitlesBySong[ex.SongID], titleOrID(titles, ex.ConflictsWith))
+		conflictTitlesBySong[ex.ConflictsWith] = append(conflictTitlesBySong[ex.ConflictsWith], titleOrID(titles, ex.SongID))
+	}
 
 	// ServiceOrder: the plan's full order, with this set's own songs
 	// interleaved at their anchored position (see mergeServiceOrder) -
@@ -257,6 +281,20 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 		data.PCOSyncFingerprint = pcoItemsFingerprint(pcoItems.Data)
 
 		merged := mergeServiceOrder(pcoItems.Data, setSongs)
+
+		// transitionsByRow: keyTransitionWarnings flags two songs that are
+		// truly back-to-back in merged with no transition between their
+		// keys - see that function's own doc comment. Computed here, ahead
+		// of renderServiceOrder just below, so the transition can be
+		// attributed onto the *second* song's own row (SetSongView.
+		// KeyTransitionLabel/KeyTransitionMessage) instead of a separate
+		// top-of-page list - see docs/plans/shipped/
+		// in-place-set-warnings-plan.md's resolved rendering decision.
+		transitionsByRow := make(map[int64]keyTransitionWarning, 1)
+		for _, w := range keyTransitionWarnings(merged, arrangementCache, titles) {
+			transitionsByRow[w.SongRowID] = w
+		}
+
 		// Fetched once per render, not per song - see renderServiceOrder's
 		// own doc comment on noteCategories.
 		noteCategories, _ := pco.GetItemNoteCategories(ctx, serviceTypeID, nil)
@@ -264,18 +302,15 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 		// rather than one GetItemNotes call per published song - see
 		// itemNotesFromIncluded's own doc comment.
 		itemNotes := itemNotesFromIncluded(pcoItems.Included)
-		data.ServiceOrder = renderServiceOrder(ctx, sc.store, organizationID, arrangementCache, noteCategories.Data, itemNotes, merged, titles, rolesBySong, roleTypeLabels)
+		data.ServiceOrder = renderServiceOrder(ctx, sc.store, organizationID, arrangementCache, noteCategories.Data, itemNotes, merged, titles, rolesBySong, roleTypeLabels, history.RepeatedSongs, conflictTitlesBySong, transitionsByRow)
 
-		// PlanWarnings: whole-plan concerns, as opposed to the per-song/
-		// per-pairing warnings below - see serviceLengthWarning and
-		// keyTransitionWarnings for what each actually checks. Both work
-		// off merged/arrangementCache, already in hand here, and
-		// history.AverageLength, already fetched above - zero new PCO
-		// calls for either.
-		if warning := serviceLengthWarning(serviceOrderLengthSeconds(merged, arrangementCache), history.AverageLength); warning != "" {
-			data.PlanWarnings = append(data.PlanWarnings, warning)
-		}
-		data.PlanWarnings = append(data.PlanWarnings, keyTransitionWarnings(merged, arrangementCache, titles)...)
+		// ServiceLengthWarning: the one warning that stays a standalone,
+		// whole-plan banner rather than moving onto a row - it isn't
+		// attributable to any one song or pair (see SetBuilderData's own
+		// doc comment). Works off merged/arrangementCache, already in hand
+		// here, and history.AverageLength, already fetched above - no new
+		// PCO calls.
+		data.ServiceLengthWarning = serviceLengthWarning(serviceOrderLengthSeconds(merged, arrangementCache), history.AverageLength)
 
 		// Keep this service type's "where does the first song usually go"
 		// memory (see PreferredFirstSongAnchorTitle, and firstSongFallbackAnchor
@@ -337,38 +372,14 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 		data.MergeAvailableCount = len(deriveMergeImportRows(pcoItems.Data, trackedPCOItemIDs(setSongs, pendingDeletions)))
 	}
 
-	// candidateConflicts/existing and repeated (below) are fetched up front,
-	// ahead of both the Suggestions loop and the SongsToReinforce pass
-	// further down, since "Recommended next"/"Could use one more sing" (see
-	// SuggestionView, set_types.go) show the same conflict/repeat/
-	// arrangement/role/tag metadata the "Browse all songs" search list does
-	// (see candidateLookups.candidateSongView), not just title + reason.
-	candidateConflicts, existing, err := sc.store.AvoidPairings(ctx, organizationID, set.ID)
-	if err != nil {
-		data.ErrMsg = appendErr(data.ErrMsg, err.Error())
-	}
-	for _, ex := range existing {
-		data.ExistingConflicts = append(data.ExistingConflicts, fmt.Sprintf(
-			"%s conflicts with %s - both are already in this set.",
-			titleOrID(titles, ex.SongID), titleOrID(titles, ex.ConflictsWith),
-		))
-	}
-
 	// repeated: songs sung in both of the last two past plans for this
 	// service type, straight from Planning Center's own history rather than
 	// this tool's local sets - see fetchRecentPlanHistory. Surfaced both
-	// against songs already in this set (a banner, alongside the same-set
-	// avoid-pairing conflicts above) and against not-yet-added candidates
-	// (a badge, so it's visible before adding rather than only after).
+	// against songs already in this set (SetSongView.RecentlyRepeated, a
+	// per-row badge - see renderServiceOrder) and against not-yet-added
+	// candidates (a badge here too, so it's visible before adding rather
+	// than only after).
 	repeated := history.RepeatedSongs
-	for _, ss := range data.SetSongs {
-		if repeated[ss.SongID] {
-			data.RepeatWarnings = append(data.RepeatWarnings, fmt.Sprintf(
-				"%s was sung in each of the last two plans - consider whether it should repeat again so soon.",
-				titleOrID(titles, ss.SongID),
-			))
-		}
-	}
 
 	suggestions, err := sc.store.Recommendations(ctx, organizationID, set.ID)
 	if err != nil {
@@ -1242,6 +1253,23 @@ func semitoneDistance(a, b int) int {
 	return d
 }
 
+// keyTransitionWarning is one flagged key change between two songs that are
+// truly back-to-back in the order (see keyTransitionWarnings). SongRowID is
+// the set_songs row id (SetSong.ID) of the *second*, later song in the
+// pair, not the first - per docs/plans/shipped/in-place-set-warnings-plan.md's
+// resolved rendering decision, this renders as a badge on that later song's
+// own row (captioned so it clearly reads as being about the transition, not
+// a flaw in that song itself), not a separate spacer row between the two.
+// Label is the short, always-visible badge text; Message is the full
+// sentence, revealed via a click-to-expand components.Disclosure rather
+// than shown inline (too long for a badge - see songBadgeSpans,
+// set_builder.templ).
+type keyTransitionWarning struct {
+	SongRowID int64
+	Label     string
+	Message   string
+}
+
 // keyTransitionWarnings flags two songs that are truly back-to-back in the
 // order - nothing else between them in rows, see mergeServiceOrder - whose
 // keys are a half-step apart: the single interval most likely to sound like
@@ -1250,8 +1278,8 @@ func semitoneDistance(a, b int) int {
 // no key set, or a key string that doesn't parse (see
 // parseKeyPitchClass), is silently skipped - same best-effort convention as
 // fetchRecentPlanHistory above.
-func keyTransitionWarnings(rows []mergedRow, arrangementCache map[string]scheduling.SongArrangementInfo, titles map[string]string) []string {
-	var warnings []string
+func keyTransitionWarnings(rows []mergedRow, arrangementCache map[string]scheduling.SongArrangementInfo, titles map[string]string) []keyTransitionWarning {
+	var warnings []keyTransitionWarning
 	for i := 1; i < len(rows); i++ {
 		prev, cur := rows[i-1], rows[i]
 		if prev.Song == nil || cur.Song == nil {
@@ -1274,19 +1302,20 @@ func keyTransitionWarnings(rows []mergedRow, arrangementCache map[string]schedul
 			continue
 		}
 
-		if change == 1 {
-			warnings = append(warnings, fmt.Sprintf(
-				"%s (%s) into %s (%s) is a half-step key change with no transition - consider a pad/bridge, or adjusting one song's key.",
-				titleOrID(titles, prev.Song.SongID), prevKey,
-				titleOrID(titles, cur.Song.SongID), curKey,
-			))
-		} else if change == 6 {
-			warnings = append(warnings, fmt.Sprintf(
-				"%s (%s) into %s (%s) is a tri-tone key change with no transition - consider a pad/bridge, or adjusting one song's key.",
-				titleOrID(titles, prev.Song.SongID), prevKey,
-				titleOrID(titles, cur.Song.SongID), curKey,
-			))
+		kind, label := "half-step", "half-step from previous song"
+		if change == 6 {
+			kind, label = "tri-tone", "tritone from previous song"
 		}
+		warnings = append(warnings, keyTransitionWarning{
+			SongRowID: cur.Song.ID,
+			Label:     label,
+			Message: fmt.Sprintf(
+				"%s (%s) into %s (%s) is a %s key change with no transition - consider a pad/bridge, or adjusting one song's key.",
+				titleOrID(titles, prev.Song.SongID), prevKey,
+				titleOrID(titles, cur.Song.SongID), curKey,
+				kind,
+			),
+		})
 	}
 	return warnings
 }
@@ -1365,7 +1394,16 @@ func buildSongNoteViews(itemID string, noteCategories []pco.ItemNoteCategoryData
 // buildSongNoteViews) - a service type has few note categories, and a
 // plan's items/notes are sideloaded on one GetItems call, so there's no
 // per-song lookup left here at all.
-func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizationID string, arrangementCache map[string]scheduling.SongArrangementInfo, noteCategories []pco.ItemNoteCategoryData, itemNotes map[string][]pco.ItemNoteData, rows []mergedRow, titles map[string]string, rolesBySong map[string][]scheduling.SongRole, roleTypeLabels map[string]string) []views.ServiceOrderRow {
+//
+// repeated/conflictTitlesBySong/transitionsByRow are the three per-row
+// warning inputs this now attaches directly onto each song's own
+// SetSongView (RecentlyRepeated/ConflictTitles/KeyTransitionLabel+Message)
+// instead of a separate top-of-page list - see
+// docs/plans/shipped/in-place-set-warnings-plan.md. transitionsByRow is
+// keyed by the *second* song's own row id (keyTransitionWarning.SongRowID),
+// so a row only ever picks up a transition badge for the pair ending at
+// itself, never the one starting from it.
+func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizationID string, arrangementCache map[string]scheduling.SongArrangementInfo, noteCategories []pco.ItemNoteCategoryData, itemNotes map[string][]pco.ItemNoteData, rows []mergedRow, titles map[string]string, rolesBySong map[string][]scheduling.SongRole, roleTypeLabels map[string]string, repeated map[string]bool, conflictTitlesBySong map[string][]string, transitionsByRow map[int64]keyTransitionWarning) []views.ServiceOrderRow {
 	// A plain sequential loop, not scheduling.RunConcurrently - unlike
 	// before Phase 2 (docs/plans/shipped/pco-call-efficiency-rollout-plan.md), a song
 	// row's only per-row lookup, resolveArrangementCacheInfo, no longer
@@ -1412,27 +1450,33 @@ func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizati
 		// no per-occurrence override to reflect.
 		displayInfo := arrangementInfo
 		displayInfo.Key = key
-		out[i] = views.ServiceOrderRow{
-			IsSong: true,
-			Song: views.SetSongView{
-				ID:              ss.ID,
-				SongID:          ss.SongID,
-				Title:           titleOrID(titles, ss.SongID),
-				Position:        ss.Position,
-				Roles:           roleViews,
-				Published:       ss.PCOItemID != "",
-				AnchorItemID:    ss.AnchorItemID,
-				Moved:           ss.Moved,
-				InfoPending:     ss.InfoPending,
-				ArrangementInfo: formatArrangementInfo(displayInfo),
-				Structure:       displayInfo.Structure,
-				HasChordChart:   displayInfo.HasChordChart,
-				Description:     ss.Description,
-				Key:             key,
-				PCOItemID:       ss.PCOItemID,
-				Notes:           buildSongNoteViews(ss.PCOItemID, noteCategories, itemNotes),
-			},
+
+		songView := views.SetSongView{
+			ID:               ss.ID,
+			SongID:           ss.SongID,
+			Title:            titleOrID(titles, ss.SongID),
+			Position:         ss.Position,
+			Roles:            roleViews,
+			Published:        ss.PCOItemID != "",
+			AnchorItemID:     ss.AnchorItemID,
+			Moved:            ss.Moved,
+			InfoPending:      ss.InfoPending,
+			ArrangementInfo:  formatArrangementInfo(displayInfo),
+			Structure:        displayInfo.Structure,
+			HasChordChart:    displayInfo.HasChordChart,
+			Description:      ss.Description,
+			Key:              key,
+			PCOItemID:        ss.PCOItemID,
+			Notes:            buildSongNoteViews(ss.PCOItemID, noteCategories, itemNotes),
+			RecentlyRepeated: repeated[ss.SongID],
+			ConflictTitles:   conflictTitlesBySong[ss.SongID],
 		}
+		if transition, ok := transitionsByRow[ss.ID]; ok {
+			songView.KeyTransitionLabel = transition.Label
+			songView.KeyTransitionMessage = transition.Message
+		}
+
+		out[i] = views.ServiceOrderRow{IsSong: true, Song: songView}
 	}
 
 	return out

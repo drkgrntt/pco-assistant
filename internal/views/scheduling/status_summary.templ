@@ -75,6 +75,14 @@ templ statusBadge(status string) {
 // page's "at a glance" sidebar can render the exact same chips a second
 // time while the Team tab is the one actually open, instead of hand-
 // duplicating the logic that decides which chips show.
+//
+// The last chip used to be a "Warnings: N" count of ExistingConflicts/
+// RepeatWarnings/PlanWarnings, all three now rendered inline on the row(s)
+// they're actually about instead (see songBadgeSpans, set_builder.templ) -
+// see docs/plans/shipped/in-place-set-warnings-plan.md. What's left is a
+// boolean flag for the one warning that has no row to live on:
+// ServiceLengthWarning, a property of the whole plan rather than any one
+// song or pair.
 templ SongStatusSummary(data SetBuilderData) {
 	<div class="status-summary">
 		@statusChip(fmt.Sprintf("Songs: %d", len(data.SetSongs)), false)
@@ -87,8 +95,8 @@ templ SongStatusSummary(data SetBuilderData) {
 		if data.ReorderPending {
 			@statusChip("Order changed", true)
 		}
-		if warnCount := len(data.ExistingConflicts) + len(data.RepeatWarnings) + len(data.PlanWarnings); warnCount > 0 {
-			@statusChip(fmt.Sprintf("Warnings: %d", warnCount), true)
+		if data.ServiceLengthWarning != "" {
+			@statusChip("Service length", true)
 		}
 	</div>
 }

@@ -42,10 +42,9 @@ type SetBuilderData struct {
 	// logic care about. ServiceOrder is the fuller, displayed view: every
 	// item PCO has for this plan, song or not, interleaved with these same
 	// songs at their anchored position - see buildServiceOrder.
-	SetSongs          []SetSongView
-	ServiceOrder      []ServiceOrderRow
-	Suggestions       []SuggestionView
-	ExistingConflicts []string
+	SetSongs     []SetSongView
+	ServiceOrder []ServiceOrderRow
+	Suggestions  []SuggestionView
 
 	// ReplaceCandidates is every active, not-yet-in-this-set song's id+
 	// title - just enough to populate the replace-form <select> dropdowns
@@ -62,8 +61,8 @@ type SetBuilderData struct {
 	// SongsToReinforce lists candidates that are genuinely new to the
 	// church (see tracked_new_songs/TrackNewSong) and have only been sung
 	// once or twice so far (see PublishedSongAppearanceCounts) - the
-	// opposite nudge from RepeatWarnings below: not "this repeated too
-	// soon" but "this hasn't stuck yet." Reuses SuggestionView (its
+	// opposite nudge from SetSongView.RecentlyRepeated: not "this repeated
+	// too soon" but "this hasn't stuck yet." Reuses SuggestionView (its
 	// RelationshipLabel carries the reason, e.g. "Sung once - one more to
 	// make it stick") rather than a new type. Deliberately its own list,
 	// not merged into Suggestions: Suggestions is anchored to the last
@@ -72,21 +71,19 @@ type SetBuilderData struct {
 	// set (or if there's nothing in it yet).
 	SongsToReinforce []SuggestionView
 
-	// RepeatWarnings flags songs already in this set that were also sung in
-	// each of the last two past plans for this service type - see the
-	// controller's fetchRecentPlanHistory. Rendered the same way as
-	// ExistingConflicts, just a different reason.
-	RepeatWarnings []string
-
-	// PlanWarnings covers the whole plan rather than any one song or
-	// pairing: today, a total length that's noticeably longer/shorter than
-	// this service type's recent average (serviceLengthWarning), and a
-	// half-step key change between two back-to-back songs with nothing
-	// between them (keyTransitionWarnings). Rendered the same way as
-	// RepeatWarnings/ExistingConflicts, just a different reason - kept as
-	// its own field rather than folded into RepeatWarnings since neither
-	// check is actually about repetition.
-	PlanWarnings []string
+	// ServiceLengthWarning is an advisory message when this plan's total
+	// length is noticeably longer/shorter than this service type's recent
+	// average (see the controller's serviceLengthWarning) - "" means
+	// nothing to flag. The one warning check that stays a standalone,
+	// whole-plan banner rather than moving onto a song's own row (see
+	// SetSongView.RecentlyRepeated/ConflictTitles/KeyTransitionLabel
+	// below): it isn't attributable to any one song or pair, just the set
+	// as a whole. See docs/plans/shipped/in-place-set-warnings-plan.md for
+	// why the other three warning checks that used to live in a
+	// top-of-page list (ExistingConflicts, RepeatWarnings, and the other
+	// half of what used to be PlanWarnings, keyTransitionWarnings) now
+	// render inline on the row(s) they're actually about instead.
+	ServiceLengthWarning string
 
 	// UnpublishedCount is how many SetSongs still need a "Publish" push -
 	// creates and reordering. PendingDeleteCount is how many
@@ -297,6 +294,36 @@ type SetSongView struct {
 	// plan item to attach a note to otherwise; nil for an unpublished one,
 	// which the song detail card takes as "publish this first."
 	Notes []SongNoteView
+
+	// RecentlyRepeated is true when this song was sung in each of the last
+	// two past plans for this service type (see the controller's
+	// fetchRecentPlanHistory) - mirrors CandidateSongView.RecentlyRepeated,
+	// rendered inline via components.ConflictBadge in songBadgeSpans
+	// (set_builder.templ) instead of the old top-of-page RepeatWarnings
+	// list - see docs/plans/shipped/in-place-set-warnings-plan.md.
+	RecentlyRepeated bool
+	// ConflictTitles lists the titles of other songs already in this set
+	// that this one has an avoid_pairing relationship with - mirrors
+	// CandidateSongView.ConflictTitles, rendered the same way (a
+	// components.ConflictBadge naming the other song(s)) instead of the old
+	// top-of-page ExistingConflicts list. Empty when there's no such
+	// conflict. The two songs in a pair aren't necessarily adjacent rows -
+	// see the controller's conflictTitlesBySong.
+	ConflictTitles []string
+	// KeyTransitionLabel is a short, always-visible badge caption
+	// ("half-step from previous song") when this song's key is a half-step
+	// or tritone change from the song immediately before it in the order of
+	// service with nothing between them (see the controller's
+	// keyTransitionWarnings) - "" means no such transition. Deliberately
+	// attached to the *second*, later song's row, not the first or a
+	// separate spacer row between them - see
+	// docs/plans/shipped/in-place-set-warnings-plan.md's resolved rendering
+	// decision. KeyTransitionMessage is the full explanatory sentence,
+	// revealed via a click-to-expand components.Disclosure rather than
+	// shown inline (too long for a badge) - see songBadgeSpans,
+	// set_builder.templ.
+	KeyTransitionLabel   string
+	KeyTransitionMessage string
 }
 
 // SongNoteView is one Planning Center note category's state for a specific

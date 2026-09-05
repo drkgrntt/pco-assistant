@@ -1,10 +1,12 @@
 package controllers
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"pco-assistant/internal/scheduling"
+	views "pco-assistant/internal/views/scheduling"
 
 	pco "github.com/drkgrntt/go-pco"
 )
@@ -648,6 +650,102 @@ func TestPCOItemsFingerprint(t *testing.T) {
 				t.Errorf("expected same=%v against base fingerprint %q, got %q", tt.same, want, got)
 			}
 		})
+	}
+}
+
+// renderServiceOrderRow renders rows through renderServiceOrder with a nil
+// store (safe as long as arrangementCache already has an entry for every
+// song row - see resolveArrangementCacheInfo's cache-hit path, which never
+// touches store on a hit) and returns the one song row whose SongID matches
+// - a small helper for the RecentlyRepeated/ConflictTitles/
+// KeyTransitionLabel tests below, which only care about one row's own
+// resulting SetSongView.
+func renderServiceOrderRow(t *testing.T, rows []mergedRow, cache map[string]scheduling.SongArrangementInfo, titles map[string]string, repeated map[string]bool, conflictTitlesBySong map[string][]string, transitionsByRow map[int64]keyTransitionWarning, songID string) views.SetSongView {
+	t.Helper()
+	out := renderServiceOrder(context.Background(), nil, "org1", cache, nil, nil, rows, titles, nil, nil, repeated, conflictTitlesBySong, transitionsByRow)
+	for _, row := range out {
+		if row.IsSong && row.Song.SongID == songID {
+			return row.Song
+		}
+	}
+	t.Fatalf("no rendered row found for song %q", songID)
+	return views.SetSongView{}
+}
+
+// TestRenderServiceOrderPopulatesRecentlyRepeated confirms a set song whose
+// id is in the repeated map (see fetchRecentPlanHistory.RepeatedSongs) gets
+// RecentlyRepeated set on its rendered SetSongView - the same badge
+// CandidateSongView.RecentlyRepeated already gets for a not-yet-added
+// candidate, now also rendered inline on an already-in-the-set song's own
+// row (see docs/plans/shipped/in-place-set-warnings-plan.md).
+func TestRenderServiceOrderPopulatesRecentlyRepeated(t *testing.T) {
+	a := setSong("song-a", "", 0)
+	b := setSong("song-b", "", 1)
+	rows := []mergedRow{{Song: &a}, {Song: &b}}
+	cache := map[string]scheduling.SongArrangementInfo{}
+	repeated := map[string]bool{"song-a": true}
+
+	gotA := renderServiceOrderRow(t, rows, cache, map[string]string{}, repeated, map[string][]string{}, map[int64]keyTransitionWarning{}, "song-a")
+	if !gotA.RecentlyRepeated {
+		t.Error("expected song-a's RecentlyRepeated to be true")
+	}
+
+	gotB := renderServiceOrderRow(t, rows, cache, map[string]string{}, repeated, map[string][]string{}, map[int64]keyTransitionWarning{}, "song-b")
+	if gotB.RecentlyRepeated {
+		t.Error("expected song-b's RecentlyRepeated to be false")
+	}
+}
+
+// TestRenderServiceOrderPopulatesConflictTitles confirms conflictTitlesBySong
+// (built from Store.AvoidPairings' existing pairs - see buildSetBuilderData)
+// attaches each conflict's *other* song title onto this song's own
+// ConflictTitles, the same shape CandidateSongView.ConflictTitles already
+// has for a not-yet-added candidate.
+func TestRenderServiceOrderPopulatesConflictTitles(t *testing.T) {
+	a := setSong("song-a", "", 0)
+	b := setSong("song-b", "", 1)
+	rows := []mergedRow{{Song: &a}, {Song: &b}}
+	cache := map[string]scheduling.SongArrangementInfo{}
+	titles := map[string]string{"song-a": "Song A", "song-b": "Song B"}
+	conflictTitlesBySong := map[string][]string{
+		"song-a": {"Song B"},
+		"song-b": {"Song A"},
+	}
+
+	gotA := renderServiceOrderRow(t, rows, cache, titles, map[string]bool{}, conflictTitlesBySong, map[int64]keyTransitionWarning{}, "song-a")
+	if len(gotA.ConflictTitles) != 1 || gotA.ConflictTitles[0] != "Song B" {
+		t.Errorf("expected song-a's ConflictTitles to be [\"Song B\"], got %+v", gotA.ConflictTitles)
+	}
+}
+
+// TestRenderServiceOrderAttachesKeyTransitionToSecondSongOnly confirms a
+// transitionsByRow entry (keyed by the second song's own row id, see
+// keyTransitionWarning.SongRowID) attaches KeyTransitionLabel/Message onto
+// that later song's rendered row only - never the earlier one, per
+// docs/plans/shipped/in-place-set-warnings-plan.md's resolved rendering
+// decision.
+func TestRenderServiceOrderAttachesKeyTransitionToSecondSongOnly(t *testing.T) {
+	e := setSong("song-e", "", 0)
+	e.ID = 1
+	f := setSong("song-f", "", 1)
+	f.ID = 2
+	rows := []mergedRow{{Song: &e}, {Song: &f}}
+	cache := map[string]scheduling.SongArrangementInfo{}
+	transitionsByRow := map[int64]keyTransitionWarning{
+		f.ID: {SongRowID: f.ID, Label: "half-step from previous song", Message: "Song E (E) into Song F (F) is a half-step key change..."},
+	}
+
+	gotE := renderServiceOrderRow(t, rows, cache, map[string]string{}, map[string]bool{}, map[string][]string{}, transitionsByRow, "song-e")
+	if gotE.KeyTransitionLabel != "" {
+		t.Errorf("expected song-e (the earlier song) to carry no key-transition badge, got %q", gotE.KeyTransitionLabel)
+	}
+
+	gotF := renderServiceOrderRow(t, rows, cache, map[string]string{}, map[string]bool{}, map[string][]string{}, transitionsByRow, "song-f")
+	if gotF.KeyTransitionLabel == "" {
+		t.Error("expected song-f (the later song) to carry the key-transition badge label")
+	}
+	if gotF.KeyTransitionMessage == "" {
+		t.Error("expected song-f to carry the full key-transition message")
 	}
 }
 

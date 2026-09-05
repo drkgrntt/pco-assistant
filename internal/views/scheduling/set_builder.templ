@@ -163,6 +163,29 @@ func nextSongID(order []ServiceOrderRow, i int) string {
 	return ""
 }
 
+// nextSongRowAfter returns the very next row after songRowID's own row, but
+// only when that next row is itself a song (its Song.ID) - unlike
+// nextSongID above, this deliberately does NOT skip over header/foreign
+// items to find the next song further down: a key-transition badge only
+// ever exists between two rows that are truly back-to-back with nothing
+// between them (see the controller's keyTransitionWarnings), so a caller
+// asking "does editing this song's key need to also refresh its neighbor's
+// badge" (KeyFormFragment/SongArrangementInfoRefreshFragment,
+// song_detail_card.templ) needs exactly that same adjacency, not the
+// next song regardless of what's between. Returns ok=false when songRowID
+// isn't found, or its next row isn't a song (nothing to refresh).
+func nextSongRowAfter(order []ServiceOrderRow, songRowID int64) (SetSongView, bool) {
+	for i, row := range order {
+		if row.IsSong && row.Song.ID == songRowID {
+			if i+1 < len(order) && order[i+1].IsSong {
+				return order[i+1].Song, true
+			}
+			return SetSongView{}, false
+		}
+	}
+	return SetSongView{}, false
+}
+
 // songBadges is the badge cluster in a song row's own Tags column -
 // factored out (rather than inlined in the row below) so it can also be
 // re-rendered as its own targeted out-of-band fragment (see
@@ -183,6 +206,30 @@ templ songBadgesOOB(song SetSongView) {
 	</span>
 }
 
+// keyTransitionToggle/keyTransitionMenu are the key-transition Disclosure's
+// toggle-button content and popup contents (see songBadgeSpans below) - a
+// short, always-visible caption (e.g. "half-step from previous song") that
+// expands, on click, to the full explanatory sentence
+// (SetSongView.KeyTransitionMessage). Kept as a click-to-expand Disclosure
+// rather than a hover-only title= tooltip per
+// docs/plans/shipped/in-place-set-warnings-plan.md's resolved decision -
+// keyboard/screen-reader accessible, matching this app's existing pattern
+// for the same tradeoff (see components.Disclosure's own doc comment).
+templ keyTransitionToggle(label string) {
+	⚠ { label }
+}
+
+templ keyTransitionMenu(message string) {
+	<p>{ message }</p>
+}
+
+// songBadgeSpans is the badge cluster in a song row's own Tags column -
+// role/published/moved/info-pending badges, plus the same-set avoid-pairing
+// conflict, recently-repeated, and key-transition warnings, all rendered
+// inline right on this row instead of a separate top-of-page list - see
+// docs/plans/shipped/in-place-set-warnings-plan.md. Mirrors
+// songCandidateMeta's identical ConflictBadge usage for a not-yet-added
+// candidate's ConflictTitles/RecentlyRepeated.
 templ songBadgeSpans(song SetSongView) {
 	for _, role := range song.Roles {
 		@components.Badge("", role.Label)
@@ -196,40 +243,22 @@ templ songBadgeSpans(song SetSongView) {
 	if song.InfoPending {
 		@components.BadgeTitled("status-pending", "Note/key pending", "This week's note or key changed since it was last published - Refresh song info (or Publish) to send it to Planning Center")
 	}
-}
-
-// songWarnings/songWarningsOOB wrap the set builder's warning-message lists
-// (ExistingConflicts, RepeatWarnings, PlanWarnings) in one container with a
-// stable id - the songBadges/songBadgesOOB pattern above, applied here so a
-// narrower fragment response (one that only re-renders a single form, not
-// the whole page) can still push a fresh warnings list via OOB.
-// KeyFormFragment (song_detail_card.templ) is the one form so far whose
-// edit can actually change PlanWarnings - a key override can flip
-// keyTransitionWarnings' verdict on the songs next to it - without going
-// through a full SetBuilderBody re-render, which is what left the banner
-// stuck showing the pre-edit warnings until some other action happened to
-// re-render everything.
-templ songWarnings(data SetBuilderData) {
-	<div id="song-warnings">
-		@songWarningSpans(data)
-	</div>
-}
-
-templ songWarningsOOB(data SetBuilderData) {
-	<div id="song-warnings" hx-swap-oob="true">
-		@songWarningSpans(data)
-	</div>
-}
-
-templ songWarningSpans(data SetBuilderData) {
-	for _, msg := range data.ExistingConflicts {
-		<div class="warning">{ msg }</div>
+	if len(song.ConflictTitles) > 0 {
+		@components.ConflictBadge(fmt.Sprintf("avoid pairing with %s", strings.Join(song.ConflictTitles, ", ")))
 	}
-	for _, msg := range data.RepeatWarnings {
-		<div class="warning">{ msg }</div>
+	if song.RecentlyRepeated {
+		@components.ConflictBadge("sung in each of the last two plans")
 	}
-	for _, msg := range data.PlanWarnings {
-		<div class="warning">{ msg }</div>
+	if song.KeyTransitionLabel != "" {
+		@components.Disclosure(
+			"key-transition-badge",
+			"conflict-badge key-transition-toggle",
+			"toggleKeyTransitionBadge(this)",
+			"",
+			"",
+			keyTransitionToggle(song.KeyTransitionLabel),
+			keyTransitionMenu(song.KeyTransitionMessage),
+		)
 	}
 }
 
@@ -441,7 +470,19 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 			<p class="success">{ data.PublishMsg }</p>
 		}
 		@SongStatusSummary(data)
-		@songWarnings(data)
+		<!--
+			ServiceLengthWarning is the one warning check that stays a
+			standalone banner rather than moving onto a song's own row (see
+			SetSongView.RecentlyRepeated/ConflictTitles/KeyTransitionLabel,
+			rendered inline via songBadgeSpans instead) - it's a property of
+			the whole plan, not any one song or pair, so there's no row to
+			attach it to. See docs/plans/shipped/in-place-set-warnings-plan.md.
+			At most one such message at a time, so this is a single
+			conditional message, not a list/container.
+		-->
+		if data.ServiceLengthWarning != "" {
+			<div class="warning">{ data.ServiceLengthWarning }</div>
+		}
 		if data.ReadOnly {
 			<p class="muted">This plan has already happened - shown read-only for reference.</p>
 		}
