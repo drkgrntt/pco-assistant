@@ -226,9 +226,9 @@ templ RosterBuilderBodyLazy(data RosterBuilderData) {
 // any specific position (QuickAddPersonRelationship - creating a
 // relationship changes none of Positions' Assigned/Candidates data) can
 // still refresh this without a full #roster-builder-body re-render, the
-// same way songWarnings/songBadges (set_builder.templ) let a narrower
-// set-builder response still push a fresh copy of just their own slice of
-// the page. This is the primary (non-OOB) response for
+// same way songBadges (set_builder.templ) lets a narrower set-builder
+// response still push a fresh copy of just its own slice of the page.
+// This is the primary (non-OOB) response for
 // QuickAddPersonRelationship and its own pair-prompt form; every
 // position-scoped mutation (AddRosterAssignment, RemoveRosterAssignment,
 // QuickAddPositionPreference - rosters_detail.go) instead includes it as

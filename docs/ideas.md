@@ -121,13 +121,14 @@ the builder page's "Open in Planning Center" link.)
    on Team-tab person rows, side-by-side team cards, and an "N needed"
    badge on open positions. The Songs/Order tab and tab-bar styling were
    already close enough to leave alone.
-6. **In-place warnings instead of a top-of-page alert list.** Key-change,
-   repeat-song, and length warnings currently render as a stack of alerts
-   above the set (`PlanWarnings`, `keyTransitionWarnings`/
-   `serviceLengthWarning` in `sets_builder.go`). Moving each one inline -
-   a tooltip/badge on the specific song row it's actually about - would
-   put it where the eye already is instead of a separate list to
-   cross-reference against the set below it.
+6. ~~**In-place warnings instead of a top-of-page alert list.**~~ -
+   **shipped 2026-09-05**, see
+   `docs/plans/shipped/in-place-set-warnings-plan.md`: repeat-song and
+   avoid-pairing conflicts now render as `components.ConflictBadge`s right
+   on the song row(s) they're about, and a half-step/tritone key change
+   renders as a short badge + click-to-expand `components.Disclosure` on
+   the second song's row. Only the whole-plan service-length check has no
+   row to attach to, so it stays a standalone banner near the top.
 
 **A related but distinct problem: discoverability, not friction.** A fair
 amount of what actually pays off here (tag/relate suggestions, preference

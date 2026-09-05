@@ -31,7 +31,12 @@ type RosterBuilderData struct {
 	// they're eligible for - see SuggestionView.
 	Suggestions []PersonSuggestionView
 	// ExistingConflicts flags avoid_pairing pairs where both people are
-	// already assigned to this roster - see SetBuilderData.ExistingConflicts.
+	// already assigned to this roster - the Team tab's own top-of-page
+	// warning list (see RosterStatusSummary/roster_builder.templ). Unlike
+	// the Songs tab's equivalent same-set song conflicts, which moved onto
+	// each song's own row (see SetSongView.ConflictTitles and
+	// docs/plans/shipped/in-place-set-warnings-plan.md), this one hasn't
+	// been revisited - kept as its own top-of-page list for now.
 	ExistingConflicts []string
 
 	// UnpublishedCount/PendingDeleteCount drive whether the Publish button

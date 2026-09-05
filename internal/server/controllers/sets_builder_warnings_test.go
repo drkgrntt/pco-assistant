@@ -1,9 +1,12 @@
 package controllers
 
-// Unit tests for the plan-level warnings (see PlanWarnings) added to the
-// set builder: total service length vs. this service type's recent
-// average, and a half-step key change between two back-to-back songs. Both
-// checks are pure functions over already-in-hand data, same as
+// Unit tests for the set builder's plan-level/positional warning checks:
+// total service length vs. this service type's recent average
+// (SetBuilderData.ServiceLengthWarning), and a half-step/tritone key change
+// between two back-to-back songs (keyTransitionWarnings - see
+// docs/plans/shipped/in-place-set-warnings-plan.md for why this returns a
+// structured []keyTransitionWarning rather than pre-formatted strings).
+// Both checks are pure functions over already-in-hand data, same as
 // mergeServiceOrder/songsInBoth in sets_builder_test.go, so they're tested
 // directly here rather than through buildSetBuilderData.
 
@@ -143,9 +146,15 @@ func TestSemitoneDistanceWrapsAround(t *testing.T) {
 	}
 }
 
+// TestKeyTransitionWarningsFlagsHalfStep also confirms the structured
+// return value's SongRowID identifies the *second*, later song's own
+// set_songs row id - not the first - per
+// docs/plans/shipped/in-place-set-warnings-plan.md's resolved rendering
+// decision (the badge renders on that later song's row).
 func TestKeyTransitionWarningsFlagsHalfStep(t *testing.T) {
 	e := setSong("song-e", "", 0)
 	f := setSong("song-f", "", 1)
+	f.ID = 42
 	rows := []mergedRow{{Song: &e}, {Song: &f}}
 	cache := map[string]scheduling.SongArrangementInfo{
 		"song-e": {Key: "E"},
@@ -157,8 +166,38 @@ func TestKeyTransitionWarningsFlagsHalfStep(t *testing.T) {
 	if len(got) != 1 {
 		t.Fatalf("expected exactly 1 warning, got %d: %+v", len(got), got)
 	}
-	if !strings.Contains(got[0], "Song E") || !strings.Contains(got[0], "Song F") {
-		t.Errorf("expected the warning to name both songs, got %q", got[0])
+	if !strings.Contains(got[0].Message, "Song E") || !strings.Contains(got[0].Message, "Song F") {
+		t.Errorf("expected the warning message to name both songs, got %q", got[0].Message)
+	}
+	if got[0].Label == "" {
+		t.Error("expected a non-empty short badge label")
+	}
+	if got[0].SongRowID != f.ID {
+		t.Errorf("expected SongRowID to be the second song's row id (%d), got %d", f.ID, got[0].SongRowID)
+	}
+}
+
+// TestKeyTransitionWarningsFlagsTritoneWithDistinctMessage confirms a
+// tritone change (the other flagged interval, alongside the half-step case
+// above) is worded distinctly from a half-step one.
+func TestKeyTransitionWarningsFlagsTritoneWithDistinctMessage(t *testing.T) {
+	c := setSong("song-c", "", 0)
+	fs := setSong("song-fs", "", 1)
+	rows := []mergedRow{{Song: &c}, {Song: &fs}}
+	cache := map[string]scheduling.SongArrangementInfo{
+		"song-c":  {Key: "C"},
+		"song-fs": {Key: "F#"},
+	}
+
+	got := keyTransitionWarnings(rows, cache, map[string]string{})
+	if len(got) != 1 {
+		t.Fatalf("expected exactly 1 warning, got %d: %+v", len(got), got)
+	}
+	if !strings.Contains(got[0].Message, "tri-tone") {
+		t.Errorf("expected the message to call this a tri-tone change, got %q", got[0].Message)
+	}
+	if !strings.Contains(got[0].Label, "tritone") {
+		t.Errorf("expected the badge label to say tritone, got %q", got[0].Label)
 	}
 }
 

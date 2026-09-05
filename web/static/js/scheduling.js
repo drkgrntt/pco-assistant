@@ -150,6 +150,35 @@ function closeRowMenus() {
   });
 }
 
+// The set builder's per-row key-transition badge (see songBadgeSpans,
+// set_builder.templ) - a short always-visible caption ("half-step from
+// previous song") that click-to-expands into the full explanatory
+// sentence, per docs/plans/shipped/in-place-set-warnings-plan.md's resolved
+// decision to use a Disclosure rather than a hover-only title= tooltip.
+// Same open/closed idiom as toggleRowMenu above, but kept as its own
+// wrapper class rather than reusing .row-menu: this popup is an
+// explanation, not an action menu, and shouldn't close (or be closed by)
+// the row's own "more actions"/"replace" menus.
+function toggleKeyTransitionBadge(button) {
+  var wrapper = button.closest(".key-transition-badge");
+  var opening = !wrapper.classList.contains("open");
+  closeKeyTransitionBadges();
+  if (opening) {
+    wrapper.classList.add("open");
+    button.setAttribute("aria-expanded", "true");
+  }
+}
+
+function closeKeyTransitionBadges() {
+  document.querySelectorAll(".key-transition-badge.open").forEach(function (wrapper) {
+    wrapper.classList.remove("open");
+    var toggle = wrapper.querySelector(".key-transition-toggle");
+    if (toggle) {
+      toggle.setAttribute("aria-expanded", "false");
+    }
+  });
+}
+
 // Reveals the hidden tag/relate/role form for one song row and hides its
 // two siblings - each song gets one <tr class="quick-action-row"> "slot"
 // per action, all sharing the same data-row-id as the song's own row (see
@@ -184,12 +213,16 @@ function openQuickAction(button, action) {
 // the room a table cell doesn't have. Clicking the same row again, or its
 // card's own Close button, closes it - a plain toggle, same idiom as
 // toggleRowMenu. Ignores clicks on the row's own action cell (buttons,
-// forms, the replace <select>) and drag handle - those already do
-// something on their own; selecting the row on top of that would just be
-// noise (and, for the drag handle, fire on every drag as an unwanted
-// side effect).
+// forms, the replace <select>), drag handle, and key-transition badge -
+// those already do something on their own; selecting the row on top of
+// that would just be noise (and, for the drag handle, fire on every drag
+// as an unwanted side effect).
 function selectSongRow(row, event) {
-  if (event.target.closest(".set-song-actions") || event.target.closest(".drag-handle")) {
+  if (
+    event.target.closest(".set-song-actions") ||
+    event.target.closest(".drag-handle") ||
+    event.target.closest(".key-transition-badge")
+  ) {
     return;
   }
   var rowID = row.dataset.rowId;
@@ -310,6 +343,9 @@ document.addEventListener("click", function (event) {
   if (!event.target.closest(".row-menu")) {
     closeRowMenus();
   }
+  if (!event.target.closest(".key-transition-badge")) {
+    closeKeyTransitionBadges();
+  }
   if (!event.target.closest("tr.song-row") && !event.target.closest(".build-detail-card")) {
     closeSongDetail();
   }
@@ -326,6 +362,7 @@ document.addEventListener("keydown", function (event) {
   if (event.key === "Escape") {
     closeNavDropdowns();
     closeRowMenus();
+    closeKeyTransitionBadges();
     closeMobileMenu();
     closeSongDetail();
     closePersonDetail();

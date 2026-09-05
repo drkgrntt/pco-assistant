@@ -1,13 +1,43 @@
 # Plan: in-place warnings instead of a top-of-page alert list
 
+**Status: shipped 2026-09-05.** Built in `internal/server/controllers/
+sets_builder.go`/`internal/views/scheduling/` per this doc's own "Suggested
+build order," with the three open questions below resolved by the product
+owner rather than left to a mockup:
+
+- **Top-of-page list's fate**: dropped entirely. `RepeatWarnings`/
+  `ExistingConflicts` moved onto each song's own row as a
+  `components.ConflictBadge` (mirroring `CandidateSongView`'s existing use
+  of the same component); `keyTransitionWarnings` moved onto the *second*
+  song's row (see below). `serviceLengthWarning` - the one check with no
+  row to attach to - stayed as its own small standalone banner near the
+  top, since it's a property of the whole plan, not any song or pair. The
+  `SongStatusSummary`/`songGlanceContent` "Warnings: N" chip was narrowed
+  to a boolean "Service length" chip reflecting only that one remaining
+  check, rather than dropped outright.
+- **Long key-transition message**: a click-to-expand
+  `components.Disclosure` (keyboard/screen-reader accessible), not a
+  hover-only `title=` tooltip.
+- **Key-transition marker placement**: a badge on the *second* song's row
+  (the later one in `mergeServiceOrder`'s merged order), captioned as being
+  about the transition ("half-step from previous song"/"tritone from
+  previous song"), not a separate spacer `<tr>` between the two rows -
+  `keyTransitionWarnings` now returns `[]keyTransitionWarning{SongRowID,
+  Label, Message}` instead of pre-formatted strings, keyed by the second
+  song's own `set_songs` row id.
+
+`docs/plans/not-started/key-change-tip-plan.md`, written concurrently and
+explicitly deferred to whatever this plan settled on for these same two
+questions, was updated to point at this outcome.
+
 Written 2026-09-05, expanding item 6 of `docs/ideas.md`'s "Reducing
-friction vs. Planning Center" section into a real plan. Not built yet.
-Item 5 right above it in that list (bringing the Build page's layout
-closer to PCO's own) already shipped - see
-`docs/plans/shipped/build-page-redesign-plan.md` - but that redesign
-touched Team-tab person rows and side-by-side team cards, not the Songs
-tab's row layout or its warning banner, so there's nothing from it to
-build on here; this is a genuinely separate piece of the page.
+friction vs. Planning Center" section into a real plan. Item 5 right above
+it in that list (bringing the Build page's layout closer to PCO's own)
+already shipped - see `docs/plans/shipped/build-page-redesign-plan.md` -
+but that redesign touched Team-tab person rows and side-by-side team
+cards, not the Songs tab's row layout or its warning banner, so there was
+nothing from it to build on here; this was a genuinely separate piece of
+the page.
 
 ## Current state
 

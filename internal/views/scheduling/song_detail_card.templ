@@ -81,17 +81,25 @@ templ songDetailCardsLazyOOB(data SetBuilderData) {
 // summary line (set_builder.templ's #song-meta-<id>), which shows this
 // song's *effective* key (see renderServiceOrder's own comment on why) -
 // DescriptionFormFragment has no equivalent, since Description isn't
-// shown anywhere else on the row. It also re-pushes the warnings banner
-// (songWarningsOOB, set_builder.templ): unlike Description, a key edit can
-// flip keyTransitionWarnings' verdict on this song and its neighbor, and
-// without this the banner stayed stuck showing whatever it said before the
-// edit until some unrelated action happened to re-render the whole page.
+// shown anywhere else on the row. It also re-pushes this song's own Tags
+// column badges (which now carry its key-transition badge inline, see
+// songBadgeSpans/SetSongView.KeyTransitionLabel) *and*, when the row right
+// after this one is also a song, that neighbor's badges too: a key edit on
+// this song can flip keyTransitionWarnings' verdict on both the pair
+// ending here and the pair starting here, but only the first of those two
+// lives on this song's own row (the badge is attached to the *second*
+// song in each pair - see keyTransitionWarning's doc comment) - without
+// this second OOB push, the row right after a key edit stayed stuck
+// showing its pre-edit transition badge (or lack of one) until some
+// unrelated action happened to re-render the whole page.
 templ KeyFormFragment(data SetBuilderData, song SetSongView, errMsg string) {
 	@keyForm(data, song, errMsg)
 	<div class="muted song-meta" id={ fmt.Sprintf("song-meta-%d", song.ID) } hx-swap-oob="true">{ song.ArrangementInfo }</div>
 	@songBadgesOOB(song)
+	if next, ok := nextSongRowAfter(data.ServiceOrder, song.ID); ok {
+		@songBadgesOOB(next)
+	}
 	@songPublishPanelOOB(data)
-	@songWarningsOOB(data)
 }
 
 templ DescriptionFormFragment(data SetBuilderData, song SetSongView, errMsg string) {
@@ -119,13 +127,13 @@ templ SongNoteFormFragment(data SetBuilderData, song SetSongView, note SongNoteV
 // directions is exactly the kind of thing worth a distinct name for. Mirrors
 // KeyFormFragment's own multi-piece update: the card's own arrangement-info
 // paragraph is the primary (non-OOB) swap target, since that's what the
-// button itself points hx-target at, plus the same three OOB pieces
+// button itself points hx-target at, plus the same OOB pieces
 // KeyFormFragment already pushes whenever a song's effective key can
 // change - the order-of-service row's #song-meta-<id> summary (which shows
 // the *effective* key, arrangement default or override - see
-// renderServiceOrder), this song's own Tags-column badges, and the
-// warnings banner (a refreshed key can flip keyTransitionWarnings' verdict
-// against this song's neighbors, same as an edited key override would).
+// renderServiceOrder), this song's own Tags-column badges (a refreshed key
+// can flip keyTransitionWarnings' verdict against this song's neighbor,
+// same as an edited key override would), and that neighbor's own badges.
 //
 // Also pushes Structure/HasChordChart (song-structure-<id>, song-chord-
 // chart-badge-<id>) via the same OOB mechanism - both can change on a real
@@ -136,7 +144,11 @@ templ SongNoteFormFragment(data SetBuilderData, song SetSongView, note SongNoteV
 // element already exists in the DOM - a song going from "no structure yet"
 // to "has one" on this same click needs a full page reload to show it the
 // first time, same trade-off as everywhere else in this app that only
-// re-renders a fragment rather than the whole page.
+// re-renders a fragment rather than the whole page. Also refreshes the
+// next row's own badges (nextSongRowAfter), same reasoning as
+// KeyFormFragment's own doc comment above: a refreshed key can flip
+// keyTransitionWarnings' verdict against this song's neighbor too, and
+// that badge lives on the neighbor's row, not this one.
 templ SongArrangementInfoRefreshFragment(data SetBuilderData, song SetSongView, errMsg string) {
 	<p class="muted" id={ fmt.Sprintf("song-arrangement-info-%d", song.ID) }>
 		if errMsg != "" {
@@ -157,7 +169,9 @@ templ SongArrangementInfoRefreshFragment(data SetBuilderData, song SetSongView, 
 		</span>
 	}
 	@songBadgesOOB(song)
-	@songWarningsOOB(data)
+	if next, ok := nextSongRowAfter(data.ServiceOrder, song.ID); ok {
+		@songBadgesOOB(next)
+	}
 	@songRefreshStatusOOB(song.ID, errMsg)
 }
 

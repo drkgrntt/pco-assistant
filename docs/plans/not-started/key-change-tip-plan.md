@@ -3,23 +3,23 @@
 Written 2026-09-05, expanding the "Key-change tip surfaced inline" bullet
 in `docs/ideas.md`'s "Songs" section into a real plan. Not built yet.
 
-This depends on where `docs/plans/not-started/in-place-set-warnings-plan.md`
-lands, which was being written concurrently with this doc and also isn't
-built yet. That plan's own research concluded the key-transition warning is
-the one warning shape among this app's four that's inherently about the
-*gap between two rows* rather than one row or the whole plan, and - because
-its message is a full sentence, too long for an always-visible inline pill -
-leans toward rendering it via `components.Disclosure` (click-to-expand,
-keyboard/screen-reader accessible) rather than a hover-only tooltip or a
-plain `ConflictBadge`. Nothing here re-opens that decision. This plan
-assumes whatever surface that plan settles on (a `Disclosure` popover between
-the two songs is the leading candidate, but that plan explicitly leaves the
-exact structural placement - inter-row `<tr>` vs. captioned badge on the
-second song - as a real open question) and treats the key-change tip as
-**one more paragraph inside that same popover**, appended after the existing
-warning sentence, never a second badge/icon of its own. If that plan hasn't
-landed by the time this one is picked up, re-read it first rather than
-re-deciding "where does a key-transition warning render" here.
+This depended on where `docs/plans/shipped/in-place-set-warnings-plan.md`
+landed, which was being written concurrently with this doc - it has since
+shipped (2026-09-05, see that doc's own "Status" line for the full
+resolution). Both open questions this plan was waiting on are now settled:
+the key-transition warning renders via a click-to-expand
+`components.Disclosure` (not a hover-only tooltip or a plain
+`ConflictBadge`), and its structural placement is a short captioned badge
+("half-step from previous song"/"tritone from previous song") on the
+*second* song's own row - not an inter-row `<tr>` spacer. The badge's short
+label is the Disclosure's always-visible toggle text
+(`keyTransitionToggle`, `set_builder.templ`); its popover
+(`keyTransitionMenu`) currently holds just the one warning sentence
+(`keyTransitionWarning.Message`, `sets_builder.go`). This plan still treats
+the key-change tip as **one more paragraph inside that same popover**,
+appended after the existing warning sentence, never a second badge/icon of
+its own - nothing here re-opens that placement decision, only extends what
+`keyTransitionMenu` renders.
 
 ## Current state
 
@@ -72,18 +72,26 @@ small reverse lookup (see "What's actually new" below):
   has handled it since it shipped - not a known bug, just an untested path
   worth closing while this plan is in the same function anyway.
 
-**How the message reaches the view today**: `keyTransitionWarnings` returns
-`[]string` (pre-formatted, e.g. `"Amazing Grace (G) into How Great Thou Art
-(Ab) is a half-step key change with no transition - consider a pad/bridge,
-or adjusting one song's key."`), appended into `SetBuilderData.PlanWarnings`
-(`internal/views/scheduling/set_types.go`) alongside the unrelated
-`serviceLengthWarning` string. `set_builder.templ`'s `songWarningSpans`
-(~L123-133) renders every `PlanWarnings` entry as a flat
-`<div class="warning">{ msg }</div>` inside one shared `#song-warnings`
-container above the order-of-service table - nothing here identifies *which*
-row pair a given string is about; that's exactly the gap the sibling plan's
-proposed `KeyTransitionWarning{AfterRowID int64; Message string}` struct
-exists to close.
+**How the message reaches the view today (post-ship)**:
+`keyTransitionWarnings` now returns `[]keyTransitionWarning{SongRowID int64;
+Label, Message string}` (`internal/server/controllers/sets_builder.go`) -
+`SongRowID` is the *second* song's own `set_songs` row id, `Message` is the
+same full-sentence text as before (e.g. `"Amazing Grace (G) into How Great
+Thou Art (Ab) is a half-step key change with no transition - consider a
+pad/bridge, or adjusting one song's key."`), and `Label` is the new short
+always-visible badge caption ("half-step from previous song"/"tritone from
+previous song"). `renderServiceOrder` attaches `Label`/`Message` onto that
+second song's own `SetSongView.KeyTransitionLabel`/`KeyTransitionMessage`;
+`set_builder.templ`'s `songBadgeSpans` renders them as a
+`components.Disclosure` (short label as the always-visible toggle text via
+`keyTransitionToggle`, full sentence in the popover via `keyTransitionMenu`)
+right on that row - no more shared top-of-page `#song-warnings`
+container/`SetBuilderData.PlanWarnings` field; both are gone. This is
+exactly the "which row pair a given string is about" gap this doc's
+original text below flagged - it's now closed by `SongRowID`/the row
+attachment above, not by the `KeyTransitionWarning{AfterRowID int64;
+Message string}` shape originally proposed (the actual shipped shape adds
+`Label` and calls the field `SongRowID`, but is otherwise the same idea).
 
 ## What's actually new here (and what isn't)
 

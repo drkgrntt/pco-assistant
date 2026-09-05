@@ -124,3 +124,60 @@
   color: var(--accent);
   flex-shrink: 0;
 }
+
+/* The set builder's per-row key-transition badge (see songBadgeSpans,
+   set_builder.templ) - a short always-visible caption that click-to-expands
+   into the full explanatory sentence, per docs/plans/shipped/
+   in-place-set-warnings-plan.md's resolved decision to use a Disclosure
+   rather than a hover-only title= tooltip. Same floating-menu shape as
+   .row-menu-menu above, kept as its own class family (not reused) since
+   the popup here is plain explanatory text, not a list of action buttons,
+   and shouldn't participate in toggleRowMenu/closeRowMenus' "only one
+   open at a time" bookkeeping (see toggleKeyTransitionBadge/
+   closeKeyTransitionBadges, scheduling.js). */
+.key-transition-badge {
+  position: relative;
+  display: inline-flex;
+}
+
+/* The toggle button reuses .conflict-badge for its pill look (background/
+   color/padding/border-radius) - these three overrides strip the plain
+   <button> reset (forms.css) that would otherwise leave it 44px tall with
+   a visible border, the same "shrink a real button down to badge size"
+   problem .icon-btn solves for the row-menu's icon buttons above. */
+.key-transition-toggle {
+  display: inline-block;
+  min-height: 0;
+  border: none;
+  line-height: 1;
+}
+
+.key-transition-toggle:hover {
+  background: var(--danger-subtle);
+  border-color: transparent;
+}
+
+.key-transition-badge-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 20;
+  max-width: 20rem;
+  margin-top: 0.3rem;
+  padding: var(--space-2) calc(var(--space-2) + 0.1rem);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+
+.key-transition-badge-menu p {
+  margin: 0;
+}
+
+.key-transition-badge.open .key-transition-badge-menu {
+  display: block;
+}
