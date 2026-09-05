@@ -323,19 +323,35 @@ pattern as `song_tags`/`song_relationships`:**
   to check against (service type? set-level?) and a scoring formula, which
   is a calibration problem, not a plumbing one.
 - **CCLI/reporting completeness** - flag a song missing CCLI number/author
-  before publish, so licensing reports don't silently have gaps. Needs
-  checking what `pco.SongData` actually exposes for CCLI fields before
-  promising this - not yet verified.
-- **Retired / "don't resurrect" flag** - distinct from `avoid_pairing` (which
-  is about *pairing*, not benching a song entirely). Every song list picks
-  up a handful the team quietly agreed to stop doing - "never landed," "too
-  hard live," "dated." The flag itself is close to free (a new
-  `song_tag_categories` row, e.g. `status`/`retired`, same fully-dynamic
-  mechanism as the instrumentation idea above), but `song_tags` has no notes
-  column, so capturing *why* it was retired needs either a small schema
-  addition or a new table with notes, not a free ride on tags alone.
+  before publish, so licensing reports don't silently have gaps. Verified
+  2026-09-05: `pco.SongAttributes` (`go-pco` v0.21.0) already exposes both
+  `CCLINumber` and `Author` - no PCO-side gap, this is buildable whenever
+  it's prioritized.
+- ~~Retired / "don't resurrect" flag~~ - **decided 2026-09-05: don't build a
+  separate local flag, use PCO's own archive (`hidden`) instead.** The
+  original framing (a new `song_tag_categories` row plus a notes table for
+  *why* it was retired) duplicates a distinction PCO already has - Derek's
+  own note below turned out to be the right call once actually weighed:
+  there's no real payoff to a second, local "retired" concept that PCO's
+  existing hidden/archived state doesn't already cover, once this app can
+  set that flag itself. See `docs/plans/not-started/song-archive-plan.md`
+  for the resulting plan, which folds in the "not sung in a long time"
+  nudge below and requires adding an `UpdateSong` wrapper to `go-pco`
+  (currently only wraps Create/Get/GetSongs/Delete) - a deliberate,
+  wanted addition to that library rather than a workaround to avoid
+  touching it.
   - Note from Derek, perhaps to reevaluate next time you see this,
     could we not just leverage PCO's existing archive functionality?
+- **"Not sung in a long time" nudge** - the reinforcement idea's mirror
+  image: PCO's own `Song.LastScheduledAt`/`LastScheduledShortDates`
+  (`go-pco` v0.21.0's `SongAttributes`, already fetched on every song list
+  call via `FetchActiveSongs` - no new PCO traffic) surfaces a song that's
+  gone cold, as a soft "haven't done this in a while" signal while
+  browsing/selecting songs. Feeds the archive decision above rather than
+  automating it - a long gap is a *prompt* to consider archiving, never an
+  automatic suggestion, since a seasonal song (Christmas, Easter) has a
+  long, entirely intentional gap by design; a seasonal tag is the natural
+  exemption once one exists. See `docs/plans/not-started/song-archive-plan.md`.
 - **Per-person key fit** - "this key works for Sarah, too low for Mike."
   A different axis than the existing preferred/discouraged binary (that's
   about *wanting* to sing it, not *being able to* in that arrangement's
