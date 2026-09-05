@@ -1,6 +1,8 @@
 package scheduling
 
 import (
+	"pco-assistant/internal/views/components"
+
 	pco "github.com/drkgrntt/go-pco"
 )
 
@@ -56,6 +58,7 @@ templ PersonSearchResults(people []pco.PersonData, suffix string) {
 			data-suffix={ suffix }
 			onclick="selectPerson(this)"
 		>
+			@components.Avatar(person.Attributes.Avatar)
 			{ person.Attributes.Name }
 		</div>
 	}

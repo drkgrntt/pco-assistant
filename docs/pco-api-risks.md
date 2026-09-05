@@ -89,6 +89,17 @@ that first. Facts worth adding here that aren't in CLAUDE.md:
 
 - People#index (`GetPeople`) supports batched `where[id]=1,2,3` -
   `PeopleParams.IDs` in go-pco `v0.15.0`+.
+- **`PersonAttributes.Avatar`** (a real uploaded photo, or PCO's own
+  generated colored-initials image if the person has none) comes back on
+  every `People#index`/`#show` response with no extra `Include` needed -
+  **used** (2026-09-05, build-page redesign - see
+  `docs/build-page-redesign-plan.md`): `personLookupMapForIDs`
+  (`people.go`) now keeps it alongside the name from the exact same batched
+  call `personNameMapForIDs` already made, so the roster builder's
+  avatars (assignment/candidate/suggestion rows, person-picker search
+  results) cost zero additional PCO calls. Don't add a separate
+  avatar-fetch path if this area changes again - it's already free on this
+  call.
 - Services v2 blockouts (`services/v2/people/{id}/blockouts`) has **no**
   batch/`where[id]` option - `can_query_by` is just `group_identifier`, so
   concurrency/caching are the only levers, batching isn't available.

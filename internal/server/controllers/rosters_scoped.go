@@ -215,7 +215,11 @@ func (sc *SchedulingController) buildRosterPositionGroupData(ctx context.Context
 	for id := range namedPersonIDs {
 		namedIDs = append(namedIDs, id)
 	}
-	names := personNameMapForIDs(ctx, namedIDs)
+	lookups := personLookupMapForIDs(ctx, namedIDs)
+	names := make(map[string]string, len(lookups))
+	for id, l := range lookups {
+		names[id] = l.Name
+	}
 
 	// Cache-first read per relevant person - see personBlockouts
 	// (rosters_warnings.go); no PCO call happens here, cache hit or not.
@@ -285,6 +289,7 @@ func (sc *SchedulingController) buildRosterPositionGroupData(ctx context.Context
 			ID:               ra.ID,
 			PersonID:         ra.PersonID,
 			Name:             titleOrID(names, ra.PersonID),
+			AvatarURL:        lookups[ra.PersonID].AvatarURL,
 			Status:           ra.Status,
 			TeamID:           teamID,
 			TeamName:         teamName,
@@ -311,7 +316,7 @@ func (sc *SchedulingController) buildRosterPositionGroupData(ctx context.Context
 			continue
 		}
 
-		pg.Candidates = append(pg.Candidates, candidatePersonView(personID, titleOrID(names, personID), pa.Attributes.SchedulePreference))
+		pg.Candidates = append(pg.Candidates, candidatePersonView(personID, titleOrID(names, personID), lookups[personID].AvatarURL, pa.Attributes.SchedulePreference))
 	}
 
 	return pg, errMsg

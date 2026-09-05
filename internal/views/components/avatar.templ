@@ -1,0 +1,17 @@
+package components
+
+// Avatar renders one person's circular avatar image, given the PCO
+// Attributes.Avatar URL PCO already returns on every person - a real
+// uploaded photo, or PCO's own generated colored-initials placeholder if
+// they have none, with no local initials/color logic needed on this side.
+// Renders nothing when url is "" (a failed batched person lookup - see
+// personLookupMapForIDs - or a search result whose own PCO response
+// somehow omitted it), the same graceful-degradation a missing name falls
+// back to a raw id instead of erroring. alt is deliberately "" - every call
+// site renders the person's name as visible text right next to this image,
+// so a screen reader announcing it too would just repeat the name.
+templ Avatar(url string) {
+	if url != "" {
+		<img class="avatar" src={ url } alt="" loading="lazy"/>
+	}
+}

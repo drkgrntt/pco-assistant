@@ -272,7 +272,7 @@ func TestPositionTeamSequenceUnknownTeamSortsLast(t *testing.T) {
 // regression that made this helper populate a warning field would be
 // caught here.
 func TestCandidatePersonViewLeavesWarningsEmpty(t *testing.T) {
-	got := candidatePersonView("p1", "Alice", pco.SchedulePreferenceEveryWeek)
+	got := candidatePersonView("p1", "Alice", "https://example.com/avatar.png", pco.SchedulePreferenceEveryWeek)
 
 	if got.FrequencyWarning != "" {
 		t.Errorf("expected FrequencyWarning to stay empty, got %q", got.FrequencyWarning)
@@ -283,7 +283,7 @@ func TestCandidatePersonViewLeavesWarningsEmpty(t *testing.T) {
 	if got.CrossTeamWarning != "" {
 		t.Errorf("expected CrossTeamWarning to stay empty, got %q", got.CrossTeamWarning)
 	}
-	if got.PersonID != "p1" || got.Name != "Alice" || got.SchedulePreference != pco.SchedulePreferenceEveryWeek {
-		t.Errorf("expected PersonID/Name/SchedulePreference to still be set, got %+v", got)
+	if got.PersonID != "p1" || got.Name != "Alice" || got.AvatarURL != "https://example.com/avatar.png" || got.SchedulePreference != pco.SchedulePreferenceEveryWeek {
+		t.Errorf("expected PersonID/Name/AvatarURL/SchedulePreference to still be set, got %+v", got)
 	}
 }

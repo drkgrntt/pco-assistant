@@ -254,6 +254,55 @@ function closePersonDetail() {
   });
 }
 
+// jumpToTeamPosition is the "Team, at a glance" sidebar card's own
+// navigation (TeamGlanceList, status_summary.templ) - clicking a position
+// or a named person there switches to the Team tab, force-opens that
+// exact position's own card (a filled position collapses by default - see
+// positionGroupCard's own doc comment - so it needs opening even though
+// it already exists in the DOM), and scrolls to it. el is the clicked
+// button itself (data-position-id/data-row-id carry which position/row -
+// this codebase's usual way of passing dynamic ids to a handler, see
+// selectPersonRow/toggleCollapse below). Composes toggleBuildTab/
+// toggleCollapse/selectPersonRow rather than reimplementing any of their
+// logic - toggleCollapse in particular so the force-opened state
+// persists in localStorage exactly like a manual click would.
+function jumpToTeamPosition(el) {
+  var positionID = el.dataset.positionId;
+  var rowID = el.dataset.rowId;
+  toggleBuildTab("team");
+  var card = document.getElementById(positionID);
+  if (!card) {
+    return;
+  }
+  if (!card.classList.contains("open")) {
+    var toggle = card.querySelector("h3 > .collapsible-toggle");
+    if (toggle) {
+      toggleCollapse(toggle);
+    }
+  }
+  card.scrollIntoView({ behavior: "smooth", block: "center" });
+  if (rowID) {
+    var row = card.querySelector('.assignment-list li[data-row-id="' + rowID + '"]');
+    if (row) {
+      selectPersonRow(row, { target: row });
+    }
+  }
+  // Clear any highlight already in progress (including this same card's
+  // own, if it's clicked again mid-fade) before restarting it - removing
+  // and re-adding the class with a reflow forced in between is what makes
+  // the CSS animation (jump-highlight-fade, card.css) actually restart
+  // rather than a no-op class toggle silently doing nothing.
+  document.querySelectorAll(".jump-highlight").forEach(function (el) {
+    el.classList.remove("jump-highlight");
+  });
+  void card.offsetWidth;
+  card.classList.add("jump-highlight");
+  card.addEventListener("animationend", function handler() {
+    card.classList.remove("jump-highlight");
+    card.removeEventListener("animationend", handler);
+  });
+}
+
 document.addEventListener("click", function (event) {
   if (!event.target.closest(".nav-dropdown")) {
     closeNavDropdowns();

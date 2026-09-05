@@ -1,0 +1,16 @@
+/* Backs internal/views/components/avatar.templ's Avatar - a circular image
+   for a person's PCO-supplied avatar (real photo, or PCO's own generated
+   colored-initials placeholder). Sized to sit inline beside a name on the
+   dense person rows it's used in (PersonListItem, PersonSearchResults), not
+   a standalone profile-photo size. */
+.avatar {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: var(--radius-full);
+  object-fit: cover;
+  flex: none;
+  /* Visible placeholder while the image loads (loading="lazy") or if its
+     PCO-hosted URL 404s - a plain circle reads as "still loading," not a
+     broken image. */
+  background: var(--surface-hover);
+}

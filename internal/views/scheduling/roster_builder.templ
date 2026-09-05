@@ -101,6 +101,36 @@ func assignedNamesSummary(assigned []AssignmentView) string {
 	return strings.Join(names, ", ")
 }
 
+// assignmentConflictWarnings collects a's non-empty warning strings
+// (frequency/blockout/cross-team) for the assignment row's own compact
+// conflict indicator below - one badge instead of up to three, since the
+// full text of each is already shown on this same person's sidebar detail
+// card (personBadgeSpans, person_detail_card.templ) once the row is
+// clicked.
+func assignmentConflictWarnings(a AssignmentView) []string {
+	var msgs []string
+	if a.FrequencyWarning != "" {
+		msgs = append(msgs, a.FrequencyWarning)
+	}
+	if a.BlockoutWarning != "" {
+		msgs = append(msgs, a.BlockoutWarning)
+	}
+	if a.CrossTeamWarning != "" {
+		msgs = append(msgs, a.CrossTeamWarning)
+	}
+	return msgs
+}
+
+// conflictCountLabel is the compact label for assignmentConflictWarnings'
+// badge - the full messages themselves travel as that badge's title
+// attribute (a hover), not in this label.
+func conflictCountLabel(n int) string {
+	if n == 1 {
+		return "1 conflict"
+	}
+	return fmt.Sprintf("%d conflicts", n)
+}
+
 // positionHeading is one position group's collapsibleCard heading - a
 // multi-span title (position name, muted fill-count, muted "who's on it"
 // summary) that collapsibleSection's plain string label can't express.
@@ -108,11 +138,23 @@ func assignedNamesSummary(assigned []AssignmentView) string {
 // team-group heading (RosterBuilderBodyContent) already says which team,
 // so repeating it on every position was both redundant and exactly the
 // kind of per-position bulk groupPositionsByTeam exists to cut down on.
+//
+// The "who's on it" summary only renders when the card is collapsed by
+// default (fully staffed - see collapsibleCard's own call site) - that's
+// the one case it's the *only* place showing who's assigned. An
+// understaffed position starts expanded, so its own assignment-list rows
+// are already visible right below this same heading; repeating every
+// name here too was pure duplication, and the biggest single contributor
+// to an open position's heading reading as busy.
 templ positionHeading(pos PositionGroupView) {
+	{{ open := len(pos.Assigned) < pos.Quantity }}
 	<span>
 		{ pos.TeamPositionName }
 		<span class="muted">({ strconv.Itoa(len(pos.Assigned)) } of { strconv.Itoa(pos.Quantity) } filled)</span>
-		if len(pos.Assigned) > 0 {
+		if open {
+			@components.Badge("status-needed", fmt.Sprintf("%d needed", pos.Quantity-len(pos.Assigned)))
+		}
+		if len(pos.Assigned) > 0 && !open {
 			<span class="muted">- { assignedNamesSummary(pos.Assigned) }</span>
 		}
 	</span>
@@ -314,21 +356,25 @@ templ RosterBuilderBodyContent(data RosterBuilderData) {
 				<p class="muted">Nothing needed yet - Planning Center has no open positions configured for this plan.</p>
 			}
 		}
-		for _, group := range groupPositionsByTeam(data.Positions) {
-			<!--
-				One card per team (see groupPositionsByTeam) so positions from
-				different teams are visually separated instead of running
-				together in one flat stack - individual positions below are
-				compact rows inside it, not their own full cards (see
-				.team-group/.position-group in card.css).
-			-->
-			<div class="team-group">
-				<h3 class="team-group-heading">{ group.TeamName }</h3>
-				for _, item := range group.Positions {
-					@positionGroupCard(data.ServiceTypeID, data.PlanID, data.SchedulePreferenceOptions, item.Pos, data.ReadOnly)
-				}
-			</div>
-		}
+		<!--
+			One card per team (see groupPositionsByTeam), laid out side by
+			side rather than stacked full-width - mirrors Planning Center's
+			own "My Teams" columns, and uses screen width better than a
+			single-column stack once a service has more than one or two
+			teams. Individual positions below are compact rows inside their
+			own team's card, not their own full cards (see
+			.team-groups-grid/.team-group/.position-group in card.css).
+		-->
+		<div class="team-groups-grid">
+			for _, group := range groupPositionsByTeam(data.Positions) {
+				<div class="team-group">
+					<h3 class="team-group-heading">{ group.TeamName }</h3>
+					for _, item := range group.Positions {
+						@positionGroupCard(data.ServiceTypeID, data.PlanID, data.SchedulePreferenceOptions, item.Pos, data.ReadOnly)
+					}
+				</div>
+			}
+		</div>
 		<!--
 			See SetBuilderBodyContent's matching comment - the publish/discard
 			controls live in the sidebar now (RosterPublishPanel, build.templ);
@@ -340,7 +386,7 @@ templ RosterBuilderBodyContent(data RosterBuilderData) {
 				<p class="muted">Based on works-well-with and mentorship relationships with people already on this roster.</p>
 				<ul class="suggestion-list">
 					for _, sug := range data.Suggestions {
-						@components.ListItem("", nil, sug.Name) {
+						@components.PersonListItem("", nil, sug.AvatarURL, sug.Name) {
 							<span class="muted">{ sug.TeamPositionName } &middot; { sug.RelationshipLabel }</span>
 							<form hx-post={ fmt.Sprintf("/scheduling/rosters/%s/%s/assignments", data.ServiceTypeID, data.PlanID) } hx-target={ "#" + PositionGroupElementID(sug.TeamID, sug.TeamPositionName) } hx-swap="outerHTML">
 								<input type="hidden" name="person_id" value={ sug.PersonID }/>
@@ -387,19 +433,15 @@ templ positionGroupCard(serviceTypeID, planID string, schedulePreferenceOptions 
 		if len(pos.Assigned) > 0 {
 			<ul class="assignment-list">
 				for _, a := range pos.Assigned {
-					@components.ListItem("", templ.Attributes{"data-row-id": fmt.Sprintf("%d", a.ID), "onclick": "selectPersonRow(this, event)"}, a.Name) {
-						@components.Badge("", a.Status)
+					@components.PersonListItem("", templ.Attributes{"data-row-id": fmt.Sprintf("%d", a.ID), "onclick": "selectPersonRow(this, event)"}, a.AvatarURL, a.Name) {
+						if assignmentStatusBucket(a.Status) != "Confirmed" {
+							@statusBadge(a.Status)
+						}
 						if a.Published {
 							@components.Badge("published", "Published")
 						}
-						if a.FrequencyWarning != "" {
-							@components.ConflictBadge(a.FrequencyWarning)
-						}
-						if a.BlockoutWarning != "" {
-							@components.ConflictBadge(a.BlockoutWarning)
-						}
-						if a.CrossTeamWarning != "" {
-							@components.ConflictBadge(a.CrossTeamWarning)
+						if msgs := assignmentConflictWarnings(a); len(msgs) > 0 {
+							@components.BadgeTitled("status-needed", conflictCountLabel(len(msgs)), strings.Join(msgs, "\n"))
 						}
 						if !readOnly {
 							<button
@@ -435,7 +477,7 @@ templ positionGroupCard(serviceTypeID, planID string, schedulePreferenceOptions 
 							preference + Add, the same shape an assigned
 							row keeps.
 						-->
-						@components.ListItem("candidate-row", templ.Attributes{"data-row-id": candidateCardElementID(pos.TeamID, pos.TeamPositionName, cand.PersonID), "onclick": "selectPersonRow(this, event)"}, cand.Name) {
+						@components.PersonListItem("candidate-row", templ.Attributes{"data-row-id": candidateCardElementID(pos.TeamID, pos.TeamPositionName, cand.PersonID), "onclick": "selectPersonRow(this, event)"}, cand.AvatarURL, cand.Name) {
 							<span class="muted">{ cand.SchedulePreference }</span>
 							<form hx-post={ fmt.Sprintf("/scheduling/rosters/%s/%s/assignments", serviceTypeID, planID) } hx-target={ "#" + PositionGroupElementID(pos.TeamID, pos.TeamPositionName) } hx-swap="outerHTML">
 								<input type="hidden" name="person_id" value={ cand.PersonID }/>

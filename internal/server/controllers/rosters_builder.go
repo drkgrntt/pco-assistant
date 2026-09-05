@@ -50,10 +50,11 @@ func assignmentPersonIDs(assignments []scheduling.RosterAssignment) []string {
 // addendum) - a candidate's warnings are fetched on demand instead, only
 // when someone clicks "Check availability" on that one row (CandidateWarnings,
 // rosters_candidate_warnings.go).
-func candidatePersonView(personID, name, schedulePreference string) views.CandidatePersonView {
+func candidatePersonView(personID, name, avatarURL, schedulePreference string) views.CandidatePersonView {
 	return views.CandidatePersonView{
 		PersonID:           personID,
 		Name:               name,
+		AvatarURL:          avatarURL,
 		SchedulePreference: schedulePreference,
 	}
 }
@@ -443,7 +444,11 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 	for id := range namedPersonIDs {
 		namedIDs = append(namedIDs, id)
 	}
-	names := personNameMapForIDs(ctx, namedIDs)
+	lookups := personLookupMapForIDs(ctx, namedIDs)
+	names := make(map[string]string, len(lookups))
+	for id, l := range lookups {
+		names[id] = l.Name
+	}
 
 	// PersonDataSyncPending: "still gathering data" notice for a render
 	// where nobody this render will actually show a cached warning for has
@@ -577,6 +582,7 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 				ID:               ra.ID,
 				PersonID:         ra.PersonID,
 				Name:             titleOrID(names, ra.PersonID),
+				AvatarURL:        lookups[ra.PersonID].AvatarURL,
 				Status:           ra.Status,
 				TeamID:           pg.TeamID,
 				TeamName:         pg.TeamName,
@@ -606,7 +612,7 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 				continue
 			}
 
-			pg.Candidates = append(pg.Candidates, candidatePersonView(personID, titleOrID(names, personID), pa.Attributes.SchedulePreference))
+			pg.Candidates = append(pg.Candidates, candidatePersonView(personID, titleOrID(names, personID), lookups[personID].AvatarURL, pa.Attributes.SchedulePreference))
 		}
 
 		if len(pg.Assigned) < pg.Quantity {
@@ -647,7 +653,7 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 	if suggestions, err := sc.store.RelationshipSuggestions(ctx, organizationID, roster.ID); err != nil {
 		data.ErrMsg = appendErr(data.ErrMsg, err.Error())
 	} else {
-		data.Suggestions = suggestionsForOpenPositions(suggestions, groups, candidatesByGroup, teamNames, names)
+		data.Suggestions = suggestionsForOpenPositions(suggestions, groups, candidatesByGroup, lookups)
 	}
 
 	return data
@@ -662,7 +668,7 @@ func suggestionsForOpenPositions(
 	suggestions []scheduling.PersonSuggestion,
 	groups []positionGroup,
 	candidatesByGroup [][]pco.PersonTeamPositionAssignmentData,
-	teamNames, personNames map[string]string,
+	personLookups map[string]personLookup,
 ) []views.PersonSuggestionView {
 	var out []views.PersonSuggestionView
 	for _, sug := range suggestions {
@@ -689,9 +695,14 @@ func suggestionsForOpenPositions(
 				continue
 			}
 
+			name := sug.PersonID
+			if l, ok := personLookups[sug.PersonID]; ok {
+				name = l.Name
+			}
 			out = append(out, views.PersonSuggestionView{
 				PersonID:          sug.PersonID,
-				Name:              titleOrID(personNames, sug.PersonID),
+				Name:              name,
+				AvatarURL:         personLookups[sug.PersonID].AvatarURL,
 				TeamID:            g.TeamID,
 				TeamPositionName:  g.TeamPositionName,
 				RelationshipLabel: strings.Join(sug.RelationshipTypes, ", "),

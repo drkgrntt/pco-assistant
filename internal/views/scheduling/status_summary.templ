@@ -2,7 +2,10 @@ package scheduling
 
 import (
 	"fmt"
-	"strings"
+
+	pco "github.com/drkgrntt/go-pco"
+
+	"pco-assistant/internal/views/components"
 )
 
 // statusChip is one pill in a builder's status-summary row - the first
@@ -18,6 +21,52 @@ templ statusChip(label string, warn bool) {
 		<span class="status-chip warn">{ label }</span>
 	} else {
 		<span class="status-chip">{ label }</span>
+	}
+}
+
+// assignmentStatusBucket turns a's raw stored status - PCO's own single-
+// letter Confirmed/Unconfirmed/Declined code (pco.PlanPersonStatus*) once
+// imported from a real PlanPerson, or this app's own
+// scheduling.StatusUnconfirmed sentinel for an assignment that's never
+// been published/imported - into the one human label both a row's own
+// status badge (positionGroupCard, roster_builder.templ) and
+// TeamGlanceList's rollup below show, instead of leaking PCO's raw letter
+// code or the local sentinel word to either display. Defaults to
+// "Unconfirmed" for anything that isn't a recognized Confirmed/Declined
+// code, which already covers every value this field can actually hold.
+//
+// Known limitation, not a bug: this field is only ever set at
+// Revert/import time (rosters_publish.go's RevertRoster) - nothing
+// refreshes it afterward, so both the row badge and the rollup below are
+// only as fresh as the last Revert/import, the same staleness the row's
+// own status badge has always had. Don't assume this is live.
+func assignmentStatusBucket(status string) string {
+	switch status {
+	case pco.PlanPersonStatusConfirmed:
+		return "Confirmed"
+	case pco.PlanPersonStatusDeclined:
+		return "Declined"
+	default:
+		return "Unconfirmed"
+	}
+}
+
+// statusBadge is one assignment's status badge, in whichever of the three
+// assignmentStatusBucket labels applies - shared between
+// positionGroupCard's own row (which skips rendering this entirely for
+// the common Confirmed case - see its own call site) and personBadgeSpans'
+// sidebar detail card (which always renders it, Confirmed included, since
+// that's the full-detail view). Declined/Unconfirmed reuse the existing
+// status-needed/status-pending badge tones (badge.css) already used
+// elsewhere on this page, rather than introducing new colors.
+templ statusBadge(status string) {
+	switch bucket := assignmentStatusBucket(status); bucket {
+		case "Declined":
+			@components.Badge("status-needed", bucket)
+		case "Unconfirmed":
+			@components.Badge("status-pending", bucket)
+		default:
+			@components.Badge("", bucket)
 	}
 }
 
@@ -61,19 +110,6 @@ templ RosterStatusSummary(data RosterBuilderData) {
 	</div>
 }
 
-// assignedNames pulls out just the names from a position's assignments -
-// TeamGlanceList's one non-trivial piece, so the comma-joined "who" a
-// position shows can go through the same strings.Join(..., ", ") idiom
-// CandidateSongView.ConflictTitles already uses elsewhere on this page,
-// rather than hand-building the join inline.
-func assignedNames(assigned []AssignmentView) []string {
-	names := make([]string, len(assigned))
-	for i, a := range assigned {
-		names[i] = a.Name
-	}
-	return names
-}
-
 // songRowCount is how many of order's rows are actually songs (as opposed
 // to headers/foreign PCO items) - SongGlanceList's empty-state check, since
 // an order full of nothing but non-song items would otherwise render an
@@ -111,13 +147,69 @@ templ SongGlanceList(order []ServiceOrderRow) {
 	</ol>
 }
 
+// teamAssignmentCounts tallies a team's assigned people into
+// assignmentStatusBucket's three buckets, for teamStatusRollup below.
+func teamAssignmentCounts(items []positionGroupItem) (confirmed, declined, unconfirmed int) {
+	for _, item := range items {
+		for _, a := range item.Pos.Assigned {
+			switch assignmentStatusBucket(a.Status) {
+			case "Confirmed":
+				confirmed++
+			case "Declined":
+				declined++
+			default:
+				unconfirmed++
+			}
+		}
+	}
+	return
+}
+
+// teamStatusRollup is one team's confirmed/declined/unconfirmed summary in
+// the "Team, at a glance" card (TeamGlanceList) - mirrors Planning
+// Center's own check/x/question status counts on its Teams tab, built
+// entirely from AssignmentView.Status already on the page (see
+// assignmentStatusBucket's own doc comment on its staleness). Renders
+// nothing when there's nothing to flag - a fully-confirmed team needs no
+// chip, same "only show what needs attention" idiom
+// RosterStatusSummary/SongStatusSummary already use for their own chips.
+templ teamStatusRollup(items []positionGroupItem) {
+	{{ _, declined, unconfirmed := teamAssignmentCounts(items) }}
+	if declined > 0 || unconfirmed > 0 {
+		<div class="status-summary">
+			if declined > 0 {
+				@statusChip(fmt.Sprintf("Declined: %d", declined), true)
+			}
+			if unconfirmed > 0 {
+				@statusChip(fmt.Sprintf("Awaiting response: %d", unconfirmed), true)
+			}
+		</div>
+	}
+}
+
 // TeamGlanceList is the Team glance card's content (see build.templ) - one
 // line per position, naming who's actually filling it (or "Open" when
 // nobody is yet), the roster equivalent of SongGlanceList. Grouped by team
 // (groupPositionsByTeam, roster_builder.templ - the same grouping the
 // Team tab's own Positions section uses) with a small heading per team,
 // rather than one flat list - a glance card with two or three teams on it
-// read as one undifferentiated pile of positions otherwise.
+// read as one undifferentiated pile of positions otherwise. Each assigned
+// person renders on their own line under the position (.glance-assigned,
+// build-page.css) - a column, not a wrapped comma-separated row - for the
+// same avatar-plus-name row shape PersonListItem (components/list_item.
+// templ) already uses everywhere else on this page, rather than a
+// second, more cramped presentation just for this card.
+//
+// Every position/person here is a real jumpToTeamPosition(this) button
+// (scheduling.js), not static text - clicking one switches to the Team
+// tab, force-opens that exact position's card (even if it's currently
+// collapsed - a filled position collapses by default, see
+// positionGroupCard's own doc comment) and scrolls to it, and for a named
+// person also opens their own sidebar detail card, the same as clicking
+// their row directly would. Dynamic ids travel via data-position-id/
+// data-row-id, not a dynamic onclick string - this codebase's existing
+// convention (selectPersonRow(this, event), toggleCollapse(this)) for
+// handlers that need to know which element triggered them.
 templ TeamGlanceList(positions []PositionGroupView) {
 	if len(positions) == 0 {
 		<ul class="build-glance-list">
@@ -126,15 +218,28 @@ templ TeamGlanceList(positions []PositionGroupView) {
 	}
 	for _, group := range groupPositionsByTeam(positions) {
 		<p class="build-glance-team-heading">{ group.TeamName }</p>
+		@teamStatusRollup(group.Positions)
 		<ul class="build-glance-list">
 			for _, item := range group.Positions {
 				{{ pos := item.Pos }}
+				{{ elementID := PositionGroupElementID(pos.TeamID, pos.TeamPositionName) }}
 				<li>
-					<span>{ pos.TeamPositionName }</span>
+					<button type="button" class="glance-link" data-position-id={ elementID } onclick="jumpToTeamPosition(this)">
+						{ pos.TeamPositionName }
+					</button>
 					if len(pos.Assigned) > 0 {
-						<span class="muted">{ strings.Join(assignedNames(pos.Assigned), ", ") }</span>
+						<div class="glance-assigned">
+							for _, a := range pos.Assigned {
+								<button type="button" class="glance-link muted" data-position-id={ elementID } data-row-id={ fmt.Sprintf("%d", a.ID) } onclick="jumpToTeamPosition(this)">
+									@components.Avatar(a.AvatarURL)
+									{ a.Name }
+								</button>
+							}
+						</div>
 					} else {
-						<span class="muted">Open</span>
+						<button type="button" class="glance-link muted" data-position-id={ elementID } onclick="jumpToTeamPosition(this)">
+							Open
+						</button>
 					}
 				</li>
 			}

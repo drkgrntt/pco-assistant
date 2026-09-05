@@ -201,7 +201,7 @@ func personBadgesElementID(assignmentID int64) string {
 // can re-render exactly this content after a manual cache refresh, without
 // duplicating the badge list in two places.
 templ personBadgeSpans(a AssignmentView) {
-	@components.Badge("", a.Status)
+	@statusBadge(a.Status)
 	if a.Published {
 		@components.Badge("published", "Published")
 	}

@@ -34,3 +34,24 @@ templ ListItem(class string, attrs templ.Attributes, title string) {
 		{ children... }
 	</li>
 }
+
+// PersonListItem is ListItem's variant for a row about a specific person
+// (the Team tab's assignment-list/candidate-list/suggestion-list rows) -
+// identical row shape and shared list-item.css styling, just with the
+// person's Avatar prepended inside the title span itself, so list-item.css's
+// "> span:first-child" rule (bold/flex-grow) still applies to the whole
+// span, avatar included, and the first-child-is-the-title contract ListItem's
+// own doc comment describes holds here too. The span also carries
+// "list-item-title-with-avatar" (list-item.css) so the avatar sits centered
+// against the name's text baseline with real space between them, instead of
+// the img's own default baseline alignment and whatever whitespace
+// happens to survive between these two template expressions.
+templ PersonListItem(class string, attrs templ.Attributes, avatarURL, name string) {
+	<li class={ class } { attrs... }>
+		<span class="list-item-title-with-avatar">
+			@Avatar(avatarURL)
+			{ name }
+		</span>
+		{ children... }
+	</li>
+}

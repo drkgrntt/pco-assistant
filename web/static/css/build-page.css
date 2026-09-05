@@ -103,9 +103,18 @@
    page is genuinely two columns (tab content + the glance sidebar below).
    Scoped with :has() rather than a Layout parameter, so only a page that
    actually contains .build-layout opts into the wider column; every other
-   page's <main> is untouched. */
+   page's <main> is untouched.
+
+   90rem (not the original 75rem) - the Team tab's .team-groups-grid
+   (components/card.css) needs real room of its own now that team cards
+   sit side by side: at 75rem, .build-main (everything left after the
+   15rem glance sidebar, its gap, and page padding) had only ~56rem to
+   work with, room for 2 columns at the grid's own 20rem floor but not 3 -
+   most services have 2-4 teams. 90rem leaves ~68rem for .build-main (the
+   glance sidebar's own basis grew from 15rem to 18rem below, for its own
+   reasons), still comfortable room for 3 full-width columns. */
 main:has(.build-layout) {
-  max-width: 75rem;
+  max-width: 90rem;
 }
 
 /* The Build page's "at a glance" sidebar (see build.templ, toggleBuildTab
@@ -127,7 +136,7 @@ main:has(.build-layout) {
    flex item's automatic minimum width is its content's min-content size,
    not its flex-basis - so a detail card (personDetailCard/
    songDetailCard) revealed inside here via selectSongRow/selectPersonRow
-   could silently widen this whole column past its 15rem basis (see the
+   could silently widen this whole column past its 18rem basis (see the
    media query below) the moment it had wider content than whatever
    glance summary was showing before it, instead of staying a fixed
    width and letting that content wrap/scroll like everything else in
@@ -180,6 +189,49 @@ main:has(.build-layout) {
   font-weight: var(--font-medium);
 }
 
+/* TeamGlanceList's own per-position link (see below) takes over the
+   emphasis the plain <span> above used to carry, now that the position
+   name is a real jumpToTeamPosition(this) button instead of static text. */
+.build-glance-list li > .glance-link:first-child {
+  font-weight: var(--font-medium);
+}
+
+/* glance-link is TeamGlanceList's button-as-text idiom (status_summary.
+   templ) - a position name or an assigned person's own name/avatar,
+   clickable via jumpToTeamPosition (scheduling.js), styled to read as
+   plain row content rather than a button. Same reset idiom
+   .collapsible-toggle already uses (collapsible.css), not a new pattern.
+   inline-flex + gap so an avatar (when present - assigned-person links
+   only) sits centered against the name with real space, same reasoning
+   as .list-item-title-with-avatar (list-item.css). */
+.glance-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.glance-link:hover {
+  color: var(--accent);
+}
+
+/* One line per assigned person under their position (status_summary.
+   templ) - a column, not a wrapped comma-separated row, so a long name or
+   several people never crowds onto one line the way the position-name
+   row above already can't avoid on a narrow sidebar. */
+.glance-assigned {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+}
+
 /* TeamGlanceList's per-team sub-heading - lighter than the card's own
    uppercase h3 ("Team, at a glance"), since this is one level down from
    that, not a second card title. Each team gets its own .build-glance-list
@@ -208,8 +260,13 @@ main:has(.build-layout) {
     flex: 1 1 auto;
   }
 
+  /* 18rem, not the original 15rem - the glance card's own rows (avatars,
+     stacked assigned-person names, status-rollup chips) needed a little
+     more room now that .main's own cap is 90rem rather than 75rem; see
+     the main:has(.build-layout) comment above for the column-width math
+     this feeds into. */
   .build-glance {
-    flex: 0 0 15rem;
+    flex: 0 0 18rem;
   }
 }
 
