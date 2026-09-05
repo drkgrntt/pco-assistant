@@ -29,6 +29,15 @@
   color: var(--accent);
 }
 
+/* An open position's unfilled-slot count (positionHeading,
+   roster_builder.templ) - danger-toned rather than pending-toned, since an
+   unfilled slot reads as more urgent than "in progress" (mirrors Planning
+   Center's own red "N Needed" pill). */
+.badge.status-needed {
+  background: var(--danger-subtle);
+  color: var(--danger);
+}
+
 /* Theme/scripture/idea tags (see song_tags.go) on the set builder's
    candidate list - deliberately muted rather than accent-colored like the
    opener/response role badges beside them, since a song can carry several

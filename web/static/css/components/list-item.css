@@ -59,6 +59,20 @@
   font-weight: var(--font-semibold);
 }
 
+/* PersonListItem's title span (components/list_item.templ) - an <img
+   class="avatar"> plus the name, as inline content. Without this, the
+   avatar keeps its default baseline vertical-align (sitting low against
+   the name's text) and the gap between them depends on whitespace
+   surviving between two template expressions rather than being a real,
+   guaranteed gap. inline-flex keeps the span itself inline (so it still
+   only takes up its content's width for the flex:1 1 auto rule above to
+   grow from), while everything inside it lays out as a centered row. */
+.list-item-title-with-avatar {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 /* The one exception: arrangement-info (meter/bpm/key - set_builder.templ's
    songCandidateMeta) is deliberately forced onto its own full-width line
    below the title+trailing-content line, the same title-then-meta-

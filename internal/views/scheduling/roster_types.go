@@ -120,7 +120,13 @@ type AssignmentView struct {
 	ID       int64
 	PersonID string
 	Name     string
-	Status   string
+	// AvatarURL is PCO's PersonAttributes.Avatar - a real uploaded photo, or
+	// PCO's own generated colored-initials placeholder if the person has
+	// none. Empty only when the batched person lookup itself failed for
+	// this id (see personLookupMapForIDs) - the row falls back to
+	// name-only, same as a failed name lookup falls back to raw id.
+	AvatarURL string
+	Status    string
 	// TeamID/TeamName/TeamPositionName repeat the values already on this
 	// assignment's own PositionGroupView - carried here too so the person
 	// detail sidebar card (person_detail_card.templ) can say which position
@@ -157,6 +163,7 @@ type AssignmentView struct {
 type CandidatePersonView struct {
 	PersonID           string
 	Name               string
+	AvatarURL          string // see AssignmentView.AvatarURL
 	SchedulePreference string
 	FrequencyWarning   string
 	BlockoutWarning    string
@@ -168,6 +175,7 @@ type CandidatePersonView struct {
 type PersonSuggestionView struct {
 	PersonID          string
 	Name              string
+	AvatarURL         string // see AssignmentView.AvatarURL
 	TeamID            string
 	TeamPositionName  string
 	RelationshipLabel string

@@ -115,11 +115,11 @@ the builder page's "Open in Planning Center" link.)
    billing (README) is keyed to its own OAuth session, which activity
    happening inside PCO's own tab doesn't naturally attribute to - unsolved
    design question, not just an implementation detail.
-5. **Bring the plan-page layout closer to PCO's own.** Less decision
-   fatigue if the layout a director already knows from PCO transfers
-   directly - order of service, song rows, where actions live - rather
-   than asking them to learn a second layout from scratch just to get at
-   the checks this app adds on top.
+5. ~~**Bring the plan-page layout closer to PCO's own.**~~ - **shipped
+   2026-09-05**, see `docs/build-page-redesign-plan.md`: real PCO avatars
+   on Team-tab person rows, side-by-side team cards, and an "N needed"
+   badge on open positions. The Songs/Order tab and tab-bar styling were
+   already close enough to leave alone.
 6. **In-place warnings instead of a top-of-page alert list.** Key-change,
    repeat-song, and length warnings currently render as a stack of alerts
    above the set (`PlanWarnings`, `keyTransitionWarnings`/

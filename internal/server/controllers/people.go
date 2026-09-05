@@ -123,17 +123,33 @@ func relationshipPersonIDs(relationships []scheduling.PersonRelationship) []stri
 // 100 matches PCO's documented per_page maximum across its APIs.
 const personIDBatchSize = 100
 
-// personNameMapForIDs resolves a specific set of PCO person ids to display
-// names - like personNameMap in scheduling.go, but for callers (person
-// relationships, rosters) that already know exactly which ids they need
-// rather than deriving them from a preferences list. Batches ids into one
-// `where[id]=...` call per personIDBatchSize ids rather than one GetPerson
-// round trip per id (see docs/pco-api-risks.md's mitigation #2 - this was the
-// single biggest source of PCO calls on the Team Builder page). An id that
-// fails to resolve is simply left out; callers fall back to showing the raw
-// id.
-func personNameMapForIDs(ctx context.Context, ids []string) map[string]string {
-	names := make(map[string]string, len(ids))
+// personLookup is one person's display name plus avatar URL, as resolved by
+// personLookupMapForIDs - the roster builder's person rows (assigned/
+// candidate/suggested) need both; everything else only ever wanted the name,
+// which is why personNameMapForIDs below stays around as a thin wrapper
+// rather than every existing caller having to switch to this richer type.
+type personLookup struct {
+	Name      string
+	AvatarURL string
+}
+
+// personLookupMapForIDs resolves a specific set of PCO person ids to display
+// names and avatar URLs - like personNameMap in scheduling.go, but for
+// callers (person relationships, rosters) that already know exactly which
+// ids they need rather than deriving them from a preferences list. Batches
+// ids into one `where[id]=...` call per personIDBatchSize ids rather than one
+// GetPerson round trip per id (see docs/pco-api-risks.md's mitigation #2 -
+// this was the single biggest source of PCO calls on the Team Builder page).
+// An id that fails to resolve is simply left out; callers fall back to
+// showing the raw id (and, for avatars, no image at all - see
+// components.Avatar).
+//
+// PersonAttributes.Avatar rides along on this same batched fetch for free -
+// PCO's People#index already returns it on every person, uploaded photo or
+// PCO's own generated placeholder, with no extra Include/round trip needed
+// (see docs/pco-api-risks.md).
+func personLookupMapForIDs(ctx context.Context, ids []string) map[string]personLookup {
+	lookups := make(map[string]personLookup, len(ids))
 	for start := 0; start < len(ids); start += personIDBatchSize {
 		end := min(start+personIDBatchSize, len(ids))
 		batch := ids[start:end]
@@ -143,8 +159,20 @@ func personNameMapForIDs(ctx context.Context, ids []string) map[string]string {
 			continue // best-effort, same as every other lookup here - callers fall back to raw ids
 		}
 		for _, person := range people.Data {
-			names[person.ID] = person.Attributes.Name
+			lookups[person.ID] = personLookup{Name: person.Attributes.Name, AvatarURL: person.Attributes.Avatar}
 		}
+	}
+	return lookups
+}
+
+// personNameMapForIDs is personLookupMapForIDs, names only - every call site
+// that doesn't need avatars (person relationships, position preferences)
+// stays on this narrower, unchanged signature.
+func personNameMapForIDs(ctx context.Context, ids []string) map[string]string {
+	lookups := personLookupMapForIDs(ctx, ids)
+	names := make(map[string]string, len(lookups))
+	for id, l := range lookups {
+		names[id] = l.Name
 	}
 	return names
 }
