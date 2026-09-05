@@ -3,7 +3,7 @@
 Written 2026-09-04, prompted by revisiting the "song vocal range" idea in
 `docs/ideas.md` - specifically whether PCO's lead sheets could feed an
 *automatic* range calculation. Not built yet; written up for later, same
-spirit as `docs/pco-roster-cold-start-plan.md`/`docs/pco-throttle-plan.md`.
+spirit as `docs/plans/shipped/pco-roster-cold-start-plan.md`/`docs/plans/shipped/pco-throttle-plan.md`.
 
 ## Why automatic range extraction is out of scope
 
@@ -145,7 +145,7 @@ refresh.
     piece landed (per CLAUDE.md's "mark `~~struck~~` with a pointer"
     convention) - do this as the last step of implementation, not before.
   - Mark this plan itself with a status line at the top once shipped or
-    superseded, same convention as `docs/pco-throttle-plan.md`'s "Status:
+    superseded, same convention as `docs/plans/shipped/pco-throttle-plan.md`'s "Status:
     shipped ..." line.
 
 ## Verification (once built)

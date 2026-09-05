@@ -36,13 +36,13 @@ conversation converged on two separable pieces:
    should also warm itself for an org where nobody's actively rendering
    pages, by borrowing that org's own idle session token on a schedule.
 
-**This is explicitly the thing `docs/pco-roster-cold-start-plan.md`'s
+**This is explicitly the thing `docs/plans/shipped/pco-roster-cold-start-plan.md`'s
 "unattended-cron question, revisited" section considered and declined to
 build**, with an explicit condition attached: "revisit the unattended
 version only if staleness genuinely proves to matter for orgs that go a
 long time between visits - not speculatively." That condition hasn't been
 met - no org has reported stale Song Info or person data as an actual
-problem. Same posture as `docs/pco-throttle-plan.md` when it was written:
+problem. Same posture as `docs/plans/shipped/pco-throttle-plan.md` when it was written:
 **not urgent, written up for later rather than built now.** Don't start
 implementing this from a re-read of this doc alone without first checking
 whether that's changed.
@@ -63,7 +63,7 @@ holds up the same way anymore:
   same way, then persist the result via the existing
   `auth.Store.UpdateSessionTokens`.
 - **The contention risk is already solved, by something that didn't
-  exist when that doc was written.** `docs/pco-throttle-plan.md`'s
+  exist when that doc was written.** `docs/plans/shipped/pco-throttle-plan.md`'s
   priority-aware throttle (shipped, `PCO_THROTTLE_ENABLED`) already
   guarantees low-priority traffic yields to interactive traffic on the
   same token - `SyncSongInfo`'s background goroutine already opts into
@@ -315,7 +315,7 @@ discovery query's "skip anyone already caught by the refresh sweep, only
 enqueue genuinely new (person, team) pairs" dedup logic - both of the
 latter are DB-backed tests the same shape as `person_data_cache_db_test.go`'s
 existing backdated-`synced_at` tests. Follows
-`docs/pco-roster-cold-start-plan.md`'s own "decide up front whether this
+`docs/plans/shipped/pco-roster-cold-start-plan.md`'s own "decide up front whether this
 needs the DB-backed harness" note.
 
 ## Rollout

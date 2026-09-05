@@ -44,7 +44,7 @@ func (sc *SchedulingController) buildSetBuilderDataWithErr(ctx context.Context, 
 // call the trigger themselves the way person_data_cache.go's
 // triggerPersonDataSync requires of its own, much smaller set of callers.
 // See triggerSongInfoQueueSync's own doc comment for the full reasoning
-// (docs/pco-call-efficiency-rollout-plan.md's Phase 2 "trigger mechanism"
+// (docs/plans/shipped/pco-call-efficiency-rollout-plan.md's Phase 2 "trigger mechanism"
 // decision). Deferred so it still runs on this function's several early
 // "loading X failed" returns below, not just the final one.
 func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organizationID, serviceTypeID, planID string) views.SetBuilderData {
@@ -1323,7 +1323,7 @@ func buildSongNoteViews(itemID string, noteCategories []pco.ItemNoteCategoryData
 // per-song lookup left here at all.
 func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizationID string, arrangementCache map[string]scheduling.SongArrangementInfo, noteCategories []pco.ItemNoteCategoryData, itemNotes map[string][]pco.ItemNoteData, rows []mergedRow, titles map[string]string, rolesBySong map[string][]scheduling.SongRole, roleTypeLabels map[string]string) []views.ServiceOrderRow {
 	// A plain sequential loop, not scheduling.RunConcurrently - unlike
-	// before Phase 2 (docs/pco-call-efficiency-rollout-plan.md), a song
+	// before Phase 2 (docs/plans/shipped/pco-call-efficiency-rollout-plan.md), a song
 	// row's only per-row lookup, resolveArrangementCacheInfo, no longer
 	// makes a live PCO call on a cache miss: it enqueues a background sync
 	// request and returns immediately (see its own doc comment), so there's

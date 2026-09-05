@@ -52,7 +52,7 @@ func cacheEntryFresh(computedAt time.Time, now time.Time, ttl time.Duration) boo
 // cached Song Info, driving a matching nav nag link) - removed along with
 // that page/button once a cache miss started syncing itself in the
 // background instead of needing anyone to notice and click something (see
-// docs/pco-call-efficiency-rollout-plan.md's Phase 2). The PCO song-library
+// docs/plans/shipped/pco-call-efficiency-rollout-plan.md's Phase 2). The PCO song-library
 // fetch stays either way, since Song Tag Suggestions still needs it.
 //
 // Best-effort like every other page-builder in this codebase: a failed

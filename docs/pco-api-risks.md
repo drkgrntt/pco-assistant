@@ -93,7 +93,7 @@ that first. Facts worth adding here that aren't in CLAUDE.md:
   generated colored-initials image if the person has none) comes back on
   every `People#index`/`#show` response with no extra `Include` needed -
   **used** (2026-09-05, build-page redesign - see
-  `docs/build-page-redesign-plan.md`): `personLookupMapForIDs`
+  `docs/plans/shipped/build-page-redesign-plan.md`): `personLookupMapForIDs`
   (`people.go`) now keeps it alongside the name from the exact same batched
   call `personNameMapForIDs` already made, so the roster builder's
   avatars (assignment/candidate/suggestion rows, person-picker search
@@ -108,7 +108,7 @@ that first. Facts worth adding here that aren't in CLAUDE.md:
   100) without losing per-team accuracy for a multi-team volunteer is
   **not yet confirmed** - would let `crossTeamAssignmentsThisWeek` and
   `otherAssignmentDates` share one cached table instead of two if it checks
-  out (`docs/pco-roster-cold-start-plan.md` has the full design fork).
+  out (`docs/plans/shipped/pco-roster-cold-start-plan.md` has the full design fork).
 - Whether PCO exposes a global/batch blockouts listing (vs. only the
   per-person nested resource above) is also **not yet confirmed** - would
   eliminate the per-person blockout cache entirely if it exists.
@@ -195,7 +195,7 @@ that first. Facts worth adding here that aren't in CLAUDE.md:
 - **The throttle is keyed per access token, not one global bucket.** PCO's
   limit is per-token; a process-wide limiter would let one busy org slow
   down another org's unrelated traffic even though each has its own
-  independent budget with PCO. Full reasoning in `docs/pco-throttle-plan.md`.
+  independent budget with PCO. Full reasoning in `docs/plans/shipped/pco-throttle-plan.md`.
 - **No anti-starvation in the throttle, deliberately.** A background sync
   (tagged low priority) losing out to interactive traffic on the same
   token indefinitely is the *intended* outcome under sustained load, not a
@@ -320,7 +320,7 @@ out to 100-200 sequential round trips per load.
   otherwise re-trigger the same burst this fix removes, just moved from
   render-time to open-time).
 - **Per-person blockout/cross-team/frequency data cached in Postgres**
-  (`docs/pco-roster-cold-start-plan.md`, shipped) - closes the *per-person*
+  (`docs/plans/shipped/pco-roster-cold-start-plan.md`, shipped) - closes the *per-person*
   half of the still-open gap above. Three new tables (migration `00033`,
   sync-marker + detail rows per the "Reference pattern" section), backed
   by a background sync cloning `SyncSongInfo`'s architecture (paced
@@ -351,7 +351,7 @@ out to 100-200 sequential round trips per load.
   Known ceiling, not revisited: PCO exposes no permission-level field, so
   this can only tell "some access" from "none," not Viewer from
   Administrator.
-- **Priority-aware throttle shipped** (`docs/pco-throttle-plan.md`, go-pco
+- **Priority-aware throttle shipped** (`docs/plans/shipped/pco-throttle-plan.md`, go-pco
   `v0.18.0`) - a per-token priority queue gated by a token bucket, off
   unless opted into (`PCO_THROTTLE_ENABLED=true`). Both background syncs
   tagged low-priority so they never delay interactive traffic once
@@ -446,7 +446,7 @@ out to 100-200 sequential round trips per load.
   a fresh state" (wipe, then queue-on-miss refills it as songs are actually
   touched).
 - **PCO call-efficiency rollout, Phase 3 (background-sync cron)** - full
-  design in `docs/pco-background-sync-plan.md` (now marked shipped). New
+  design in `docs/plans/shipped/pco-background-sync-plan.md` (now marked shipped). New
   `jobs.PCOJobs` (`internal/server/jobs/pco.go`), registered alongside
   `AuthJobs`/`BillingJobs` in `crons.go`, ticks hourly: for every
   organization with at least one live session

@@ -131,7 +131,7 @@ func (s *Store) MostRecentSession(ctx context.Context) (Session, error) {
 // SessionForBackgroundSync returns organizationID's most-recently-created
 // still-valid session, if any - the token-source for the background-sync
 // cron's per-org pass (see jobs.PCOJobs and
-// docs/pco-background-sync-plan.md's "Per-org pass" section). Unlike
+// docs/plans/shipped/pco-background-sync-plan.md's "Per-org pass" section). Unlike
 // MostRecentSession (global, read-only, used by dev tooling),
 // this is org-scoped and returns Session.ID so the caller can act on this
 // session afterward (RefreshAccessToken, then UpdateSessionTokensByID or

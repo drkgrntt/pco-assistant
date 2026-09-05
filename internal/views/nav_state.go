@@ -24,7 +24,7 @@ import "context"
 // org's songs lacked cached Song Info) - removed along with the Song Info
 // page/button it drove a nag link to, once a cache miss started syncing
 // itself in the background instead of needing anyone to notice and click
-// something (see docs/pco-call-efficiency-rollout-plan.md's Phase 2).
+// something (see docs/plans/shipped/pco-call-efficiency-rollout-plan.md's Phase 2).
 type navCtxKey struct{ name string }
 
 // NavSuggestionsPendingKey is true when this org has at least one

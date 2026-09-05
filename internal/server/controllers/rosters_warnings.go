@@ -132,7 +132,7 @@ func blockoutWarning(targetDate time.Time, blockouts []pco.BlockoutData) string 
 // personCacheStale) - a few hours, not FetchActiveSongs'/navStateTTL's 60s:
 // blockouts and serving history don't change minute-to-minute the way "is
 // this song still active" does, so a short TTL would barely improve the
-// cold-render case (see docs/pco-roster-cold-start-plan.md's "Caching"
+// cold-render case (see docs/plans/shipped/pco-roster-cold-start-plan.md's "Caching"
 // section - this is the whole reason this cache is a persisted table
 // with its own TTL rather than an in-process map). Chosen as a round,
 // safely-long default; tune once real

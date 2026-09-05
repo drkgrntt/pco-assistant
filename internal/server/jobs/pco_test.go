@@ -2,7 +2,7 @@ package jobs
 
 // Plain-Go tests for the background-sync cron's per-org pass logic - no
 // live Postgres or PCO OAuth endpoint required, per
-// docs/pco-background-sync-plan.md's own "Testing" section: the
+// docs/plans/shipped/pco-background-sync-plan.md's own "Testing" section: the
 // token-refresh-then-delete-on-failure branch and the org/session
 // selection ("already-in-progress orgs get skipped") logic are both
 // exercised here against fakes; StalePersonSyncTargets/PersonSyncMarkerStatus

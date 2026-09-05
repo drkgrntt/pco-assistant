@@ -218,7 +218,7 @@ func FetchAllSongsIncludingArchived(ctx context.Context) ([]pco.SongData, error)
 // from PCO, not a possibly-60s-stale cached one - no current production
 // call site (the Song Info "sync now" action this originally backed was
 // removed along with the rest of the button/nag it was part of, see
-// docs/pco-call-efficiency-rollout-plan.md's Phase 2), kept exported as a
+// docs/plans/shipped/pco-call-efficiency-rollout-plan.md's Phase 2), kept exported as a
 // small, already-tested piece of FetchActiveSongs' own cache API rather
 // than deleted purely for lack of a caller today.
 func InvalidateActiveSongsCache(organizationID string) {

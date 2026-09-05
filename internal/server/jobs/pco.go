@@ -1,8 +1,8 @@
 package jobs
 
 // The background-sync cron - Phase 3 of
-// docs/pco-call-efficiency-rollout-plan.md, full design in
-// docs/pco-background-sync-plan.md. On each tick, for every organization
+// docs/plans/shipped/pco-call-efficiency-rollout-plan.md, full design in
+// docs/plans/shipped/pco-background-sync-plan.md. On each tick, for every organization
 // with at least one live session, borrow that session's token (refreshing
 // it first), and kick off the same paced Song Info / person-data syncs an
 // ordinary render already triggers - so an org nobody's actively visiting
@@ -24,7 +24,7 @@ import (
 	"github.com/gofiber/fiber/v2/utils"
 )
 
-// backgroundSyncInterval - see docs/pco-background-sync-plan.md's "Cadence"
+// backgroundSyncInterval - see docs/plans/shipped/pco-background-sync-plan.md's "Cadence"
 // section: this job spends a real chunk of an org's own PCO budget every
 // time it actually finds work (unlike AuthJobs'/BillingJobs' 24h pure-
 // housekeeping cadence), so it runs more often, but is a cheap no-op for
@@ -121,7 +121,7 @@ func (j *PCOJobs) runBackgroundSync() {
 
 // runOrgPass wraps runOrgPassWith with this job's real dependencies -
 // see that function for the actual per-org pass logic (steps 1-3 of
-// docs/pco-background-sync-plan.md's "Per-org pass" section; steps 4-6 are
+// docs/plans/shipped/pco-background-sync-plan.md's "Per-org pass" section; steps 4-6 are
 // controllers.RunOrgBackgroundSync).
 func (j *PCOJobs) runOrgPass(ctx context.Context, organizationID string) {
 	runOrgPassWith(ctx, j.authStore, auth.RefreshAccessToken, j.schedulingStore, controllers.RunOrgBackgroundSync, organizationID)
@@ -164,7 +164,7 @@ func runOrgPassWith(ctx context.Context, sessionStore backgroundSyncSessionStore
 	if err != nil {
 		// This session's refresh token is no longer honored by PCO (revoked
 		// access, disconnected app, or an idle refresh token PCO has
-		// stopped accepting - see docs/pco-background-sync-plan.md's "Open
+		// stopped accepting - see docs/plans/shipped/pco-background-sync-plan.md's "Open
 		// questions"). Delete it now and skip this org for this tick - a
 		// strictly earlier, stronger cleanup trigger than
 		// deleteExpiredSessions' 30-day TTL sweep (auth.go), since a dead

@@ -158,10 +158,21 @@ someone has to remember to ask for:
   restructured once already (2026-09-04) specifically to stop it growing
   as an unbounded append-only history - don't let it drift back into that
   shape.
-- A point-in-time design doc (`docs/*-plan.md`) gets fully shipped -> add a
+- Point-in-time design docs live under `docs/plans/`, sorted by their own
+  status - `docs/plans/not-started/` (written up, nothing built yet),
+  `docs/plans/in-progress/` (partially built), `docs/plans/shipped/`
+  (fully landed). Moving a doc between these folders as work progresses is
+  routine bookkeeping, but these docs stay in the tree once shipped rather
+  than getting deleted - they're cited as the design-rationale reference
+  from other docs' changelogs and from code comments throughout
+  `internal/`, so treat every `docs/plans/**/*.md` reference the same way
+  as any other code reference: if you rename or move a plan doc, `grep -r`
+  for its old filename across the whole repo (`.md` and code comments
+  both - a stale pointer here won't fail a build) and update every hit in
+  the same change. When a plan doc moves into `docs/plans/shipped/`, add a
   `**Status: shipped.**` line at its top pointing at where it landed (see
-  `docs/pco-throttle-plan.md` for the convention), same spirit as marking
-  a `docs/ideas.md` item struck.
+  `docs/plans/shipped/pco-throttle-plan.md` for the convention), same
+  spirit as marking a `docs/ideas.md` item struck.
 
 ## Architecture
 

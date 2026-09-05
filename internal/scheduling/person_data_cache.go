@@ -396,7 +396,7 @@ type StalePersonSyncTarget struct {
 // migration-00033 tables), whose synced_at is older than olderThan - i.e.
 // people/teams this org already knows about, now due for a refresh. Feeds
 // the background-sync cron's "refresh" step (see
-// docs/pco-background-sync-plan.md's "Scope" section and
+// docs/plans/shipped/pco-background-sync-plan.md's "Scope" section and
 // controllers.RunOrgBackgroundSync) the same personSyncRequest-shaped
 // targets the organic per-render path (rosters_warnings.go) would
 // eventually enqueue on its own via personCacheStale - this just does it
@@ -479,7 +479,7 @@ func (s *Store) StalePersonSyncTargets(ctx context.Context, organizationID strin
 // an unresolvable team).
 //
 // Used by the background-sync cron's recent-history discovery pass (see
-// docs/pco-background-sync-plan.md's step 6 and
+// docs/plans/shipped/pco-background-sync-plan.md's step 6 and
 // controllers.RunOrgBackgroundSync) to tell "never seen this person/team
 // before" (worth enqueueing as a new discovery) from "already known,
 // possibly just stale" (StalePersonSyncTargets' job above, not this

@@ -12,7 +12,7 @@ there's a real reason to turn it on). This doc is kept as-is below as the
 original design record, not edited to match the final shipped shape.
 
 Written 2026-09-02, prompted by a conversation during the roster
-cold-start rate-limit fix (see `docs/pco-roster-cold-start-plan.md`, now
+cold-start rate-limit fix (see `docs/plans/shipped/pco-roster-cold-start-plan.md`, now
 shipped as two branches) - that work surfaced a coordination gap this
 doc exists to close: Song
 Info's background sync, the new person-data cache's background sync, and

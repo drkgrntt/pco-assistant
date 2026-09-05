@@ -1,8 +1,8 @@
 package controllers
 
 // The background-sync cron's per-org pass (steps 4-6 of
-// docs/pco-background-sync-plan.md, Phase 3 of
-// docs/pco-call-efficiency-rollout-plan.md) - "for an org nobody's actively
+// docs/plans/shipped/pco-background-sync-plan.md, Phase 3 of
+// docs/plans/shipped/pco-call-efficiency-rollout-plan.md) - "for an org nobody's actively
 // rendering pages for, do the discovery + kick off the same paced sync that
 // already exists." RunOrgBackgroundSync (below) is the one exported entry
 // point jobs.PCOJobs calls, once per org per tick, with a ctx already
@@ -27,7 +27,7 @@ import (
 
 // RunOrgBackgroundSync runs the Song Info sync (step 4), the person-data
 // refresh sync (step 5), and the person-data recent-history discovery sync
-// (step 6) for organizationID - see docs/pco-background-sync-plan.md's
+// (step 6) for organizationID - see docs/plans/shipped/pco-background-sync-plan.md's
 // "Per-org pass" section for the full design. ctx must already carry a
 // valid PCO access token (pco.WithAccessToken) - both
 // triggerSongInfoQueueSync and triggerPersonDataSyncCtx are no-ops without
@@ -72,7 +72,7 @@ func triggerSongInfoBackgroundSync(ctx context.Context, store *scheduling.Store,
 }
 
 // backgroundSyncRecentPlansPerServiceType bounds step 6's "recent past
-// plans" window per service type - see docs/pco-background-sync-plan.md's
+// plans" window per service type - see docs/plans/shipped/pco-background-sync-plan.md's
 // "Open questions" section on why this needs a bound at all. 5 is a
 // deliberate middle ground: wide enough to likely include a
 // monthly-rotation volunteer's most recent appearance (roughly a month of
@@ -207,7 +207,7 @@ func personSyncKindFromStale(kind scheduling.StalePersonSyncKind) personSyncKind
 // never re-enqueued here), enqueue the matching personSyncRequest(s) the
 // same way the refresh sweep does. This is the "recent history of people"
 // seed for a just-connected org or one whose team membership has shifted -
-// see docs/pco-background-sync-plan.md's "Scope" section for why this is
+// see docs/plans/shipped/pco-background-sync-plan.md's "Scope" section for why this is
 // bounded by (recent plan count) x (service type count), not total
 // volunteer count, and therefore safe independent of org size.
 func discoverRecentPersonTeamPairs(ctx context.Context, store *scheduling.Store, organizationID string) {

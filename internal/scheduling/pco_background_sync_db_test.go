@@ -2,7 +2,7 @@ package scheduling
 
 // DB-backed tests for StalePersonSyncTargets/PersonSyncMarkerStatus - the
 // background-sync cron's refresh and discovery-dedup queries (see
-// docs/pco-background-sync-plan.md's "Scope"/"Per-org pass" sections and
+// docs/plans/shipped/pco-background-sync-plan.md's "Scope"/"Per-org pass" sections and
 // controllers.RunOrgBackgroundSync). Follows
 // person_data_cache_db_test.go's established pattern exactly (see that
 // file's doc comment for the full rationale): gated behind RUN_DB_TESTS=1,

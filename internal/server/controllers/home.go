@@ -65,7 +65,7 @@ func (hc *HomeController) Index(c *fiber.Ctx) error {
 // that section empty, never breaks the page. No Song Info cache coverage
 // here any more - that nudge is gone now that a miss syncs itself in the
 // background instead of needing anyone to notice and click something (see
-// docs/pco-call-efficiency-rollout-plan.md's Phase 2).
+// docs/plans/shipped/pco-call-efficiency-rollout-plan.md's Phase 2).
 func (hc *HomeController) buildHomeData(ctx context.Context, organizationID string) views.HomeData {
 	var data views.HomeData
 

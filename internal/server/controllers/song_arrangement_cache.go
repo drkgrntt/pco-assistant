@@ -30,7 +30,7 @@ import (
 // personSyncPending/triggerPersonDataSync architecture exactly (see that
 // file's own header comment). A song gets its info the first time any set
 // builder render actually needs it, with no button or nag anywhere in the
-// UI - see docs/pco-call-efficiency-rollout-plan.md's Phase 2 for the full
+// UI - see docs/plans/shipped/pco-call-efficiency-rollout-plan.md's Phase 2 for the full
 // rationale this replaced.
 //
 // songSyncInProgress (below) still guards against a second concurrent pass
@@ -175,7 +175,7 @@ func songSyncBatches(songIDs []string, size int) [][]string {
 // (sets_builder.go), right before they return, rather than from each of
 // their ~20-plus call sites across build.go/sets_detail.go/sets_publish.go/
 // sets_reorder.go/run_sheet.go/song_arrangement_cache.go - seeded from
-// docs/pco-call-efficiency-rollout-plan.md's Phase 2 "trigger mechanism"
+// docs/plans/shipped/pco-call-efficiency-rollout-plan.md's Phase 2 "trigger mechanism"
 // decision: person_data_cache.go's per-handler-call convention works for
 // its own ~6 well-known roster handlers, but copying that here would mean
 // ~20 mechanical call sites today and a new one to remember on every future

@@ -473,7 +473,7 @@ func TestResolveArrangementCacheInfoHitReturnsCachedValueWithoutEnqueuing(t *tes
 
 // TestResolveArrangementCacheInfoMissEnqueuesAndReturnsZeroValueImmediately
 // is the fast, deterministic unit test the miss path never had before Phase
-// 2 (docs/pco-call-efficiency-rollout-plan.md): previously this branch made
+// 2 (docs/plans/shipped/pco-call-efficiency-rollout-plan.md): previously this branch made
 // a live (or mocked) PCO call, so testing it at all meant a fake server;
 // now it's pure - enqueue and return - so this proves that with a nil store
 // and a background context that would panic or hang if either were

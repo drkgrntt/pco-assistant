@@ -1,5 +1,11 @@
 # Plan: PCO call-efficiency rollout (for a new session)
 
+**Status: shipped 2026-09-04.** All three phases below landed (see each
+phase's own "Status" line) - kept as the reference doc for the design
+rationale behind the code it's cited from throughout `internal/`
+(`nav.go`, `home.go`, `sets_builder.go`, `pco_songs.go`,
+`person_data_cache.go`, and others point back here for "the full design").
+
 Written 2026-09-04. This bundles everything from one conversation into
 concrete, buildable phases for a fresh session to pick up - it's an
 execution plan, not new design. Two other docs already hold the actual
@@ -11,7 +17,7 @@ re-derive what they already establish:
   three `include=` findings Phase 1 below implements, each with the exact
   live-verified `can_include` values and why every other endpoint this
   app calls was checked and ruled out.
-- `docs/pco-background-sync-plan.md` - the full design for Phase 3 below
+- `docs/plans/shipped/pco-background-sync-plan.md` - the full design for Phase 3 below
   (unattended cache warming via borrowed idle session tokens). Explicitly
   marked **not urgent, written up for later** - don't build it just
   because it's next in this list; see "Phase 3" below for the actual
@@ -30,7 +36,7 @@ the one piece from the conversation that was explicitly deferred and
 never fully specced - this doc specs it now (see below).
 
 **Phase 3 (background-sync cron) last, and only if explicitly asked
-for** - `docs/pco-background-sync-plan.md` already states its own
+for** - `docs/plans/shipped/pco-background-sync-plan.md` already states its own
 condition for building it ("revisit only if staleness genuinely proves
 to matter... not speculatively"). That condition hasn't changed. Don't
 start Phase 3 from this doc alone without checking with the user first -
@@ -51,7 +57,7 @@ live-verified `can_include` values are in `docs/pco-api-risks.md`'s
 This is a change to the separate `go-pco` module
 (`/home/drkgrntt/projects/go-pco` locally), not this repo - same
 "lives in go-pco first" situation as the throttle work
-(`docs/pco-throttle-plan.md`). `PeopleParams`/`TeamMembersParams`/
+(`docs/plans/shipped/pco-throttle-plan.md`). `PeopleParams`/`TeamMembersParams`/
 `PersonPlanPeopleParams` already have this field and already wire it into
 the query string via `.Include(params.Include...)` - mirror that exact
 pattern for:
@@ -314,10 +320,10 @@ miss branch at all).
 
 **Status: shipped 2026-09-04**, on explicit user request (the "not urgent"
 gating below applied until then). Full design in
-`docs/pco-background-sync-plan.md` (now marked shipped there too) - see
+`docs/plans/shipped/pco-background-sync-plan.md` (now marked shipped there too) - see
 `docs/pco-api-risks.md`'s changelog entry for exactly what landed.
 
-Full design already written: `docs/pco-background-sync-plan.md`. Nothing
+Full design already written: `docs/plans/shipped/pco-background-sync-plan.md`. Nothing
 to add here beyond the gating already stated at the top of this doc and
 in that plan's own opening section - re-read its "not urgent" framing
 before starting, and confirm with the user this condition has actually

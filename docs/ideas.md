@@ -116,7 +116,7 @@ the builder page's "Open in Planning Center" link.)
    happening inside PCO's own tab doesn't naturally attribute to - unsolved
    design question, not just an implementation detail.
 5. ~~**Bring the plan-page layout closer to PCO's own.**~~ - **shipped
-   2026-09-05**, see `docs/build-page-redesign-plan.md`: real PCO avatars
+   2026-09-05**, see `docs/plans/shipped/build-page-redesign-plan.md`: real PCO avatars
    on Team-tab person rows, side-by-side team cards, and an "N needed"
    badge on open positions. The Songs/Order tab and tab-bar styling were
    already close enough to leave alone.

@@ -10,7 +10,7 @@ package controllers
 // organization.
 //
 // There's no dedicated page/button that kicks this off (nor, since Phase 2
-// of docs/pco-call-efficiency-rollout-plan.md, is there one for Song Info
+// of docs/plans/shipped/pco-call-efficiency-rollout-plan.md, is there one for Song Info
 // any more either) - requests are collected as a side effect of
 // otherAssignmentDates/crossTeamAssignmentsThisWeek/personBlockouts finding
 // a miss or a stale hit during an ordinary Team Builder render
@@ -27,11 +27,11 @@ package controllers
 // logger.RequestIDFromContext) rather than a *fiber.Ctx directly - see
 // triggerPersonDataSyncCtx/triggerSongInfoQueueSync - which is also what
 // lets the exact same drain-and-run logic be triggered by a context that
-// was never a live request's at all: docs/pco-background-sync-plan.md's
+// was never a live request's at all: docs/plans/shipped/pco-background-sync-plan.md's
 // background-sync cron (jobs.PCOJobs, via RunOrgBackgroundSync in
 // pco_background_sync.go) builds an equivalent context from a borrowed,
 // refreshed idle session token instead of a request's, closing the gap
-// docs/pco-roster-cold-start-plan.md's "unattended-cron question,
+// docs/plans/shipped/pco-roster-cold-start-plan.md's "unattended-cron question,
 // revisited" section originally left open for exactly this reason.
 
 import (
