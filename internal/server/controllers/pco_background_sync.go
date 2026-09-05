@@ -16,6 +16,8 @@ package controllers
 
 import (
 	"context"
+	"sync"
+	"time"
 
 	"pco-assistant/internal/logger"
 	"pco-assistant/internal/scheduling"
@@ -95,14 +97,60 @@ func triggerSongInfoBackgroundSync(ctx context.Context, store *scheduling.Store,
 // a problem.
 const backgroundSyncRecentPlansPerServiceType = 5
 
+// backgroundSyncDiscoveryInterval bounds how often step 6's recent-history
+// discovery (discoverRecentPersonTeamPairs) actually runs its
+// GetPlans/GetTeamMembers walk, independent of the hourly tick everything
+// else in this file runs on. Unlike Song Info/person-data refresh (both
+// genuinely time-sensitive staleness, and already self-limiting via the
+// existing paced-batch sync they trigger), discovery's job is finding
+// people/teams this org has *never* seen before - a condition that doesn't
+// change hour to hour for a church whose plans update roughly weekly.
+// Running the walk every hour regardless would just be 24 near-identical
+// PCO calls for every one that could actually find something new. Daily is
+// a deliberate middle ground: still far more often than any real team's
+// membership changes, cheap enough that under-shooting this constant costs
+// nothing but a slightly later discovery.
+const backgroundSyncDiscoveryInterval = 24 * time.Hour
+
+// discoveryLastRunMu/discoveryLastRunAt track this process's last
+// discovery-walk attempt per organization, purely in-memory (a restart
+// simply means the next tick after startup runs discovery once more than
+// strictly necessary - the existing PersonSyncMarkerStatus check already
+// makes a redundant walk a cheap no-op for anyone already known, so this
+// never needs to survive a restart). A dedicated map/mutex rather than
+// reusing pcoBackgroundSyncMu/pcoBackgroundSyncInProgress above -
+// deliberately: that guard's job is "don't overlap this org's own pass,"
+// this one's job is "don't bother re-walking too often," and conflating
+// the two would make either concern harder to reason about on its own.
+var (
+	discoveryLastRunMu sync.Mutex
+	discoveryLastRunAt = map[string]time.Time{}
+)
+
+// discoveryDue is the pure check-and-set at the core of the gate above -
+// split out so it's unit-testable against a plain map and a fake clock,
+// same reasoning as pcoBackgroundSyncTryStart (jobs/pco.go). Returns true
+// (and records now as the new last-run time) the first time it's ever
+// called for organizationID, or once interval has elapsed since the
+// previous true - false otherwise, leaving the recorded time untouched.
+func discoveryDue(lastRunAt map[string]time.Time, organizationID string, now time.Time, interval time.Duration) bool {
+	if last, ok := lastRunAt[organizationID]; ok && now.Sub(last) < interval {
+		return false
+	}
+	lastRunAt[organizationID] = now
+	return true
+}
+
 // triggerPersonDataBackgroundSync is steps 5-6: refresh every stale
 // person/team sync-marker row for organizationID (step 5,
 // scheduling.Store.StalePersonSyncTargets), discover anyone who served on a
 // bounded window of this org's recent past plans but has no sync-marker row
-// at all yet (step 6, discoverRecentPersonTeamPairs below), then trigger the
-// existing drain-and-run pass once for whatever either step enqueued -
-// mirrors triggerPersonDataSync's own render-triggered call exactly, just
-// fed by this org's own idle-session pass instead of a live request.
+// at all yet (step 6, discoverRecentPersonTeamPairs below - gated to
+// backgroundSyncDiscoveryInterval via discoveryDue, not run every tick),
+// then trigger the existing drain-and-run pass once for whatever either
+// step enqueued - mirrors triggerPersonDataSync's own render-triggered call
+// exactly, just fed by this org's own idle-session pass instead of a live
+// request.
 func triggerPersonDataBackgroundSync(ctx context.Context, store *scheduling.Store, organizationID string) {
 	stale, err := store.StalePersonSyncTargets(ctx, organizationID, personCacheTTL)
 	if err != nil {
@@ -117,7 +165,12 @@ func triggerPersonDataBackgroundSync(ctx context.Context, store *scheduling.Stor
 		})
 	}
 
-	discoverRecentPersonTeamPairs(ctx, store, organizationID)
+	discoveryLastRunMu.Lock()
+	due := discoveryDue(discoveryLastRunAt, organizationID, time.Now(), backgroundSyncDiscoveryInterval)
+	discoveryLastRunMu.Unlock()
+	if due {
+		discoverRecentPersonTeamPairs(ctx, store, organizationID)
+	}
 
 	triggerPersonDataSyncCtx(ctx, store, organizationID)
 }
