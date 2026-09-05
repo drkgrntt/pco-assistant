@@ -525,20 +525,145 @@ func (sc *SchedulingController) RefreshSongInfo(c *fiber.Ctx) error {
 	return render(c, views.SetBuilderBody(data))
 }
 
+// trackedItemChange is one detected difference between an already-tracked,
+// active (non-tombstoned) set_songs row and its live Planning Center item -
+// see reconcileTrackedItems, MergeSet's expanded reconciliation (step 3 of
+// docs/plans/in-progress/live-sync-reflection-plan.md). Purely a report;
+// nothing here mutates anything itself.
+type trackedItemChange struct {
+	RowID int64
+	Title string
+	// Missing is true when PCOItemID no longer matches any live item - a
+	// PCO-side deletion race. MergeSet responds by clearing PCOItemID back
+	// to "" (see scheduling.Store.ClearSetSongPCOItemID) rather than
+	// deleting the local row, so the song stays here, just unpublished
+	// again. NewDescription/NewKeyOverride are meaningless when this is
+	// true.
+	Missing bool
+	// NewDescription/NewKeyOverride are PCO's current Description/KeyName
+	// to adopt locally - only ever populated for a row whose InfoPending is
+	// false, so a pending local edit is never overwritten (see the
+	// conflict-policy decision the plan doc settled: a local pending edit
+	// always wins).
+	NewDescription string
+	NewKeyOverride string
+}
+
+// reconcileTrackedItems is MergeSet's step-3 core: given the plan's live
+// items and this set's already-tracked, active set_songs rows (setSongs -
+// pendingDeletions are out of scope, same as everywhere else in this file),
+// it reports what's changed in Planning Center since this app last saw
+// each row, without mutating anything itself - the caller (MergeSet) is
+// what actually applies these via the store.
+//
+// A row with InfoPending true - an unpushed local Description/KeyOverride
+// edit - is skipped entirely: the local edit always wins, never reconciled
+// against PCO here, per the plan doc's conflict-policy decision. A row
+// whose PCOItemID no longer matches any live item is reported Missing
+// (see trackedItemChange) rather than compared field-by-field. Everything
+// else is compared against PCO's live Description/KeyName, and only
+// reported when at least one actually differs.
+func reconcileTrackedItems(items []pco.ItemData, setSongs []scheduling.SetSong) []trackedItemChange {
+	byID := make(map[string]pco.ItemData, len(items))
+	for _, item := range items {
+		byID[item.ID] = item
+	}
+
+	var changes []trackedItemChange
+	for _, ss := range setSongs {
+		if ss.PCOItemID == "" {
+			continue
+		}
+
+		item, ok := byID[ss.PCOItemID]
+		if !ok {
+			changes = append(changes, trackedItemChange{RowID: ss.ID, Missing: true})
+			continue
+		}
+		if ss.InfoPending {
+			continue
+		}
+		if item.Attributes.Description != ss.Description || item.Attributes.KeyName != ss.KeyOverride {
+			changes = append(changes, trackedItemChange{
+				RowID:          ss.ID,
+				NewDescription: item.Attributes.Description,
+				NewKeyOverride: item.Attributes.KeyName,
+			})
+		}
+	}
+	return changes
+}
+
+// trackedItemOrderChanged reports whether the relative order of this set's
+// already-tracked, published songs' PCO items - as PCO's own Sequence
+// attribute has them right now - still matches the order this app's local
+// anchor chain implies once merged with the plan's other (foreign) items
+// (see mergeServiceOrder). A mismatch means someone reordered directly in
+// Planning Center since this app last synced. Per the plan doc's
+// order-changed decision, MergeSet only ever surfaces this as a plain
+// warning - it never attempts an automatic reorder reconciliation, and
+// never touches any SetSong's Position/AnchorItemID.
+//
+// items must already be sorted by Sequence (every caller in this file
+// already sorts before use). expected is mergeServiceOrder's own walk,
+// filtered to just this set's published song rows in the order it placed
+// them - which, so long as nothing has drifted, is exactly the same order
+// their PCO items' own live Sequence puts them in; live is that same
+// tracked-id set, ordered purely by each item's current Sequence. Any
+// difference between the two orderings means a real reorder happened.
+func trackedItemOrderChanged(items []pco.ItemData, setSongs []scheduling.SetSong) bool {
+	merged := mergeServiceOrder(items, setSongs)
+
+	var expected []string
+	tracked := make(map[string]bool)
+	for _, row := range merged {
+		if row.Song != nil && row.Song.PCOItemID != "" {
+			expected = append(expected, row.Song.PCOItemID)
+			tracked[row.Song.PCOItemID] = true
+		}
+	}
+
+	var live []string
+	for _, item := range items {
+		if tracked[item.ID] {
+			live = append(live, item.ID)
+		}
+	}
+
+	if len(expected) != len(live) {
+		return true
+	}
+	for i := range expected {
+		if expected[i] != live[i] {
+			return true
+		}
+	}
+	return false
+}
+
 // MergeSet is the non-destructive third sync direction, alongside
 // PublishSet ("assert what's here") and RevertSet ("conform to what's
-// there," discarding local changes): it pulls in anything added directly
-// in Planning Center since the local draft was last touched, WITHOUT
-// touching any existing local row - no local edit (an unpublished add, a
-// tombstoned removal/replacement, a reorder, a pending note/key edit) is
-// discarded or altered. It walks the plan's items the same way RevertSet's
-// deriveImportRows does (see deriveMergeImportRows), but only inserts a
-// fresh local row for a song-linked item whose PCO item id isn't already
-// tracked by an existing set_songs row here (active or tombstoned) -
-// already-tracked items are left alone entirely, whether or not they
-// happen to be one of this set's own active songs right now. Like
-// RevertSet, this never calls a PCO write endpoint - it's a pure local
-// addition from a fresh read.
+// there," discarding local changes): it pulls in anything that changed
+// directly in Planning Center since the local draft was last touched,
+// WITHOUT discarding or altering any competing local edit. This covers two
+// distinct cases now, not just one:
+//
+//   - Net-new items: walks the plan's items the same way RevertSet's
+//     deriveImportRows does (see deriveMergeImportRows), inserting a fresh
+//     local row for any song-linked item whose PCO item id isn't already
+//     tracked by an existing set_songs row here (active or tombstoned).
+//   - Already-tracked items (reconcileTrackedItems, above): a row whose PCO
+//     item's Description/KeyName changed gets updated to match, but only
+//     when InfoPending is false - a pending local edit always wins and is
+//     left completely untouched (the field-conflict policy the plan doc
+//     settled). A row whose PCO item was deleted out from under it has its
+//     PCOItemID cleared back to "" (re-publishable, not deleted locally) -
+//     see scheduling.Store.ClearSetSongPCOItemID. A pure reorder among
+//     tracked items (trackedItemOrderChanged, above) is surfaced as a
+//     plain warning, never auto-corrected.
+//
+// Like RevertSet, this never calls a PCO write endpoint - it's a pure
+// local reconciliation from a fresh read.
 func (sc *SchedulingController) MergeSet(c *fiber.Ctx) error {
 	ctx := middleware.RequestContext(c)
 	orgID := middleware.CurrentOrganizationID(c)
@@ -547,7 +672,7 @@ func (sc *SchedulingController) MergeSet(c *fiber.Ctx) error {
 
 	set, err := sc.store.GetOrCreateSet(ctx, orgID, serviceTypeID, planID)
 	errMsg := ""
-	publishMsg := ""
+	var summary []string
 	if err != nil {
 		errMsg = err.Error()
 	} else {
@@ -572,17 +697,55 @@ func (sc *SchedulingController) MergeSet(c *fiber.Ctx) error {
 				})
 
 				importRows := deriveMergeImportRows(items.Data, trackedItemIDs)
-
 				imported, importErr := sc.store.ImportNewSongsFromPCO(ctx, set.ID, importRows)
 				if importErr != nil {
-					errMsg = importErr.Error()
+					errMsg = appendErr(errMsg, importErr.Error())
 				} else if imported > 0 {
-					publishMsg = fmt.Sprintf("Pulled in %d new song(s) from Planning Center.", imported)
-				} else {
-					publishMsg = "Nothing new to pull in - already up to date."
+					summary = append(summary, fmt.Sprintf("imported %d new song(s)", imported))
+				}
+
+				// Order-changed check runs against setSongs as fetched
+				// above - before any of the reconciliation writes below,
+				// none of which touch Position/AnchorItemID anyway - so
+				// this reads the same "did PCO's order drift out from
+				// under our anchors" question either way.
+				orderChanged := trackedItemOrderChanged(items.Data, setSongs)
+
+				updated, cleared := 0, 0
+				for _, change := range reconcileTrackedItems(items.Data, setSongs) {
+					if change.Missing {
+						if err := sc.store.ClearSetSongPCOItemID(ctx, set.ID, change.RowID); err != nil {
+							errMsg = appendErr(errMsg, err.Error())
+							continue
+						}
+						cleared++
+						continue
+					}
+					if err := sc.store.SyncSetSongInfoFromPCO(ctx, set.ID, change.RowID, change.NewDescription, change.NewKeyOverride); err != nil {
+						errMsg = appendErr(errMsg, err.Error())
+						continue
+					}
+					updated++
+				}
+				if updated > 0 {
+					summary = append(summary, fmt.Sprintf("updated %d song(s) from Planning Center", updated))
+				}
+				if cleared > 0 {
+					summary = append(summary, fmt.Sprintf("cleared %d broken reference(s) removed in Planning Center", cleared))
+				}
+				if orderChanged {
+					summary = append(summary, "song order also changed in Planning Center - review before publishing")
 				}
 			}
 		}
+	}
+
+	publishMsg := ""
+	if len(summary) > 0 {
+		publishMsg = strings.Join(summary, "; ") + "."
+		publishMsg = strings.ToUpper(publishMsg[:1]) + publishMsg[1:]
+	} else if errMsg == "" {
+		publishMsg = "Nothing new to pull in - already up to date."
 	}
 
 	data := sc.buildSetBuilderData(ctx, orgID, serviceTypeID, planID)
@@ -592,6 +755,53 @@ func (sc *SchedulingController) MergeSet(c *fiber.Ctx) error {
 	}
 
 	return render(c, views.SetBuilderBody(data))
+}
+
+// SyncCheck is the poll-while-open live-sync check's endpoint
+// (docs/plans/in-progress/live-sync-reflection-plan.md, option C): polled
+// every 30s by the set builder page's own hidden trigger element
+// (set_builder.templ) while a Build page's Songs tab is open, carrying the
+// fingerprint (see SetBuilderData.PCOSyncFingerprint/pcoItemsFingerprint)
+// the page last saw as the fp query param. Does its own GetItems call
+// (there's no cheaper "has this plan changed" PCO endpoint - live-verified
+// against the dev org that neither Plan.UpdatedAt nor Plan.ItemsCount
+// reflect item-level edits or pure reorders, see pco-api-risks.md),
+// recomputes the same fingerprint, and compares:
+//
+//   - Equal: nothing changed since fp was captured - an empty 200, so htmx
+//     (hx-swap="none" on the polling element) does nothing at all.
+//   - Different: something changed - responds with exactly two
+//     hx-swap-oob="true" fragments, matching set_builder.templ's own ids:
+//     the banner slot (#pco-sync-banner), populated with an ImportBanner
+//     offering to run the existing MergeSet endpoint, and the hidden
+//     fingerprint input (#pco-sync-fp), updated to the fresh value so the
+//     next poll tick doesn't re-show the banner for the same
+//     already-detected change.
+//
+// Tagged pco.WithPriority(ctx, 20) - same convention as the background
+// syncs in person_data_cache.go/song_arrangement_cache.go/jobs/pco.go - so
+// an unattended, timer-driven poll never delays interactive traffic
+// sharing the same token. A failed GetItems call (a transient PCO error,
+// or a 429 the retry backstop didn't absorb) is treated the same as "no
+// change detected" - an empty 200 - rather than surfacing an error banner
+// for what's very likely a fine plan on the next tick.
+func (sc *SchedulingController) SyncCheck(c *fiber.Ctx) error {
+	ctx := pco.WithPriority(middleware.RequestContext(c), 20)
+	serviceTypeID := c.Params("service_type_id")
+	planID := c.Params("plan_id")
+	clientFP := c.Query("fp")
+
+	items, err := pco.GetItems(ctx, serviceTypeID, planID, nil)
+	if err != nil {
+		return c.SendStatus(fiber.StatusOK)
+	}
+
+	freshFP := pcoItemsFingerprint(items.Data)
+	if freshFP == clientFP {
+		return c.SendStatus(fiber.StatusOK)
+	}
+
+	return render(c, views.SyncCheckBanner(serviceTypeID, planID, freshFP))
 }
 
 // RevertSet is PublishSet's opposite: instead of pushing local changes to

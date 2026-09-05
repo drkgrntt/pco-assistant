@@ -193,6 +193,22 @@ func (s *Store) ClearInfoPending(ctx context.Context, setID, rowID int64) error 
 	return err
 }
 
+// SyncSetSongInfoFromPCO overwrites rowID's local Description/KeyOverride
+// with PCO's own current values - MergeSet's already-tracked-item
+// reconciliation (see reconcileTrackedItems, sets_publish.go), for a row
+// whose InfoPending is already false (no competing unpushed local edit -
+// see the live-sync-reflection plan's conflict-policy decision). Unlike
+// UpdateSetSongDescription/UpdateSetSongKeyOverride above, this
+// deliberately does NOT set info_pending true: these values are being
+// pulled in because they already match what's live in Planning Center,
+// not because of a new local edit that still needs pushing.
+func (s *Store) SyncSetSongInfoFromPCO(ctx context.Context, setID, rowID int64, description, keyOverride string) error {
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE set_songs SET description = $1, key_override = $2 WHERE id = $3 AND set_id = $4 AND pending_delete = false
+	`, description, keyOverride, rowID, setID)
+	return err
+}
+
 // ListPendingDeletions returns songs that were removed/replaced locally
 // after already being published - their pco_item_id still needs deleting
 // in Planning Center on the next PublishSet run.
@@ -229,6 +245,21 @@ func (s *Store) MarkSetSongPublished(ctx context.Context, setID, rowID int64, it
 	_, err := s.db.ExecContext(ctx, `
 		UPDATE set_songs SET pco_item_id = $1 WHERE id = $2 AND set_id = $3 AND pending_delete = false
 	`, itemID, rowID, setID)
+	return err
+}
+
+// ClearSetSongPCOItemID resets rowID back to "not published yet" -
+// MarkSetSongPublished's reverse - for the PCO-side deletion race MergeSet's
+// already-tracked-item reconciliation handles (see reconcileTrackedItems,
+// sets_publish.go): an active, non-tombstoned row whose linked PCO item no
+// longer exists among the plan's live items. Clearing pco_item_id back to
+// "" (rather than deleting the local row) makes it re-creatable on the next
+// Publish, the same as any other never-yet-published song - the local song
+// choice itself is preserved, only the stale PCO link is dropped.
+func (s *Store) ClearSetSongPCOItemID(ctx context.Context, setID, rowID int64) error {
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE set_songs SET pco_item_id = NULL WHERE id = $1 AND set_id = $2 AND pending_delete = false
+	`, rowID, setID)
 	return err
 }
 

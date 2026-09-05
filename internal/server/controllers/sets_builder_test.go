@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"testing"
+	"time"
 
 	"pco-assistant/internal/scheduling"
 
@@ -578,6 +579,76 @@ func TestBuildSongNoteViews(t *testing.T) {
 			}
 		}
 	})
+}
+
+// fingerprintItem builds a bare pco.ItemData carrying just what
+// pcoItemsFingerprint reads - id, Sequence, UpdatedAt - for
+// TestPCOItemsFingerprint below.
+func fingerprintItem(id string, sequence int, updatedAt time.Time) pco.ItemData {
+	return pco.ItemData{ID: id, Attributes: pco.ItemAttributes{Sequence: sequence, UpdatedAt: updatedAt}}
+}
+
+// TestPCOItemsFingerprint covers pcoItemsFingerprint's contract (see its
+// own doc comment): two fingerprints are equal iff the same set of item
+// ids exist with the same Sequence and UpdatedAt values each. Each case
+// compares against a fixed baseline (two items, i1 then i2) rather than
+// comparing pairs directly, so "same"/"different" reads naturally per
+// case.
+func TestPCOItemsFingerprint(t *testing.T) {
+	t1 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	t2 := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+
+	base := []pco.ItemData{
+		fingerprintItem("i1", 0, t1),
+		fingerprintItem("i2", 1, t1),
+	}
+	want := pcoItemsFingerprint(base)
+
+	tests := []struct {
+		name  string
+		items []pco.ItemData
+		same  bool
+	}{
+		{
+			name:  "identical input produces an identical fingerprint",
+			items: []pco.ItemData{fingerprintItem("i1", 0, t1), fingerprintItem("i2", 1, t1)},
+			same:  true,
+		},
+		{
+			name:  "item order in the slice passed in doesn't affect the result",
+			items: []pco.ItemData{fingerprintItem("i2", 1, t1), fingerprintItem("i1", 0, t1)},
+			same:  true,
+		},
+		{
+			name:  "a title/description/key edit (different UpdatedAt, same Sequence) changes it",
+			items: []pco.ItemData{fingerprintItem("i1", 0, t2), fingerprintItem("i2", 1, t1)},
+			same:  false,
+		},
+		{
+			name:  "a pure reorder (swapped Sequence, same UpdatedAt) changes it",
+			items: []pco.ItemData{fingerprintItem("i1", 1, t1), fingerprintItem("i2", 0, t1)},
+			same:  false,
+		},
+		{
+			name:  "an added item changes it",
+			items: []pco.ItemData{fingerprintItem("i1", 0, t1), fingerprintItem("i2", 1, t1), fingerprintItem("i3", 2, t1)},
+			same:  false,
+		},
+		{
+			name:  "a removed item changes it",
+			items: []pco.ItemData{fingerprintItem("i1", 0, t1)},
+			same:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := pcoItemsFingerprint(tt.items)
+			if (got == want) != tt.same {
+				t.Errorf("expected same=%v against base fingerprint %q, got %q", tt.same, want, got)
+			}
+		})
+	}
 }
 
 func assertRowOrder(t *testing.T, got []mergedRow, want []string) {

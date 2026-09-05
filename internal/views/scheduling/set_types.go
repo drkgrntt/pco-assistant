@@ -139,6 +139,22 @@ type SetBuilderData struct {
 	// something.
 	MergeAvailableCount int
 
+	// PCOSyncFingerprint is a hash of every plan item's (id, sequence,
+	// updated_at) as of this render (see pcoItemsFingerprint,
+	// sets_builder.go) - the poll-while-open live-sync check's baseline
+	// (docs/plans/in-progress/live-sync-reflection-plan.md). The hidden
+	// #pco-sync-fp input in set_builder.templ carries this value; a
+	// background poll every 30s (SyncCheck, sets_publish.go) refetches the
+	// plan's items, recomputes the same fingerprint, and only shows a
+	// "Planning Center has changes" banner when the two differ. Reuses the
+	// exact GetItems response ServiceOrder is built from (see
+	// buildSetBuilderData) - no extra PCO call, same reasoning as
+	// MergeAvailableCount above. Left "" when that GetItems call failed
+	// (see ErrMsg) - the poll then simply won't match until the next
+	// successful render repopulates it, same best-effort tolerance as
+	// everything else built from that response.
+	PCOSyncFingerprint string
+
 	// SongPairPrompt, when set, offers a one-shot inline "remember that
 	// these two go together?" relationship capture right after adding a
 	// song that landed right after another one - see SongPairPromptView
