@@ -1,15 +1,15 @@
 package controllers
 
-// The pacing test for the background Song Info sync (runSongInfoSync) -
+// The pacing test for the background Song Info sync (runSongInfoQueueSync) -
 // the single most important test in this task, per the user's explicit
-// ask: runSongInfoSync's own paced batch loop was extracted, unchanged,
-// into runPacedBatches (see song_arrangement_cache.go) specifically so it
-// could be tested on its own, on a fast clock, without needing a real
-// Postgres store - fetchAndCacheArrangementInfo (runSongInfoSync's actual
+// ask: runSongInfoQueueSync's own paced batch loop lives in runPacedBatches
+// (see song_arrangement_cache.go), factored out specifically so it could be
+// tested on its own, on a fast clock, without needing a real Postgres
+// store - fetchAndCacheArrangementInfo (runSongInfoQueueSync's actual
 // per-song work) writes straight to scheduling.Store, and this repo has no
-// test-database harness, so exercising runSongInfoSync itself end-to-end
-// isn't reachable from a unit test. runPacedBatches is the real production
-// pacing mechanism (batch size, scheduling.PCOFanOutLimit-bounded
+// test-database harness, so exercising runSongInfoQueueSync itself end-to-
+// end isn't reachable from a unit test. runPacedBatches is the real
+// production pacing mechanism (batch size, scheduling.PCOFanOutLimit-bounded
 // concurrency, inter-batch pause via time.Sleep), unmodified other than
 // the pause becoming a parameter instead of reading the package-level
 // songInfoSyncBatchPause constant directly - so this is a faithful
@@ -26,8 +26,8 @@ import (
 	"time"
 )
 
-// TestRunPacedBatchesWaitsBetweenBatches proves runSongInfoSync's actual
-// pacing mechanism (via the extracted runPacedBatches) does what
+// TestRunPacedBatchesWaitsBetweenBatches proves runSongInfoQueueSync's
+// actual pacing mechanism (via the extracted runPacedBatches) does what
 // songInfoSyncBatchPause's doc comment claims: batch N+1's requests don't
 // start until at least batchPause has elapsed since batch N's requests
 // finished - the real reason a large library's first sync stays under

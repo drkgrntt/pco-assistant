@@ -62,9 +62,8 @@ func (sc *SchedulingController) AddRosterAssignment(c *fiber.Ctx) error {
 	// Fetched once and handed to both builders below - see
 	// rosterSharedPCOData's doc comment (rosters_scoped.go): without this,
 	// buildRosterPositionGroupData and buildRosterLightData would each make
-	// their own GetTeamMembers/GetNeededPositions/GetTeams calls for the
-	// same plan a moment apart, doubling this handler's PCO cost for no
-	// reason.
+	// their own GetTeamMembers/GetNeededPositions calls for the same plan a
+	// moment apart, doubling this handler's PCO cost for no reason.
 	shared := fetchRosterSharedPCOData(ctx, serviceTypeID, planID)
 	group, groupErrMsg := sc.buildRosterPositionGroupData(ctx, orgID, serviceTypeID, planID, body.TeamID, body.TeamPositionName, shared)
 	top := sc.buildRosterLightData(ctx, orgID, serviceTypeID, planID, shared)

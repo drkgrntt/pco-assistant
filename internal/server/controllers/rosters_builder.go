@@ -187,27 +187,45 @@ func planSortDatesFromIncluded(included []any) map[string]time.Time {
 }
 
 // includedTeam is the Team equivalent of includedPlan - just enough of
-// Team's shape (see go-pco's TeamData) to resolve a team's name out of a
-// GetPersonPlanPeople response's Included array when fetched with
-// Include: []string{"team"}. Whether PCO's plan_people endpoint actually
-// honors that include isn't confirmed live (unlike "plan", which
-// GetPersonPlanPeople's own test fixtures cover) - if it doesn't, this map
-// just comes back empty and crossTeamAssignmentsThisWeek falls back to
-// Attributes.TeamPositionName alone, same best-effort spirit as every other
-// lookup in buildRosterBuilderData.
+// Team's shape (see go-pco's TeamData) to resolve a team's name and
+// Planning Center's own display Sequence out of an Included array, whether
+// that's a GetPersonPlanPeople response (Include: []string{"team"}) or a
+// GetNeededPositions response (NeededPositionsParams.Include:
+// []string{"team"} - see docs/pco-api-risks.md's include=team finding,
+// which is what let buildRosterBuilderData/fetchRosterSharedPCOData
+// (rosters_scoped.go) drop their standalone GetTeams call). Whether PCO's
+// plan_people endpoint actually honors "team" isn't confirmed live (unlike
+// "plan", which GetPersonPlanPeople's own test fixtures cover) - if it
+// doesn't, teamInfoFromIncluded just comes back empty there and
+// crossTeamAssignmentsThisWeek falls back to Attributes.TeamPositionName
+// alone, same best-effort spirit as every other lookup in
+// buildRosterBuilderData. needed_positions' "team" include *is*
+// live-verified (see docs/pco-api-risks.md).
 type includedTeam struct {
 	Type       string `json:"type"`
 	ID         string `json:"id"`
 	Attributes struct {
-		Name string `json:"name"`
+		Name     string `json:"name"`
+		Sequence int    `json:"sequence"`
 	} `json:"attributes"`
 }
 
-// teamNamesFromIncluded extracts team id -> name from a GetPersonPlanPeople
-// response's Included array, mirroring planSortDatesFromIncluded. Any entry
-// that isn't a well-formed Team (or that lacks a name) is silently skipped.
-func teamNamesFromIncluded(included []any) map[string]string {
-	names := map[string]string{}
+// teamInfo is one team's name and Planning Center's own display Sequence
+// (see positionTeamSequence) - the two fields the roster builder needs per
+// team, both resolved from included Team entries instead of a separate
+// GetTeams call.
+type teamInfo struct {
+	Name     string
+	Sequence int
+}
+
+// teamInfoFromIncluded extracts team id -> {name, sequence} from an
+// Included array (see includedTeam). Any entry that isn't a well-formed
+// Team (or that lacks a name) is silently skipped - a malformed entry here
+// feeds only advisory display data (a team's name/sort order), never
+// something worth failing a render over.
+func teamInfoFromIncluded(included []any) map[string]teamInfo {
+	infos := map[string]teamInfo{}
 	for _, raw := range included {
 		b, err := json.Marshal(raw)
 		if err != nil {
@@ -220,7 +238,19 @@ func teamNamesFromIncluded(included []any) map[string]string {
 		if t.Type != "Team" || t.ID == "" || t.Attributes.Name == "" {
 			continue
 		}
-		names[t.ID] = t.Attributes.Name
+		infos[t.ID] = teamInfo{Name: t.Attributes.Name, Sequence: t.Attributes.Sequence}
+	}
+	return infos
+}
+
+// teamNamesFromIncluded extracts team id -> name from a GetPersonPlanPeople
+// response's Included array, mirroring planSortDatesFromIncluded - a thin
+// wrapper over teamInfoFromIncluded for the one caller (person_data_cache.go)
+// that only needs the name, not Sequence.
+func teamNamesFromIncluded(included []any) map[string]string {
+	names := map[string]string{}
+	for id, info := range teamInfoFromIncluded(included) {
+		names[id] = info.Name
 	}
 	return names
 }
@@ -300,25 +330,25 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 		}
 	}
 
-	needed, err := pco.GetNeededPositions(ctx, serviceTypeID, planID, nil)
+	// Include: []string{"team"} sideloads each needed position's team
+	// (name + display Sequence) in this same response's Included array,
+	// eliminating what used to be a separate GetTeams call just to resolve
+	// team ids to names - see docs/pco-api-risks.md's include=team finding.
+	needed, err := pco.GetNeededPositions(ctx, serviceTypeID, planID, &pco.NeededPositionsParams{Include: []string{"team"}})
 	if err != nil {
 		data.ErrMsg = appendErr(data.ErrMsg, "loading needed positions from Planning Center: "+err.Error())
 	}
 	groups := groupNeededPositions(needed.Data, assignments)
 
-	teamNames := map[string]string{}
 	// teamSequence backs the team-group ordering below (see
 	// unknownTeamSequence's own comment) - PCO's own Team.Sequence, the
 	// order a director already arranged their teams in within Planning
 	// Center itself, rather than an arbitrary or alphabetical order.
+	teamNames := map[string]string{}
 	teamSequence := map[string]int{}
-	if teams, err := pco.GetTeams(ctx, serviceTypeID, nil); err != nil {
-		data.ErrMsg = appendErr(data.ErrMsg, "loading teams from Planning Center: "+err.Error())
-	} else {
-		for _, t := range teams.Data {
-			teamNames[t.ID] = t.Attributes.Name
-			teamSequence[t.ID] = t.Attributes.Sequence
-		}
+	for id, info := range teamInfoFromIncluded(needed.Included) {
+		teamNames[id] = info.Name
+		teamSequence[id] = info.Sequence
 	}
 
 	// team_position ids aren't stored locally or on NeededPosition (both

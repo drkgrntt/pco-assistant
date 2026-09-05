@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -71,14 +72,56 @@ func formatSongStructure(sequenceShort, sequence []string) string {
 	return strings.Join(sequence, ", ")
 }
 
+// includedKey is the Key equivalent of includedTeam/includedPlan
+// (rosters_builder.go) - just enough of a Key resource's shape (see
+// go-pco's KeyData) to read its id and starting key out of a
+// GetArrangements response's Included array when fetched with
+// Include: []string{"keys"}.
+type includedKey struct {
+	Type       string `json:"type"`
+	ID         string `json:"id"`
+	Attributes struct {
+		StartingKey string `json:"starting_key"`
+	} `json:"attributes"`
+}
+
+// keysFromIncluded extracts Key entries from a GetArrangements response's
+// Included array, mirroring teamNamesFromIncluded/planSortDatesFromIncluded
+// (rosters_builder.go). Any entry that isn't a well-formed Key is silently
+// skipped. Returned in Included's own order, since
+// fetchAndCacheArrangementInfo only ever reads the first entry - the same
+// "first row wins" behavior the former direct
+// GetKeys(..., &pco.KeysParams{PerPage: 1}) call had.
+func keysFromIncluded(included []any) []includedKey {
+	var keys []includedKey
+	for _, raw := range included {
+		b, err := json.Marshal(raw)
+		if err != nil {
+			continue
+		}
+		var k includedKey
+		if err := json.Unmarshal(b, &k); err != nil {
+			continue
+		}
+		if k.Type != "Key" || k.ID == "" {
+			continue
+		}
+		keys = append(keys, k)
+	}
+	return keys
+}
+
 // fetchAndCacheArrangementInfo live-fetches songID's arrangement from
 // Planning Center and upserts it into song_arrangement_cache, returning
 // the resolved info - or an error, and no write, if the fetch failed or
 // the song genuinely has no arrangement at all (PCO auto-creates one for
 // every song via the API, so this should be rare in practice). Shared by
-// resolveArrangementInfo's cache-miss path and SyncSongInfo's bulk
-// backfill (song_arrangement_cache.go), so there's exactly one place that
-// knows how to turn a PCO arrangement into a cache row.
+// runSongInfoQueueSync's background queue-drain sync and
+// RefreshSetSongArrangementInfo's manual single-song refresh
+// (song_arrangement_cache.go), so there's exactly one place that knows how
+// to turn a PCO arrangement into a cache row. resolveArrangementCacheInfo's
+// own cache-miss path (below) deliberately does NOT call this directly -
+// see its own doc comment for why it enqueues instead.
 //
 // Key comes from the arrangement's Key sub-resource (its StartingKey),
 // not the arrangement's own ChordChartKey attribute - confirmed live
@@ -89,7 +132,7 @@ func formatSongStructure(sequenceShort, sequence []string) string {
 // ChordChartKey blank. ChordChartKey is used only as a fallback for the
 // rarer case where a chord chart's own key is set but no Key row exists.
 func fetchAndCacheArrangementInfo(ctx context.Context, store *scheduling.Store, organizationID, songID string) (scheduling.SongArrangementInfo, error) {
-	resp, err := pco.GetArrangements(ctx, songID, &pco.ArrangementsParams{PerPage: 1})
+	resp, err := pco.GetArrangements(ctx, songID, &pco.ArrangementsParams{PerPage: 1, Include: []string{"keys"}})
 	if err != nil {
 		return scheduling.SongArrangementInfo{}, err
 	}
@@ -101,15 +144,15 @@ func fetchAndCacheArrangementInfo(ctx context.Context, store *scheduling.Store, 
 	attrs := arrangement.Attributes
 	key := attrs.ChordChartKey
 	keyID := ""
-	if keys, err := pco.GetKeys(ctx, songID, arrangement.ID, &pco.KeysParams{PerPage: 1}); err == nil && len(keys.Data) > 0 && keys.Data[0].Attributes.StartingKey != "" {
-		key = keys.Data[0].Attributes.StartingKey
+	if keys := keysFromIncluded(resp.Included); len(keys) > 0 && keys[0].Attributes.StartingKey != "" {
+		key = keys[0].Attributes.StartingKey
 		// A genuinely separate relationship from the arrangement, not
 		// implied by it (confirmed live: an item with only its
 		// arrangement linked still shows no key at all) - only set when
 		// there's a real Key row to point at, same condition as the
 		// display string above, so the two stay consistent with each
 		// other.
-		keyID = keys.Data[0].ID
+		keyID = keys[0].ID
 	}
 
 	info := scheduling.SongArrangementInfo{
@@ -209,29 +252,34 @@ func resolveKeyID(ctx context.Context, songID, arrangementID, keyOverride, defau
 // resolveArrangementCacheInfo returns songID's full cached arrangement
 // info (not just the formatted display string - see resolveArrangementInfo
 // below for that), preferring the already-loaded cache (zero Planning
-// Center calls) and falling back to fetchAndCacheArrangementInfo on a
-// miss. This is the "song-by-song" catch-up the cache relies on: a song
-// added to a library after the last sync (or never synced at all) still
-// shows correct info the first time it's actually rendered, same as
-// before this cache existed, and every render after that is a cache hit.
-// Best-effort: a failed fetch/backfill just means a zero-value info for
-// this render and another live attempt next time, not a broken page.
+// Center calls) and never blocking on a miss: a miss enqueues a background
+// sync request (enqueueSongSync, song_arrangement_cache.go) and returns a
+// zero-value info immediately instead, matching person_data_cache.go's own
+// cache-first read paths - see rosters_warnings.go's otherAssignmentDates/
+// crossTeamAssignmentsThisWeek/personBlockouts for the pattern this
+// mirrors. A song added to a library after the last sync (or never synced
+// at all) shows blank arrangement info on the render that first discovers
+// it, then correct info on the next - buildSetBuilderData/
+// buildSetBuilderDataWithErr (sets_builder.go) trigger the queued sync
+// right before they return, so "the next render" typically means "the next
+// time this plan/set is opened", not an indefinite wait.
+//
+// ctx/store are still threaded through - unused on this miss path itself,
+// since enqueueSongSync takes neither - so this keeps one signature for
+// both branches and for resolveArrangementInfo's own pass-through below;
+// the actual PCO fetch a miss used to make inline now happens later, out
+// of band, in runSongInfoQueueSync.
 //
 // Split out from resolveArrangementInfo so a caller needing more than the
 // formatted string (e.g. renderServiceOrder's song detail card, which also
-// wants the arrangement's raw Notes) can get everything from one lookup
-// instead of fetching the same song's arrangement twice on a cache miss.
+// wants the arrangement's raw Notes) can get everything from one lookup.
 func resolveArrangementCacheInfo(ctx context.Context, store *scheduling.Store, organizationID string, cache map[string]scheduling.SongArrangementInfo, songID string) scheduling.SongArrangementInfo {
 	if info, ok := cache[songID]; ok {
 		return info
 	}
 
-	info, err := fetchAndCacheArrangementInfo(ctx, store, organizationID, songID)
-	if err != nil {
-		return scheduling.SongArrangementInfo{}
-	}
-
-	return info
+	enqueueSongSync(songSyncRequest{organizationID: organizationID, songID: songID})
+	return scheduling.SongArrangementInfo{}
 }
 
 // resolveArrangementInfo returns songID's display-ready arrangement info -
@@ -368,9 +416,6 @@ func (sc *SchedulingController) RegisterRoutes(router fiber.Router) {
 	group.Get("/song-tag-suggestions", sc.SongTagSuggestionsPage)
 	group.Post("/song-tag-suggestions/apply", sc.ApplySongTagSuggestion)
 	group.Post("/song-tag-suggestions/ignore", sc.IgnoreSongTagSuggestion)
-
-	group.Get("/song-info", sc.SongInfoPage)
-	group.Post("/song-info/sync", sc.SyncSongInfo)
 
 	group.Get("/person-relationships", sc.PersonRelationshipsPage)
 	group.Post("/person-relationships", sc.CreatePersonRelationship)

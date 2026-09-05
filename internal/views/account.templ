@@ -31,8 +31,7 @@ templ Account(personName, organizationName string, data AccountData) {
 }
 
 // AccountCacheBody is both the initial-render fragment and the htmx swap
-// target (id="account-cache-body") for the two cache-clear actions below -
-// same shape as SongInfoBody (internal/views/scheduling/song_info.templ).
+// target (id="account-cache-body") for the two cache-clear actions below.
 //
 // Both actions are deliberately NOT styled "danger" (see publish_panel.templ
 // for what that class is reserved for - a genuinely irreversible action
@@ -58,12 +57,10 @@ templ AccountCacheBody(data AccountData) {
 				<p class="success">{ data.SongInfoCacheMsg }</p>
 			}
 			<p class="muted">
-				Clears every song's cached key, tempo, meter, and length info
-				(from the Song Info page). Not destructive - it's just removing
-				some data we have sitting on top so it can be re-collected from
-				PCO, either automatically as sets get built or right away from
-				the <a href="/scheduling/song-info">Song Info</a> page's Sync
-				action.
+				Clears every song's cached key, tempo, meter, and length info.
+				Not destructive - it's just removing some data we have sitting
+				on top so it can be re-collected from PCO automatically, in the
+				background, as sets get built.
 			</p>
 			<form
 				hx-post="/account/cache/song-info"

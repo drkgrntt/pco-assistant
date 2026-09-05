@@ -60,9 +60,10 @@ with at least Viewer access can still sign in.
 - **Song Info** - each song's Planning Center arrangement (key, tempo,
   meter, length) is cached locally so showing it doesn't mean a live
   Planning Center request per song on every page load - a song gets
-  cached automatically the first time it's added to a set, or sync your
-  whole library at once from the Song Info page. A song's detail card
-  (click its row on the Build page) also shows its section-by-section
+  cached automatically the first time the Build page's set builder
+  actually needs it, with no button or page to remember to visit. A
+  song's detail card (click its row on the Build page) also shows its
+  section-by-section
   structure ("Intro, Verse 1, Chorus...") and a "Chord chart" badge when
   one's attached in Planning Center - both pulled from the same cached
   arrangement data, no extra Planning Center request
@@ -175,6 +176,11 @@ scheduling warnings). Explicitly non-destructive: both only delete this
 app's own locally-cached copy of Planning Center data, which gets
 transparently re-collected from Planning Center the next time it's
 needed - nothing in Planning Center, and no draft set/roster, is touched.
+Both caches also top themselves up in the background roughly once an
+hour for any organization with someone currently signed in, so a church
+that doesn't open this app every day still finds its Song Info and
+roster warnings already warm next time someone does, rather than only
+ever catching up the moment a page is opened.
 It also lists everyone currently signed in, with a per-person Sign out
 button, so a departed staff member's billed seat can be freed right away
 instead of waiting out the 30-day session expiry (see the Pricing section

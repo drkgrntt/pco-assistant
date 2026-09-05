@@ -14,9 +14,6 @@ type HomeData struct {
 	// waiting for review (see the controller's songTagSuggestions) - 0
 	// hides the nudge entirely.
 	SuggestionCount int
-	// SongInfoCached/SongInfoTotal back the Song Info sync nudge - hidden
-	// when SongInfoTotal is 0 (no songs at all) or already fully synced.
-	SongInfoCached, SongInfoTotal int
 	// OrgStatus/OrgPlan/TrialDaysLeft mirror BillingData's own trial
 	// fields - shown here too since a trial ending is worth surfacing
 	// somewhere more visible than a page you only visit on purpose.

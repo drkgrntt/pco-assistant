@@ -360,3 +360,138 @@ func (s *Store) ClearPersonDataCache(ctx context.Context, organizationID string)
 
 	return tx.Commit()
 }
+
+// StalePersonSyncKind mirrors controllers.personSyncKind's three values
+// (person_data_cache.go, internal/server/controllers) - duplicated here
+// rather than shared, since this package has no dependency on
+// internal/server/... (see CLAUDE.md's Architecture section) and that
+// package's own kind is deliberately unexported. Values are assigned to
+// line up with the three tables migration 00033 defines, in the same
+// order controllers' own enum already uses - a caller translates via an
+// explicit switch (see controllers.personSyncKindFromStale), not a raw int
+// conversion, so neither enum's order can silently drift out of sync with
+// the other.
+type StalePersonSyncKind int
+
+const (
+	StalePersonSyncKindBlockouts StalePersonSyncKind = iota
+	StalePersonSyncKindCrossTeamHistory
+	StalePersonSyncKindTeamHistory
+)
+
+// StalePersonSyncTarget is one (person[, team]) sync-marker row for an
+// organization whose synced_at is old enough to need a refresh - see
+// StalePersonSyncTargets. TeamID is only meaningful for
+// StalePersonSyncKindTeamHistory, left "" for the other two kinds (which
+// aren't team-scoped) - mirrors controllers.personSyncRequest's own
+// TeamID convention exactly.
+type StalePersonSyncTarget struct {
+	PersonID string
+	TeamID   string
+	Kind     StalePersonSyncKind
+}
+
+// StalePersonSyncTargets returns every (person[, team]) sync-marker row
+// this organization has ever completed a sync pass for (across all three
+// migration-00033 tables), whose synced_at is older than olderThan - i.e.
+// people/teams this org already knows about, now due for a refresh. Feeds
+// the background-sync cron's "refresh" step (see
+// docs/pco-background-sync-plan.md's "Scope" section and
+// controllers.RunOrgBackgroundSync) the same personSyncRequest-shaped
+// targets the organic per-render path (rosters_warnings.go) would
+// eventually enqueue on its own via personCacheStale - this just does it
+// proactively, for an org nobody's actively rendering pages for.
+//
+// A row with no synced_at old enough (or no row at all - see the
+// discovery pass this doesn't cover) is simply absent from the result;
+// there's no separate "ok" signal to check, unlike the read-path caches
+// above, since an empty result here is exactly "nothing to refresh right
+// now," never a lookup failure.
+func (s *Store) StalePersonSyncTargets(ctx context.Context, organizationID string, olderThan time.Duration) ([]StalePersonSyncTarget, error) {
+	cutoff := time.Now().Add(-olderThan)
+	var targets []StalePersonSyncTarget
+
+	blockoutRows, err := s.db.QueryContext(ctx, `
+		SELECT person_id FROM person_blockout_sync WHERE organization_id = $1 AND synced_at < $2
+	`, organizationID, cutoff)
+	if err != nil {
+		return nil, err
+	}
+	defer blockoutRows.Close()
+	for blockoutRows.Next() {
+		var personID string
+		if err := blockoutRows.Scan(&personID); err != nil {
+			return nil, err
+		}
+		targets = append(targets, StalePersonSyncTarget{PersonID: personID, Kind: StalePersonSyncKindBlockouts})
+	}
+	if err := blockoutRows.Err(); err != nil {
+		return nil, err
+	}
+
+	crossTeamRows, err := s.db.QueryContext(ctx, `
+		SELECT person_id FROM person_plan_history_sync WHERE organization_id = $1 AND synced_at < $2
+	`, organizationID, cutoff)
+	if err != nil {
+		return nil, err
+	}
+	defer crossTeamRows.Close()
+	for crossTeamRows.Next() {
+		var personID string
+		if err := crossTeamRows.Scan(&personID); err != nil {
+			return nil, err
+		}
+		targets = append(targets, StalePersonSyncTarget{PersonID: personID, Kind: StalePersonSyncKindCrossTeamHistory})
+	}
+	if err := crossTeamRows.Err(); err != nil {
+		return nil, err
+	}
+
+	teamRows, err := s.db.QueryContext(ctx, `
+		SELECT person_id, team_id FROM person_team_plan_history_sync WHERE organization_id = $1 AND synced_at < $2
+	`, organizationID, cutoff)
+	if err != nil {
+		return nil, err
+	}
+	defer teamRows.Close()
+	for teamRows.Next() {
+		var personID, teamID string
+		if err := teamRows.Scan(&personID, &teamID); err != nil {
+			return nil, err
+		}
+		targets = append(targets, StalePersonSyncTarget{PersonID: personID, TeamID: teamID, Kind: StalePersonSyncKindTeamHistory})
+	}
+	if err := teamRows.Err(); err != nil {
+		return nil, err
+	}
+
+	return targets, nil
+}
+
+// PersonSyncMarkerStatus reports, for one (person[, team]) pair, whether
+// this organization has ever completed *any* person-level sync (a
+// blockout or cross-team-history pass - either one is enough, since both
+// are populated by the same "this org has organically encountered this
+// person" event) and, separately, whether it's completed a team-level
+// sync for this exact (person, team) pair. teamID may be "" (a plan
+// assignment with no team relationship) - teamKnown is always false in
+// that case, matching how callers should treat it (nothing to enqueue for
+// an unresolvable team).
+//
+// Used by the background-sync cron's recent-history discovery pass (see
+// docs/pco-background-sync-plan.md's step 6 and
+// controllers.RunOrgBackgroundSync) to tell "never seen this person/team
+// before" (worth enqueueing as a new discovery) from "already known,
+// possibly just stale" (StalePersonSyncTargets' job above, not this
+// one's) - a person/team with any marker at all, fresh or stale, is
+// already covered by the refresh sweep and should never be double-
+// enqueued here.
+func (s *Store) PersonSyncMarkerStatus(ctx context.Context, organizationID, personID, teamID string) (personKnown, teamKnown bool, err error) {
+	err = s.db.QueryRowContext(ctx, `
+		SELECT
+			EXISTS(SELECT 1 FROM person_blockout_sync WHERE organization_id = $1 AND person_id = $2)
+				OR EXISTS(SELECT 1 FROM person_plan_history_sync WHERE organization_id = $1 AND person_id = $2),
+			$3 != '' AND EXISTS(SELECT 1 FROM person_team_plan_history_sync WHERE organization_id = $1 AND person_id = $2 AND team_id = $3)
+	`, organizationID, personID, teamID).Scan(&personKnown, &teamKnown)
+	return personKnown, teamKnown, err
+}

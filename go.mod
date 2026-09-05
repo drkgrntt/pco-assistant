@@ -7,7 +7,7 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.41.4
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.12
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.97.1
-	github.com/drkgrntt/go-pco v0.20.0
+	github.com/drkgrntt/go-pco v0.21.0
 	github.com/go-co-op/gocron/v2 v2.16.1
 	github.com/gofiber/fiber/v2 v2.52.13
 	github.com/jackc/pgx/v5 v5.10.0

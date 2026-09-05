@@ -70,10 +70,11 @@ that first. Facts worth adding here that aren't in CLAUDE.md:
 | `personNameMapForIDs` (1 call/person) | fixed | batched `where[id]=...`, 100/call |
 | Cross-team/frequency checks (1 call per person-per-group) | fixed | deduped to 1 call per person, then per (person, team, position) |
 | Sequential per-item loops (candidates, blockouts, item notes, ...) | fixed | `scheduling.RunConcurrently`, bounded to `PCOFanOutLimit` (10) |
-| Song Info bulk sync (~200 calls for a 100-song library) | fixed | detached to a background goroutine, paced batches (10/batch, 10s pause, ~60% of budget) |
+| Song Info sync (blocked a render on a cache miss; also had a whole-library "sync now" button/nag) | fixed | queue-on-miss: a miss enqueues and returns immediately, `buildSetBuilderData` drains the queue in a background goroutine (paced batches, 10/batch, 10s pause, ~60% of budget) - no more button/page, see Phase 2 changelog entry |
 | Team Builder candidate eligibility pool (scales with volunteer pool, not the roster) | fixed | candidate warnings computed on-demand (button click), not eagerly for every candidate |
 | Team Builder per-person blockout/cross-team/frequency (live call every render) | fixed | local Postgres cache (migration `00033`) + paced background sync, same architecture as Song Info |
 | Roster shared-fetch duplication (`GetTeamMembers`/`GetNeededPositions`/`GetTeams` fetched twice per click) | fixed | `rosterSharedPCOData` - fetch once, pass to both scoped builders |
+| Roster `GetTeams` call (a whole extra request per plan, just to resolve team ids to names) | fixed | `include=team` sideloaded on the `GetNeededPositions` call already being made - `GetTeams` eliminated, shared roster fetch now 2 calls not 3 |
 | `GetServiceTypes` (called independently by 3 pages) | fixed | cached `FetchServiceTypes`, 60s TTL, same shape as `FetchActiveSongs` |
 | `fetchRecentPlanHistory` (uncached, would've fired per debounced keystroke once candidates went search-driven) | fixed | cached per service type, 60s TTL |
 | Home page (`buildHomeData`, sequential per-service-type) | fixed | `RunConcurrently` fan-out |
@@ -81,6 +82,7 @@ that first. Facts worth adding here that aren't in CLAUDE.md:
 | Sustained-rate ceiling across all traffic on one token | enabled (prod) | go-pco `ConfigureThrottle`, `PCO_THROTTLE_ENABLED=true`, 60 req/20s default, background syncs tagged low-priority |
 | A 429 that gets through anyway | enabled (prod) | go-pco `ConfigureRetry`, `PCO_RETRY_ON_429_ENABLED=true`, waits `Retry-After`, 1 retry |
 | Visibility into PCO failures | shipped | `pco.SetResponseHook` logs every failure (never a success) through this app's logger |
+| Unattended sync (Song Info + person-data refresh + person-data recent-history discovery) | shipped | hourly `jobs.PCOJobs` cron, one org at a time, borrowing and refreshing that org's own idle session token - reuses the exact same paced/guarded sync entry points (`triggerSongInfoQueueSync`, `triggerPersonDataSyncCtx`) an ordinary render already triggers, low-priority (`pco.WithPriority`, 20) |
 | **Team/position lists and team-member names** | **still open** | fetched live, uncached, on every roster render - no reported symptom yet, not fixed speculatively |
 
 ## Live-verified PCO API facts (worth not re-checking)
@@ -104,34 +106,38 @@ that first. Facts worth adding here that aren't in CLAUDE.md:
 - **Arrangements#index/#show supports `include=keys`** - confirmed live
   against a real song/arrangement (`meta.can_include` lists `keys`,
   `sections`; `?include=keys` returns the arrangement's Key resource(s)
-  sideloaded in `included`). Not yet used:
-  `fetchAndCacheArrangementInfo` (`scheduling.go`) still makes two
-  sequential calls per song (`GetArrangements` then `GetKeys`) - one
-  `include=keys` call would do both, halving Song Info's whole-library
-  sync cost (the "~200 calls for a 100-song library" figure). Needs a
-  small go-pco change first: `ArrangementsParams` has no `Include` field
-  today, unlike `PeopleParams`/`TeamMembersParams`/
-  `PersonPlanPeopleParams`, which already support one.
+  sideloaded in `included`). **Used** (2026-09-04, Phase 1b):
+  `fetchAndCacheArrangementInfo` (`scheduling.go`) now calls
+  `GetArrangements(..., &pco.ArrangementsParams{PerPage: 1, Include:
+  []string{"keys"}})` and reads the Key resource out of that response's
+  `Included` array (`keysFromIncluded`) instead of a second `GetKeys`
+  call - halves Song Info's whole-library sync cost (the "~200 calls for
+  a 100-song library" figure).
 - **Items#index supports `include=item_notes`** (also `song`,
   `arrangement`, `key`, among others - confirmed live via `meta.can_include`
-  on a real plan's items) - not yet used: `renderServiceOrder`
-  (`sets_builder.go`) fans a `GetItemNotes` call out per published song via
-  `RunConcurrently` (its own comment: "song's GetItemNotes/GetArrangements/
-  GetKeys latency one at a time") - a wall-clock fix, not a call-count one,
-  same distinction the "why this is a real risk" section above draws. One
-  `GetItems(..., include=item_notes)` sideloads every item's notes in the
-  same call already being made, on every Set Builder render. `ItemsParams`
-  has no `Include` field today - same gap as `ArrangementsParams`.
+  on a real plan's items) - **used** (2026-09-04, Phase 1c): `buildSetBuilderData`
+  (`sets_builder.go`) now calls `GetItems(..., &pco.ItemsParams{Include:
+  []string{"item_notes"}})` and `renderServiceOrder`/`buildSongNoteViews`
+  read every published song's notes out of a `map[itemID][]pco.ItemNoteData`
+  built once from that response's `Included` array
+  (`itemNotesFromIncluded`), instead of one `GetItemNotes` call per
+  published song. `buildSongNoteViews` is now a pure function with no PCO
+  call of its own; `renderServiceOrder`'s `RunConcurrently` fan-out was kept
+  at the time this landed (Phase 1b, which collapsed
+  `resolveArrangementCacheInfo`'s cache-miss path to one call, hadn't
+  shipped yet) - collapsed to a plain sequential loop in Phase 2 below,
+  once that cache-miss path stopped making any PCO call at all.
 - **NeededPositions#index and TeamMembers#index both support
-  `include=team`** (confirmed live) - not yet used:
-  `fetchRosterSharedPCOData` (`rosters_scoped.go`) makes exactly 3 calls
-  per plan (`GetTeamMembers`, `GetNeededPositions`, `GetTeams`), and
-  `GetTeams`' only use anywhere in this codebase is resolving bare team
-  IDs to names for the other two. Sideloading `team` on the
-  `NeededPositions` call already being made eliminates the standalone
-  `GetTeams` call - on every Team Builder render and every roster
+  `include=team`** (confirmed live) - now used: `fetchRosterSharedPCOData`
+  (`rosters_scoped.go`) and `buildRosterBuilderData`'s full-rebuild path
+  (`rosters_builder.go`) both call `GetNeededPositions(...,
+  &pco.NeededPositionsParams{Include: []string{"team"}})` and parse Team
+  resources out of the response's `Included` array (`teamInfoFromIncluded`,
+  `rosters_builder.go`) instead of a separate `GetTeams` call - `GetTeams`'
+  only use anywhere in this codebase was resolving bare team IDs to names/
+  display order for these two functions. Drops the shared roster fetch
+  from 3 calls to 2, on every Team Builder render and every roster
   add/remove/preference-change mutation (`rosters_detail.go`).
-  `NeededPositionsParams` has no `Include` field today either.
 - **Checked and ruled out**: `TeamMembers#index`'s `include=person` looked
   like it might replace `personNameMapForIDs`' batched name lookup, but
   that lookup already spans IDs beyond just a plan's team members
@@ -360,3 +366,118 @@ out to 100-200 sequential round trips per load.
   decisions"). **Confirmed resolved 2026-09-03**: the affected user
   reported no further issues; prod logs show the retry actually firing and
   succeeding. No third occurrence.
+- **PCO call-efficiency rollout, Phase 1 (`include=` wins)** - go-pco
+  `v0.21.0` added `Include []string` to `ArrangementsParams`/`ItemsParams`/
+  `NeededPositionsParams` plus an `AccessTokenFromContext` accessor (the
+  latter for Phase 2 below), landing three sideloading fixes from this
+  file's own "Live-verified PCO API facts":
+  - **Arrangement keys sideloaded instead of a second `GetKeys` call**
+    (Phase 1b) - `fetchAndCacheArrangementInfo` (`scheduling.go`) now calls
+    `GetArrangements(..., &pco.ArrangementsParams{PerPage: 1, Include:
+    []string{"keys"}})` and reads the Key resource out of that response's
+    `Included` array (`keysFromIncluded`) instead of a separate `GetKeys`
+    call - halves Song Info's whole-library sync cost.
+  - **Item notes sideloaded instead of fetched per song** (Phase 1c) -
+    `buildSetBuilderData`'s one `GetItems` call now passes `Include:
+    []string{"item_notes"}`; `renderServiceOrder` no longer fans a
+    `GetItemNotes` call out per published song via `RunConcurrently` -
+    `buildSongNoteViews` reads from a `map[itemID][]pco.ItemNoteData` built
+    once (`itemNotesFromIncluded`, same `Included`-array parsing convention
+    as `teamNamesFromIncluded`/`planSortDatesFromIncluded`). Kept
+    `RunConcurrently` in `renderServiceOrder` rather than collapsing it to a
+    sequential loop: at the time this landed, `resolveArrangementCacheInfo`'s
+    cache-miss path was still two sequential calls per song, giving the
+    fan-out genuine per-row latency to parallelize - Phase 1b (above)
+    since folded that into one call. Revisited and collapsed to a plain
+    sequential loop in Phase 2 below, once the cache-miss path stopped
+    making any PCO call at all (queue-on-miss).
+  - **Roster `GetTeams` call eliminated** (Phase 1d) -
+    `fetchRosterSharedPCOData` (`rosters_scoped.go`) and
+    `buildRosterBuilderData` (`rosters_builder.go`) now sideload `team` on
+    the `GetNeededPositions` call already being made instead of firing a
+    separate `GetTeams` request just to resolve team ids to names/display
+    order. Team resources are parsed out of that response's `Included`
+    array by a new `teamInfoFromIncluded` helper (`rosters_builder.go`,
+    alongside the existing `teamNamesFromIncluded`/`planSortDatesFromIncluded`
+    precedent), and `rosterSharedPCOData.Teams`/`TeamsErr` are gone -
+    replaced by a pre-parsed `TeamInfo map[string]teamInfo` field. Drops
+    the shared roster fetch from 3 calls to 2, on every Team Builder
+    render and every roster add/remove/preference-change mutation.
+- **PCO call-efficiency rollout, Phase 2 (Song Info queue-on-miss)** -
+  `resolveArrangementCacheInfo`'s (`scheduling.go`) cache-miss path no
+  longer blocks a render on a live `fetchAndCacheArrangementInfo` call: it
+  enqueues a `songSyncRequest` (`enqueueSongSync`) and returns a zero-value
+  immediately, mirroring `person_data_cache.go`'s
+  personSyncPending/triggerPersonDataSync architecture exactly (see that
+  file's own header comment). `buildSetBuilderData`/
+  `buildSetBuilderDataWithErr` (`sets_builder.go`) call
+  `triggerSongInfoQueueSync` once, right before returning, which drains
+  whatever's pending for the org into a background goroutine
+  (`runSongInfoQueueSync`) in the same paced-batch shape as the old
+  whole-library sync. Trigger mechanism (the plan's own "2c" decision):
+  called from *inside* the shared builder function rather than from each of
+  its ~20-plus call sites, using a new `pco.AccessTokenFromContext`
+  accessor (go-pco `v0.21.0`, added alongside Phase 1's `Include` fields)
+  and a new `logger.RequestIDFromContext` counterpart to pull the access
+  token/request id back out of the plain `context.Context`
+  `buildSetBuilderData` already has, rather than threading either through
+  as new parameters - a context with no token (never happens for a real
+  signed-in request today) makes the trigger a no-op. `renderServiceOrder`'s
+  `RunConcurrently` fan-out (kept in Phase 1c above) was collapsed to a
+  plain sequential loop once this shipped, since no per-row PCO call
+  remains in the common case any more. Also removed: the standalone
+  `/scheduling/song-info` page and its "Sync now" button
+  (`SongInfoPage`/`SyncSongInfo`), the home-page "Finish syncing"
+  nudge/Setup-list item (`HomeData.SongInfoCached`/`SongInfoTotal`), and the
+  matching nav-dropdown nag (`PopulateNavState`'s `songInfoNeedsSync`
+  flag). Deliberately **not added**: a whole-library "resync" button on
+  Account - the existing `ClearSongInfoCache` action already covers "force
+  a fresh state" (wipe, then queue-on-miss refills it as songs are actually
+  touched).
+- **PCO call-efficiency rollout, Phase 3 (background-sync cron)** - full
+  design in `docs/pco-background-sync-plan.md` (now marked shipped). New
+  `jobs.PCOJobs` (`internal/server/jobs/pco.go`), registered alongside
+  `AuthJobs`/`BillingJobs` in `crons.go`, ticks hourly: for every
+  organization with at least one live session
+  (`auth.Store.SessionForBackgroundSync` - most-recently-created wins, any
+  live session has equivalent PCO access), refreshes that session's token
+  (`auth.RefreshAccessToken`), persists it back
+  (`UpdateSessionTokensByID`), and calls the new
+  `controllers.RunOrgBackgroundSync` (`pco_background_sync.go`) with a
+  low-priority context built from it. A dead refresh token deletes the
+  session on the spot (`DeleteSessionByID`) - an earlier, stronger signal
+  than `deleteExpiredSessions`' 30-day sweep - and skips that org for the
+  tick; no live session at all is unchanged from today (simply skipped).
+  `RunOrgBackgroundSync` deliberately reuses every existing sync mechanic
+  unchanged rather than inventing new ones: it computes what an idle org
+  needs (a `FetchActiveSongs`-vs-cache diff for Song Info, a new
+  `scheduling.Store.StalePersonSyncTargets` query across migration
+  `00033`'s three tables for person-data refresh), enqueues it the same
+  way an organic render-time miss would
+  (`enqueueSongSync`/`enqueuePersonSync`), and triggers the same paced,
+  guarded drain-and-run path a render already uses
+  (`triggerSongInfoQueueSync` unchanged; `triggerPersonDataSync` split into
+  a `*fiber.Ctx` wrapper and a new ctx/store/org-based
+  `triggerPersonDataSyncCtx` core so both a request and this cron can
+  drive it) - so this can never race a concurrent organic sync for the
+  same org, and adds no second rate-limit budget to reason about. Also
+  added: a bounded "recent-history discovery" pass (5 most recent past
+  plans per service type, `GetPlans`+`GetTeamMembers`) that seeds
+  person-data sync requests for anyone with **no** sync-marker row at all
+  yet (`scheduling.Store.PersonSyncMarkerStatus`) - the "just-connected
+  org with hundreds of volunteers" case - bounded by (recent plan count) x
+  (service type count), not volunteer-pool size, so independent of org
+  size unlike the full-eligibility-pool problem this deliberately still
+  leaves open (see the "still open" row above). No new migration: the
+  discovery window is deliberately re-walked every tick rather than
+  gated behind a new "already discovered up through plan X" marker table
+  (an alternative the plan doc considered) - `PersonSyncMarkerStatus`'s
+  existence check already skips everyone previously discovered, so the
+  only recurring cost of re-walking is a small, constant number of
+  `GetPlans`/`GetTeamMembers` calls per org per hour, not reprocessing
+  already-known people; revisit if that ever actually shows up as
+  expensive. `middleware.AccessToken(c)` (the fiber-locals token accessor
+  `triggerPersonDataSync` used before this refactor) was removed as dead
+  code once nothing called it any more - `pco.AccessTokenFromContext` on
+  the already-carried `pco_ctx` context does the same job for every
+  remaining caller.

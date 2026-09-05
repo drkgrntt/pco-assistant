@@ -46,6 +46,8 @@ live-verified `can_include` values are in `docs/pco-api-risks.md`'s
 
 ### 1a. go-pco: add `Include []string` to three params structs
 
+**Status: shipped 2026-09-04, go-pco `v0.21.0`.**
+
 This is a change to the separate `go-pco` module
 (`/home/drkgrntt/projects/go-pco` locally), not this repo - same
 "lives in go-pco first" situation as the throttle work
@@ -84,6 +86,10 @@ sequence as every previous go-pco version bump in this project's history.
 
 ### 1b. This repo: `fetchAndCacheArrangementInfo` (`scheduling.go`)
 
+**Status: shipped 2026-09-04.** See `docs/pco-api-risks.md`'s changelog
+entry for what landed (`keysFromIncluded`). Section left as-written below
+for reference.
+
 Currently: `GetArrangements(ctx, songID, &pco.ArrangementsParams{PerPage: 1})`
 then, on success, a second `GetKeys(ctx, songID, arrangement.ID, ...)` call.
 
@@ -100,6 +106,10 @@ Key row exists" logic (`fetchAndCacheArrangementInfo`'s current
 lines ~102-113) unchanged - just source the Key data differently.
 
 ### 1c. This repo: item notes in `renderServiceOrder`/`buildSetBuilderData` (`sets_builder.go`)
+
+**Shipped 2026-09-04** - see `docs/pco-api-risks.md`'s changelog for what
+landed and the `RunConcurrently`-kept reasoning. Section left as-written
+below for reference.
 
 Currently: `buildSetBuilderData` calls `GetItems(ctx, serviceTypeID,
 planID, nil)` once, then `renderServiceOrder` fans out one `GetItemNotes`
@@ -124,6 +134,9 @@ already PCO-free), or whether the concurrency now has nothing left to
 parallelize.
 
 ### 1d. This repo: `GetTeams` elimination (`rosters_scoped.go`, `rosters_builder.go`)
+
+**Status: shipped.** See `docs/pco-api-risks.md`'s changelog entry for
+what actually landed (`teamInfoFromIncluded`, `rosterSharedPCOData.TeamInfo`).
 
 Currently: `fetchRosterSharedPCOData` (`rosters_scoped.go`) makes
 `GetTeamMembers`, `GetNeededPositions`, and `GetTeams` - three calls per
@@ -155,6 +168,14 @@ needed - this phase touches PCO parsing only, not caching/storage.
 ---
 
 ## Phase 2: Song Info queue-on-miss (kills the button/nag)
+
+**Status: shipped 2026-09-04.** See `docs/pco-api-risks.md`'s changelog
+entry for what landed - the queue/trigger architecture below was followed
+exactly, including the "trigger mechanism" decision (2c): the recommended
+in-function approach (`buildSetBuilderData`/`buildSetBuilderDataWithErr`
+calling `triggerSongInfoQueueSync` once via `pco.AccessTokenFromContext`/
+`logger.RequestIDFromContext`), not the ~20-call-site fallback. Section
+left as-written below for reference.
 
 Converts `resolveArrangementCacheInfo`'s cache-miss path
 (`scheduling.go`) from block-and-fetch-inline to queue-and-batch,
@@ -290,6 +311,11 @@ miss branch at all).
 ---
 
 ## Phase 3: background-sync cron (only if explicitly requested)
+
+**Status: shipped 2026-09-04**, on explicit user request (the "not urgent"
+gating below applied until then). Full design in
+`docs/pco-background-sync-plan.md` (now marked shipped there too) - see
+`docs/pco-api-risks.md`'s changelog entry for exactly what landed.
 
 Full design already written: `docs/pco-background-sync-plan.md`. Nothing
 to add here beyond the gating already stated at the top of this doc and

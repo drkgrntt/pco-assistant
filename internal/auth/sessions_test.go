@@ -179,3 +179,101 @@ func TestDeleteSessionsForPerson(t *testing.T) {
 		t.Fatalf("ListActiveSessions (after delete) = %+v, want exactly [Bob] (personB untouched)", sessions)
 	}
 }
+
+func TestSessionForBackgroundSyncPicksMostRecent(t *testing.T) {
+	store := dbTestStore(t)
+	ctx := context.Background()
+	orgID := testScopeID("org")
+	otherOrgID := testScopeID("org")
+	cleanupSessions(t, store, orgID)
+	cleanupSessions(t, store, otherOrgID)
+
+	// No sessions at all yet - ok should be false, not an error.
+	_, ok, err := store.SessionForBackgroundSync(ctx, orgID)
+	if err != nil {
+		t.Fatalf("SessionForBackgroundSync (no sessions): unexpected error: %v", err)
+	}
+	if ok {
+		t.Error("SessionForBackgroundSync (no sessions) ok = true, want false")
+	}
+
+	if _, err := store.CreateSession(ctx, testScopeID("person"), "Alice", orgID, "Test Org", "tok-a", "ref-a", time.Now().Add(time.Hour)); err != nil {
+		t.Fatalf("CreateSession (Alice): %v", err)
+	}
+	// See TestListActiveSessions' identical comment: created_at has
+	// second-ish resolution, sleep briefly to guarantee ordering.
+	time.Sleep(1100 * time.Millisecond)
+	if _, err := store.CreateSession(ctx, testScopeID("person"), "Bob", orgID, "Test Org", "tok-b", "ref-b", time.Now().Add(time.Hour)); err != nil {
+		t.Fatalf("CreateSession (Bob): %v", err)
+	}
+
+	// A session in a different org must never be picked.
+	if _, err := store.CreateSession(ctx, testScopeID("person"), "Other Org Person", otherOrgID, "Other Org", "tok-o", "ref-o", time.Now().Add(time.Hour)); err != nil {
+		t.Fatalf("CreateSession (other org): %v", err)
+	}
+
+	// An expired session for this org must never be picked either, even if
+	// it's the most recently created row.
+	time.Sleep(1100 * time.Millisecond)
+	insertExpiredSession(t, store, testScopeID("sess"), testScopeID("person"), "Expired Person", orgID)
+
+	session, ok, err := store.SessionForBackgroundSync(ctx, orgID)
+	if err != nil {
+		t.Fatalf("SessionForBackgroundSync: %v", err)
+	}
+	if !ok {
+		t.Fatal("SessionForBackgroundSync ok = false, want true")
+	}
+	if session.PersonName != "Bob" {
+		t.Errorf("SessionForBackgroundSync picked %q, want %q (most recently created live session)", session.PersonName, "Bob")
+	}
+	if session.ID == "" {
+		t.Error("SessionForBackgroundSync returned an empty ID - callers need this to act on the session without its raw cookie token")
+	}
+	if session.RefreshToken != "ref-b" {
+		t.Errorf("SessionForBackgroundSync returned RefreshToken = %q, want %q", session.RefreshToken, "ref-b")
+	}
+}
+
+func TestUpdateSessionTokensByIDAndDeleteSessionByID(t *testing.T) {
+	store := dbTestStore(t)
+	ctx := context.Background()
+	orgID := testScopeID("org")
+	cleanupSessions(t, store, orgID)
+
+	rawToken, err := store.CreateSession(ctx, testScopeID("person"), "Alice", orgID, "Test Org", "tok-orig", "ref-orig", time.Now().Add(time.Hour))
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+
+	session, ok, err := store.SessionForBackgroundSync(ctx, orgID)
+	if err != nil || !ok {
+		t.Fatalf("SessionForBackgroundSync: ok=%v err=%v", ok, err)
+	}
+
+	newExpiry := time.Now().Add(2 * time.Hour).Truncate(time.Microsecond)
+	if err := store.UpdateSessionTokensByID(ctx, session.ID, "tok-new", "ref-new", newExpiry); err != nil {
+		t.Fatalf("UpdateSessionTokensByID: %v", err)
+	}
+
+	// GetSession (keyed by the raw cookie token, like a real request) sees
+	// the update made via the hashed-id path.
+	updated, err := store.GetSession(ctx, rawToken)
+	if err != nil {
+		t.Fatalf("GetSession (after UpdateSessionTokensByID): %v", err)
+	}
+	if updated.AccessToken != "tok-new" || updated.RefreshToken != "ref-new" {
+		t.Errorf("GetSession (after UpdateSessionTokensByID) tokens = (%q, %q), want (%q, %q)", updated.AccessToken, updated.RefreshToken, "tok-new", "ref-new")
+	}
+	if !updated.TokenExpiresAt.Equal(newExpiry) {
+		t.Errorf("GetSession (after UpdateSessionTokensByID) TokenExpiresAt = %v, want %v", updated.TokenExpiresAt, newExpiry)
+	}
+
+	if err := store.DeleteSessionByID(ctx, session.ID); err != nil {
+		t.Fatalf("DeleteSessionByID: %v", err)
+	}
+
+	if _, err := store.GetSession(ctx, rawToken); err == nil {
+		t.Error("GetSession after DeleteSessionByID should fail - session should be gone")
+	}
+}
