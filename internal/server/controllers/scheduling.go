@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"pco-assistant/internal/logger"
 	"pco-assistant/internal/scheduling"
 	"pco-assistant/internal/server/middleware"
 	views "pco-assistant/internal/views/scheduling"
@@ -72,6 +73,29 @@ func formatSongStructure(sequenceShort, sequence []string) string {
 	return strings.Join(sequence, ", ")
 }
 
+// songAttachmentViews converts a song's cached attachments into their
+// display-ready view form (views.SongAttachmentView) - a thin field-by-field
+// copy, kept as its own function (rather than inlined at the one call site
+// in renderServiceOrder) purely to mirror how every other SetSongView field
+// derived from a cache lookup gets its own small conversion step in this
+// file (formatArrangementInfo, formatSongStructure). nil in, nil out - a
+// song with no cached attachments renders no "Files" block at all (see
+// songDetailCard).
+func songAttachmentViews(infos []scheduling.SongAttachmentInfo) []views.SongAttachmentView {
+	if len(infos) == 0 {
+		return nil
+	}
+
+	out := make([]views.SongAttachmentView, len(infos))
+	for i, info := range infos {
+		out[i] = views.SongAttachmentView{
+			PCOAttachmentID: info.PCOAttachmentID,
+			Filename:        info.Filename,
+		}
+	}
+	return out
+}
+
 // includedKey is the Key equivalent of includedTeam/includedPlan
 // (rosters_builder.go) - just enough of a Key resource's shape (see
 // go-pco's KeyData) to read its id and starting key out of a
@@ -123,6 +147,17 @@ func keysFromIncluded(included []any) []includedKey {
 // own cache-miss path (below) deliberately does NOT call this directly -
 // see its own doc comment for why it enqueues instead.
 //
+// Also fetches and caches this song's Attachments (fetchAndCacheSongAttachments
+// below) as part of the same "sync this song's info" unit - see
+// docs/plans/not-started/song-lead-sheet-attachments-plan.md. That's a second,
+// independent PCO call (this function/its callers now cost 2 live PCO
+// calls per uncached song, not 1 - see songInfoSyncBatchPause's own doc
+// comment for the pacing math this feeds), kept best-effort and never
+// reflected in this function's own returned error: a hiccup fetching
+// attachments shouldn't make an otherwise-successful arrangement fetch look
+// like a failed sync to callers that gate real behavior on that error (see
+// fetchAndCacheSongAttachments' own doc comment for why).
+//
 // Key comes from the arrangement's Key sub-resource (its StartingKey),
 // not the arrangement's own ChordChartKey attribute - confirmed live
 // against real songs: ChordChartKey only ever gets set when there's an
@@ -171,7 +206,46 @@ func fetchAndCacheArrangementInfo(ctx context.Context, store *scheduling.Store, 
 		return info, err
 	}
 
+	fetchAndCacheSongAttachments(ctx, store, organizationID, songID)
+
 	return info, nil
+}
+
+// fetchAndCacheSongAttachments live-fetches songID's Planning Center
+// Attachments (lead sheet/chord chart PDFs, scans, audio - arbitrary
+// uploaded files, see pco.GetAttachments) and replaces its cached
+// attachment list (scheduling.Store.UpsertSongAttachments) - the
+// attachment half of fetchAndCacheArrangementInfo's "sync this song's
+// info" unit above, called from there rather than from each of that
+// function's own call sites.
+//
+// Deliberately swallows its own errors (logged, not returned): this is a
+// newer, less-established PCO call than the arrangement fetch it rides
+// alongside, and several of fetchAndCacheArrangementInfo's callers
+// (sets_publish.go's publish-time arrangement resolution, in particular)
+// use that function's returned error to decide whether the *arrangement*
+// info it just fetched is safe to use - an unrelated attachments hiccup
+// must never make those callers discard a perfectly good, already-persisted
+// arrangement fetch.
+func fetchAndCacheSongAttachments(ctx context.Context, store *scheduling.Store, organizationID, songID string) {
+	resp, err := pco.GetAttachments(ctx, songID, nil)
+	if err != nil {
+		logger.WarnContext(ctx, "song info sync: fetching attachments failed", "organization_id", organizationID, "song_id", songID, "error", err)
+		return
+	}
+
+	attachments := make([]scheduling.SongAttachmentInfo, 0, len(resp.Data))
+	for _, a := range resp.Data {
+		attachments = append(attachments, scheduling.SongAttachmentInfo{
+			PCOAttachmentID: a.ID,
+			Filename:        a.Attributes.Filename,
+			ContentType:     a.Attributes.ContentType,
+		})
+	}
+
+	if err := store.UpsertSongAttachments(ctx, organizationID, songID, attachments); err != nil {
+		logger.WarnContext(ctx, "song info sync: caching attachments failed", "organization_id", organizationID, "song_id", songID, "error", err)
+	}
 }
 
 // itemDescriptionFor resolves what to publish as a set song's plan item
@@ -463,6 +537,7 @@ func (sc *SchedulingController) RegisterRoutes(router fiber.Router) {
 	group.Post("/sets/:service_type_id/:plan_id/set-songs/:set_song_id/description", sc.UpdateSetSongDescription)
 	group.Post("/sets/:service_type_id/:plan_id/set-songs/:set_song_id/key", sc.UpdateSetSongKey)
 	group.Post("/sets/:service_type_id/:plan_id/set-songs/:set_song_id/refresh-arrangement-info", sc.RefreshSetSongArrangementInfo)
+	group.Get("/sets/:service_type_id/:plan_id/set-songs/:set_song_id/attachments/:attachment_id", sc.OpenSongAttachment)
 	group.Post("/sets/:service_type_id/:plan_id/items/:item_id/notes", sc.UpdateSongNote)
 	group.Post("/sets/:service_type_id/:plan_id/publish", sc.PublishSet)
 	group.Post("/sets/:service_type_id/:plan_id/refresh-info", sc.RefreshSongInfo)

@@ -67,6 +67,16 @@ with at least Viewer access can still sign in.
   structure ("Intro, Verse 1, Chorus...") and a "Chord chart" badge when
   one's attached in Planning Center - both pulled from the same cached
   arrangement data, no extra Planning Center request
+- **Song attachments (lead sheets/chord charts)** - a song's detail card
+  also lists its Planning Center Attachments (lead sheet/chord chart PDFs,
+  scans, audio - any file a church has uploaded to it) as a small "Files"
+  list, one link per attachment, opening the real file in a new tab.
+  Cached alongside the rest of Song Info at sync time; clicking a link
+  live-fetches a fresh URL from Planning Center first, rather than linking
+  to a possibly-stale one, in case it expires. This is a manual reference
+  aid, not automatic vocal-range extraction - Planning Center's attachments
+  are arbitrary file blobs (often scanned PDFs), not structured notation,
+  so there's nothing to compute a range from automatically
 - **Song / Person Preferences** - note who's preferred or discouraged for a
   given song
 - **Song notes** - click a song's row on the Build page to open its detail

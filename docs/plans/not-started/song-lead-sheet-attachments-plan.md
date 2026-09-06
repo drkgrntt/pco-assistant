@@ -1,5 +1,43 @@
 # Plan: surface song attachments (lead sheets) on the Build page
 
+**Status: partially built (2026-09-06).** Every numbered step below is
+coded and wired end-to-end (`go build ./...`/`make test` both pass in both
+repos), but two things this doc explicitly calls for are still open, and
+this stays in `not-started/` until they're closed:
+
+1. **The "Verify live first" step was not actually done.** The build
+   environment for this pass had no reachable PCO credentials or dev
+   database (sandboxed - every attempt to pull a session token or query
+   the local DB was denied), so `go-pco`'s `AttachmentAttributes` field
+   names (`filename`, `content_type`, `file_size`, `url`, `created_at`/
+   `updated_at`) are inferred from this app's ordinary JSON:API naming
+   convention, not confirmed against a real response - and whether `url`
+   is long-lived or expiring (the fact step 4 below turns on) is unknown
+   either way. The implementation defensively assumes the worse case
+   (expiring, never cached - `OpenSongAttachment` always live-fetches a
+   fresh URL on click), which is correct regardless of which way this
+   turns out, but the attribute *names* could still be wrong, in which
+   case a song's real attachments would just silently render as an empty
+   Files list rather than error (see `docs/pco-api-risks.md`'s matching
+   entry in "Live-verified PCO API facts"). **Before trusting this
+   feature**: open the Build page for a song with a real Planning Center
+   attachment in the dev org and confirm its filename/link actually shows
+   and opens - then update both this doc and `docs/pco-api-risks.md`'s
+   entry to say so, and move this doc to `docs/plans/shipped/`.
+2. **`go-pco`'s new code is committed locally but not tagged/pushed.**
+   `attachments.go`/`attachments_test.go` are committed on `go-pco`'s
+   `main` branch in the local checkout (commit message flags the same
+   unverified-schema caveat as above), but tagging `v0.23.0` and pushing
+   it to `github.com/drkgrntt/go-pco` needs an explicit go-ahead per
+   CLAUDE.md's git-workflow gating - this session only had access to a
+   local `go-pco` checkout, not push credentials. Until that tag exists,
+   this repo's `go.mod` carries a temporary `replace
+   github.com/drkgrntt/go-pco => /home/drkgrntt/projects/go-pco` directive
+   (with `require` already bumped to the intended `v0.23.0`) so
+   `go build`/`go test` work locally - **remove the replace line** once
+   `v0.23.0` is actually tagged and pushed, at which point `go mod tidy`
+   resolves the real dependency.
+
 Written 2026-09-04, prompted by revisiting the "song vocal range" idea in
 `docs/ideas.md` - specifically whether PCO's lead sheets could feed an
 *automatic* range calculation. Not built yet; written up for later, same

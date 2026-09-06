@@ -236,11 +236,13 @@ somewhere to put it.
 - ~~Whether a chord chart exists~~ - **shipped**, as a "Chord chart" badge
   on the song detail card - `Arrangement.HasChordChart`. See
   `SongArrangementInfo.HasChordChart`, `SetSongView.HasChordChart`.
-- **A lightweight reference link** - PCO's Attachment resource supports
-  `linked_url`/`remote_link` (just a URL, no file upload) - "here's the
-  recording to learn this from." Much cheaper than the full file-upload
-  design considered (and declined) for the Song Info feature - this piece
-  alone doesn't need any of that machinery.
+- ~~A lightweight reference link~~ - **shipped**, broader than originally
+  scoped here: rather than just a `linked_url`/`remote_link`-type
+  attachment, every one of a song's Planning Center Attachments (lead
+  sheet/chord chart PDFs, scans, audio, or a plain link) now shows as a
+  filename link on the song detail card - see
+  `docs/plans/not-started/song-lead-sheet-attachments-plan.md`. `SetSongView.
+  Attachments`, `scheduling.SongAttachmentInfo`.
 
 **Not in PCO's data model at all - would need local storage, same
 pattern as `song_tags`/`song_relationships`:**
@@ -376,7 +378,15 @@ pattern as `song_tags`/`song_relationships`:**
   whether a key works for someone, actually know the song's sung range
   and compare it against a person's own vocal range (see People, below)
   to flag a real mismatch automatically, not just show a note someone has
-  to read. Two real design pieces, not one:
+  to read. Still not built - see
+  `docs/plans/not-started/song-lead-sheet-attachments-plan.md` for why
+  *automatic* range extraction from a song's lead sheet specifically is
+  out of scope (Planning Center's Attachments are arbitrary file blobs,
+  often scanned PDFs, not structured notation - would need OMR, a
+  separate future R&D spike). That plan shipped the lead-sheet-link piece
+  as its own standalone manual aid (a director can open the real chart
+  while eyeballing a range) rather than as a prerequisite of this bullet.
+  Two real design pieces, not one:
   - **A key engine.** A song's range only means something relative to the
     key it was measured in, so it has to be stored as an interval
     (semitone offsets from a reference key), then transposed using the
@@ -449,8 +459,11 @@ pattern as `song_tags`/`song_relationships`:**
     practice.
   - **Lyric-derived tags** - whether Planning Center's API exposes
     song lyrics/chord chart text at all (so a topic/word could be pulled
-    automatically instead of tagged by hand) needs checking against the
-    live API before promising it - not yet verified.
+    automatically instead of tagged by hand) - **verified**: `go-pco`'s
+    `ArrangementAttributes.Lyrics` is real and already wrapped (confirmed
+    while scoping `docs/plans/not-started/song-lead-sheet-attachments-plan.md`).
+    Still not built - this only resolves the "does the data exist" open
+    question, not the picking/extraction UX.
 
   Worth treating as more than a brainstorm bullet if it gets built: the
   current UX (view tags on a song, filter by an existing tag) doesn't yet

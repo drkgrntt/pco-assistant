@@ -259,6 +259,13 @@ type SetSongView struct {
 	// Planning Center. Shown as a badge on the song detail card only, same
 	// detail-card-only scope as Structure above.
 	HasChordChart bool
+	// Attachments is this song's cached Planning Center Attachments (lead
+	// sheet/chord chart PDFs, scans, audio - arbitrary uploaded files, see
+	// scheduling.SongAttachmentInfo) - a small "Files" list of links on the
+	// song detail card, one per attachment, nothing shown when there are
+	// none. See docs/plans/not-started/song-lead-sheet-attachments-plan.md.
+	// Detail-card-only, same scope as Structure/HasChordChart above.
+	Attachments []SongAttachmentView
 	// Description is this one occurrence's local per-occurrence note (see
 	// scheduling.SetSong.Description) - "cut the bridge this week," not a
 	// persistent fact about the song. Editing this only updates the local
@@ -335,6 +342,18 @@ type SongNoteView struct {
 	CategoryName string
 	NoteID       string
 	Content      string
+}
+
+// SongAttachmentView is one of a song's cached Planning Center Attachments
+// - see SetSongView.Attachments and scheduling.SongAttachmentInfo.
+// Deliberately carries no URL: the link on the detail card points at this
+// app's own attachment-open route (OpenSongAttachment,
+// song_arrangement_cache.go), which live-fetches a fresh URL from Planning
+// Center and redirects, rather than linking straight to a cached one - see
+// scheduling.SongAttachmentInfo's own doc comment for why.
+type SongAttachmentView struct {
+	PCOAttachmentID string
+	Filename        string
 }
 
 // ServiceOrderRow is one row of the full order of service shown on the set

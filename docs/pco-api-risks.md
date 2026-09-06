@@ -84,6 +84,7 @@ that first. Facts worth adding here that aren't in CLAUDE.md:
 | Visibility into PCO failures | shipped | `pco.SetResponseHook` logs every failure (never a success) through this app's logger |
 | Unattended sync (Song Info + person-data refresh + person-data recent-history discovery) | shipped | hourly `jobs.PCOJobs` cron, one org at a time, borrowing and refreshing that org's own idle session token - reuses the exact same paced/guarded sync entry points (`triggerSongInfoQueueSync`, `triggerPersonDataSyncCtx`) an ordinary render already triggers, low-priority (`pco.WithPriority`, 20) |
 | Live-sync poll-while-open (`SyncCheck`, one `GetItems` per open Build-page Songs tab per 30s) | shipped | poll-while-open only (option C) - bounded by concurrent viewers, not total org/plan count; tagged `pco.WithPriority(ctx, 20)` so a poll tick never contends with interactive traffic on the same token; a failed poll tick is treated as "no change," never surfaced as an error |
+| Song attachments (lead sheets/chord charts) | shipped | cached at sync time alongside arrangement info (`fetchAndCacheSongAttachments`, one more PCO call per uncached song - Song Info sync is now 2 calls/song, not 1); the attachment's own `url` is never cached, a click-triggered route live-fetches a fresh one instead |
 | **Team/position lists and team-member names** | **still open** | fetched live, uncached, on every roster render - no reported symptom yet, not fixed speculatively |
 
 ## Live-verified PCO API facts (worth not re-checking)
@@ -143,6 +144,26 @@ that first. Facts worth adding here that aren't in CLAUDE.md:
   `Included` array (`keysFromIncluded`) instead of a second `GetKeys`
   call - halves Song Info's whole-library sync cost (the "~200 calls for
   a 100-song library" figure).
+- **Song Attachments' actual response shape is NOT yet confirmed live** -
+  unlike every other entry in this section, `pco.GetAttachments`/
+  `AttachmentAttributes` (go-pco, backing
+  `docs/plans/not-started/song-lead-sheet-attachments-plan.md`) shipped without
+  the live check the plan itself calls for, because the environment this
+  was built in had no reachable PCO credentials or dev database to check
+  against. Field names (`filename`, `content_type`, `file_size`, `url`,
+  `created_at`/`updated_at`) are inferred from this app's ordinary
+  JSON:API naming convention, not verified - and whether `url` is a
+  long-lived link or an expiring pre-signed one (the fact the plan
+  explicitly says determines whether it's cacheable) is unknown either
+  way. The implementation defensively assumes the worse case (expiring,
+  never cached - see `OpenSongAttachment`'s click-triggered live-fetch),
+  which is correct regardless of which way this turns out, but the
+  attribute names themselves could still be wrong, in which case
+  filenames/links would just silently render blank rather than error (the
+  same "fails silently" risk pattern called out at the top of this file).
+  **Do this check before treating the feature as fully verified**: open
+  the Build page for a song with a real Planning Center attachment and
+  confirm its filename/link actually shows and opens.
 - **Items#index supports `include=item_notes`** (also `song`,
   `arrangement`, `key`, among others - confirmed live via `meta.can_include`
   on a real plan's items) - **used** (2026-09-04, Phase 1c): `buildSetBuilderData`
@@ -550,3 +571,32 @@ out to 100-200 sequential round trips per load.
   tracked items surfaces as a plain warning rather than an automatic
   reorder reconciliation. Option A (real PCO webhooks) and the harder
   order-diff/multi-viewer questions remain open per the plan doc.
+- **Song attachments cached alongside arrangement info, not fetched live** -
+  full design in `docs/plans/not-started/song-lead-sheet-attachments-plan.md`.
+  New per-song call: `fetchAndCacheSongAttachments` (`scheduling.go`) calls
+  the new `pco.GetAttachments` (go-pco, list-only wrap of Song Attachments)
+  right after `fetchAndCacheArrangementInfo`'s own arrangement fetch
+  succeeds, in every one of that function's existing call sites (the
+  Song Info queue-drain sync, the manual "Update from Planning Center"
+  refresh, and the publish-time cache-miss backfills in
+  `sets_publish.go`) - same "cached at sync time, never live in a render
+  path" posture as arrangement info itself, not a new hot-path risk.
+  Deliberately best-effort and never reflected in
+  `fetchAndCacheArrangementInfo`'s own returned error (logged and
+  swallowed instead) - several of that function's callers use its error to
+  decide whether the arrangement info it just fetched is safe to use, and
+  an unrelated attachments hiccup must never make those callers discard an
+  otherwise-good, already-persisted arrangement fetch. Cost: Song Info
+  sync goes from 1 PCO call/uncached song to 2 (see
+  `songInfoSyncBatchPause`'s updated doc comment for the corrected pacing
+  math - that comment had drifted stale at "2 calls" ever since Phase 1b
+  folded the old separate `GetKeys` call into `GetArrangements`' own
+  `include=keys` sideload, dropping the *real* per-song cost to 1 call
+  without anyone updating this comment; this change is what makes "2
+  calls" true again, for a different reason than the stale comment
+  claimed). The attachment's own download `url` is deliberately never
+  cached (see the "not yet confirmed" fact below) - a new click-triggered
+  route (`OpenSongAttachment`, `song_attachment_cache.go`) live-fetches a
+  fresh one from Planning Center on the actual click and redirects,
+  same "gated behind an explicit click, not a render-path cost" posture as
+  `RefreshSetSongArrangementInfo`'s own button.
