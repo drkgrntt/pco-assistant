@@ -454,6 +454,7 @@ func (sc *SchedulingController) RegisterRoutes(router fiber.Router) {
 	group.Post("/rosters/:service_type_id/:plan_id/assignments/:assignment_id/refresh-data", sc.RefreshPersonData)
 	group.Post("/rosters/:service_type_id/:plan_id/publish", sc.PublishRoster)
 	group.Post("/rosters/:service_type_id/:plan_id/revert", sc.RevertRoster)
+	group.Post("/rosters/:service_type_id/:plan_id/refresh-team-data", sc.RefreshRosterTeamData)
 
 	group.Post("/sets/:service_type_id/:plan_id/songs", sc.AddSetSong)
 	group.Delete("/sets/:service_type_id/:plan_id/set-songs/:set_song_id", sc.RemoveSetSong)

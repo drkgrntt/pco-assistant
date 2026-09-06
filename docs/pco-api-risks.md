@@ -84,7 +84,7 @@ that first. Facts worth adding here that aren't in CLAUDE.md:
 | Visibility into PCO failures | shipped | `pco.SetResponseHook` logs every failure (never a success) through this app's logger |
 | Unattended sync (Song Info + person-data refresh + person-data recent-history discovery) | shipped | hourly `jobs.PCOJobs` cron, one org at a time, borrowing and refreshing that org's own idle session token - reuses the exact same paced/guarded sync entry points (`triggerSongInfoQueueSync`, `triggerPersonDataSyncCtx`) an ordinary render already triggers, low-priority (`pco.WithPriority`, 20) |
 | Live-sync poll-while-open (`SyncCheck`, one `GetItems` per open Build-page Songs tab per 30s) | shipped | poll-while-open only (option C) - bounded by concurrent viewers, not total org/plan count; tagged `pco.WithPriority(ctx, 20)` so a poll tick never contends with interactive traffic on the same token; a failed poll tick is treated as "no change," never surfaced as an error |
-| **Team/position lists and team-member names** | **still open** | fetched live, uncached, on every roster render - no reported symptom yet, not fixed speculatively |
+| Team/position lists and team-member names (fetched live, uncached, on every roster render) | fixed | cached `fetchRosterSharedPCOData` (`rosters_shared_cache.go`), 20s TTL - shorter than the 60s norm since team membership can change mid-session; manual "Refresh team data" button is the remedy for the remaining window |
 
 ## Live-verified PCO API facts (worth not re-checking)
 
@@ -182,8 +182,9 @@ that first. Facts worth adding here that aren't in CLAUDE.md:
   one call. That's why it can shrink the three-call roster fetch above to
   two (`team` is a relationship of `needed_positions`) but can't merge
   `team_members` and `needed_positions` themselves into one call (neither
-  is a relationship of the other) - the still-open Team/position/member
-  gap's real fix stays caching, this only trims it from 3 calls to 2.
+  is a relationship of the other) - the Team/position/member gap's real
+  fix was caching (see the Changelog's "Roster shared-fetch cache" entry),
+  this only trimmed the live fetch itself from 3 calls to 2.
 - **`include` swept exhaustively across every PCO endpoint this app calls**
   (not just the hot paths above) - 2026-09-04, prompted by "is there
   really nothing else." Checked live (`meta.can_include`) against every
@@ -350,9 +351,11 @@ out to 100-200 sequential round trips per load.
   refresh - the render never blocks on PCO either way. A render-time "still
   gathering data" notice (`PersonDataSyncPending`) covers the UX gap for a
   brand-new org's first-ever render, so zero-synced doesn't read as
-  zero-conflicts. **Team/position lists and team-member names themselves
-  remain the one deliberate open gap** - this only closed the per-person
-  half.
+  zero-conflicts. Team/position lists and team-member names themselves
+  were, at the time this shipped, still the one deliberate open gap - this
+  only closed the per-person half (see the Changelog's "Roster
+  shared-fetch cache" entry for how the team/position half was later
+  closed too).
 - **Two manual "refresh this one item now" actions** added (Song Info's
   detail card, Team Builder's person detail card) - both cache designs
   above are read-first/background-sync-second, so a single item's real-world
@@ -497,8 +500,8 @@ out to 100-200 sequential round trips per load.
   yet (`scheduling.Store.PersonSyncMarkerStatus`) - the "just-connected
   org with hundreds of volunteers" case - bounded by (recent plan count) x
   (service type count), not volunteer-pool size, so independent of org
-  size unlike the full-eligibility-pool problem this deliberately still
-  leaves open (see the "still open" row above). No new migration: the
+  size unlike a naive full-eligibility-pool walk, which this discovery
+  pass deliberately avoids being. No new migration: the
   discovery window is simply re-walked (rather than gated behind a new
   "already discovered up through plan X" marker table, an alternative the
   plan doc considered) - `PersonSyncMarkerStatus`'s existence check already
@@ -550,3 +553,34 @@ out to 100-200 sequential round trips per load.
   tracked items surfaces as a plain warning rather than an automatic
   reorder reconciliation. Option A (real PCO webhooks) and the harder
   order-diff/multi-viewer questions remain open per the plan doc.
+- **Roster shared-fetch cache** (2026-09-06) - closes the last row that was
+  still "still open" above: `GetTeamMembers`/`GetNeededPositions` were
+  already deduped to one pair per handler call (`fetchRosterSharedPCOData`,
+  see above), but every separate render/click still re-fetched live, with
+  nothing shared *across* calls. Now cache-aside
+  (`rosters_shared_cache.go`), keyed by `(serviceTypeID, planID)` - PCO ids
+  are globally unique, so no organization id is needed in the key either.
+  TTL is 20s, not the usual 60s (`songCacheTTL`/`serviceTypeCacheTTL`):
+  team membership can change *during* an active scheduling session (an
+  admin adds someone to a team directly in Planning Center right before
+  someone here tries to schedule that same person), unlike a song library
+  or service-type list, which are effectively static within one. Same
+  fail-safe convention as every other cache here - only a fetch with
+  neither call's error set is cached, so one bad PCO response can't pin a
+  stale/partial result in for the rest of the window. No invalidation on
+  local roster writes: draft assignments/preferences stay local-only until
+  Publish, so nothing this app's own roster mutations do ever changes what
+  these two calls return - the only real source of staleness is a change
+  made directly in Planning Center, which expiry already handles. For the
+  remaining window, a new manual "Refresh team data" button
+  (`RefreshRosterTeamData`, top of the roster page) bypasses the cache and
+  rebuilds the whole roster from a fresh live fetch - the same
+  explicit-click-remedy shape as `RefreshPersonData`/
+  `RefreshSetSongArrangementInfo` above, just scoped to the whole roster
+  (not one row) since a team/position change can affect every group on the
+  page. The cache stayed in `internal/server/controllers`
+  (`rosters_shared_cache.go`) rather than moving into `internal/scheduling`
+  alongside `FetchActiveSongs`/`FetchServiceTypes`: the cached value's
+  `TeamInfo` field is built from `teamInfoFromIncluded`, a
+  controllers-package-local type, and exporting it purely to satisfy a
+  package boundary bought nothing.
