@@ -85,6 +85,7 @@ that first. Facts worth adding here that aren't in CLAUDE.md:
 | Unattended sync (Song Info + person-data refresh + person-data recent-history discovery) | shipped | hourly `jobs.PCOJobs` cron, one org at a time, borrowing and refreshing that org's own idle session token - reuses the exact same paced/guarded sync entry points (`triggerSongInfoQueueSync`, `triggerPersonDataSyncCtx`) an ordinary render already triggers, low-priority (`pco.WithPriority`, 20) |
 | Live-sync poll-while-open (`SyncCheck`, one `GetItems` per open Build-page Songs tab per 30s) | shipped | poll-while-open only (option C) - bounded by concurrent viewers, not total org/plan count; tagged `pco.WithPriority(ctx, 20)` so a poll tick never contends with interactive traffic on the same token; a failed poll tick is treated as "no change," never surfaced as an error |
 | Team/position lists and team-member names (fetched live, uncached, on every roster render) | fixed | cached `fetchRosterSharedPCOData` (`rosters_shared_cache.go`), 20s TTL - shorter than the 60s norm since team membership can change mid-session; manual "Refresh team data" button is the remedy for the remaining window |
+| Song attachments (lead sheets/chord charts) | shipped | cached at sync time alongside arrangement info (`fetchAndCacheSongAttachments`, one more PCO call per uncached song - Song Info sync is now 2 calls/song, not 1); the attachment's own `url` is never cached, a click-triggered route live-fetches a fresh one instead |
 
 ## Live-verified PCO API facts (worth not re-checking)
 
@@ -143,6 +144,31 @@ that first. Facts worth adding here that aren't in CLAUDE.md:
   `Included` array (`keysFromIncluded`) instead of a second `GetKeys`
   call - halves Song Info's whole-library sync cost (the "~200 calls for
   a 100-song library" figure).
+- **Song Attachments' response shape confirmed live (2026-09-06)** - the
+  original build shipped `pco.GetAttachments`/`AttachmentAttributes`
+  without the live check `docs/plans/not-started/song-lead-sheet-attachments-plan.md`
+  itself calls for (sandboxed build environment, no reachable PCO
+  credentials). Confirmed as a same-day follow-up by creating and deleting
+  a real throwaway attachment against a dev org song
+  (`upload.planningcenteronline.com/v2/files` then `POST
+  .../songs/:id/attachments`, then `DELETE`). Result: the field names
+  already wrapped (`filename`, `content_type`, `file_size`, `url`,
+  `created_at`/`updated_at`) are all real and correct - no silent-blank
+  risk after all. But **`url` is Planning Center's own attachment web
+  page** (`https://services.planningcenteronline.com/attachments/:id`),
+  **not a file link** - a materially different fact than "might be an
+  expiring pre-signed URL," the risk the original build defended against.
+  The actual file lives behind a separate, unwrapped action: `POST
+  .../songs/:song_id/attachments/:id/open` (a bare GET on that path
+  returns only its own documentation, confirmed live) returns an
+  `AttachmentActivity` resource whose `attachment_url` attribute holds the
+  real file link. `OpenSongAttachment` redirects to `url` (PCO's page),
+  not the unwrapped `/open` flow - a reasonable v1 (that page handles
+  auth/viewing/downloading for an already-PCO-authenticated user), just
+  worth knowing precisely what it does rather than assuming "opens the
+  file." Actually streaming/downloading the file would mean wrapping
+  `/open`+`AttachmentActivity` in go-pco - not done, not currently
+  planned.
 - **Items#index supports `include=item_notes`** (also `song`,
   `arrangement`, `key`, among others - confirmed live via `meta.can_include`
   on a real plan's items) - **used** (2026-09-04, Phase 1c): `buildSetBuilderData`
@@ -584,3 +610,50 @@ out to 100-200 sequential round trips per load.
   `TeamInfo` field is built from `teamInfoFromIncluded`, a
   controllers-package-local type, and exporting it purely to satisfy a
   package boundary bought nothing.
+- **Song attachments cached alongside arrangement info, not fetched live** -
+  full design in `docs/plans/not-started/song-lead-sheet-attachments-plan.md`.
+  New per-song call: `fetchAndCacheSongAttachments` (`scheduling.go`) calls
+  the new `pco.GetAttachments` (go-pco, list-only wrap of Song Attachments)
+  right after `fetchAndCacheArrangementInfo`'s own arrangement fetch
+  succeeds, in every one of that function's existing call sites (the
+  Song Info queue-drain sync, the manual "Update from Planning Center"
+  refresh, and the publish-time cache-miss backfills in
+  `sets_publish.go`) - same "cached at sync time, never live in a render
+  path" posture as arrangement info itself, not a new hot-path risk.
+  Deliberately best-effort and never reflected in
+  `fetchAndCacheArrangementInfo`'s own returned error (logged and
+  swallowed instead) - several of that function's callers use its error to
+  decide whether the arrangement info it just fetched is safe to use, and
+  an unrelated attachments hiccup must never make those callers discard an
+  otherwise-good, already-persisted arrangement fetch. Cost: Song Info
+  sync goes from 1 PCO call/uncached song to 2 (see
+  `songInfoSyncBatchPause`'s updated doc comment for the corrected pacing
+  math - that comment had drifted stale at "2 calls" ever since Phase 1b
+  folded the old separate `GetKeys` call into `GetArrangements`' own
+  `include=keys` sideload, dropping the *real* per-song cost to 1 call
+  without anyone updating this comment; this change is what makes "2
+  calls" true again, for a different reason than the stale comment
+  claimed). The attachment's own `url` is deliberately never cached (see
+  the "confirmed live" fact below - not because it expires, but so a
+  click always reflects whatever's actually in Planning Center right now)
+  - a new click-triggered route (`OpenSongAttachment`,
+  `song_attachment_cache.go`) live-fetches a fresh one from Planning
+  Center on the actual click and redirects, same "gated behind an
+  explicit click, not a render-path cost" posture as
+  `RefreshSetSongArrangementInfo`'s own button.
+- **Song attachment field shape live-verified, `url`'s real meaning
+  corrected** (2026-09-06, same-day follow-up to the entry above) -
+  created and deleted a real throwaway attachment against a dev org song
+  to confirm `go-pco`'s guessed `AttachmentAttributes` field names
+  (`filename`/`content_type`/`file_size`/`url`/`created_at`/`updated_at`)
+  are all correct. They are - but `url` turned out to be Planning
+  Center's own attachment web page
+  (`https://services.planningcenteronline.com/attachments/:id`), not a
+  file link, and not the "might be an expiring pre-signed URL" risk the
+  original build defended against. The real file requires `POST
+  .../songs/:song_id/attachments/:id/open` (undocumented via GET,
+  confirmed live), returning an `AttachmentActivity.attachment_url` -
+  not wrapped in go-pco, since `OpenSongAttachment` only ever redirects
+  to PCO's page today. See the "Live-verified PCO API facts" entry below
+  for the full finding; no behavior change, just corrected reasoning in
+  code comments and this doc.

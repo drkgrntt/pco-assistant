@@ -136,14 +136,16 @@ templ SongNoteFormFragment(data SetBuilderData, song SetSongView, note SongNoteV
 // same as an edited key override would), and that neighbor's own badges.
 //
 // Also pushes Structure/HasChordChart (song-structure-<id>, song-chord-
-// chart-badge-<id>) via the same OOB mechanism - both can change on a real
-// refresh (an arrangement's structure edited, or a chord chart added/
-// removed, directly in Planning Center) same as key/BPM/meter/length can.
-// Each is only ever rendered (in songDetailCard, initially) when it has
-// something to show, so an OOB update here only actually appears once that
-// element already exists in the DOM - a song going from "no structure yet"
-// to "has one" on this same click needs a full page reload to show it the
-// first time, same trade-off as everywhere else in this app that only
+// chart-badge-<id>) and the attachments "Files" list (song-attachments-<id>,
+// via songAttachmentsList's own oob=true branch) via the same OOB
+// mechanism - all three can change on a real refresh (an arrangement's
+// structure edited, a chord chart or attachment added/removed, directly in
+// Planning Center) same as key/BPM/meter/length can. Each is only ever
+// rendered (in songDetailCard, initially) when it has something to show, so
+// an OOB update here only actually appears once that element already
+// exists in the DOM - a song going from "no structure yet"/"no attachments
+// yet" to having one on this same click needs a full page reload to show it
+// the first time, same trade-off as everywhere else in this app that only
 // re-renders a fragment rather than the whole page. Also refreshes the
 // next row's own badges (nextSongRowAfter), same reasoning as
 // KeyFormFragment's own doc comment above: a refreshed key can flip
@@ -163,6 +165,7 @@ templ SongArrangementInfoRefreshFragment(data SetBuilderData, song SetSongView, 
 	if song.Structure != "" {
 		<p class="muted" id={ fmt.Sprintf("song-structure-%d", song.ID) } hx-swap-oob="true"><strong>Structure:</strong> { song.Structure }</p>
 	}
+	@songAttachmentsList(data, song, true)
 	if song.HasChordChart {
 		<span id={ fmt.Sprintf("song-chord-chart-badge-%d", song.ID) } hx-swap-oob="true">
 			@components.Badge("", "Chord chart")
@@ -229,6 +232,7 @@ templ songDetailCard(data SetBuilderData, song SetSongView) {
 		if song.Structure != "" {
 			<p class="muted" id={ fmt.Sprintf("song-structure-%d", song.ID) }><strong>Structure:</strong> { song.Structure }</p>
 		}
+		@songAttachmentsList(data, song, false)
 		<div class="build-detail-badges">
 			for _, role := range song.Roles {
 				@components.Badge("", role.Label)
@@ -370,6 +374,52 @@ templ songDetailCard(data SetBuilderData, song SetSongView) {
 				}
 			}
 		}
+	}
+}
+
+// songAttachmentsList is this song's cached Planning Center Attachments
+// (lead sheet/chord chart PDFs, scans, audio - see SetSongView.Attachments)
+// as a small "Files" list, one link per attachment - filename as link text,
+// each opening in a new tab via OpenSongAttachment
+// (song_attachment_cache.go), which live-fetches a fresh URL on the actual
+// click rather than linking straight to a cached one (see
+// scheduling.SongAttachmentInfo's own doc comment for why). Renders nothing
+// at all when there are none, same "just omit it" convention as
+// ArrangementInfo's blank-field handling elsewhere on this card - and, like
+// Structure/HasChordChart's own OOB refresh (see SongArrangementInfoRefreshFragment
+// below), a song going from "no attachments" to "has some" on a live
+// refresh needs a full page reload to show the block for the first time,
+// since there's no existing DOM element for an OOB swap to land on until
+// then.
+//
+// oob is true only when called from SongArrangementInfoRefreshFragment's
+// own "Update from Planning Center" response - the same single templ
+// tagged onto both the primary card render and that OOB refresh, so the
+// two can never drift out of sync with each other.
+templ songAttachmentsList(data SetBuilderData, song SetSongView, oob bool) {
+	if len(song.Attachments) > 0 {
+		<div
+			class="build-detail-attachments muted"
+			id={ fmt.Sprintf("song-attachments-%d", song.ID) }
+			if oob {
+				hx-swap-oob="true"
+			}
+		>
+			<strong>Files:</strong>
+			<ul>
+				for _, a := range song.Attachments {
+					<li>
+						<a
+							href={ templ.SafeURL(fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/attachments/%s", data.ServiceTypeID, data.PlanID, song.ID, a.PCOAttachmentID)) }
+							target="_blank"
+							rel="noopener noreferrer"
+						>
+							{ a.Filename }
+						</a>
+					</li>
+				}
+			</ul>
+		</div>
 	}
 }
 

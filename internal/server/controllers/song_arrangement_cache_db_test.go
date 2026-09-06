@@ -32,13 +32,19 @@ import (
 )
 
 // newArrangementRefreshFakeServer stands in for Planning Center's
-// arrangements endpoint (now the only call fetchAndCacheArrangementInfo
-// makes - see its own doc comment on the include=keys sideload), replying
-// with the given key as a sideloaded Key resource in "included" - used
-// twice in the test below with two different keys to prove a second call
-// overwrites the first. A request to /keys would mean
-// fetchAndCacheArrangementInfo regressed back to its old two-call shape,
-// so one arriving here fails the test loudly instead of silently passing.
+// arrangements and attachments endpoints - the two calls
+// fetchAndCacheArrangementInfo now makes per song (see its own doc comment:
+// the arrangement fetch, with keys sideloaded via include=keys, plus
+// fetchAndCacheSongAttachments' own GetAttachments call) - replying to the
+// arrangements request with the given key as a sideloaded Key resource in
+// "included", and to the attachments request with an empty list (this
+// test's own attachment content isn't the point; song_attachment_cache_test.go/
+// song_attachment_cache_db_test.go in internal/scheduling cover that).
+// Used twice in the test below with two different keys to prove a second
+// call overwrites the first. A request to /keys would mean
+// fetchAndCacheArrangementInfo regressed back to its old two-call shape for
+// the arrangement fetch itself, so one arriving here fails the test loudly
+// instead of silently passing.
 func newArrangementRefreshFakeServer(t *testing.T, arrangementID, key string) *httptest.Server {
 	t.Helper()
 
@@ -71,8 +77,10 @@ func newArrangementRefreshFakeServer(t *testing.T, arrangementID, key string) *h
 					},
 				},
 			})
+		case strings.HasSuffix(r.URL.Path, "/attachments"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{}})
 		default:
-			t.Errorf("unexpected request to %s (fetchAndCacheArrangementInfo should make exactly one call, with include=keys)", r.URL.Path)
+			t.Errorf("unexpected request to %s (fetchAndCacheArrangementInfo should only ever hit /arrangements and /attachments, with keys sideloaded via include=keys)", r.URL.Path)
 			w.WriteHeader(http.StatusNotFound)
 		}
 	}))

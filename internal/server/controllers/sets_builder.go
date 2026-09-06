@@ -155,6 +155,12 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 	// read regardless of how many songs actually need it.
 	arrangementCache, _ := sc.store.SongArrangementInfo(ctx, organizationID)
 
+	// attachmentCache backs the detail card's "Files" list (SetSongView.
+	// Attachments) - cache-only, same shape as arrangementCache above, one
+	// bulk read for the whole page render. See
+	// docs/plans/not-started/song-lead-sheet-attachments-plan.md.
+	attachmentCache, _ := sc.store.SongAttachments(ctx, organizationID)
+
 	// AllSongs/TagCategories/RelationshipTypes/RoleTypes back the "Quick
 	// add" panel's <select> pickers (see views.SetBuilderData) - best-effort
 	// like the lookups above, since a failure here only costs that one
@@ -303,7 +309,7 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 		// rather than one GetItemNotes call per published song - see
 		// itemNotesFromIncluded's own doc comment.
 		itemNotes := itemNotesFromIncluded(pcoItems.Included)
-		data.ServiceOrder = renderServiceOrder(ctx, sc.store, organizationID, arrangementCache, noteCategories.Data, itemNotes, merged, titles, rolesBySong, roleTypeLabels, history.RepeatedSongs, conflictTitlesBySong, transitionsByRow)
+		data.ServiceOrder = renderServiceOrder(ctx, sc.store, organizationID, arrangementCache, attachmentCache, noteCategories.Data, itemNotes, merged, titles, rolesBySong, roleTypeLabels, history.RepeatedSongs, conflictTitlesBySong, transitionsByRow)
 
 		// ServiceLengthWarning: the one warning that stays a standalone,
 		// whole-plan banner rather than moving onto a row - it isn't
@@ -1441,7 +1447,7 @@ func buildSongNoteViews(itemID string, noteCategories []pco.ItemNoteCategoryData
 // keyed by the *second* song's own row id (keyTransitionWarning.SongRowID),
 // so a row only ever picks up a transition badge for the pair ending at
 // itself, never the one starting from it.
-func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizationID string, arrangementCache map[string]scheduling.SongArrangementInfo, noteCategories []pco.ItemNoteCategoryData, itemNotes map[string][]pco.ItemNoteData, rows []mergedRow, titles map[string]string, rolesBySong map[string][]scheduling.SongRole, roleTypeLabels map[string]string, repeated map[string]bool, conflictTitlesBySong map[string][]string, transitionsByRow map[int64]keyTransitionWarning) []views.ServiceOrderRow {
+func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizationID string, arrangementCache map[string]scheduling.SongArrangementInfo, attachmentCache map[string][]scheduling.SongAttachmentInfo, noteCategories []pco.ItemNoteCategoryData, itemNotes map[string][]pco.ItemNoteData, rows []mergedRow, titles map[string]string, rolesBySong map[string][]scheduling.SongRole, roleTypeLabels map[string]string, repeated map[string]bool, conflictTitlesBySong map[string][]string, transitionsByRow map[int64]keyTransitionWarning) []views.ServiceOrderRow {
 	// A plain sequential loop, not scheduling.RunConcurrently - unlike
 	// before Phase 2 (docs/plans/shipped/pco-call-efficiency-rollout-plan.md), a song
 	// row's only per-row lookup, resolveArrangementCacheInfo, no longer
@@ -1508,6 +1514,7 @@ func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizati
 			Notes:            buildSongNoteViews(ss.PCOItemID, noteCategories, itemNotes),
 			RecentlyRepeated: repeated[ss.SongID],
 			ConflictTitles:   conflictTitlesBySong[ss.SongID],
+			Attachments:      songAttachmentViews(attachmentCache[ss.SongID]),
 		}
 		if transition, ok := transitionsByRow[ss.ID]; ok {
 			songView.KeyTransitionLabel = transition.Label

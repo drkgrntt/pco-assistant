@@ -112,12 +112,15 @@ func enqueueSongSync(req songSyncRequest) {
 const songInfoSyncBatchSize = scheduling.PCOFanOutLimit
 
 // songInfoSyncBatchPause is the pause between song-info sync batches.
-// Each song needing a sync costs 2 PCO calls (arrangement + key, see
-// fetchAndCacheArrangementInfo), so one songInfoSyncBatchSize-song batch
-// (10 songs) costs up to 20 calls, fired near-simultaneously since the
-// batch itself runs concurrently - fast enough that, for this pacing
-// calculation, a batch's own PCO calls all effectively land in the same
-// instant relative to a 20-second window.
+// Each song needing a sync costs 2 PCO calls - one GetArrangements call
+// (arrangement + key, the key sideloaded via include=keys since go-pco
+// v0.21.0's Phase 1b fold, not a second call of its own) plus one
+// GetAttachments call added by fetchAndCacheSongAttachments (scheduling.go,
+// see docs/plans/not-started/song-lead-sheet-attachments-plan.md) - so one
+// songInfoSyncBatchSize-song batch (10 songs) costs up to 20 calls, fired
+// near-simultaneously since the batch itself runs concurrently - fast
+// enough that, for this pacing calculation, a batch's own PCO calls all
+// effectively land in the same instant relative to a 20-second window.
 //
 // Against PCO's 100-requests/20-seconds-per-user-token budget, pausing 10
 // seconds between batch starts means at most 3 batch-starts (60 calls)

@@ -38,6 +38,23 @@
   margin-block: var(--space-2);
 }
 
+/* The song detail card's "Files" list (songAttachmentsList,
+   song_detail_card.templ) - a plain compact list, same treatment as
+   .pending-changes (publish-panel.css) for the same reason: a quick
+   read-only list of links, not rows with their own actions. */
+.build-detail-attachments {
+  margin-block: var(--space-2);
+}
+
+.build-detail-attachments ul {
+  margin: var(--space-1) 0 0;
+  padding-left: var(--space-5);
+}
+
+.build-detail-attachments li {
+  margin-block: var(--space-1);
+}
+
 .build-detail-notes-group {
   display: flex;
   flex-direction: column;
