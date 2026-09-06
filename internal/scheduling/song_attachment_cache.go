@@ -12,11 +12,14 @@ import "context"
 // attachment is surfaced, not just a single guessed one. See
 // docs/plans/not-started/song-lead-sheet-attachments-plan.md.
 //
-// Deliberately carries no URL: go-pco's AttachmentAttributes.URL is not
-// confirmed to be a long-lived link rather than an expiring pre-signed one,
-// so it's never persisted here - a click on the resulting link live-fetches
-// a fresh URL from Planning Center instead (see the attachment-open route
-// in controllers).
+// Deliberately carries no URL: even though go-pco's AttachmentAttributes.URL
+// is confirmed live to be a stable link (Planning Center's own attachment
+// page, not an expiring pre-signed one - see attachments.go's doc comment),
+// this app still doesn't persist it, so a click always reflects whatever's
+// actually there in Planning Center right now (renamed/removed since this
+// song's row was last synced) rather than a possibly-stale cached value - a
+// click-triggered live-fetch is cheap enough to just always do (see the
+// attachment-open route in controllers).
 type SongAttachmentInfo struct {
 	// PCOAttachmentID is the attachment's own Planning Center id - needed
 	// to re-fetch a fresh URL for this exact attachment on click, since the

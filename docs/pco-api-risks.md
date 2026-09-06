@@ -144,26 +144,31 @@ that first. Facts worth adding here that aren't in CLAUDE.md:
   `Included` array (`keysFromIncluded`) instead of a second `GetKeys`
   call - halves Song Info's whole-library sync cost (the "~200 calls for
   a 100-song library" figure).
-- **Song Attachments' actual response shape is NOT yet confirmed live** -
-  unlike every other entry in this section, `pco.GetAttachments`/
-  `AttachmentAttributes` (go-pco, backing
-  `docs/plans/not-started/song-lead-sheet-attachments-plan.md`) shipped without
-  the live check the plan itself calls for, because the environment this
-  was built in had no reachable PCO credentials or dev database to check
-  against. Field names (`filename`, `content_type`, `file_size`, `url`,
-  `created_at`/`updated_at`) are inferred from this app's ordinary
-  JSON:API naming convention, not verified - and whether `url` is a
-  long-lived link or an expiring pre-signed one (the fact the plan
-  explicitly says determines whether it's cacheable) is unknown either
-  way. The implementation defensively assumes the worse case (expiring,
-  never cached - see `OpenSongAttachment`'s click-triggered live-fetch),
-  which is correct regardless of which way this turns out, but the
-  attribute names themselves could still be wrong, in which case
-  filenames/links would just silently render blank rather than error (the
-  same "fails silently" risk pattern called out at the top of this file).
-  **Do this check before treating the feature as fully verified**: open
-  the Build page for a song with a real Planning Center attachment and
-  confirm its filename/link actually shows and opens.
+- **Song Attachments' response shape confirmed live (2026-09-06)** - the
+  original build shipped `pco.GetAttachments`/`AttachmentAttributes`
+  without the live check `docs/plans/not-started/song-lead-sheet-attachments-plan.md`
+  itself calls for (sandboxed build environment, no reachable PCO
+  credentials). Confirmed as a same-day follow-up by creating and deleting
+  a real throwaway attachment against a dev org song
+  (`upload.planningcenteronline.com/v2/files` then `POST
+  .../songs/:id/attachments`, then `DELETE`). Result: the field names
+  already wrapped (`filename`, `content_type`, `file_size`, `url`,
+  `created_at`/`updated_at`) are all real and correct - no silent-blank
+  risk after all. But **`url` is Planning Center's own attachment web
+  page** (`https://services.planningcenteronline.com/attachments/:id`),
+  **not a file link** - a materially different fact than "might be an
+  expiring pre-signed URL," the risk the original build defended against.
+  The actual file lives behind a separate, unwrapped action: `POST
+  .../songs/:song_id/attachments/:id/open` (a bare GET on that path
+  returns only its own documentation, confirmed live) returns an
+  `AttachmentActivity` resource whose `attachment_url` attribute holds the
+  real file link. `OpenSongAttachment` redirects to `url` (PCO's page),
+  not the unwrapped `/open` flow - a reasonable v1 (that page handles
+  auth/viewing/downloading for an already-PCO-authenticated user), just
+  worth knowing precisely what it does rather than assuming "opens the
+  file." Actually streaming/downloading the file would mean wrapping
+  `/open`+`AttachmentActivity` in go-pco - not done, not currently
+  planned.
 - **Items#index supports `include=item_notes`** (also `song`,
   `arrangement`, `key`, among others - confirmed live via `meta.can_include`
   on a real plan's items) - **used** (2026-09-04, Phase 1c): `buildSetBuilderData`

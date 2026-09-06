@@ -10,13 +10,19 @@ import (
 // OpenSongAttachment is the "Files" list's actual link target (songDetailCard,
 // song_detail_card.templ) - a plain GET a browser follows directly (a real
 // link, opened in a new tab, not an htmx fragment swap), never the cached
-// row's own data. See scheduling.SongAttachmentInfo's own doc comment for
-// why: go-pco's AttachmentAttributes.URL is not confirmed to be a long-lived
-// link rather than an expiring pre-signed one, so this app never persists
-// it - every click live-fetches the current attachment list from Planning
-// Center and redirects to whatever URL it has *right now*, the same
-// "gated behind an explicit click, not a render-path cost" posture as
+// row's own data. Every click live-fetches the current attachment list from
+// Planning Center and redirects to whatever URL it has *right now*, rather
+// than persisting the cached row's own URL - not because that URL is
+// expiring (live-verified 2026-09-06: go-pco's AttachmentAttributes.URL is
+// a stable Planning Center attachment page, not a pre-signed link - see
+// attachments.go's doc comment), but so a click always reflects the
+// attachment actually there now (renamed/removed in Planning Center since
+// this song's row was last synced), the same "gated behind an explicit
+// click, not a render-path cost" posture as
 // RefreshSetSongArrangementInfo's "Update from Planning Center" button.
+// Note this redirects to PCO's own attachment web page, not a raw file
+// download - see attachments.go's doc comment for why, and what a true
+// file-open flow would additionally need.
 //
 // Re-fetches the whole list (pco.GetAttachments) rather than a single-
 // attachment GET, since go-pco deliberately only wraps the list endpoint
