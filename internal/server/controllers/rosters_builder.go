@@ -321,25 +321,33 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 	// instead - GetNeededPositions only reports *unfilled* slots, so a plan
 	// PCO already has fully staffed - the whole point of this prompt -
 	// shows zero needed positions.
+	//
+	// shared is this plan's GetTeamMembers/GetNeededPositions pair, cached
+	// (20s TTL, see rosters_shared_cache.go) and shared with every other
+	// fetchRosterSharedPCOData caller for this same plan - a full page
+	// load now costs this pair at most once per cache window rather than
+	// duplicating whatever a same-window add/remove/quick-add mutation
+	// already paid for it. Include: []string{"team"} (baked into the
+	// shared fetch) sideloads each needed position's team (name + display
+	// Sequence) in this same response's Included array, eliminating what
+	// used to be a separate GetTeams call just to resolve team ids to
+	// names - see docs/pco-api-risks.md's include=team finding.
+	shared := fetchRosterSharedPCOData(ctx, serviceTypeID, planID)
+
 	notesByPlanPersonID := map[string]string{}
-	if members, err := pco.GetTeamMembers(ctx, serviceTypeID, planID, nil); err == nil {
+	if shared.MembersErr == nil {
 		if len(assignments) == 0 && data.PendingDeleteCount == 0 {
-			data.ImportableAssignmentCount = len(members.Data)
+			data.ImportableAssignmentCount = len(shared.Members.Data)
 		}
-		for _, m := range members.Data {
+		for _, m := range shared.Members.Data {
 			notesByPlanPersonID[m.ID] = m.Attributes.Notes
 		}
 	}
 
-	// Include: []string{"team"} sideloads each needed position's team
-	// (name + display Sequence) in this same response's Included array,
-	// eliminating what used to be a separate GetTeams call just to resolve
-	// team ids to names - see docs/pco-api-risks.md's include=team finding.
-	needed, err := pco.GetNeededPositions(ctx, serviceTypeID, planID, &pco.NeededPositionsParams{Include: []string{"team"}})
-	if err != nil {
-		data.ErrMsg = appendErr(data.ErrMsg, "loading needed positions from Planning Center: "+err.Error())
+	if shared.NeededErr != nil {
+		data.ErrMsg = appendErr(data.ErrMsg, "loading needed positions from Planning Center: "+shared.NeededErr.Error())
 	}
-	groups := groupNeededPositions(needed.Data, assignments)
+	groups := groupNeededPositions(shared.Needed.Data, assignments)
 
 	// teamSequence backs the team-group ordering below (see
 	// unknownTeamSequence's own comment) - PCO's own Team.Sequence, the
@@ -347,7 +355,7 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 	// Center itself, rather than an arbitrary or alphabetical order.
 	teamNames := map[string]string{}
 	teamSequence := map[string]int{}
-	for id, info := range teamInfoFromIncluded(needed.Included) {
+	for id, info := range shared.TeamInfo {
 		teamNames[id] = info.Name
 		teamSequence[id] = info.Sequence
 	}

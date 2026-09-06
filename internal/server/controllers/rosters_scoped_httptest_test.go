@@ -20,6 +20,16 @@ package controllers
 // were updated alongside that fix rather than left asserting the old
 // three-call shape.
 //
+// fetchRosterSharedPCOData is now also cache-aside (rosters_shared_cache.go,
+// 20s TTL) on top of the per-request sharing this file's own tests target -
+// see rosters_shared_cache_httptest_test.go for that layer's own hit/miss/
+// TTL-expiry/error-not-cached coverage. TestFetchRosterSharedPCODataCalled-
+// TwiceDoublesRequests below calls fetchRosterSharedPCODataLive (the raw,
+// never-cached fetch) rather than fetchRosterSharedPCOData specifically so
+// it keeps demonstrating what it always has - two independent fetches cost
+// two requests each - without the new cache making a second call within
+// the TTL window a free hit instead.
+//
 // Same pco.SetBaseURLForTesting seam as internal/scheduling's
 // pco_songs_httptest_test.go and this package's own
 // build_httptest_test.go - a local httptest.Server stands in for Planning
@@ -122,13 +132,16 @@ func newRosterSharedFetchFakeServer(t *testing.T, counts *rosterSharedFetchCount
 // comes back resolved from that response's sideloaded Included array
 // rather than a separate GetTeams call.
 func TestFetchRosterSharedPCODataMakesOneCallEach(t *testing.T) {
+	const serviceTypeID, planID = "service-type-1", "plan-1"
+	t.Cleanup(func() { invalidateRosterSharedPCOCache(serviceTypeID, planID) })
+
 	var counts rosterSharedFetchCounts
 	server := newRosterSharedFetchFakeServer(t, &counts)
 
 	restore := pco.SetBaseURLForTesting(server.URL)
 	defer restore()
 
-	shared := fetchRosterSharedPCOData(context.Background(), "service-type-1", "plan-1")
+	shared := fetchRosterSharedPCOData(context.Background(), serviceTypeID, planID)
 
 	if shared.MembersErr != nil {
 		t.Errorf("unexpected Members fetch error: %v", shared.MembersErr)
@@ -158,15 +171,20 @@ func TestFetchRosterSharedPCODataMakesOneCallEach(t *testing.T) {
 	}
 }
 
-// TestFetchRosterSharedPCODataCalledTwiceDoublesRequests models the
+// TestFetchRosterSharedPCODataLiveCalledTwiceDoublesRequests models the
 // pre-fix shape - buildRosterPositionGroupData and buildRosterLightData
 // each independently calling what's now fetchRosterSharedPCOData's calls -
 // for direct contrast with TestFetchRosterSharedPCODataMakesOneCallEach's
 // single-call assertion of 1 request each: two independent fetches for the
 // same plan cost 2 requests per resource (4 total), exactly the
-// duplication this fix eliminates by fetching once and sharing the result
-// instead.
-func TestFetchRosterSharedPCODataCalledTwiceDoublesRequests(t *testing.T) {
+// duplication this fix eliminates by fetching once and sharing the
+// result. Deliberately calls fetchRosterSharedPCODataLive (the raw,
+// never-cached fetch), not fetchRosterSharedPCOData - the latter's own 20s
+// cache (rosters_shared_cache.go) would turn a second same-key call within
+// the TTL window into a free hit, which would defeat what this test is
+// demonstrating (see rosters_shared_cache_httptest_test.go for that cache
+// behavior's own coverage).
+func TestFetchRosterSharedPCODataLiveCalledTwiceDoublesRequests(t *testing.T) {
 	var counts rosterSharedFetchCounts
 	server := newRosterSharedFetchFakeServer(t, &counts)
 
@@ -174,8 +192,8 @@ func TestFetchRosterSharedPCODataCalledTwiceDoublesRequests(t *testing.T) {
 	defer restore()
 
 	ctx := context.Background()
-	_ = fetchRosterSharedPCOData(ctx, "service-type-1", "plan-1")
-	_ = fetchRosterSharedPCOData(ctx, "service-type-1", "plan-1")
+	_ = fetchRosterSharedPCODataLive(ctx, "service-type-1", "plan-1")
+	_ = fetchRosterSharedPCODataLive(ctx, "service-type-1", "plan-1")
 
 	if got := atomic.LoadInt32(&counts.teamMembers); got != 2 {
 		t.Errorf("expected 2 GetTeamMembers requests from 2 independent fetches, got %d", got)

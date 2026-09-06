@@ -24,16 +24,21 @@ import (
 )
 
 // rosterSharedPCOData holds the two Planning Center resources
-// buildRosterPositionGroupData and buildRosterLightData both independently
+// buildRosterPositionGroupData, buildRosterLightData, and
+// buildRosterBuilderData's own full-rebuild path (rosters_builder.go) all
 // need for the same plan - GetTeamMembers and GetNeededPositions - fetched
-// once by fetchRosterSharedPCOData and passed into both, instead of each
-// function repeating the same requests when they run back-to-back for one
-// mutation. See rosters_detail.go's
+// (at most once per rosterSharedCacheTTL window, see
+// rosters_shared_cache.go) by fetchRosterSharedPCOData and passed into
+// whichever of those need it, instead of each caller repeating the same
+// live requests. See rosters_detail.go's
 // AddRosterAssignment/RemoveRosterAssignment/QuickAddPositionPreference,
-// the only three call sites today that use both functions together; every
-// other caller (QuickAddPersonRelationship here, buildRosterBuilderData's
-// own full-rebuild path) only ever needs one of the two and passes nil
-// instead (see each function's own nil handling below).
+// the three call sites that pass one already-fetched *rosterSharedPCOData
+// into both scoped builders in a single request; every other caller
+// (QuickAddPersonRelationship here, buildRosterBuilderData's full-rebuild
+// path) only ever needs one of the two builders and passes nil instead
+// (see each function's own nil handling below) - nil still goes through
+// fetchRosterSharedPCOData's own cache, it just doesn't already have a
+// value in hand to skip the call with.
 //
 // A standalone GetTeams call used to be a third resource here, fetched
 // purely to resolve team ids to names/display order - eliminated by
@@ -50,7 +55,11 @@ import (
 // TeamInfo entry - the team name just falls back to teamID - while
 // buildRosterLightData reports NeededErr, which now also covers a failed
 // team sideload) - keeping the errors separate preserves that existing
-// difference instead of flattening it.
+// difference instead of flattening it. It's also why only a fully
+// error-free rosterSharedPCOData is ever cached (see
+// rosters_shared_cache.go) - a partial success cached as a whole would
+// otherwise pin one call's failure onto the other's still-good data for
+// the rest of the TTL window.
 type rosterSharedPCOData struct {
 	Members    pco.PlanPersonListResponse
 	MembersErr error
@@ -62,14 +71,17 @@ type rosterSharedPCOData struct {
 	TeamInfo map[string]teamInfo
 }
 
-// fetchRosterSharedPCOData fetches the two PCO resources
-// rosterSharedPCOData holds, once each. Sequential, not fanned out via
-// scheduling.RunConcurrently - that helper exists for fan-outs sized to
-// "one call per roster member/position" (see its own doc comment), not a
-// fixed couple of calls, and both functions previously made these same
-// calls sequentially anyway, so there's no latency regression to guard
-// against here.
-func fetchRosterSharedPCOData(ctx context.Context, serviceTypeID, planID string) *rosterSharedPCOData {
+// fetchRosterSharedPCODataLive fetches the two PCO resources
+// rosterSharedPCOData holds, once each, always live - never cached itself.
+// fetchRosterSharedPCOData (rosters_shared_cache.go) is the cache-aside
+// wrapper every real caller in this package should use instead; this stays
+// unexported and exists purely to back that wrapper's cache-miss path.
+// Sequential, not fanned out via scheduling.RunConcurrently - that helper
+// exists for fan-outs sized to "one call per roster member/position" (see
+// its own doc comment), not a fixed couple of calls, and both functions
+// previously made these same calls sequentially anyway, so there's no
+// latency regression to guard against here.
+func fetchRosterSharedPCODataLive(ctx context.Context, serviceTypeID, planID string) *rosterSharedPCOData {
 	d := &rosterSharedPCOData{}
 	d.Members, d.MembersErr = pco.GetTeamMembers(ctx, serviceTypeID, planID, nil)
 	d.Needed, d.NeededErr = pco.GetNeededPositions(ctx, serviceTypeID, planID, &pco.NeededPositionsParams{Include: []string{"team"}})

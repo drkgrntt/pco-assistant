@@ -256,6 +256,31 @@ templ rosterTopContent(data RosterBuilderData) {
 	if data.PersonDataSyncPending {
 		<p class="muted">Availability and conflict warnings are still loading for this team - check back in a couple of minutes.</p>
 	}
+	<!--
+		Team/position data (who's on the team, what positions are open) is
+		cached for up to 20 seconds (see rosters_shared_cache.go) so a
+		change made directly in Planning Center - someone added to a team
+		mid-session, say - can lag behind by that much. This button is the
+		explicit, cheap remedy: bypasses the cache and rebuilds the whole
+		roster from a fresh live fetch. Deliberately not gated on
+		data.ReadOnly - unlike Import/Revert below, this never writes
+		anything local, so it's harmless (if not especially useful) to
+		offer on a past, read-only plan too.
+	-->
+	<form
+		class="inline"
+		hx-post={ fmt.Sprintf("/scheduling/rosters/%s/%s/refresh-team-data", data.ServiceTypeID, data.PlanID) }
+		hx-target="#roster-builder-body"
+		hx-swap="outerHTML"
+	>
+		<button
+			type="submit"
+			title="Re-pull current team membership and open positions from Planning Center right now, instead of waiting for the cached copy (up to 20 seconds old) to expire on its own"
+			aria-label="Refresh team data from Planning Center"
+		>
+			Refresh team data
+		</button>
+	</form>
 	@RosterStatusSummary(data)
 	for _, msg := range data.ExistingConflicts {
 		<div class="warning">{ msg }</div>

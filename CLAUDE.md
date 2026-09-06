@@ -332,11 +332,14 @@ calling once per item (`where[id]=...`, following
 fetching actually session-stable (safe to cache, like a song list) rather
 than something that must stay live for correctness (never cache a live
 availability/conflict check the way the song list gets cached - staleness
-there is a real bug, not a cosmetic one)? Note one deliberate gap still
-open per `docs/pco-api-risks.md`: team/position lists and team-member names are
-still fetched live, uncached, on every roster render - not yet fixed
-because it hasn't produced an actual reported symptom the way the song
-list did, not because it was missed.
+there is a real bug, not a cosmetic one)? The roster's own team/position
+lists and team-member names (`fetchRosterSharedPCOData`,
+`internal/server/controllers/rosters_shared_cache.go`) follow the same
+cache-aside shape as `FetchActiveSongs`, just with a much shorter 20s TTL
+- team membership can change *during* an active scheduling session, unlike
+a song library - plus a manual "Refresh team data" button on the roster
+page as the remedy for that shorter window's remaining staleness; see
+`docs/pco-api-risks.md`'s Changelog for the full reasoning.
 
 **Controllers**: grouped by page/feature under
 `internal/server/controllers/` (`build.go` is the combined Songs/Team
