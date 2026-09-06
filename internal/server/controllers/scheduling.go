@@ -435,6 +435,7 @@ func (sc *SchedulingController) RegisterRoutes(router fiber.Router) {
 	group.Get("/build/:service_type_id/:plan_id/songs-tab", sc.BuildSongsTabLazy)
 	group.Get("/build/:service_type_id/:plan_id/team-tab", sc.BuildTeamTabLazy)
 	group.Get("/build/:service_type_id/:plan_id/candidates/search", sc.BuildCandidatesSearch)
+	group.Post("/build/:service_type_id/:plan_id/candidates/:song_id/archive", sc.ArchiveSong)
 
 	// Quick-add: the same setup-level entities as the dedicated setup pages
 	// above (song tags/relationships/roles, person relationships, position

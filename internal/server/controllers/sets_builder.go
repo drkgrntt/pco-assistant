@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"pco-assistant/internal/logger"
 	"pco-assistant/internal/scheduling"
 	"pco-assistant/internal/server/middleware"
 	views "pco-assistant/internal/views/scheduling"
@@ -600,7 +601,44 @@ func (sc *SchedulingController) BuildCandidatesSearch(c *fiber.Ctx) error {
 	role := c.Query("role")
 
 	candidates, totalMatches, capped, browsable := sc.searchCandidates(ctx, organizationID, serviceTypeID, planID, query, role)
-	return render(c, views.CandidateSearchResults(serviceTypeID, planID, candidates, query, role, totalMatches, capped, browsable))
+	return render(c, views.CandidateSearchResults(serviceTypeID, planID, candidates, query, role, totalMatches, capped, browsable, ""))
+}
+
+// ArchiveSong flips a song's PCO `hidden` attribute to true from the
+// "Browse all songs" candidate list (see
+// docs/plans/not-started/song-archive-plan.md) - a real, immediate write
+// to the org's live PCO data, confirmed client-side via hx-confirm before
+// this ever fires (matching songDetailCard's Duplicate/Remove/Replace
+// precedent), never a local draft. No local table has a real FK to a song
+// id (song_tags/song_person_preferences/song_relationships/song_roles all
+// store a plain, unconstrained song_id), so there is nothing else to
+// reconcile - archiving just makes the song stop appearing in
+// FetchActiveSongs-backed lists, via InvalidateActiveSongsCache below.
+// Re-renders the same #set-candidates fragment BuildCandidatesSearch
+// renders, using whatever query/role the candidate list currently has
+// live (see the hx-include on the archive button in songCandidateMeta's
+// sibling markup) so the archived song simply disappears from the list
+// the click came from, same UX as clicking Add.
+func (sc *SchedulingController) ArchiveSong(c *fiber.Ctx) error {
+	organizationID := middleware.CurrentOrganizationID(c)
+	ctx := middleware.RequestContext(c)
+	serviceTypeID := c.Params("service_type_id")
+	planID := c.Params("plan_id")
+	songID := c.Params("song_id")
+	query := c.FormValue("q")
+	role := c.FormValue("role")
+
+	errMsg := ""
+	hidden := true
+	if _, err := pco.UpdateSong(ctx, songID, &pco.UpdateSongParams{Hidden: &hidden}); err != nil {
+		logger.ErrorContext(ctx, "archive song", "error", err, "song_id", songID)
+		errMsg = "Couldn't archive that song in Planning Center: " + err.Error()
+	} else {
+		scheduling.InvalidateActiveSongsCache(organizationID)
+	}
+
+	candidates, totalMatches, capped, browsable := sc.searchCandidates(ctx, organizationID, serviceTypeID, planID, query, role)
+	return render(c, views.CandidateSearchResults(serviceTypeID, planID, candidates, query, role, totalMatches, capped, browsable, errMsg))
 }
 
 // searchCandidates is BuildCandidatesSearch's actual work, split out so the
