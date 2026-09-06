@@ -53,11 +53,3 @@ require (
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.40.0 // indirect
 )
-
-// TEMPORARY: go-pco v0.23.0 (adds GetAttachments, see attachments.go) is
-// committed locally in the go-pco checkout but not yet tagged/pushed - this
-// build environment had no git-push access to that separate repo. Remove
-// this replace directive once v0.23.0 is actually tagged and pushed to
-// github.com/drkgrntt/go-pco, at which point `go mod tidy` will resolve the
-// require above against the real tag instead.
-replace github.com/drkgrntt/go-pco => /home/drkgrntt/projects/go-pco
