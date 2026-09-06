@@ -434,6 +434,23 @@ band later if it proves noisy in practice, the same way
 `key-change-tip-plan.md` left its own interval-widening question open
 for later tuning rather than guessing a threshold up front.
 
+**Octave-shift tip (register differences)**: a mismatch shouldn't stop at
+a flat "doesn't fit" - the whole reason ranges are stored as absolute
+semitones rather than bare pitch classes is that a tenor's and an alto's
+ranges can share the same pitch classes a full octave apart, and the real
+fix for a lot of mismatches is "sing it an octave down/up," not "change
+the key." Before rendering a hard mismatch, also check the song's
+effective range shifted by ±12 semitones against the person's stored
+range - a pure derived comparison over values Phase 1/2 already produce,
+no new storage. If a ±1-octave shift brings the song's range fully inside
+the person's, downgrade the message from a mismatch warning to a tip
+("fits if sung an octave lower/higher than written"), same `Disclosure`
+surface, worded as a suggestion rather than a conflict; only render the
+hard mismatch when neither the written octave nor a ±1-octave shift
+works. This is the concrete answer to "what could make this person fit"
+for the single most common real case (a register difference between
+voice types), without a second warning mechanism.
+
 **The matrix view**: a presentation-only page once both ranges exist,
 cross-tabulating a team's people (rows) against a plan's songs (columns)
 to show "who can sing what, in the key it's actually in" at a glance.
