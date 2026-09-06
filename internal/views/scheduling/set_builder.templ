@@ -386,7 +386,10 @@ templ songCandidateMeta(cand CandidateSongView) {
 //   - Normal results.
 //   - Capped results: the same rows, plus a trailing hint that more exist -
 //     see BuildCandidatesSearch's candidateSearchLimit.
-templ CandidateSearchResults(serviceTypeID, planID string, candidates []CandidateSongView, query, roleFilter string, totalMatches int, capped bool, browsable []SongOptionView) {
+templ CandidateSearchResults(serviceTypeID, planID string, candidates []CandidateSongView, query, roleFilter string, totalMatches int, capped bool, browsable []SongOptionView, errMsg string) {
+	if errMsg != "" {
+		<li class="error">{ errMsg }</li>
+	}
 	if query == "" && roleFilter == "" {
 		<li class="muted">
 			Type to search your song library, or browse:
@@ -415,6 +418,19 @@ templ CandidateSearchResults(serviceTypeID, planID string, candidates []Candidat
 						@components.IconAdd()
 					</button>
 				</form>
+				<button
+					type="button"
+					class="icon-btn danger"
+					hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/candidates/%s/archive", serviceTypeID, planID, cand.SongID) }
+					hx-target="#set-candidates"
+					hx-swap="innerHTML"
+					hx-include="#candidate-search, #candidate-role-filter"
+					hx-confirm={ fmt.Sprintf("Archive %q in Planning Center? It won't be deleted, just hidden - you (or anyone with PCO access) can unhide it there anytime.", cand.Title) }
+					aria-label="Archive song"
+					title="Archive song"
+				>
+					@components.IconArchive()
+				</button>
 			}
 		}
 		if capped {
@@ -890,7 +906,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 		-->
 		@collapsibleSection("find-songs-candidates", "Browse all songs", true) {
 			<ul id="set-candidates" class="candidate-list">
-				@CandidateSearchResults(data.ServiceTypeID, data.PlanID, nil, "", "", 0, false, data.BrowsableSongs)
+				@CandidateSearchResults(data.ServiceTypeID, data.PlanID, nil, "", "", 0, false, data.BrowsableSongs, "")
 			</ul>
 		}
 		<!--
