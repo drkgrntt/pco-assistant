@@ -263,7 +263,7 @@ type SetSongView struct {
 	// sheet/chord chart PDFs, scans, audio - arbitrary uploaded files, see
 	// scheduling.SongAttachmentInfo) - a small "Files" list of links on the
 	// song detail card, one per attachment, nothing shown when there are
-	// none. See docs/plans/not-started/song-lead-sheet-attachments-plan.md.
+	// none. See docs/plans/shipped/song-lead-sheet-attachments-plan.md.
 	// Detail-card-only, same scope as Structure/HasChordChart above.
 	Attachments []SongAttachmentView
 	// Description is this one occurrence's local per-occurrence note (see

@@ -146,7 +146,7 @@ that first. Facts worth adding here that aren't in CLAUDE.md:
   a 100-song library" figure).
 - **Song Attachments' response shape confirmed live (2026-09-06)** - the
   original build shipped `pco.GetAttachments`/`AttachmentAttributes`
-  without the live check `docs/plans/not-started/song-lead-sheet-attachments-plan.md`
+  without the live check `docs/plans/shipped/song-lead-sheet-attachments-plan.md`
   itself calls for (sandboxed build environment, no reachable PCO
   credentials). Confirmed as a same-day follow-up by creating and deleting
   a real throwaway attachment against a dev org song
@@ -611,7 +611,7 @@ out to 100-200 sequential round trips per load.
   controllers-package-local type, and exporting it purely to satisfy a
   package boundary bought nothing.
 - **Song attachments cached alongside arrangement info, not fetched live** -
-  full design in `docs/plans/not-started/song-lead-sheet-attachments-plan.md`.
+  full design in `docs/plans/shipped/song-lead-sheet-attachments-plan.md`.
   New per-song call: `fetchAndCacheSongAttachments` (`scheduling.go`) calls
   the new `pco.GetAttachments` (go-pco, list-only wrap of Song Attachments)
   right after `fetchAndCacheArrangementInfo`'s own arrangement fetch

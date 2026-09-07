@@ -158,7 +158,7 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 	// attachmentCache backs the detail card's "Files" list (SetSongView.
 	// Attachments) - cache-only, same shape as arrangementCache above, one
 	// bulk read for the whole page render. See
-	// docs/plans/not-started/song-lead-sheet-attachments-plan.md.
+	// docs/plans/shipped/song-lead-sheet-attachments-plan.md.
 	attachmentCache, _ := sc.store.SongAttachments(ctx, organizationID)
 
 	// AllSongs/TagCategories/RelationshipTypes/RoleTypes back the "Quick

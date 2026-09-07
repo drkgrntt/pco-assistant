@@ -14,7 +14,7 @@ Written 2026-09-05, expanding `docs/ideas.md`'s "Reducing friction vs.
 Planning Center" item 1 ("Live sync reflection") into an actual design.
 Not built yet - written up for later, same spirit as
 `docs/plans/not-started/song-tags-setup-redesign-plan.md` and
-`docs/plans/not-started/song-lead-sheet-attachments-plan.md`. This is the
+`docs/plans/shipped/song-lead-sheet-attachments-plan.md`. This is the
 first of that section's five ideas and, on paper, the most architecturally
 invasive: unlike items 2-4 (a cron job, a CSS width, a browser extension),
 this one needs either a new push-based ingress into the app (a public

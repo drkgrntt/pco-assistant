@@ -18,7 +18,7 @@ for their own source bullets.
 ## Current state
 
 **No vocal range storage exists anywhere in this codebase today** -
-confirmed independently by `docs/plans/not-started/song-lead-sheet-attachments-plan.md`
+confirmed independently by `docs/plans/shipped/song-lead-sheet-attachments-plan.md`
 ("vocal range itself (person or song) doesn't exist in this codebase
 yet"), and reconfirmed here (no `vocal_range`/range table, no note-parsing
 helper beyond the key-transition warning's pitch-class-only parser).
@@ -71,7 +71,7 @@ alone).
 `00035_person_vocal_range.sql`. Phase 2's migration number isn't fixed as
 precisely, since other migrations may land between the two phases -
 called out below as "next available number at build time," following the
-same hedge `docs/plans/not-started/song-lead-sheet-attachments-plan.md`
+same hedge `docs/plans/shipped/song-lead-sheet-attachments-plan.md`
 implicitly avoids by being written closer to its own build.
 
 **go-pco already exposes a real cross-org join key candidate** for songs:

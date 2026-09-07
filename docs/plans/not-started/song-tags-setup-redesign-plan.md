@@ -6,7 +6,7 @@ the Build page at all, but about `/scheduling/song-tags` (the setup page
 where tags actually get created) - "the ability to look through and
 organize things," called out as "a different subject entirely, a
 redesign." Not built yet; written up for later, same spirit as
-`docs/plans/shipped/pco-roster-cold-start-plan.md`/`docs/plans/not-started/song-lead-sheet-attachments-plan.md`.
+`docs/plans/shipped/pco-roster-cold-start-plan.md`/`docs/plans/shipped/song-lead-sheet-attachments-plan.md`.
 
 ## Current state (`internal/views/scheduling/song_tags.templ`,
 `internal/server/controllers/song_tags.go`)

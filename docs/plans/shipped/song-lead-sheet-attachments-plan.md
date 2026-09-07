@@ -1,10 +1,12 @@
 # Plan: surface song attachments (lead sheets) on the Build page
 
-**Status: partially built (2026-09-06).** Every numbered step below is
-coded and wired end-to-end (`go build ./...`/`make test` both pass in both
-repos). The build's own live-verification gap (below) has since been
-closed directly against the dev org; one thing remains open, and this
-stays in `not-started/` until it's closed:
+**Status: shipped 2026-09-07.** Every numbered step below is coded and
+wired end-to-end (`go build ./...`/`make test` both pass in both repos).
+`go-pco` `v0.23.0` (`GetAttachments`) is tagged and pushed, and this
+repo's `go.mod` resolves it directly (no `replace` directive) as of
+`645ad5f`. `docs/ideas.md` and `docs/pco-api-risks.md` were already kept
+current as part of this build. The two items originally left open below
+are both done:
 
 1. ~~**The "Verify live first" step was not actually done.**~~ - **done**
    (2026-09-06, follow-up to this build): confirmed live by creating and
@@ -33,7 +35,10 @@ stays in `not-started/` until it's closed:
    would need wrapping the `/open` action and `AttachmentActivity` - not
    done, not currently planned, noted here so it isn't lost if ever
    wanted.
-2. **`go-pco`'s new code is committed but not tagged/pushed.**
+2. ~~**`go-pco`'s new code is committed but not tagged/pushed.**~~ -
+   **done** (2026-09-07): `v0.23.0` tagged and pushed to
+   `github.com/drkgrntt/go-pco`; this repo's `replace` directive was
+   dropped and `go.mod` now resolves `v0.23.0` for real (`645ad5f`).
    `attachments.go`/`attachments_test.go` (plus the live-verification fix
    above) are committed on a `feat/attachments` branch in the local
    checkout at `/home/drkgrntt/projects/go-pco` (moved off `main` during

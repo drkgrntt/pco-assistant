@@ -241,7 +241,7 @@ somewhere to put it.
   attachment, every one of a song's Planning Center Attachments (lead
   sheet/chord chart PDFs, scans, audio, or a plain link) now shows as a
   filename link on the song detail card - see
-  `docs/plans/not-started/song-lead-sheet-attachments-plan.md`. `SetSongView.
+  `docs/plans/shipped/song-lead-sheet-attachments-plan.md`. `SetSongView.
   Attachments`, `scheduling.SongAttachmentInfo`.
 
 **Not in PCO's data model at all - would need local storage, same
@@ -379,7 +379,7 @@ pattern as `song_tags`/`song_relationships`:**
   and compare it against a person's own vocal range (see People, below)
   to flag a real mismatch automatically, not just show a note someone has
   to read. Still not built - see
-  `docs/plans/not-started/song-lead-sheet-attachments-plan.md` for why
+  `docs/plans/shipped/song-lead-sheet-attachments-plan.md` for why
   *automatic* range extraction from a song's lead sheet specifically is
   out of scope (Planning Center's Attachments are arbitrary file blobs,
   often scanned PDFs, not structured notation - would need OMR, a
@@ -461,7 +461,7 @@ pattern as `song_tags`/`song_relationships`:**
     song lyrics/chord chart text at all (so a topic/word could be pulled
     automatically instead of tagged by hand) - **verified**: `go-pco`'s
     `ArrangementAttributes.Lyrics` is real and already wrapped (confirmed
-    while scoping `docs/plans/not-started/song-lead-sheet-attachments-plan.md`).
+    while scoping `docs/plans/shipped/song-lead-sheet-attachments-plan.md`).
     Still not built - this only resolves the "does the data exist" open
     question, not the picking/extraction UX.
 

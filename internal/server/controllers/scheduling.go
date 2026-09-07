@@ -149,7 +149,7 @@ func keysFromIncluded(included []any) []includedKey {
 //
 // Also fetches and caches this song's Attachments (fetchAndCacheSongAttachments
 // below) as part of the same "sync this song's info" unit - see
-// docs/plans/not-started/song-lead-sheet-attachments-plan.md. That's a second,
+// docs/plans/shipped/song-lead-sheet-attachments-plan.md. That's a second,
 // independent PCO call (this function/its callers now cost 2 live PCO
 // calls per uncached song, not 1 - see songInfoSyncBatchPause's own doc
 // comment for the pacing math this feeds), kept best-effort and never

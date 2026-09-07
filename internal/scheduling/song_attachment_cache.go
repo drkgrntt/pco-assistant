@@ -10,7 +10,7 @@ import "context"
 // which one (if any) is "the" lead sheet - the attachment-type label
 // Planning Center shows is org-defined, not a fixed enum - so every cached
 // attachment is surfaced, not just a single guessed one. See
-// docs/plans/not-started/song-lead-sheet-attachments-plan.md.
+// docs/plans/shipped/song-lead-sheet-attachments-plan.md.
 //
 // Deliberately carries no URL: even though go-pco's AttachmentAttributes.URL
 // is confirmed live to be a stable link (Planning Center's own attachment
