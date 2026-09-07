@@ -86,6 +86,7 @@ that first. Facts worth adding here that aren't in CLAUDE.md:
 | Live-sync poll-while-open (`SyncCheck`, one `GetItems` per open Build-page Songs tab per 30s) | shipped | poll-while-open only (option C) - bounded by concurrent viewers, not total org/plan count; tagged `pco.WithPriority(ctx, 20)` so a poll tick never contends with interactive traffic on the same token; a failed poll tick is treated as "no change," never surfaced as an error |
 | Team/position lists and team-member names (fetched live, uncached, on every roster render) | fixed | cached `fetchRosterSharedPCOData` (`rosters_shared_cache.go`), 20s TTL - shorter than the 60s norm since team membership can change mid-session; manual "Refresh team data" button is the remedy for the remaining window |
 | Song attachments (lead sheets/chord charts) | shipped | cached at sync time alongside arrangement info (`fetchAndCacheSongAttachments`, one more PCO call per uncached song - Song Info sync is now 2 calls/song, not 1); the attachment's own `url` is never cached, a click-triggered route live-fetches a fresh one instead |
+| Song leader -> vocal notes sync (`syncLeaderNote`, `sets_publish.go`) | shipped | `PublishSet` rides its existing `GetItems` call (adds `Include: []string{"item_notes"}` only when a vocal category is actually configured - zero new calls otherwise); `RefreshSongInfo` previously made no `GetItems` call at all, so it gains one new per-plan `GetItems(Include: item_notes)` call, but only when a service type has configured the vocal notes category setting (opt-in cost, not paid by every org) |
 
 ## Live-verified PCO API facts (worth not re-checking)
 
@@ -657,3 +658,22 @@ out to 100-200 sequential round trips per load.
   to PCO's page today. See the "Live-verified PCO API facts" entry below
   for the full finding; no behavior change, just corrected reasoning in
   code comments and this doc.
+- **Song leader synced into the existing vocal notes category, not a new
+  hot-path call** - full design in `docs/plans/shipped/song-leader-plan.md`.
+  `syncLeaderNote` (`sets_publish.go`) composes a reserved "Leading:
+  [name]" first line into whichever Item Note category the org designates
+  as "the vocal one" (a new per-service-type setting,
+  `scheduling.Store.VocalNoteCategoryID`/`SetVocalNoteCategory`, migration
+  `00038`), using the same `pco.CreateItemNote`/`UpdateItemNote`/
+  `DeleteItemNote` calls `UpdateSongNote` already makes - no new call
+  shape. `PublishSet` already fetches the plan's items for its reorder
+  step; this just adds `Include: []string{"item_notes"}` to that existing
+  call (and only when a vocal category is actually configured), reusing
+  `itemNotesFromIncluded` (Phase 1c, above) instead of a fresh
+  `GetItemNotes` per song. `RefreshSongInfo` had no `GetItems` call of its
+  own before this - it now makes one, per Refresh click, per plan, but
+  only for a service type that's opted into the setting; an org that
+  never configures it pays nothing extra. Person-name resolution for
+  display (`SetSongView.LeaderPersonName`) reuses the existing
+  `personNameMapForIDs` batched `where[id]=...` lookup, the same pattern
+  rosters/preferences already use - not a new category of call.

@@ -152,6 +152,20 @@ type SetBuilderData struct {
 	// everything else built from that response.
 	PCOSyncFingerprint string
 
+	// VocalNoteCategories is this service type's Planning Center note
+	// categories (id + name only - see NoteCategoryOptionView), backing
+	// the "Song leader syncs into" setting's <select>
+	// (vocalNoteCategorySection, set_builder.templ). Reuses the exact
+	// GetItemNoteCategories response buildSongNoteViews already resolves
+	// per song (see buildSetBuilderData) - no extra PCO call.
+	// VocalNoteCategoryID is which of those categories (by id) the song
+	// leader currently syncs into on Publish/Refresh song info - ""
+	// means not configured yet, in which case the sync is a no-op (see
+	// scheduling.Store.VocalNoteCategoryID and docs/plans/shipped/
+	// song-leader-plan.md).
+	VocalNoteCategories []NoteCategoryOptionView
+	VocalNoteCategoryID string
+
 	// SongPairPrompt, when set, offers a one-shot inline "remember that
 	// these two go together?" relationship capture right after adding a
 	// song that landed right after another one - see SongPairPromptView
@@ -336,6 +350,20 @@ type SetSongView struct {
 	KeyTransitionLabel      string
 	KeyTransitionMessage    string
 	KeyTransitionSuggestion string
+
+	// LeaderPersonID is this one occurrence's local per-occurrence song
+	// leader (see scheduling.SetSong.LeaderPersonID) - "" means no leader
+	// set. Editable on the song detail card via a PersonPickerField, same
+	// local-draft-only semantics as Key/Description above: it reaches
+	// Planning Center as a reserved line inside the org's configured
+	// vocal notes category on the next Publish or Refresh song info (see
+	// syncLeaderNote, sets_publish.go), never immediately.
+	// LeaderPersonName is that person's resolved display name (batched
+	// via personNameMapForIDs, buildSetBuilderData), falling back to the
+	// raw id if the lookup misses - what the picker's search box shows on
+	// load, and what read-only past-plan rendering shows as plain text.
+	LeaderPersonID   string
+	LeaderPersonName string
 }
 
 // SongNoteView is one Planning Center note category's state for a specific
@@ -409,6 +437,16 @@ type PlanRow struct {
 type SongOptionView struct {
 	SongID string
 	Title  string
+}
+
+// NoteCategoryOptionView is a lightweight Planning Center Item Note
+// category option - just an id and a name, the same "enough to populate
+// a plain native <select>" shape as SongOptionView above. Backs the "Song
+// leader syncs into" setting (SetBuilderData.VocalNoteCategories) - see
+// scheduling.Store.VocalNoteCategoryID.
+type NoteCategoryOptionView struct {
+	ID   string
+	Name string
 }
 
 // CandidateSongView is a song not yet in the set, offered for adding via

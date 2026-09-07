@@ -244,6 +244,40 @@ func (sc *SchedulingController) UpdateSetSongKey(c *fiber.Ctx) error {
 	return render(c, views.KeyFormFragment(data, song, errMsg))
 }
 
+// UpdateSetSongLeader sets one set song's local per-occurrence song leader
+// (see scheduling.SetSong.LeaderPersonID) - same local-draft-only
+// semantics as UpdateSetSongDescription/UpdateSetSongKey above (it reaches
+// Planning Center as a reserved line inside the org's configured vocal
+// notes category on the next Publish or Refresh song info, see
+// syncLeaderNote in sets_publish.go, not immediately), and the same
+// single-form fragment response.
+func (sc *SchedulingController) UpdateSetSongLeader(c *fiber.Ctx) error {
+	ctx := middleware.RequestContext(c)
+	orgID := middleware.CurrentOrganizationID(c)
+	serviceTypeID := c.Params("service_type_id")
+	planID := c.Params("plan_id")
+
+	rowID, err := c.ParamsInt("set_song_id")
+	if err != nil {
+		return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(ctx, orgID, serviceTypeID, planID, "set_song_id must be an integer")))
+	}
+
+	errMsg := ""
+	if set, err := sc.store.GetOrCreateSet(ctx, orgID, serviceTypeID, planID); err != nil {
+		errMsg = err.Error()
+	} else if err := sc.store.UpdateSetSongLeader(ctx, set.ID, int64(rowID), c.FormValue("leader_person_id")); err != nil {
+		errMsg = err.Error()
+	}
+
+	data := sc.buildSetBuilderData(ctx, orgID, serviceTypeID, planID)
+	song, ok := findSongViewByRowID(data, int64(rowID))
+	if !ok {
+		data.ErrMsg = appendErr(errMsg, data.ErrMsg)
+		return render(c, views.SetBuilderBody(data))
+	}
+	return render(c, views.LeaderFormFragment(data, song, errMsg))
+}
+
 // uppercaseFirst uppercases just the key's first letter ("bb" -> "Bb", "f#m"
 // -> "F#m") - normalization only, not validation. The rest of the string is
 // left untouched (and PCO's own key strings aren't a fixed enum this app

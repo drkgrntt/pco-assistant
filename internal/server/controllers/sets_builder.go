@@ -309,7 +309,21 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 		// rather than one GetItemNotes call per published song - see
 		// itemNotesFromIncluded's own doc comment.
 		itemNotes := itemNotesFromIncluded(pcoItems.Included)
-		data.ServiceOrder = renderServiceOrder(ctx, sc.store, organizationID, arrangementCache, attachmentCache, noteCategories.Data, itemNotes, merged, titles, rolesBySong, roleTypeLabels, history.RepeatedSongs, conflictTitlesBySong, transitionsByRow)
+		// VocalNoteCategories/VocalNoteCategoryID back the "Song leader
+		// syncs into" setting (vocalNoteCategorySection, set_builder.templ)
+		// - the same noteCategories list buildSongNoteViews already
+		// resolves per song, reused here for the setting's own <select>, no
+		// extra PCO call. VocalNoteCategoryID is a local Postgres read
+		// (scheduling.Store.VocalNoteCategoryID), not a PCO call either.
+		data.VocalNoteCategories = vocalNoteCategoryOptions(noteCategories.Data)
+		data.VocalNoteCategoryID, _ = sc.store.VocalNoteCategoryID(ctx, organizationID, serviceTypeID)
+		// leaderNames resolves every distinct song leader's PCO person id
+		// to a display name in one batched where[id]=... call
+		// (personNameMapForIDs) - empty (and free) when no song in this
+		// set has a leader set. Feeds SetSongView.LeaderPersonName below,
+		// the same "resolve once here, not per-row" shape as titles.
+		leaderNames := personNameMapForIDs(ctx, distinctLeaderPersonIDs(setSongs))
+		data.ServiceOrder = renderServiceOrder(ctx, sc.store, organizationID, arrangementCache, attachmentCache, noteCategories.Data, itemNotes, merged, titles, rolesBySong, roleTypeLabels, history.RepeatedSongs, conflictTitlesBySong, transitionsByRow, leaderNames)
 
 		// ServiceLengthWarning: the one warning that stays a standalone,
 		// whole-plan banner rather than moving onto a row - it isn't
@@ -1592,6 +1606,19 @@ func buildSongNoteViews(itemID string, noteCategories []pco.ItemNoteCategoryData
 	return noteViews
 }
 
+// vocalNoteCategoryOptions converts a service type's Planning Center note
+// categories into the lightweight id+name options the "Song leader syncs
+// into" setting's <select> needs (SetBuilderData.VocalNoteCategories) -
+// same "just enough for a plain native <select>" shape as
+// buildBrowsableSongs/SongOptionView.
+func vocalNoteCategoryOptions(categories []pco.ItemNoteCategoryData) []views.NoteCategoryOptionView {
+	opts := make([]views.NoteCategoryOptionView, 0, len(categories))
+	for _, cat := range categories {
+		opts = append(opts, views.NoteCategoryOptionView{ID: cat.ID, Name: cat.Attributes.Name})
+	}
+	return opts
+}
+
 // renderServiceOrder turns a merge into display rows plus the anchor
 // picker's option list (every foreign item, in order, prefixed by "Top of
 // service"). noteCategories is this service type's Planning Center note
@@ -1610,7 +1637,12 @@ func buildSongNoteViews(itemID string, noteCategories []pco.ItemNoteCategoryData
 // keyed by the *second* song's own row id (keyTransitionWarning.SongRowID),
 // so a row only ever picks up a transition badge for the pair ending at
 // itself, never the one starting from it.
-func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizationID string, arrangementCache map[string]scheduling.SongArrangementInfo, attachmentCache map[string][]scheduling.SongAttachmentInfo, noteCategories []pco.ItemNoteCategoryData, itemNotes map[string][]pco.ItemNoteData, rows []mergedRow, titles map[string]string, rolesBySong map[string][]scheduling.SongRole, roleTypeLabels map[string]string, repeated map[string]bool, conflictTitlesBySong map[string][]string, transitionsByRow map[int64]keyTransitionWarning) []views.ServiceOrderRow {
+//
+// leaderNames resolves each SetSong.LeaderPersonID to a display name
+// (SetSongView.LeaderPersonName) - see distinctLeaderPersonIDs/
+// personNameMapForIDs in buildSetBuilderData, batched once for the whole
+// render rather than a per-row lookup.
+func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizationID string, arrangementCache map[string]scheduling.SongArrangementInfo, attachmentCache map[string][]scheduling.SongAttachmentInfo, noteCategories []pco.ItemNoteCategoryData, itemNotes map[string][]pco.ItemNoteData, rows []mergedRow, titles map[string]string, rolesBySong map[string][]scheduling.SongRole, roleTypeLabels map[string]string, repeated map[string]bool, conflictTitlesBySong map[string][]string, transitionsByRow map[int64]keyTransitionWarning, leaderNames map[string]string) []views.ServiceOrderRow {
 	// A plain sequential loop, not scheduling.RunConcurrently - unlike
 	// before Phase 2 (docs/plans/shipped/pco-call-efficiency-rollout-plan.md), a song
 	// row's only per-row lookup, resolveArrangementCacheInfo, no longer
@@ -1678,6 +1710,8 @@ func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizati
 			RecentlyRepeated: repeated[ss.SongID],
 			ConflictTitles:   conflictTitlesBySong[ss.SongID],
 			Attachments:      songAttachmentViews(attachmentCache[ss.SongID]),
+			LeaderPersonID:   ss.LeaderPersonID,
+			LeaderPersonName: titleOrID(leaderNames, ss.LeaderPersonID),
 		}
 		if transition, ok := transitionsByRow[ss.ID]; ok {
 			songView.KeyTransitionLabel = transition.Label

@@ -19,6 +19,68 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+// syncLeaderNote writes ss's local song leader (SetSong.LeaderPersonID)
+// into the org's configured vocal notes category on its Planning Center
+// plan item, if one is configured for this service type - see
+// docs/plans/shipped/song-leader-plan.md's "Publish-time sync" section.
+// currentNoteID/currentContent are that category's existing note on this
+// item right now, if any (""/"" meaning no note there yet) - always
+// resolved by the caller from whatever it already sideloaded via
+// itemNotesFromIncluded (an Include: []string{"item_notes"} GetItems
+// call already being made for another reason), never a fresh per-song
+// GetItemNotes call - see PublishSet/RefreshSongInfo's own call sites.
+//
+// No-op when vocalCategoryID == "" (the feature isn't configured for this
+// service type yet - see scheduling.Store.VocalNoteCategoryID) or itemID
+// == "" (an unpublished song has no plan item to attach a note to). Also
+// a no-op when the composed content wouldn't actually change anything, to
+// avoid a pointless PATCH. Uses the exact same pco.CreateItemNote/
+// UpdateItemNote/DeleteItemNote calls UpdateSongNote (sets_detail.go)
+// already makes for the same category, just driven by the local leader
+// field instead of a live form submit.
+func syncLeaderNote(ctx context.Context, serviceTypeID, planID, itemID, vocalCategoryID, currentNoteID, currentContent, leaderName string) error {
+	if vocalCategoryID == "" || itemID == "" {
+		return nil
+	}
+
+	newContent := composeLeaderNoteContent(currentContent, leaderName)
+	if newContent == currentContent {
+		return nil
+	}
+
+	switch {
+	case newContent == "" && currentNoteID != "":
+		return pco.DeleteItemNote(ctx, serviceTypeID, planID, itemID, currentNoteID)
+	case newContent == "":
+		return nil
+	case currentNoteID != "":
+		_, err := pco.UpdateItemNote(ctx, serviceTypeID, planID, itemID, currentNoteID, &pco.UpdateItemNoteParams{Content: newContent})
+		return err
+	default:
+		_, err := pco.CreateItemNote(ctx, serviceTypeID, planID, itemID, &pco.CreateItemNoteParams{Content: newContent, ItemNoteCategoryID: vocalCategoryID})
+		return err
+	}
+}
+
+// distinctLeaderPersonIDs collects every distinct, non-empty
+// LeaderPersonID across setSongs - feeds personNameMapForIDs' batched
+// where[id]=... lookup (PublishSet/RefreshSongInfo) so a set with several
+// songs sharing the same leader still costs one name lookup, not one per
+// song, and a set with no leaders set at all costs zero (an empty slice
+// short-circuits personLookupMapForIDs before it makes any call).
+func distinctLeaderPersonIDs(setSongs []scheduling.SetSong) []string {
+	seen := make(map[string]bool, len(setSongs))
+	ids := make([]string, 0, len(setSongs))
+	for _, ss := range setSongs {
+		if ss.LeaderPersonID == "" || seen[ss.LeaderPersonID] {
+			continue
+		}
+		seen[ss.LeaderPersonID] = true
+		ids = append(ids, ss.LeaderPersonID)
+	}
+	return ids
+}
+
 // planStatus classifies a plan for the picker list:
 //   - "planned": a local draft exists, has songs, and none are unpublished
 //     or queued for deletion - fully synced with Planning Center.
@@ -135,6 +197,17 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 	// until the next manual sync.
 	arrangementCache, _ := sc.store.SongArrangementInfo(ctx, orgID)
 
+	// vocalCategoryID/leaderNames back syncLeaderNote's per-song write
+	// below - resolved once here, not per song. vocalCategoryID's own
+	// lookup is a local Postgres read (scheduling.Store.
+	// VocalNoteCategoryID), not a PCO call; leaderNames batches every
+	// distinct LeaderPersonID in this set into one where[id]=... call
+	// (personNameMapForIDs), same batching precedent as titles/roles
+	// above - empty when no song in this set has a leader set, in which
+	// case the call is skipped entirely (see personLookupMapForIDs).
+	vocalCategoryID, _ := sc.store.VocalNoteCategoryID(ctx, orgID, serviceTypeID)
+	leaderNames := personNameMapForIDs(ctx, distinctLeaderPersonIDs(setSongs))
+
 	// 1. Deletions - clear out what was removed/replaced locally before
 	// creating or reordering anything else.
 	scheduling.RunConcurrently(pendingDeletions, func(ss scheduling.SetSong) {
@@ -167,7 +240,16 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 	// quietly claiming to be in sync.
 	reorderSucceeded := true
 	if len(setSongs) > 0 {
-		existingItems, err := pco.GetItems(ctx, serviceTypeID, planID, nil)
+		// Include: item_notes only when the leader sync is actually
+		// configured (vocalCategoryID != "") - sideloading onto this
+		// already-happening call (see itemNotesFromIncluded) is free
+		// PCO-call-wise either way, but there's no reason to ask Planning
+		// Center to bundle note data nobody here is about to look at.
+		itemsParams := &pco.ItemsParams{}
+		if vocalCategoryID != "" {
+			itemsParams.Include = []string{"item_notes"}
+		}
+		existingItems, err := pco.GetItems(ctx, serviceTypeID, planID, itemsParams)
 		if err != nil {
 			failures = append(failures, "loading existing plan items from Planning Center: "+friendlyPCOErr(err))
 			reorderSucceeded = false
@@ -175,6 +257,7 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 			sort.Slice(existingItems.Data, func(i, j int) bool {
 				return existingItems.Data[i].Attributes.Sequence < existingItems.Data[j].Attributes.Sequence
 			})
+			notesByItem := itemNotesFromIncluded(existingItems.Included)
 
 			nextSequence := 0
 			for _, item := range existingItems.Data {
@@ -284,6 +367,15 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 					// call happens to succeed.
 					_ = sc.store.ClearInfoPending(ctx, set.ID, ss.ID)
 					ss.PCOItemID = item.Data.ID
+					// A freshly-created item has no existing note in any
+					// category yet ("", "" - nothing to preserve), so this
+					// only ever creates a fresh note, never updates/deletes
+					// one - see syncLeaderNote's own doc comment.
+					if err := syncLeaderNote(ctx, serviceTypeID, planID, item.Data.ID, vocalCategoryID, "", "", titleOrID(leaderNames, ss.LeaderPersonID)); err != nil {
+						failuresMu.Lock()
+						failures = append(failures, fmt.Sprintf("%s: created, but couldn't sync the song leader note: %s", title, friendlyPCOErr(err)))
+						failuresMu.Unlock()
+					}
 					atomic.AddInt32(&createdCount, 1)
 				} else {
 					// Already published - nothing to create, but a pending
@@ -333,6 +425,16 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 							if keyErr != nil {
 								failuresMu.Lock()
 								failures = append(failures, fmt.Sprintf("%s: note/length updated, but couldn't set key to %q - kept the arrangement's key instead: %s", title, ss.KeyOverride, friendlyPCOErr(keyErr)))
+								failuresMu.Unlock()
+							}
+							// currentNoteID/currentContent come from notesByItem
+							// - sideloaded on the existingItems fetch above
+							// (Include: item_notes), never a fresh per-song
+							// call - see syncLeaderNote's own doc comment.
+							currentNoteID, currentContent := noteInCategory(notesByItem, ss.PCOItemID, vocalCategoryID)
+							if err := syncLeaderNote(ctx, serviceTypeID, planID, ss.PCOItemID, vocalCategoryID, currentNoteID, currentContent, titleOrID(leaderNames, ss.LeaderPersonID)); err != nil {
+								failuresMu.Lock()
+								failures = append(failures, fmt.Sprintf("%s: note/key updated, but couldn't sync the song leader note: %s", title, friendlyPCOErr(err)))
 								failuresMu.Unlock()
 							}
 						}
@@ -453,6 +555,24 @@ func (sc *SchedulingController) RefreshSongInfo(c *fiber.Ctx) error {
 	resolveMissingTitles(ctx, titles, setSongIDs)
 	arrangementCache, _ := sc.store.SongArrangementInfo(ctx, orgID)
 
+	// vocalCategoryID/leaderNames/notesByItem back syncLeaderNote's
+	// per-song write below - see PublishSet's identical setup for the
+	// full reasoning. Unlike PublishSet (which already fetches plan items
+	// for the reorder step regardless), RefreshSongInfo otherwise never
+	// calls GetItems at all - so the one extra GetItems(Include:
+	// item_notes) call here only happens when this service type has
+	// actually configured the vocal notes category setting
+	// (vocalCategoryID != ""), never as a cost every org pays by default.
+	// See docs/pco-api-risks.md's Item Notes entry.
+	vocalCategoryID, _ := sc.store.VocalNoteCategoryID(ctx, orgID, serviceTypeID)
+	leaderNames := personNameMapForIDs(ctx, distinctLeaderPersonIDs(setSongs))
+	var notesByItem map[string][]pco.ItemNoteData
+	if vocalCategoryID != "" {
+		if items, err := pco.GetItems(ctx, serviceTypeID, planID, &pco.ItemsParams{Include: []string{"item_notes"}}); err == nil {
+			notesByItem = itemNotesFromIncluded(items.Included)
+		}
+	}
+
 	// Every song's PATCH is independent of every other's (never creates,
 	// deletes, or reorders anything - see this function's own doc
 	// comment), so fanned out via scheduling.RunConcurrently instead of
@@ -500,6 +620,17 @@ func (sc *SchedulingController) RefreshSongInfo(c *fiber.Ctx) error {
 		if keyErr != nil {
 			failuresMu.Lock()
 			failures = append(failures, fmt.Sprintf("%s: refreshed, but couldn't set key to %q - kept the arrangement's key instead: %s", title, ss.KeyOverride, friendlyPCOErr(keyErr)))
+			failuresMu.Unlock()
+		}
+		// Re-applied for every already-published song here, regardless of
+		// InfoPending - same "force resync" contract as the
+		// Description/Length/ArrangementID/KeyID PATCH just above, unlike
+		// PublishSet's own update branch (which only pushes when
+		// something's actually pending).
+		currentNoteID, currentContent := noteInCategory(notesByItem, ss.PCOItemID, vocalCategoryID)
+		if err := syncLeaderNote(ctx, serviceTypeID, planID, ss.PCOItemID, vocalCategoryID, currentNoteID, currentContent, titleOrID(leaderNames, ss.LeaderPersonID)); err != nil {
+			failuresMu.Lock()
+			failures = append(failures, fmt.Sprintf("%s: refreshed, but couldn't sync the song leader note: %s", title, friendlyPCOErr(err)))
 			failuresMu.Unlock()
 		}
 		atomic.AddInt32(&refreshedCount, 1)

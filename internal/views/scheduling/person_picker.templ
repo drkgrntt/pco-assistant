@@ -16,6 +16,20 @@ import (
 // shared. name is the hidden input's form field name (e.g. "person_id",
 // "person_id_a").
 templ PersonPickerField(label, name, suffix string) {
+	@PersonPickerFieldWithValue(label, name, suffix, "", "")
+}
+
+// PersonPickerFieldWithValue is PersonPickerField, pre-populated with an
+// already-selected person (presetID/presetName) - for a picker that edits
+// an existing value on page load (e.g. the song detail card's leader
+// picker, song_detail_card.templ) rather than always starting blank the
+// way every existing PersonPickerField call site does (those populate an
+// existing value later, on demand, via the row-table "Edit" button's own
+// JS mechanism - see editPeopleAttr/editRow instead). presetID/presetName
+// both "" reproduces PersonPickerField's own always-blank behavior
+// exactly, which is why that stays the thin wrapper above rather than
+// every existing call site needing two more arguments.
+templ PersonPickerFieldWithValue(label, name, suffix, presetID, presetName string) {
 	<label>
 		{ label }
 		<div class="search-wrap">
@@ -29,10 +43,11 @@ templ PersonPickerField(label, name, suffix string) {
 				hx-target={ "#person-search-results" + idSuffix(suffix) }
 				hx-swap="innerHTML"
 				name="q"
+				value={ presetName }
 			/>
 			<div id={ "person-search-results" + idSuffix(suffix) } class="search-results"></div>
 		</div>
-		<input type="hidden" name={ name } id={ "person-id-input" + idSuffix(suffix) }/>
+		<input type="hidden" name={ name } id={ "person-id-input" + idSuffix(suffix) } value={ presetID }/>
 	</label>
 }
 
