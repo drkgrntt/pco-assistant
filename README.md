@@ -80,11 +80,15 @@ with at least Viewer access can still sign in.
 - **Song Vocal Range** - record each song's lowest and highest sung note,
   measured against the key you played it in, on a dedicated setup page
   (mirroring Song Tags/Song Roles - a fact about the song itself, reused
-  across every plan it appears in, not a per-occurrence value). The Build
-  page's song detail card shows the transposed result live - "Vocal
-  range: G3-D5 (in this key)" - re-derived from the stored interval into
-  whatever key the arrangement is actually in right now, whether or not
-  that matches the key it was originally measured in. Pairs with the
+  across every plan it appears in, not a per-occurrence value). The setup
+  page itself shows each stored range as-measured, plus a second line
+  transposed into the song's actual current Planning Center key when it's
+  known and differs from the key it was measured in - each note has its
+  own tap-to-hear play button, same as the Vocal Range page above. The
+  Build page's song detail card shows the transposed result live too -
+  "Vocal range: G3-D5 (in this key)" - re-derived from the stored interval
+  into whatever key the arrangement is actually in right now, whether or
+  not that matches the key it was originally measured in. Pairs with the
   People section's **Vocal Range** above; the mismatch warning comparing
   a song's range against a roster'd vocalist's is still on the roadmap
   (see `docs/plans/in-progress/vocal-range-plan.md`)
@@ -187,12 +191,14 @@ with at least Viewer access can still sign in.
 - **Vocal Range** - record each vocalist's lowest and highest comfortable
   note (e.g. "G3" to "D5") on a dedicated setup page, so "can they hit this
   note" is answered from a lookup instead of guessed at in rehearsal. Each
-  note has a small tap-to-hear button next to it that plays a synthesized
-  reference tone (Web Audio, standard A440 tuning) at that pitch, so a
-  director unsure what a stored note actually sounds like doesn't have to
-  work it out by ear or on an instrument. Pairs with **Song Vocal Range**
-  below (Songs section) - the mismatch warning that compares the two is
-  still on the roadmap (see `docs/plans/in-progress/vocal-range-plan.md`)
+  note has a small tap-to-hear button next to it that plays a real
+  recorded piano reference tone at that pitch (a chromatic E2-C6 sample
+  set, covering typical choir range - falling back to a synthesized Web
+  Audio tone only for the rare note outside that span), so a director
+  unsure what a stored note actually sounds like doesn't have to work it
+  out by ear or on an instrument. Pairs with **Song Vocal Range** below
+  (Songs section) - the mismatch warning that compares the two is still on
+  the roadmap (see `docs/plans/in-progress/vocal-range-plan.md`)
 - **Build a Service (Team tab)** - the same page as the Songs tab above,
   filling an upcoming plan's open positions from each position's real PCO
   eligibility list, with avoid-pairing conflict warnings, works-well/

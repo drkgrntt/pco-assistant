@@ -523,14 +523,19 @@ pattern as `song_tags`/`song_relationships`:**
   both the add-range form and the ranges table
   (`internal/views/scheduling/vocal_range.templ`), plays a reference tone
   via `playVocalTone`/`playVocalNoteFromInput`
-  (`web/static/js/scheduling.js`). Built as a **synthesized** tone (a
-  Web Audio `OscillatorNode` at the correct frequency, standard
-  equal-tempered A440 tuning), not the pre-recorded sample set originally
-  imagined here - a clean sine tone is just as good a pitch reference as
-  a recorded note (the same role a tuning fork or pitch pipe plays), and
-  synthesizing it needs zero audio asset files, no licensing/sourcing
-  question, and covers the app's full note range for free rather than
-  only whatever octaves got recorded.
+  (`web/static/js/scheduling.js`). Initially built as a **synthesized**
+  tone only (a Web Audio `OscillatorNode` at the correct frequency,
+  standard equal-tempered A440 tuning), reasoning that a clean sine tone
+  is just as good a pitch reference as a recorded note and needs zero
+  audio asset files - ~~reversed the same day~~: the pre-recorded sample
+  set originally imagined here now exists
+  (`assets/piano-sound-samples/`, a chromatic E2-C6 piano recording set,
+  MIT-licensed, tracked in git, served unauthenticated at
+  `/piano-samples/`) and is `playVocalTone`'s primary sound - a real piano
+  note is a more faithful, pleasant reference than a synthesized sine -
+  with the original synthesis kept only as the fallback for a note outside
+  that recorded range (rare, since E2-C6 already covers typical choir
+  range).
 - **First-time-in-this-position pairing** - mirrors the new-song bootstrap
   trick: the first time someone's assigned to a position with no prior
   history there (via the same PCO history call `servingFrequency` already

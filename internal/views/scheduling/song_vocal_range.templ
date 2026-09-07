@@ -21,7 +21,14 @@ import (
 // as a transposable interval (scheduling.ComputeVocalRangeOffsets) rather
 // than a bare note pair that would be meaningless without knowing what key
 // it was measured against.
-templ SongVocalRanges(personName, organizationName string, songs []pco.SongData, ranges []scheduling.SongVocalRange, songTitles map[string]string, errMsg string) {
+//
+// currentKeysBySong resolves a song id to its current cached PCO
+// arrangement key (see SongVocalRangesTable's own doc comment) - threaded
+// through from the controller (song_vocal_range.go's currentKeysBySong
+// helper) so the table can show each range transposed into whatever key
+// the song is actually in right now, not just the key it was measured
+// against.
+templ SongVocalRanges(personName, organizationName string, songs []pco.SongData, ranges []scheduling.SongVocalRange, songTitles, currentKeysBySong map[string]string, errMsg string) {
 	@views.Layout("Song Vocal Range", personName, organizationName) {
 		<h1>Song Vocal Range</h1>
 		<p class="muted">Record each song's sung range - lowest and highest note, measured against the key you played it in - so the Build page can show its practical range transposed into whatever key the arrangement is actually in right now. Reused across every plan the song appears in, like Song Tags/Song Roles - not something to re-enter per plan.</p>
@@ -49,16 +56,34 @@ templ SongVocalRanges(personName, organizationName string, songs []pco.SongData,
 			@musicalKeyOptions()
 			<label>
 				Lowest note
-				<input type="text" name="lowest_note" placeholder="e.g. G3" list="vocal-note-options" required/>
+				<input id="song-vocal-range-lowest-input" type="text" name="lowest_note" placeholder="e.g. G3" list="vocal-note-options" required/>
 			</label>
+			<button
+				type="button"
+				class="icon-btn"
+				aria-label="Play lowest note"
+				title="Play lowest note"
+				onclick="playVocalNoteFromInput('song-vocal-range-lowest-input')"
+			>
+				@components.IconPlay()
+			</button>
 			<label>
 				Highest note
-				<input type="text" name="highest_note" placeholder="e.g. D5" list="vocal-note-options" required/>
+				<input id="song-vocal-range-highest-input" type="text" name="highest_note" placeholder="e.g. D5" list="vocal-note-options" required/>
 			</label>
+			<button
+				type="button"
+				class="icon-btn"
+				aria-label="Play highest note"
+				title="Play highest note"
+				onclick="playVocalNoteFromInput('song-vocal-range-highest-input')"
+			>
+				@components.IconPlay()
+			</button>
 			@vocalNoteOptions()
 			<button type="submit" class="primary">Save</button>
 		</form>
-		@SongVocalRangesTable(ranges, songTitles, errMsg)
+		@SongVocalRangesTable(ranges, songTitles, currentKeysBySong, errMsg)
 	}
 }
 
@@ -71,7 +96,15 @@ templ SongVocalRanges(personName, organizationName string, songs []pco.SongData,
 // same convention as PersonVocalRangesTable - a resubmit for the same song
 // upserts in place (scheduling.SetSongVocalRange's ON CONFLICT clause), so
 // re-picking that song and resubmitting is already the edit flow.
-templ SongVocalRangesTable(ranges []scheduling.SongVocalRange, songTitles map[string]string, errMsg string) {
+//
+// currentKeysBySong resolves a range's song id to its current cached PCO
+// arrangement key (song_vocal_range.go's currentKeysBySong helper - a
+// cache-only, enqueue-on-miss read, never a live blocking PCO call). A
+// song missing from this map (never cached, or PCO has no key set) shows
+// only the "as measured" line in the Range column below - the established
+// "best-effort, quiet skip" convention this codebase already uses
+// elsewhere (e.g. keyTransitionWarnings' unparseable-key skip).
+templ SongVocalRangesTable(ranges []scheduling.SongVocalRange, songTitles, currentKeysBySong map[string]string, errMsg string) {
 	<div id="song-vocal-ranges-table">
 		if errMsg != "" {
 			<p class="error">{ errMsg }</p>
@@ -81,8 +114,7 @@ templ SongVocalRangesTable(ranges []scheduling.SongVocalRange, songTitles map[st
 					<tr>
 						<th>Song</th>
 						<th>Measured in key</th>
-						<th>Lowest note</th>
-						<th>Highest note</th>
+						<th>Range</th>
 						<th></th>
 					</tr>
 				</thead>
@@ -97,8 +129,17 @@ templ SongVocalRangesTable(ranges []scheduling.SongVocalRange, songTitles map[st
 								}
 							</td>
 							<td>{ r.ReferenceKey }</td>
-							<td>{ songVocalRangeLowDisplay(r) }</td>
-							<td>{ songVocalRangeHighDisplay(r) }</td>
+							<td>
+								{{ measured := computeVocalRangeNotePair(r.ReferenceKey, r.LowOffsetSemitones, r.HighOffsetSemitones, r.ReferenceKey) }}
+								@vocalRangeLine("As measured", r.ReferenceKey, measured)
+								{{ currentKey, hasCurrentKey := currentKeysBySong[r.SongID] }}
+								if hasCurrentKey && currentKey != "" && currentKey != r.ReferenceKey {
+									{{ transposed := computeVocalRangeNotePair(r.ReferenceKey, r.LowOffsetSemitones, r.HighOffsetSemitones, currentKey) }}
+									if transposed.OK {
+										@vocalRangeLine("Current key", currentKey, transposed)
+									}
+								}
+							</td>
 							<td>
 								<button
 									class="danger icon-btn"
@@ -116,7 +157,7 @@ templ SongVocalRangesTable(ranges []scheduling.SongVocalRange, songTitles map[st
 					}
 					if len(ranges) == 0 {
 						<tr>
-							<td colspan="5" class="muted">No song vocal ranges set yet.</td>
+							<td colspan="4" class="muted">No song vocal ranges set yet.</td>
 						</tr>
 					}
 				</tbody>
@@ -124,30 +165,74 @@ templ SongVocalRangesTable(ranges []scheduling.SongVocalRange, songTitles map[st
 	</div>
 }
 
-// songVocalRangeLowDisplay/songVocalRangeHighDisplay reconstruct a stored
-// song vocal range's low/high notes for table display, reusing
-// scheduling.EffectiveVocalRange against the row's own reference key (no
-// transposition - delta ends up 0) so the table shows the range in the key
-// it was actually measured in, formatted with the same display helper
-// Phase 1's person ranges use (formatVocalNoteDisplay). See
-// EffectiveVocalRange's own doc comment for why the resulting octave is a
-// fixed, reasonable anchor rather than a byte-exact reconstruction of
-// whatever real octave was originally typed - the stored offsets alone
-// don't retain that.
-func songVocalRangeLowDisplay(r scheduling.SongVocalRange) string {
-	lowAbs, _, ok := scheduling.EffectiveVocalRange(r.ReferenceKey, r.LowOffsetSemitones, r.HighOffsetSemitones, r.ReferenceKey)
-	if !ok {
-		return "?"
-	}
-	pc, oct := scheduling.PitchClassAndOctave(lowAbs)
-	return formatVocalNoteDisplay(pc, oct)
+// vocalRangeNotePair is one transposed song vocal range's low/high notes,
+// already split into playable pitch-class/octave ints (for a play
+// button's templ.JSFuncCall) alongside the OK flag EffectiveVocalRange
+// itself returns - computeVocalRangeNotePair's return shape, so a caller
+// needing both the ints and a display string (formatVocalNoteDisplay)
+// only has to run EffectiveVocalRange/PitchClassAndOctave once per line,
+// not once per displayed note.
+type vocalRangeNotePair struct {
+	LowPitchClass, LowOctave   int
+	HighPitchClass, HighOctave int
+	OK                         bool
 }
 
-func songVocalRangeHighDisplay(r scheduling.SongVocalRange) string {
-	_, highAbs, ok := scheduling.EffectiveVocalRange(r.ReferenceKey, r.LowOffsetSemitones, r.HighOffsetSemitones, r.ReferenceKey)
+// computeVocalRangeNotePair transposes a stored song vocal range
+// (referenceKey + offsets, see scheduling.ComputeVocalRangeOffsets) into
+// targetKey and splits the result into playable pitch-class/octave pairs.
+// Passing targetKey == referenceKey (as SongVocalRangesTable's "as
+// measured" line does) reconstructs the range as it was actually measured
+// - no transposition, since the delta ends up 0. OK is false if either
+// key string fails to parse (scheduling.EffectiveVocalRange) - the
+// caller's job to skip rendering in that case, matching this codebase's
+// established "best-effort, quiet skip" convention (e.g.
+// keyTransitionWarnings' unparseable-key skip).
+func computeVocalRangeNotePair(referenceKey string, lowOffset, highOffset int, targetKey string) vocalRangeNotePair {
+	lowAbs, highAbs, ok := scheduling.EffectiveVocalRange(referenceKey, lowOffset, highOffset, targetKey)
 	if !ok {
-		return "?"
+		return vocalRangeNotePair{}
 	}
-	pc, oct := scheduling.PitchClassAndOctave(highAbs)
-	return formatVocalNoteDisplay(pc, oct)
+	lowPC, lowOct := scheduling.PitchClassAndOctave(lowAbs)
+	highPC, highOct := scheduling.PitchClassAndOctave(highAbs)
+	return vocalRangeNotePair{
+		LowPitchClass: lowPC, LowOctave: lowOct,
+		HighPitchClass: highPC, HighOctave: highOct,
+		OK: true,
+	}
+}
+
+// vocalRangeLine renders one labeled line of a song vocal range's Range
+// column - "As measured (in D): E3 [play] - B4 [play]" or "Current key
+// (G): F3 [play] - C5 [play]" - each note with its own tap-to-hear button
+// (playVocalTone, web/static/js/scheduling.js), so the two lines
+// (as-measured vs. transposed-into-current-key) are never ambiguous about
+// which is which. Callers only render this when pair.OK is true (see
+// SongVocalRangesTable) - no "?" placeholder here, matching this
+// codebase's quiet-skip convention rather than showing a broken line.
+templ vocalRangeLine(label, key string, pair vocalRangeNotePair) {
+	<div class="vocal-range-line">
+		<span class="muted">{ label } ({ key }):</span>
+		{ formatVocalNoteDisplay(pair.LowPitchClass, pair.LowOctave) }
+		<button
+			type="button"
+			class="icon-btn"
+			aria-label={ fmt.Sprintf("Play %s lowest note", label) }
+			title={ fmt.Sprintf("Play %s lowest note", label) }
+			onclick={ templ.JSFuncCall("playVocalTone", pair.LowPitchClass, pair.LowOctave) }
+		>
+			@components.IconPlay()
+		</button>
+		-
+		{ formatVocalNoteDisplay(pair.HighPitchClass, pair.HighOctave) }
+		<button
+			type="button"
+			class="icon-btn"
+			aria-label={ fmt.Sprintf("Play %s highest note", label) }
+			title={ fmt.Sprintf("Play %s highest note", label) }
+			onclick={ templ.JSFuncCall("playVocalTone", pair.HighPitchClass, pair.HighOctave) }
+		>
+			@components.IconPlay()
+		</button>
+	</div>
 }

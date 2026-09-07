@@ -1294,28 +1294,70 @@ document.addEventListener("htmx:afterSwap", wireSortableTables);
 // Step 2 ("later") of docs/ideas.md's "Vocal range per vocalist" bullet:
 // tap-to-hear a reference tone for a stored note, so a director unsure
 // what a "G4" actually sounds like doesn't have to work it out by ear or
-// on an instrument. The original brainstorm imagined pre-recorded audio
-// samples ("one recorded note per semitone"); this instead synthesizes
-// each tone live via the Web Audio API (a plain sine OscillatorNode at
-// the correct frequency, standard equal-tempered A440 tuning) - zero
-// audio asset files, no licensing/sourcing question, and it covers the
-// app's full note range (any octave, not just a pre-recorded span) for
-// free. A clean sine tone is a perfectly good pitch reference for this
-// purpose - the same role a tuning fork or pitch pipe plays - so nothing
-// about the deviation trades away what the feature is actually for. See
-// docs/plans/in-progress/vocal-range-plan.md's status note for where
-// this landed.
+// on an instrument. Originally built as a synthesized tone only (a plain
+// sine OscillatorNode via the Web Audio API) - no asset files needed, but
+// a synthesized sine wave is a thinner, less musical reference than an
+// actual piano note. Now that assets/piano-sound-samples/ exists (a real
+// chromatic E2-C6 piano recording set, MIT-licensed, see that folder's
+// MAPPING.md, served unauthenticated at /piano-samples/ - see routes.go)
+// a real recorded sample is the primary sound: a genuine piano note is a
+// more faithful and pleasant reference tone than a synthesized sine, and
+// E2-C6 already covers typical choir range (that folder's own MAPPING.md).
+// The original synthesis code is kept, unchanged, as the fallback for the
+// rare note outside that sampled range (very low bass or very high
+// soprano/countertenor notes) - see playVocalTone below. See
+// docs/plans/in-progress/vocal-range-plan.md's status note for where this
+// landed.
+
+// vocalAbsoluteSemitone combines a pitch class (0-11) + octave into one
+// internally-consistent absolute integer - octave*12 + pitchClass,
+// mirroring scheduling.AbsoluteSemitone exactly (Go,
+// internal/scheduling/key_engine.go) so a played tone always matches what
+// that same pitch class/octave pair means when stored. Shared by
+// vocalNoteFrequency (the synthesis fallback) and playVocalTone's
+// sampled-range bounds check below, so the formula lives in exactly one
+// place on the JS side rather than being hardcoded twice.
+function vocalAbsoluteSemitone(pitchClass, octave) {
+  return octave * 12 + pitchClass;
+}
 
 // vocalNoteFrequency converts a pitch class (0-11) + octave into a
-// frequency in Hz, standard A440 equal temperament. absoluteSemitone
-// mirrors internal/server/controllers/vocal_range.go's
-// absoluteVocalSemitone exactly (octave*12 + pitchClass) so a played tone
-// always matches what that same pitch class/octave pair means when
-// stored - A4 (octave 4, pitch class 9) is absolute semitone 57, which is
-// where the formula's "-57" reference point comes from.
+// frequency in Hz, standard A440 equal temperament - backs the synthesis
+// fallback only (see playVocalTone). A4 (octave 4, pitch class 9) is
+// absolute semitone 57, which is where the formula's "-57" reference
+// point comes from.
 function vocalNoteFrequency(pitchClass, octave) {
-  var absoluteSemitone = octave * 12 + pitchClass;
+  var absoluteSemitone = vocalAbsoluteSemitone(pitchClass, octave);
   return 440 * Math.pow(2, (absoluteSemitone - 57) / 12);
+}
+
+// vocalSampleNoteLetters is vocalNotePitchClasses' inverse - pitch class
+// (0-11) -> the sharp-only filename spelling assets/piano-sound-samples/
+// uses (e.g. pitch class 1 -> "Cs", matching Cs4.mp3). That pack only
+// recorded sharp spellings (see its own MAPPING.md), so this never needs
+// a flat variant.
+var vocalSampleNoteLetters = [
+  "C", "Cs", "D", "Ds", "E", "F", "Fs", "G", "Gs", "A", "As", "B",
+];
+
+// vocalSampleMinAbsoluteSemitone/vocalSampleMaxAbsoluteSemitone bound the
+// real recordings available under assets/piano-sound-samples/ - a
+// chromatic run from E2 through C6 (see that folder's MAPPING.md), chosen
+// to cover typical choir range. A pitch class/octave pair outside this
+// span has no recorded sample and falls back to synthesis (see
+// playVocalTone).
+var vocalSampleMinAbsoluteSemitone = vocalAbsoluteSemitone(4, 2); // E2
+var vocalSampleMaxAbsoluteSemitone = vocalAbsoluteSemitone(0, 6); // C6
+
+// vocalSampleURL builds a piano-sample file's URL for a pitch class +
+// octave - e.g. pitch class 1, octave 4 -> "/piano-samples/Cs4.mp3". The
+// mount itself is registered in routes.go (s.App.Static) and exempted
+// from RequireAuth alongside /static/* (see publicPrefixes,
+// internal/server/middleware/auth.go) - a sound file carries no
+// auth-relevant content, same trust level as CSS/JS already served
+// openly.
+function vocalSampleURL(pitchClass, octave) {
+  return "/piano-samples/" + vocalSampleNoteLetters[pitchClass] + octave + ".mp3";
 }
 
 // vocalNotePitchClasses mirrors keyPitchClasses/vocalNoteRe's letter ->
@@ -1369,13 +1411,16 @@ function parseVocalNoteText(text) {
 // browser-imposed limits on concurrent contexts.
 var vocalToneAudioContext = null;
 
-// playVocalTone plays a short sine reference tone at the given pitch
-// class/octave's frequency (~0.8s, with a brief linear attack/release
-// envelope on a GainNode to avoid a click/pop at start/stop). Wrapped
-// entirely in try/catch: a browser blocking audio (autoplay policy, no
-// AudioContext support at all) should mean the button silently does
-// nothing, never a broken page or a thrown error.
-function playVocalTone(pitchClass, octave) {
+// playVocalToneSynthesized plays a short sine reference tone at the given
+// pitch class/octave's frequency (~0.8s, with a brief linear attack/
+// release envelope on a GainNode to avoid a click/pop at start/stop) -
+// the original (and, before the piano sample set existed, only)
+// implementation of playVocalTone, kept unchanged and now used only as
+// the fallback for a note outside the sampled range (see playVocalTone).
+// Wrapped entirely in try/catch: a browser blocking audio (autoplay
+// policy, no AudioContext support at all) should mean the button silently
+// does nothing, never a broken page or a thrown error.
+function playVocalToneSynthesized(pitchClass, octave) {
   try {
     if (!vocalToneAudioContext) {
       var AudioContextCtor = window.AudioContext || window.webkitAudioContext;
@@ -1413,6 +1458,42 @@ function playVocalTone(pitchClass, octave) {
   } catch (err) {
     // Autoplay blocked, no Web Audio support, etc. - silently do nothing.
   }
+}
+
+// playVocalTone plays a reference tone for the given pitch class/octave -
+// a real recorded piano note (assets/piano-sound-samples/, served at
+// /piano-samples/) when one exists for it, falling back to
+// playVocalToneSynthesized's sine tone otherwise (a note outside the
+// sampled E2-C6 range - rare in practice, since that range already covers
+// typical choir range). Wrapped entirely in try/catch, same reasoning as
+// playVocalToneSynthesized: a blocked/failed play should stay silent,
+// never a broken page or a thrown error - any failure to even start the
+// sample playback falls through to the synthesized fallback rather than
+// just going silent, so a director always hears *something*.
+function playVocalTone(pitchClass, octave) {
+  var absoluteSemitone = vocalAbsoluteSemitone(pitchClass, octave);
+  if (
+    absoluteSemitone >= vocalSampleMinAbsoluteSemitone &&
+    absoluteSemitone <= vocalSampleMaxAbsoluteSemitone
+  ) {
+    try {
+      var audio = new Audio(vocalSampleURL(pitchClass, octave));
+      audio.play().catch(function () {
+        // Autoplay blocked, network error, etc. - silently do nothing
+        // (matches playVocalToneSynthesized's own silent-failure
+        // convention). Deliberately not falling back to synthesis here:
+        // Audio.play()'s promise rejection fires asynchronously, well
+        // after this function has already returned, so a fallback here
+        // would risk playing a late, unexpected tone after the button
+        // press moment has passed.
+      });
+      return;
+    } catch (err) {
+      // Synchronous construction/playback failure - fall through to
+      // synthesis below rather than staying silent.
+    }
+  }
+  playVocalToneSynthesized(pitchClass, octave);
 }
 
 // playVocalNoteFromInput reads a text input's current value (the add-

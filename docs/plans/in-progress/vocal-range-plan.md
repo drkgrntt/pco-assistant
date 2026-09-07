@@ -11,13 +11,21 @@ vocal-range` route and Setup nav link). **The Phase 1 "Step 2, later"
 reference-tone piece from `docs/ideas.md`'s own bullet also shipped
 2026-09-07**: a tap-to-hear button next to each stored/entered note
 (`internal/views/scheduling/vocal_range.templ`, `IconPlay` in
-`internal/views/components/icons.templ`) plays a synthesized reference
-tone (`playVocalTone`/`parseVocalNoteText`/`playVocalNoteFromInput` in
-`web/static/js/scheduling.js`) via the Web Audio API - an
-`OscillatorNode` at the correct A440-tuned frequency, not the
-pre-recorded audio sample set the original brainstorm imagined, since a
-clean sine tone is just as good a pitch reference and needs no asset
-files.
+`internal/views/components/icons.templ`) plays a reference tone
+(`playVocalTone`/`parseVocalNoteText`/`playVocalNoteFromInput` in
+`web/static/js/scheduling.js`). Originally built as a synthesized-only tone
+(a Web Audio `OscillatorNode` at the correct A440-tuned frequency), on the
+reasoning that a clean sine tone is just as good a pitch reference as a
+recorded note and needs no asset files - **since reversed, also
+2026-09-07**: `assets/piano-sound-samples/` (a real chromatic E2-C6 piano
+recording set, MIT-licensed, tracked in git) now exists and is served
+unauthenticated at `/piano-samples/` (`internal/server/routes.go`,
+exempted from `RequireAuth` in `internal/server/middleware/auth.go`), so
+`playVocalTone` now plays the real recorded sample for any note within
+that range (a more faithful, pleasant reference than a synthesized sine),
+falling back to the original oscillator synthesis only for a note outside
+E2-C6 - rare in practice, since that range already covers typical choir
+range (see that folder's own `MAPPING.md`).
 
 **Phase 2 (key engine + song vocal range) also shipped 2026-09-07** - the
 key engine extraction (`internal/scheduling/key_engine.go`:
@@ -55,6 +63,32 @@ had in mind. See that function's own doc comment for the full reasoning.
 Phase 3 (the mismatch warning/matrix view) and the crowdsourced-default
 question remain not started - see those sections below, unchanged from
 the original plan.
+
+**Song Vocal Range page gets play buttons + a current-key line, also
+2026-09-07** (the same day the piano samples above landed, and the
+natural place to spend them - this page previously had no tap-to-hear
+affordance at all, unlike the Person Vocal Range page). Every stored
+range's Range column (`internal/views/scheduling/song_vocal_range.templ`)
+now shows an "As measured (in `<reference key>`)" line with a play button
+on each of its two notes, mirroring the Person Vocal Range page's pattern
+exactly (`components.IconPlay`, `templ.JSFuncCall("playVocalTone", ...)`);
+the add-range form gained the same lowest/highest-note preview buttons
+(`playVocalNoteFromInput`) the person page's form already had. New on top
+of that mirror: a second "Current key (`<key>`)" line appears whenever the
+song's actual cached PCO arrangement key (`SongArrangementInfo.Key`,
+resolved via the existing `resolveArrangementCacheInfo` enqueue-on-miss
+helper - `song_vocal_range.go`'s new `currentKeysBySong`, one bulk
+cache-only read per render, no new PCO call) is known, non-empty, and
+different from the stored reference key - both lines share one new
+`computeVocalRangeNotePair` helper (`song_vocal_range.templ`) so
+`EffectiveVocalRange`/`PitchClassAndOctave` only run once per line instead
+of once per note, replacing the old `songVocalRangeLowDisplay`/
+`songVocalRangeHighDisplay` pair. All three handlers touching this page's
+table fragment (`SongVocalRangePage`/`SetSongVocalRange`/
+`DeleteSongVocalRange`) build and thread the same current-key map, not
+just the initial page load. See `docs/pco-api-risks.md`'s entry for the
+fan-out-stays-small reasoning (this page only ever lists songs that
+already have a stored range, a small subset of the active song library).
 
 Written 2026-09-06, expanding two related `docs/ideas.md` bullets into one
 coherent build plan: **"Vocal range per vocalist"** (People section,
