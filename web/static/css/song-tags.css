@@ -4,24 +4,54 @@
    small "add a tag" form scoped to that song. Every active song renders up
    front (no search gate - see
    docs/plans/shipped/song-tags-setup-redesign-plan.md - a plain local-DB
-   read is cheap regardless of library size); #song-tag-filter just hides
-   non-matching cards client-side (filterSongTagCards, scheduling.js) for a
-   large library, it never limits what's rendered. */
+   read is cheap regardless of library size); #song-tag-filter and the tag
+   filter chips just hide non-matching cards client-side
+   (filterSongTagCards, scheduling.js) for a large library, they never
+   limit what's rendered. Each card's own "Value" input also points its
+   list= at a shared #song-tag-value-options <datalist> of every tag
+   value already in use, for autocomplete on a repeat tag - no CSS of its
+   own, browser-native. */
 
 .song-tags-filter {
   max-width: 24rem;
   margin-bottom: var(--space-3);
 }
 
-/* Distinct tag values as toggleable filter chips (songTagFilterChips,
-   song_tags.templ) - not constrained to the text filter's own 24rem, since
-   a wide library's tag vocabulary reads better wrapped full-width than
-   squeezed into a narrow column. */
-.song-tag-filter-chips {
+/* Bare <label> here isn't inside a form.inline (forms.css's own
+   "label text above its field, with a gap" rule doesn't reach it), so
+   without this "Filter songs" and the text box below it ran together
+   with no breathing room. */
+.song-tags-filter label {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: var(--space-1);
+}
+
+/* Distinct tag values as toggleable filter chips (songTagFilterChips,
+   song_tags.templ), one .tag-filter-item per tag. Two columns from
+   tablet up rather than one long flex-wrap row - a wide library's tag
+   vocabulary wrapped edge-to-edge across the full page width read as
+   more sprawling than useful; a single column on mobile, where there's
+   no width to spare for a second. max-width caps it well short of full
+   width even in two columns, per the same reasoning. */
+.song-tag-filter-chips {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-1) var(--space-4);
+  max-width: 32rem;
+  margin-top: var(--space-3);
   margin-bottom: var(--space-4);
+}
+
+@media (min-width: 640px) {
+  .song-tag-filter-chips {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.tag-filter-item {
+  position: relative;
+  display: flex;
 }
 
 /* The real checkbox stays in the DOM (so :checked, keyboard focus, and
@@ -37,6 +67,7 @@
 
 .tag-filter-chip {
   display: inline-block;
+  align-self: start;
   cursor: pointer;
   background: color-mix(in srgb, var(--text) 8%, var(--surface));
   color: var(--muted);

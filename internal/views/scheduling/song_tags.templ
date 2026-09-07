@@ -61,14 +61,16 @@ templ songTagFilterChips(tagValues []string) {
 	if len(tagValues) > 0 {
 		<div class="song-tag-filter-chips" role="group" aria-label="Filter by tag">
 			for i, v := range tagValues {
-				<input
-					type="checkbox"
-					id={ fmt.Sprintf("tag-filter-%d", i) }
-					class="song-tag-filter-checkbox"
-					value={ strings.ToLower(v) }
-					onchange="filterSongTagCards()"
-				/>
-				<label for={ fmt.Sprintf("tag-filter-%d", i) } class="tag-filter-chip">{ v }</label>
+				<span class="tag-filter-item">
+					<input
+						type="checkbox"
+						id={ fmt.Sprintf("tag-filter-%d", i) }
+						class="song-tag-filter-checkbox"
+						value={ strings.ToLower(v) }
+						onchange="filterSongTagCards()"
+					/>
+					<label for={ fmt.Sprintf("tag-filter-%d", i) } class="tag-filter-chip">{ v }</label>
+				</span>
 			}
 		</div>
 	}
@@ -101,7 +103,13 @@ func distinctTagValues(tagsBySong map[string][]scheduling.SongTag) []string {
 // SongTagsTable's old doc comment (song_tags.go history) for why errMsg
 // lives inside the swapped fragment rather than the page around it: an
 // htmx response only replaces this div, so an error from a create/delete
-// has nowhere else to render.
+// has nowhere else to render. Also carries the #song-tag-value-options
+// <datalist> every card's own "Value" input points its list= attribute at
+// (autocomplete for re-using an existing tag value, see SongTagCard) -
+// deliberately inside the swapped fragment, unlike songTagFilterChips'
+// checkboxes above, since a datalist has no user-set state that a re-swap
+// could lose, so it may as well pick up a brand-new tag value on the very
+// next add instead of waiting for a page reload.
 templ SongTagsList(songs []pco.SongData, tagsBySong map[string][]scheduling.SongTag, categories []scheduling.SongTagCategory, categoryLabels map[string]string, errMsg string) {
 	<div id="song-tags-list" class="song-tags-list">
 		if errMsg != "" {
@@ -110,6 +118,11 @@ templ SongTagsList(songs []pco.SongData, tagsBySong map[string][]scheduling.Song
 		if len(songs) == 0 {
 			<p class="muted">No active songs found.</p>
 		}
+		<datalist id="song-tag-value-options">
+			for _, v := range distinctTagValues(tagsBySong) {
+				<option value={ v }></option>
+			}
+		</datalist>
 		for _, song := range songs {
 			@SongTagCard(song, tagsBySong[song.ID], categories, categoryLabels)
 		}
@@ -188,7 +201,7 @@ templ SongTagCard(song pco.SongData, tags []scheduling.SongTag, categories []sch
 					</label>
 					<label>
 						Value
-						<input type="text" name="value" placeholder="e.g. Grace, Romans 8:1, New beginnings" required/>
+						<input type="text" name="value" list="song-tag-value-options" placeholder="e.g. Grace, Romans 8:1, New beginnings" required/>
 					</label>
 					<button type="submit" class="primary">Add tag</button>
 					<button type="button" class="cancel-edit" onclick="cancelSetupEdit(this)" hidden>Cancel</button>
