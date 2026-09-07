@@ -23,12 +23,30 @@ templ PersonVocalRanges(personName, organizationName string, ranges []scheduling
 			@PersonPickerField("Person", "person_id", "")
 			<label>
 				Lowest note
-				<input type="text" name="lowest_note" placeholder="e.g. G3" list="vocal-note-options" required/>
+				<input id="vocal-lowest-note-input" type="text" name="lowest_note" placeholder="e.g. G3" list="vocal-note-options" required/>
 			</label>
+			<button
+				type="button"
+				class="icon-btn"
+				aria-label="Play lowest note"
+				title="Play lowest note"
+				onclick="playVocalNoteFromInput('vocal-lowest-note-input')"
+			>
+				@components.IconPlay()
+			</button>
 			<label>
 				Highest note
-				<input type="text" name="highest_note" placeholder="e.g. D5" list="vocal-note-options" required/>
+				<input id="vocal-highest-note-input" type="text" name="highest_note" placeholder="e.g. D5" list="vocal-note-options" required/>
 			</label>
+			<button
+				type="button"
+				class="icon-btn"
+				aria-label="Play highest note"
+				title="Play highest note"
+				onclick="playVocalNoteFromInput('vocal-highest-note-input')"
+			>
+				@components.IconPlay()
+			</button>
 			@vocalNoteOptions()
 			<button type="submit" class="primary">Save</button>
 		</form>
@@ -68,8 +86,30 @@ templ PersonVocalRangesTable(ranges []scheduling.PersonVocalRange, personNames m
 									{ r.PersonID }
 								}
 							</td>
-							<td>{ formatVocalNoteDisplay(r.LowestPitchClass, r.LowestOctave) }</td>
-							<td>{ formatVocalNoteDisplay(r.HighestPitchClass, r.HighestOctave) }</td>
+							<td>
+								{ formatVocalNoteDisplay(r.LowestPitchClass, r.LowestOctave) }
+								<button
+									type="button"
+									class="icon-btn"
+									aria-label="Play lowest note"
+									title="Play lowest note"
+									onclick={ templ.JSFuncCall("playVocalTone", r.LowestPitchClass, r.LowestOctave) }
+								>
+									@components.IconPlay()
+								</button>
+							</td>
+							<td>
+								{ formatVocalNoteDisplay(r.HighestPitchClass, r.HighestOctave) }
+								<button
+									type="button"
+									class="icon-btn"
+									aria-label="Play highest note"
+									title="Play highest note"
+									onclick={ templ.JSFuncCall("playVocalTone", r.HighestPitchClass, r.HighestOctave) }
+								>
+									@components.IconPlay()
+								</button>
+							</td>
 							<td>
 								<button
 									class="danger icon-btn"

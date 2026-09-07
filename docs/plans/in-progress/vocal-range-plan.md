@@ -7,9 +7,19 @@ shifted from this doc's own `00035` guess; `internal/scheduling/
 person_vocal_range.go`'s `Store` methods; `internal/server/controllers/
 vocal_range.go`'s page/set/delete handlers and standalone note-with-octave
 parser; `internal/views/scheduling/vocal_range.templ`; the `/scheduling/
-vocal-range` route and Setup nav link). Phases 2-3 (song vocal range, the
-key engine extraction it needs, and the mismatch warning) remain not
-started - see those sections below, unchanged from the original plan.
+vocal-range` route and Setup nav link). **The Phase 1 "Step 2, later"
+reference-tone piece from `docs/ideas.md`'s own bullet also shipped
+2026-09-07**: a tap-to-hear button next to each stored/entered note
+(`internal/views/scheduling/vocal_range.templ`, `IconPlay` in
+`internal/views/components/icons.templ`) plays a synthesized reference
+tone (`playVocalTone`/`parseVocalNoteText`/`playVocalNoteFromInput` in
+`web/static/js/scheduling.js`) via the Web Audio API - an
+`OscillatorNode` at the correct A440-tuned frequency, not the
+pre-recorded audio sample set the original brainstorm imagined, since a
+clean sine tone is just as good a pitch reference and needs no asset
+files. Phases 2-3 (song vocal range, the key engine extraction it needs,
+and the mismatch warning) remain not started - see those sections below,
+unchanged from the original plan.
 
 Written 2026-09-06, expanding two related `docs/ideas.md` bullets into one
 coherent build plan: **"Vocal range per vocalist"** (People section,

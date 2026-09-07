@@ -1172,3 +1172,145 @@ document.addEventListener("htmx:afterSwap", wireSortableTables);
     document.addEventListener("pointercancel", endDrag);
   });
 })();
+
+// --- Vocal range reference tone -----------------------------------------
+//
+// Step 2 ("later") of docs/ideas.md's "Vocal range per vocalist" bullet:
+// tap-to-hear a reference tone for a stored note, so a director unsure
+// what a "G4" actually sounds like doesn't have to work it out by ear or
+// on an instrument. The original brainstorm imagined pre-recorded audio
+// samples ("one recorded note per semitone"); this instead synthesizes
+// each tone live via the Web Audio API (a plain sine OscillatorNode at
+// the correct frequency, standard equal-tempered A440 tuning) - zero
+// audio asset files, no licensing/sourcing question, and it covers the
+// app's full note range (any octave, not just a pre-recorded span) for
+// free. A clean sine tone is a perfectly good pitch reference for this
+// purpose - the same role a tuning fork or pitch pipe plays - so nothing
+// about the deviation trades away what the feature is actually for. See
+// docs/plans/in-progress/vocal-range-plan.md's status note for where
+// this landed.
+
+// vocalNoteFrequency converts a pitch class (0-11) + octave into a
+// frequency in Hz, standard A440 equal temperament. absoluteSemitone
+// mirrors internal/server/controllers/vocal_range.go's
+// absoluteVocalSemitone exactly (octave*12 + pitchClass) so a played tone
+// always matches what that same pitch class/octave pair means when
+// stored - A4 (octave 4, pitch class 9) is absolute semitone 57, which is
+// where the formula's "-57" reference point comes from.
+function vocalNoteFrequency(pitchClass, octave) {
+  var absoluteSemitone = octave * 12 + pitchClass;
+  return 440 * Math.pow(2, (absoluteSemitone - 57) / 12);
+}
+
+// vocalNotePitchClasses mirrors keyPitchClasses/vocalNoteRe's letter ->
+// pitch class table (internal/server/controllers/vocal_range.go) - kept
+// as a separate JS-side table rather than shared with the Go code (no
+// realistic way to share a lookup table across that language boundary),
+// but must stay numerically identical to it.
+var vocalNotePitchClasses = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+
+// vocalNoteTextRe mirrors parseVocalNote's vocalNoteRe exactly (Go,
+// internal/server/controllers/vocal_range.go): a note letter A-G, an
+// optional single sharp/flat accidental (ASCII or Unicode), then a
+// signed integer octave.
+var vocalNoteTextRe = /^([A-Ga-g])(#|♯|b|♭)?(-?[0-9]+)$/;
+
+// parseVocalNoteText parses the same note+octave text format
+// parseVocalNote (Go) accepts, returning {pitchClass, octave} or null if
+// it doesn't parse - so "hear it" always matches what would actually be
+// saved, and a not-yet-valid in-progress input (still being typed) just
+// silently does nothing rather than erroring.
+function parseVocalNoteText(text) {
+  if (typeof text !== "string") {
+    return null;
+  }
+  var m = vocalNoteTextRe.exec(text.trim());
+  if (!m) {
+    return null;
+  }
+  var pitchClass = vocalNotePitchClasses[m[1].toUpperCase()];
+  if (pitchClass === undefined) {
+    return null;
+  }
+  if (m[2] === "#" || m[2] === "♯") {
+    pitchClass += 1;
+  } else if (m[2] === "b" || m[2] === "♭") {
+    pitchClass -= 1;
+  }
+  pitchClass = ((pitchClass % 12) + 12) % 12;
+
+  var octave = parseInt(m[3], 10);
+  if (isNaN(octave)) {
+    return null;
+  }
+  return { pitchClass: pitchClass, octave: octave };
+}
+
+// vocalToneAudioContext is a single lazily-created AudioContext, reused
+// across every played tone rather than one per call - browsers require
+// it to originate from a user gesture anyway (a button click satisfies
+// that), and creating a fresh one per play would be wasteful and can hit
+// browser-imposed limits on concurrent contexts.
+var vocalToneAudioContext = null;
+
+// playVocalTone plays a short sine reference tone at the given pitch
+// class/octave's frequency (~0.8s, with a brief linear attack/release
+// envelope on a GainNode to avoid a click/pop at start/stop). Wrapped
+// entirely in try/catch: a browser blocking audio (autoplay policy, no
+// AudioContext support at all) should mean the button silently does
+// nothing, never a broken page or a thrown error.
+function playVocalTone(pitchClass, octave) {
+  try {
+    if (!vocalToneAudioContext) {
+      var AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextCtor) {
+        return;
+      }
+      vocalToneAudioContext = new AudioContextCtor();
+    }
+    var ctx = vocalToneAudioContext;
+    if (ctx.state === "suspended") {
+      ctx.resume();
+    }
+
+    var frequency = vocalNoteFrequency(pitchClass, octave);
+    var now = ctx.currentTime;
+    var attack = 0.02;
+    var duration = 0.8;
+    var peakGain = 0.3;
+
+    var oscillator = ctx.createOscillator();
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(frequency, now);
+
+    var gainNode = ctx.createGain();
+    gainNode.gain.setValueAtTime(0, now);
+    gainNode.gain.linearRampToValueAtTime(peakGain, now + attack);
+    gainNode.gain.setValueAtTime(peakGain, now + duration - attack);
+    gainNode.gain.linearRampToValueAtTime(0, now + duration);
+
+    oscillator.connect(gainNode);
+    gainNode.connect(ctx.destination);
+
+    oscillator.start(now);
+    oscillator.stop(now + duration);
+  } catch (err) {
+    // Autoplay blocked, no Web Audio support, etc. - silently do nothing.
+  }
+}
+
+// playVocalNoteFromInput reads a text input's current value (the add-
+// range form's still-being-typed Lowest/Highest note fields), parses it,
+// and plays it if valid - does nothing otherwise, so previewing a note
+// before save never errors on an in-progress, not-yet-valid value.
+function playVocalNoteFromInput(inputId) {
+  var input = document.getElementById(inputId);
+  if (!input) {
+    return;
+  }
+  var parsed = parseVocalNoteText(input.value);
+  if (!parsed) {
+    return;
+  }
+  playVocalTone(parsed.pitchClass, parsed.octave);
+}

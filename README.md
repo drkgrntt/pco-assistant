@@ -155,10 +155,13 @@ with at least Viewer access can still sign in.
   respected by Planning Center's own scheduling tools too, not just here
 - **Vocal Range** - record each vocalist's lowest and highest comfortable
   note (e.g. "G3" to "D5") on a dedicated setup page, so "can they hit this
-  note" is answered from a lookup instead of guessed at in rehearsal.
-  Person-level only for now - a per-song vocal range and the mismatch
-  warning that compares the two are still on the roadmap (see
-  `docs/plans/in-progress/vocal-range-plan.md`)
+  note" is answered from a lookup instead of guessed at in rehearsal. Each
+  note has a small tap-to-hear button next to it that plays a synthesized
+  reference tone (Web Audio, standard A440 tuning) at that pitch, so a
+  director unsure what a stored note actually sounds like doesn't have to
+  work it out by ear or on an instrument. Person-level only for now - a
+  per-song vocal range and the mismatch warning that compares the two are
+  still on the roadmap (see `docs/plans/in-progress/vocal-range-plan.md`)
 - **Build a Service (Team tab)** - the same page as the Songs tab above,
   filling an upcoming plan's open positions from each position's real PCO
   eligibility list, with avoid-pairing conflict warnings, works-well/
