@@ -2,7 +2,7 @@
 -- Remembers, per organization + service type, which Planning Center Item
 -- Note category (pco.ItemNoteCategory - "Vocals," "Singers," whatever the
 -- org named it) the song leader (set_songs.leader_person_id, migration
--- 00036) should sync into on Publish/Refresh song info - see
+-- 00037) should sync into on Publish/Refresh song info - see
 -- docs/plans/shipped/song-leader-plan.md's "Which note category is 'the
 -- vocal one'?" decision (option 2: an explicit, one-time per-service-type
 -- designation, not fuzzy name matching). Same flat, no-children shape as

@@ -1,7 +1,7 @@
 # Plan: song leader (per-occurrence), synced into the existing vocal notes
 
-**Status: shipped 2026-09-07.** Migrations `00036` (`set_songs.
-leader_person_id`) and `00037` (`service_type_vocal_note_categories`);
+**Status: shipped 2026-09-07.** Migrations `00037` (`set_songs.
+leader_person_id`) and `00038` (`service_type_vocal_note_categories`);
 `scheduling.Store.UpdateSetSongLeader`/`VocalNoteCategoryID`/
 `SetVocalNoteCategory` (`internal/scheduling/sets.go`,
 `vocal_note_category.go`); the song detail card's leader

@@ -664,7 +664,7 @@ out to 100-200 sequential round trips per load.
   [name]" first line into whichever Item Note category the org designates
   as "the vocal one" (a new per-service-type setting,
   `scheduling.Store.VocalNoteCategoryID`/`SetVocalNoteCategory`, migration
-  `00037`), using the same `pco.CreateItemNote`/`UpdateItemNote`/
+  `00038`), using the same `pco.CreateItemNote`/`UpdateItemNote`/
   `DeleteItemNote` calls `UpdateSongNote` already makes - no new call
   shape. `PublishSet` already fetches the plan's items for its reorder
   step; this just adds `Include: []string{"item_notes"}` to that existing
