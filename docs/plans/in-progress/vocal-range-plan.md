@@ -22,8 +22,8 @@ song range plus the key engine it needs, **then** a presentation-only
 matrix view once both exist. This plan does not strike anything in
 `docs/ideas.md` - per this task's own instructions, a brainstorm bullet
 stays open/unstruck until something is actually built, the same
-convention `docs/plans/not-started/song-tags-setup-redesign-plan.md`
-follows for its own source bullet (`docs/plans/shipped/key-change-tip-
+convention `docs/plans/shipped/song-tags-setup-redesign-plan.md` followed
+for its own source bullet while it was still open (`docs/plans/shipped/key-change-tip-
 plan.md` has since built and struck its own bullet the same way, once it
 actually shipped).
 
@@ -328,12 +328,14 @@ their own setup pages. The Build page only ever *reads* the transposed
 result (next paragraph), the same way it reads tags/roles/preferences
 today rather than editing them inline.
 
-If `docs/plans/not-started/song-tags-setup-redesign-plan.md`'s proposed
-`SongPickerField` (a searchable song picker replacing the current
-`<select>` of every active song) ships before this page is built, this
-page should use it too - but this plan doesn't depend on that one; absent
-it, this page uses the same plain `<select>` every other setup page uses
-today.
+`docs/plans/shipped/song-tags-setup-redesign-plan.md` has since shipped,
+but its decided scope didn't need the `SongPickerField`/song-search
+endpoint it had originally proposed (every song card renders
+unconditionally on that page now, so there was nothing left for a picker
+to narrow down) - so there's still no reusable searchable song picker
+anywhere in the codebase. This page should keep using the same plain
+`<select>` every other setup page uses today, unless some other page
+builds a real one first.
 
 **Transposition to the arrangement's actual current key**: happens at
 Build-page render time, in `buildSetBuilderData`

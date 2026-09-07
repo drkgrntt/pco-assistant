@@ -1,5 +1,33 @@
 # Plan: redesign the Song Tags setup page
 
+**Status: shipped 2026-09-07.** Built against these three decisions,
+settling the open questions this doc originally left open below (see
+"Suggested build order" - the open questions were resolved rather than
+re-derived from scratch):
+
+1. **Layout: a persistent `components.Card` per song** (not a click-to-
+   expand collapsible) - every song's tags show as chips right under its
+   title, no click needed to see them.
+2. **Scope: every active song renders up front**, tagged or not (a "no
+   tags yet" song still gets a card) - not search-gated the way the Build
+   page's own "Browse all songs" is, since a plain local-DB read is cheap
+   regardless of library size. A client-side filter box
+   (`filterSongTagCards`, `web/static/js/scheduling.js`) hides non-matching
+   cards for a large library, but never gates the initial render.
+3. **Adding a tag: inline, from within each song's own card** - not a
+   separate flat form above the list. Each card gets its own small
+   category-select + value-input + submit, scoped to that song by a hidden
+   `song_id` rather than a picker.
+
+One piece proposed below was **not** built, since decision 2 made it
+unnecessary: the `SongPickerField`/song-search endpoint under "Proposed
+redesign" § 1. Every song already renders unconditionally, and the inline
+add-tag form's song context comes from which card it's inside, so there
+was nothing left for a song picker to do on this page. Other plans citing
+this doc as a future reuse target for `SongPickerField`
+(`transition-notes-plan.md`, `vocal-range-plan.md`) have been updated to
+reflect that it doesn't exist - see those docs' own notes.
+
 Written 2026-09-04, prompted by feedback on the just-shipped Build-page
 "browse by tag" chips: the underlying complaint turned out not to be about
 the Build page at all, but about `/scheduling/song-tags` (the setup page
