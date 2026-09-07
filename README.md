@@ -195,9 +195,22 @@ It also lists everyone currently signed in, with a per-person Sign out
 button, so a departed staff member's billed seat can be freed right away
 instead of waiting out the 30-day session expiry (see the Pricing section
 above) - any signed-in person can sign any other out, since every seat is
-already, by this product's own definition, a full admin.
+already, by this product's own definition, a full admin. An "Install this
+app" section is the persistent, findable home for adding Resonance to a
+home screen or dock, whichever install path applies (see below).
 
-Mobile-first, installable as a PWA, with light/dark theming.
+Mobile-first, installable as a PWA, with light/dark theming. Beyond the
+browser's own passive install affordance, a custom in-app install flow
+(`web/static/js/install-prompt.js`) captures Chrome/Edge's
+`beforeinstallprompt` event and drives the prompt from this app's own
+button instead - shown both on `/account` (always available once the
+browser makes installing possible at all) and as a dismissible banner that
+starts appearing after a few days of use rather than on a visitor's first
+visit. iOS Safari has no such event (Apple has never shipped one), so it
+gets user-agent-gated instructional copy instead ("tap the Share icon,
+then Add to Home Screen") in the same two spots. A dismissed banner stays
+dismissed for two weeks before re-appearing, entirely via `localStorage` -
+no server-side state involved.
 
 ## Tech stack
 

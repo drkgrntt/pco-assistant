@@ -1,5 +1,14 @@
 # Plan: PWA install-prompt improvements
 
+**Status: shipped 2026-09-07.** Implemented as `web/static/js/
+install-prompt.js` (loaded from `internal/views/layout.templ`'s `Head`),
+`installPromptBanner` in `layout.templ` (the dismissible banner), and
+`AccountInstallBody` in `internal/views/account.templ` (the persistent
+Account-page section) - all four build-order steps below, minus the
+manual browser verification pass (step 4), which is left to a human per
+that step's own note that no automated test meaningfully covers
+browser-native install events.
+
 Written 2026-09-06. Smaller and more concrete than its companion,
 `docs/plans/not-started/browser-extension-hud-plan.md` - this one doesn't
 block on anything external and is buildable soon, not gated on adoption

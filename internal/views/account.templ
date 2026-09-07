@@ -25,6 +25,8 @@ templ Account(personName, organizationName string, data AccountData) {
 		@BillingBody(data.Billing)
 		<h2>Data &amp; Caches</h2>
 		@AccountCacheBody(data)
+		<h2>Install this app</h2>
+		@AccountInstallBody()
 		<h2>Who's signed in</h2>
 		@AccountSessionsBody(data)
 	}
@@ -93,6 +95,41 @@ templ AccountCacheBody(data AccountData) {
 			>
 				<button type="submit">Clear person data cache</button>
 			</form>
+		}
+	</div>
+}
+
+// AccountInstallBody is the persistent, findable "install this app" home
+// (see docs/plans/shipped/pwa-install-improvements-plan.md's "Placement
+// and trigger" section) - the deliberate settings-page counterpart to
+// layout.templ's transient, dismissible installPromptBanner: someone who
+// dismissed that banner, or who just wants to install on purpose, always
+// has a stable place to come do it, same reasoning as why the cache-clear
+// actions above live on this page rather than a transient prompt.
+//
+// Server-rendered as a static shell - the explanatory text and Card title
+// always render, so a JS-disabled visitor still sees something here
+// rather than an empty section; the button and iOS instructional copy
+// inside start hidden and install-prompt.js (installPromptRefreshUI)
+// reveals exactly one of them, or hides the whole #account-install-section
+// wrapper entirely when neither install path applies (unsupported
+// browser, or already installed - navigator.standalone/display-mode:
+// standalone).
+templ AccountInstallBody() {
+	<div id="account-install-section">
+		@components.Card("Add Resonance to your home screen") {
+			<p class="muted">
+				Installing Resonance puts it in its own window on your home
+				screen or dock - a quicker way back in than digging up a browser
+				tab, especially handy alongside Planning Center itself.
+			</p>
+			<button type="button" id="account-install-button" class="button primary" onclick="handleInstallPromptClick('account')" hidden>
+				Install app
+			</button>
+			<p id="account-install-ios-copy" class="muted" hidden>
+				@components.IconShare()
+				On iPhone or iPad: tap the <strong>Share</strong> icon in Safari, then <strong>"Add to Home Screen."</strong>
+			</p>
 		}
 	</div>
 }
