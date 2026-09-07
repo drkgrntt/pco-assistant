@@ -693,27 +693,21 @@ were.
   this is throwaway-after-Sunday info that currently lives in a text
   thread or nowhere. Smallest new storage in this file: one note field
   tied to the local `sets` row.
-- **Post-service debrief log / transition notes** - distinct from the
-  ephemeral note above, which is throwaway; these are meant to be found
-  again. Two related but distinct kinds of note, both keyed to a song or a
-  specific song-to-song transition and both meant to resurface
-  automatically the next time that song (or that pairing back-to-back)
-  shows up in a draft set, so nothing has to be rediscovered by trial and
-  error three months later:
-  - **Debrief (retrospective)** - a 60-second post-Sunday note ("the
-    bridge in Gratitude ran long," "transition out of communion felt
-    abrupt") capturing what happened, for next time.
-  - **Talking points (prospective)** - what to actually say bridging out
-    of one song into the next (or into/out of a specific song) - carried
-    into the service, not just a lesson learned after it. Worth
-    prefilling/suggesting from whatever was used last time the same song
-    or pairing came up, same as the debrief note.
-
-  Needs a new table (note text plus what it's keyed to - a song id, or a
-  song-pair for transition-specific notes, plus a kind so debrief and
-  talking-point don't collide) and, for the pairing case, matching logic
-  that recognizes "these two songs are adjacent again" while building a
-  set.
+- ~~Post-service debrief log / transition notes~~ - **shipped**, see
+  `docs/plans/shipped/transition-notes-plan.md`. A new `song_transition_notes`
+  table (migration `00040`) keyed to a song or a directional song-to-song
+  transition, with a `kind` column distinguishing the two kinds the
+  brainstorm described (debrief/retrospective, talking_point/prospective).
+  Written from a new "Debrief & talking points" subsection on the song
+  detail card (Build page) - reachable even on a past, read-only plan,
+  since a debrief is naturally written about a plan that's already
+  happened. Resurfaces as an informational badge (not a warning) on the
+  relevant song's row the next time that song, or that exact pairing
+  back-to-back, comes up in a new draft set (`transitionNotePrompts`,
+  mirroring `keyTransitionWarnings`' adjacency walk); the latest talking
+  point per song/pair also prints inline on the Run Sheet. Latest-only on
+  both surfaces - the full log stays on the song's own detail card, with a
+  "see past ones" history view left for later if wanted.
 
 ## Rough leverage-to-cost read
 

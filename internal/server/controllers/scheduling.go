@@ -527,6 +527,12 @@ func (sc *SchedulingController) RegisterRoutes(router fiber.Router) {
 	group.Post("/build/:service_type_id/:plan_id/song-roles", sc.QuickAddSongRole)
 	group.Post("/build/:service_type_id/:plan_id/person-relationships", sc.QuickAddPersonRelationship)
 	group.Post("/build/:service_type_id/:plan_id/position-preferences", sc.QuickAddPositionPreference)
+	// Transition notes (docs/plans/shipped/transition-notes-plan.md) - same
+	// quick-add shape as the entities above, but with no dedicated setup
+	// page of its own (see song_transition_notes.go): the song detail card
+	// is the only place these are ever written or deleted.
+	group.Post("/build/:service_type_id/:plan_id/transition-notes", sc.QuickAddTransitionNote)
+	group.Delete("/build/:service_type_id/:plan_id/transition-notes/:id", sc.DeleteTransitionNote)
 
 	group.Post("/rosters/:service_type_id/:plan_id/assignments", sc.AddRosterAssignment)
 	group.Delete("/rosters/:service_type_id/:plan_id/assignments/:assignment_id", sc.RemoveRosterAssignment)

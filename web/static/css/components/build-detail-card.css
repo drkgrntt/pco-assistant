@@ -62,6 +62,45 @@
   margin-block: var(--space-2);
 }
 
+/* The song detail card's "Debrief & talking points" log
+   (transitionNotesSection, song_detail_card.templ) - each entry is a
+   small self-contained card (kind badge + optional pairing context, the
+   note text, then a meta row with the date and its own delete button),
+   not a plain <li> the way .build-detail-attachments' link list is. */
+.transition-note-list {
+  list-style: none;
+  margin: var(--space-1) 0 var(--space-3);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.transition-note-entry {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-2);
+}
+
+.transition-note-entry-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+}
+
+.transition-note-entry p {
+  margin: 0;
+}
+
+.transition-note-entry-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: var(--space-1);
+  font-size: var(--text-xs);
+}
+
 .build-detail-note-form {
   margin: 0;
 }

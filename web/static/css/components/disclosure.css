@@ -181,3 +181,54 @@
 .key-transition-badge.open .key-transition-badge-menu {
   display: block;
 }
+
+/* The set builder's per-row transition-note resurfacing prompt (see
+   songBadgeSpans, set_builder.templ) - a short always-visible caption
+   ("Debrief on file"/"Talking point on file") that click-to-expands into
+   the actual note text. Same open/close idiom as .key-transition-badge
+   above (see toggleTransitionNoteBadge/closeTransitionNoteBadges,
+   scheduling.js) but deliberately styled as a plain, non-warning .badge
+   pill (accent, not danger) rather than reusing .conflict-badge - see
+   docs/plans/shipped/transition-notes-plan.md's "informational surfacing,
+   not a warning" framing. */
+.transition-note-badge {
+  position: relative;
+  display: inline-flex;
+}
+
+.transition-note-toggle {
+  display: inline-block;
+  min-height: 0;
+  border: none;
+  line-height: 1;
+}
+
+.transition-note-toggle:hover {
+  background: var(--accent-subtle);
+  border-color: transparent;
+}
+
+.transition-note-badge-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 20;
+  max-width: 20rem;
+  margin-top: 0.3rem;
+  padding: var(--space-2) calc(var(--space-2) + 0.1rem);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+
+.transition-note-badge-menu p {
+  margin: 0;
+}
+
+.transition-note-badge.open .transition-note-badge-menu {
+  display: block;
+}

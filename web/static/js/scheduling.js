@@ -179,6 +179,32 @@ function closeKeyTransitionBadges() {
   });
 }
 
+// The set builder's per-row transition-note resurfacing prompt (see
+// songBadgeSpans, set_builder.templ) - same open/close idiom as
+// toggleKeyTransitionBadge/closeKeyTransitionBadges above, kept as its own
+// wrapper class for the same reason: this popup is an explanation, not an
+// action menu, and shouldn't close (or be closed by) the row's other
+// menus/badges.
+function toggleTransitionNoteBadge(button) {
+  var wrapper = button.closest(".transition-note-badge");
+  var opening = !wrapper.classList.contains("open");
+  closeTransitionNoteBadges();
+  if (opening) {
+    wrapper.classList.add("open");
+    button.setAttribute("aria-expanded", "true");
+  }
+}
+
+function closeTransitionNoteBadges() {
+  document.querySelectorAll(".transition-note-badge.open").forEach(function (wrapper) {
+    wrapper.classList.remove("open");
+    var toggle = wrapper.querySelector(".transition-note-toggle");
+    if (toggle) {
+      toggle.setAttribute("aria-expanded", "false");
+    }
+  });
+}
+
 // The "Browse all songs" plain title list's per-row detail toggle
 // (songBrowseRow, set_builder.templ) - purely the CSS open/close; the
 // row's title button also carries its own hx-get/hx-trigger="click once"
@@ -229,15 +255,16 @@ function openQuickAction(button, action) {
 // the room a table cell doesn't have. Clicking the same row again, or its
 // card's own Close button, closes it - a plain toggle, same idiom as
 // toggleRowMenu. Ignores clicks on the row's own action cell (buttons,
-// forms, the replace <select>), drag handle, and key-transition badge -
-// those already do something on their own; selecting the row on top of
-// that would just be noise (and, for the drag handle, fire on every drag
-// as an unwanted side effect).
+// forms, the replace <select>), drag handle, and key-transition/
+// transition-note badges - those already do something on their own;
+// selecting the row on top of that would just be noise (and, for the drag
+// handle, fire on every drag as an unwanted side effect).
 function selectSongRow(row, event) {
   if (
     event.target.closest(".set-song-actions") ||
     event.target.closest(".drag-handle") ||
-    event.target.closest(".key-transition-badge")
+    event.target.closest(".key-transition-badge") ||
+    event.target.closest(".transition-note-badge")
   ) {
     return;
   }
@@ -362,6 +389,9 @@ document.addEventListener("click", function (event) {
   if (!event.target.closest(".key-transition-badge")) {
     closeKeyTransitionBadges();
   }
+  if (!event.target.closest(".transition-note-badge")) {
+    closeTransitionNoteBadges();
+  }
   if (!event.target.closest("tr.song-row") && !event.target.closest(".build-detail-card")) {
     closeSongDetail();
   }
@@ -379,6 +409,7 @@ document.addEventListener("keydown", function (event) {
     closeNavDropdowns();
     closeRowMenus();
     closeKeyTransitionBadges();
+    closeTransitionNoteBadges();
     closeMobileMenu();
     closeSongDetail();
     closePersonDetail();

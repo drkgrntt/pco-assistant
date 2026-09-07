@@ -283,6 +283,7 @@ templ songDetailCard(data SetBuilderData, song SetSongView) {
 				@descriptionForm(data, song, "")
 			}
 		</div>
+		@transitionNotesSection(data, song)
 		if !data.ReadOnly {
 			<div class="build-detail-actions">
 				<button
@@ -435,6 +436,104 @@ templ songAttachmentsList(data SetBuilderData, song SetSongView, oob bool) {
 				}
 			</ul>
 		</div>
+	}
+}
+
+// transitionNotesSection is the song detail card's "Debrief & talking
+// points" subsection (docs/plans/shipped/transition-notes-plan.md) - a
+// persistent, cross-plan log distinct from the per-occurrence Description
+// field right above it (see build-detail-notes-group): a debrief/talking-
+// point note is keyed to the song (or a specific song-to-song transition),
+// not to this one set_songs row, and carries forward to the next plan
+// that schedules it, unlike Description which is cleared/replaced per
+// occurrence.
+//
+// Deliberately rendered unconditionally - NOT inside the
+// `if data.ReadOnly { ... } else { ... }` split every other form on this
+// card uses (see keyForm/leaderForm/descriptionForm above). A debrief is,
+// by definition, almost always written about a plan that already
+// happened: the natural moment to write "the bridge ran long" is while
+// looking at last Sunday's now-past, now-read-only plan on the Build
+// page. Unlike Description/Key (which mutate *this plan's own draft*, and
+// correctly stay frozen once that plan is done), a transition note never
+// touches the plan's draft at all - it's keyed to the song(s), not to
+// this set_songs row or this plan id - so it's both safe and necessary to
+// keep this form active even when data.ReadOnly is true. See
+// QuickAddTransitionNote/DeleteTransitionNote (transition_notes.go), which
+// likewise aren't gated by ReadOnly.
+templ transitionNotesSection(data SetBuilderData, song SetSongView) {
+	@collapsibleSection(fmt.Sprintf("transition-notes-%d", song.ID), "Debrief & talking points", false) {
+		<p class="muted">Persistent notes about this song - or a specific transition into/out of it - that carry forward to the next time it's scheduled. Separate from this week's note above.</p>
+		if len(song.TransitionNotes) == 0 {
+			<p class="muted">No notes on file yet.</p>
+		} else {
+			<ul class="transition-note-list">
+				for _, note := range song.TransitionNotes {
+					<li class="transition-note-entry">
+						<div class="transition-note-entry-head">
+							@components.Badge("", note.KindLabel)
+							if note.Direction == "into" {
+								<span class="muted">{ fmt.Sprintf("Into %s", note.OtherTitle) }</span>
+							} else if note.Direction == "from" {
+								<span class="muted">{ fmt.Sprintf("From %s", note.OtherTitle) }</span>
+							}
+						</div>
+						<p>{ note.Note }</p>
+						<div class="transition-note-entry-meta">
+							<span class="muted">{ note.CreatedAt }</span>
+							<form
+								hx-delete={ fmt.Sprintf("/scheduling/build/%s/%s/transition-notes/%d", data.ServiceTypeID, data.PlanID, note.ID) }
+								hx-target="#set-builder-body"
+								hx-swap="outerHTML"
+								hx-confirm="Remove this note?"
+							>
+								<button type="submit" class="danger icon-btn" aria-label="Remove note" title="Remove note">
+									@components.IconRemove()
+								</button>
+							</form>
+						</div>
+					</li>
+				}
+			</ul>
+		}
+		<form
+			class="build-detail-note-form"
+			hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/transition-notes", data.ServiceTypeID, data.PlanID) }
+			hx-target="#set-builder-body"
+			hx-swap="outerHTML"
+		>
+			<input type="hidden" name="song_id" value={ song.SongID }/>
+			<label>
+				Kind
+				<select name="kind">
+					<option value="debrief">Debrief - what happened</option>
+					<option value="talking_point">Talking point - what to say next time</option>
+				</select>
+			</label>
+			<label>
+				Other song (optional)
+				<select name="other_song_id">
+					<option value="">No specific pairing - just this song</option>
+					for _, s := range data.AllSongs {
+						if s.ID != song.SongID {
+							<option value={ s.ID }>{ s.Attributes.Title }</option>
+						}
+					}
+				</select>
+			</label>
+			<label>
+				Direction (if a song is chosen above)
+				<select name="direction">
+					<option value="into">This song, into the other one</option>
+					<option value="from">The other one, into this song</option>
+				</select>
+			</label>
+			<label>
+				Note
+				<textarea name="note" rows="2" placeholder="e.g. the bridge ran long, or say this right before the key change" required></textarea>
+			</label>
+			<button type="submit">Add note</button>
+		</form>
 	}
 }
 
