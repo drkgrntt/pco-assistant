@@ -339,6 +339,9 @@ templ songCandidateMeta(cand CandidateSongView) {
 	if cand.NewSongLabel != "" {
 		@components.BadgeTitled("status-pending", cand.NewSongLabel, "New to the church - a repeat helps it stick")
 	}
+	if cand.NotSungInLabel != "" {
+		@components.BadgeTitled("status-pending", cand.NotSungInLabel, "Last scheduled over 6 months ago - consider whether this still belongs in rotation")
+	}
 	if cand.ArrangementInfo != "" {
 		<!--
 			arrangement-info is a distinguishing class, not just styling -

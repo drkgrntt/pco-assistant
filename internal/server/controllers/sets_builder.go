@@ -555,6 +555,7 @@ func (l candidateLookups) candidateSongView(song pco.SongData) views.CandidateSo
 		ConflictTitles:   conflictTitles,
 		RecentlyRepeated: l.repeated[song.ID],
 		NewSongLabel:     reinforcementLabel(l.trackedNew, l.appearanceCounts, song.ID),
+		NotSungInLabel:   notSungInLabel(song.Attributes.LastScheduledAt, l.tagsBySong[song.ID]),
 		ArrangementInfo:  arrangementInfo,
 		Roles:            roleViews,
 		RolesAttr:        rolesAttr,
@@ -708,7 +709,7 @@ func (sc *SchedulingController) BuildCandidatesSearch(c *fiber.Ctx) error {
 
 // ArchiveSong flips a song's PCO `hidden` attribute to true from the
 // "Browse all songs" candidate list (see
-// docs/plans/not-started/song-archive-plan.md) - a real, immediate write
+// docs/plans/shipped/song-archive-plan.md) - a real, immediate write
 // to the org's live PCO data, confirmed client-side via hx-confirm before
 // this ever fires (matching songDetailCard's Duplicate/Remove/Replace
 // precedent), never a local draft. No local table has a real FK to a song
@@ -872,6 +873,37 @@ func reinforcementLabel(tracked map[string]bool, counts map[string]int, songID s
 	default:
 		return ""
 	}
+}
+
+// notSungInThreshold is how long since a song's PCO LastScheduledAt before
+// the "not sung in a while" nudge kicks in - a real, concrete default
+// (180 days, ~6 months), not an org-level setting in v1. Simple on
+// purpose: an org-configurable threshold could be added later if
+// requested, but isn't built here.
+const notSungInThreshold = 180 * 24 * time.Hour
+
+// notSungInLabel returns the short badge text for a song that used to get
+// scheduled regularly but has gone cold - "" for anything else. A song
+// with no LastScheduledAt at all (never scheduled, or PCO has no history
+// that far back) doesn't qualify - that's TrackNewSong's reinforcement
+// path instead (see reinforcementLabel above), not this one. A song
+// carrying any tag in scheduling.TagCategorySeasonal is exempted
+// regardless of how long it's been - an intentional gap (Christmas,
+// Easter, ...) is by design, not a signal. See
+// CandidateSongView.NotSungInLabel, which this drives.
+func notSungInLabel(lastScheduledAt *time.Time, tags []scheduling.SongTag) string {
+	if lastScheduledAt == nil {
+		return ""
+	}
+	if time.Since(*lastScheduledAt) < notSungInThreshold {
+		return ""
+	}
+	for _, tag := range tags {
+		if tag.Category == scheduling.TagCategorySeasonal {
+			return ""
+		}
+	}
+	return "Not sung recently"
 }
 
 // recentTwoPlanLookback is how many of the most recent past plans

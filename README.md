@@ -120,7 +120,12 @@ with at least Viewer access can still sign in.
   prior scheduling date for it the first time it's seen) gets a "Sung
   once"/"Sung twice" badge and a spot in a "Could use one more sing" section
   once it's been published once or twice, so a new song gets the repetition
-  it needs to stick before it's forgotten. A new plan's first song lands
+  it needs to stick before it's forgotten. The mirror-image nudge runs too:
+  a song that HAS been sung before but not in the last 6 months gets a
+  "Not sung recently" badge, a soft prompt to consider archiving it rather
+  than an automatic suggestion - a seasonal song (Christmas, Easter, etc.,
+  tagged with the "Seasonal" tag category) is exempted, since its long gap
+  is by design. A new plan's first song lands
   wherever the first song usually goes for that service type once you've
   placed it there once (tracked separately per service type, so e.g.
   Sunday and Wednesday can differ). Add a song right after another one and
