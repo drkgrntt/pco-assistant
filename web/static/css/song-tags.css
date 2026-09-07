@@ -10,21 +10,89 @@
 
 .song-tags-filter {
   max-width: 24rem;
+  margin-bottom: var(--space-3);
+}
+
+/* Distinct tag values as toggleable filter chips (songTagFilterChips,
+   song_tags.templ) - not constrained to the text filter's own 24rem, since
+   a wide library's tag vocabulary reads better wrapped full-width than
+   squeezed into a narrow column. */
+.song-tag-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
   margin-bottom: var(--space-4);
 }
 
+/* The real checkbox stays in the DOM (so :checked, keyboard focus, and
+   form semantics all still work) but renders invisible - its paired
+   <label> is the only thing shown, styled as the pill below. */
+.song-tag-filter-checkbox {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+
+.tag-filter-chip {
+  display: inline-block;
+  cursor: pointer;
+  background: color-mix(in srgb, var(--text) 8%, var(--surface));
+  color: var(--muted);
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.song-tag-filter-checkbox:checked + .tag-filter-chip {
+  background: var(--accent-subtle);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.song-tag-filter-checkbox:focus-visible + .tag-filter-chip {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Tighter than the shared .song-tags-list flex gap other pages might
+   assume - at a library's real song count (dozens+), var(--space-4)
+   between every card added up to a lot of scrolling for what's meant to
+   be a quick scan-and-tag list. */
 .song-tags-list {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-2);
+}
+
+/* Overrides components.Card's shared .position-group padding/margin
+   (card.css) tighter for this page only - that base sizing is tuned for
+   a handful of billing/account sections, not one card per song across a
+   whole library. Left as a scoped override rather than changing the
+   shared rule itself, so every other components.Card() caller keeps its
+   own sizing. */
+.song-tag-card .position-group {
+  padding: var(--space-2) var(--space-3);
+  margin-block: 0;
+}
+
+.song-tag-card .position-group h3 {
+  font-size: var(--text-base);
+  margin-bottom: var(--space-1);
+}
+
+.song-tag-empty {
+  margin: 0;
 }
 
 .song-tag-chips {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2);
-  margin: var(--space-2) 0;
+  gap: var(--space-1);
+  margin: 0;
 }
 
 /* One tag's badge plus its own edit/remove icon buttons, inline - the
@@ -38,6 +106,32 @@
 
 .tag-chip .badge {
   margin-right: 0;
+}
+
+/* The add-tag form starts collapsed behind this <summary> toggle (see
+   SongTagCard, song_tags.templ) - shown open only while actively editing
+   an existing tag (editRow opens it, cancelSetupEdit closes it again,
+   scheduling.js). Keeping the form itself always in the DOM (just hidden
+   by <details>, not htmx-loaded on demand) is what let editRow keep
+   working unchanged - it just also has to flip .open now. */
+.song-tag-add-details {
+  margin-top: var(--space-1);
+}
+
+.song-tag-add-details[open] {
+  margin-top: var(--space-2);
+}
+
+.song-tag-add-toggle {
+  cursor: pointer;
+  color: var(--accent);
+  font-size: var(--text-sm);
+  list-style: none;
+  user-select: none;
+}
+
+.song-tag-add-toggle::-webkit-details-marker {
+  display: none;
 }
 
 .song-tag-add-form {

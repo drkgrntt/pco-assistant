@@ -751,43 +751,78 @@ function editRow(button) {
     cancelBtn.hidden = false;
   }
 
+  // The Song Tags page's own add-tag form (song_tags.templ) sits collapsed
+  // inside a <details> to stay compact - editing an existing tag needs it
+  // open, since a closed <details> hides the very fields editRow just
+  // filled in. Every other setup page's form isn't wrapped in one, so
+  // form.closest("details") is simply null there and this is a no-op.
+  var details = form.closest("details");
+  if (details) {
+    details.open = true;
+  }
+
   form.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function cancelSetupEdit(button) {
-  resetSetupForm(button.closest("form"));
+  var form = button.closest("form");
+  resetSetupForm(form);
+  var details = form.closest("details");
+  if (details) {
+    details.open = false;
+  }
 }
 
-// filterSongTagCards backs the Song Tags setup page's own filter box
-// (song_tags.templ) - purely client-side, hiding/showing each already-
-// rendered .song-tag-card by its own data-search text (song title + tag
-// values, see songTagCardSearchText). Every song renders unconditionally
-// on that page (unlike the Build page's search-gated candidate list,
-// which re-fetches from the server as you type - see the comment above
-// #candidate-search's own handling below), so there's nothing to fetch
-// here, just hide/show against data already in the DOM.
-function filterSongTagCards(input) {
-  var query = input.value.trim().toLowerCase();
+// filterSongTagCards backs the Song Tags setup page's own filter controls
+// (song_tags.templ): the free-text #song-tag-filter box and the checked
+// .song-tag-filter-checkbox tag chips above the list, both applied
+// together - a card must match the typed text (if any) AND carry at
+// least one of the checked tags (if any are checked). Purely client-side,
+// hiding/showing each already-rendered .song-tag-card: the text query
+// against its data-search (song title + tag values, substring match, see
+// songTagCardSearchText) and the checked tags against its data-tags
+// (tag values only, exact membership via songTagCardTagsAttr's pipe
+// delimiting, so a chip for "Grace" doesn't also match a card just
+// because some other tag's value contains "grace" as a substring). Every
+// song renders unconditionally on that page (unlike the Build page's
+// search-gated candidate list, which re-fetches from the server as you
+// type - see the comment above #candidate-search's own handling below),
+// so there's nothing to fetch here, just hide/show against data already
+// in the DOM.
+function filterSongTagCards() {
+  var input = document.getElementById("song-tag-filter");
+  var query = input ? input.value.trim().toLowerCase() : "";
+  var checked = Array.prototype.slice
+    .call(document.querySelectorAll(".song-tag-filter-checkbox:checked"))
+    .map(function (checkbox) {
+      return checkbox.value;
+    });
+
   document.querySelectorAll(".song-tag-card").forEach(function (card) {
-    var haystack = card.dataset.search || "";
-    card.hidden = query !== "" && haystack.indexOf(query) === -1;
+    var matchesText =
+      query === "" || (card.dataset.search || "").indexOf(query) !== -1;
+    var tags = card.dataset.tags || "";
+    var matchesTags =
+      checked.length === 0 ||
+      checked.some(function (tag) {
+        return tags.indexOf("|" + tag + "|") !== -1;
+      });
+    card.hidden = !(matchesText && matchesTags);
   });
 }
 
-// Re-applies that same filter after any htmx swap of the card list itself
-// (adding/editing/removing a tag all swap the whole #song-tags-list) -
-// without this, a filtered view would flash back to showing every song
-// again after each mutation, even though #song-tag-filter (outside the
-// swapped div, so untouched by the swap) still shows the typed query.
+// Re-applies those same filters after any htmx swap of the card list
+// itself (adding/editing/removing a tag all swap the whole
+// #song-tags-list) - without this, a filtered view would flash back to
+// showing every song again after each mutation, even though
+// #song-tag-filter and the tag filter chips (both outside the swapped
+// div, so untouched by the swap) still show their previous state.
 document.addEventListener("htmx:afterSwap", function (event) {
   var target = event.detail && event.detail.target;
   if (!target || target.id !== "song-tags-list") {
     return;
   }
-  var input = document.getElementById("song-tag-filter");
-  if (input && input.value) {
-    filterSongTagCards(input);
-  }
+  filterSongTagCards();
 });
 
 // Generic collapsible sections used across the build page (see

@@ -2,6 +2,7 @@ package scheduling
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -36,12 +37,63 @@ templ SongTags(personName, organizationName string, songs []pco.SongData, tagsBy
 					id="song-tag-filter"
 					placeholder="Filter by song title or tag..."
 					autocomplete="off"
-					oninput="filterSongTagCards(this)"
+					oninput="filterSongTagCards()"
 				/>
 			</label>
+			@songTagFilterChips(distinctTagValues(tagsBySong))
 		</div>
 		@SongTagsList(songs, tagsBySong, categories, categoryLabels, errMsg)
 	}
+}
+
+// songTagFilterChips renders the distinct tag values already in use as
+// checkbox-backed toggle chips (native checkbox visually hidden, its
+// <label> styled as the pill - see .tag-filter-chip, song-tags.css) so
+// filtering reads as "select which tags to show" rather than free typing.
+// Computed once from the page's initial load, not re-derived on every
+// #song-tags-list swap (like #song-tag-filter's own text input above,
+// deliberately outside that swap target) so checking a few boxes doesn't
+// get silently wiped the next time any card's tags change. The tradeoff:
+// a tag value added after page load won't get its own chip until reload -
+// acceptable since the plain text filter still matches it in the
+// meantime.
+templ songTagFilterChips(tagValues []string) {
+	if len(tagValues) > 0 {
+		<div class="song-tag-filter-chips" role="group" aria-label="Filter by tag">
+			for i, v := range tagValues {
+				<input
+					type="checkbox"
+					id={ fmt.Sprintf("tag-filter-%d", i) }
+					class="song-tag-filter-checkbox"
+					value={ strings.ToLower(v) }
+					onchange="filterSongTagCards()"
+				/>
+				<label for={ fmt.Sprintf("tag-filter-%d", i) } class="tag-filter-chip">{ v }</label>
+			}
+		</div>
+	}
+}
+
+// distinctTagValues collects every unique tag value across all songs,
+// sorted case-insensitively, for songTagFilterChips above.
+func distinctTagValues(tagsBySong map[string][]scheduling.SongTag) []string {
+	seen := make(map[string]string) // lowercased -> original casing
+	for _, tags := range tagsBySong {
+		for _, tag := range tags {
+			key := strings.ToLower(tag.Value)
+			if _, ok := seen[key]; !ok {
+				seen[key] = tag.Value
+			}
+		}
+	}
+	values := make([]string, 0, len(seen))
+	for _, v := range seen {
+		values = append(values, v)
+	}
+	sort.Slice(values, func(i, j int) bool {
+		return strings.ToLower(values[i]) < strings.ToLower(values[j])
+	})
+	return values
 }
 
 // SongTagsList is both the initial-render fragment and the htmx swap target
@@ -75,10 +127,10 @@ templ SongTagsList(songs []pco.SongData, tagsBySong map[string][]scheduling.Song
 // filtering also surfaces "which songs are tagged 'grace'" without a
 // server round trip.
 templ SongTagCard(song pco.SongData, tags []scheduling.SongTag, categories []scheduling.SongTagCategory, categoryLabels map[string]string) {
-	<div class="song-tag-card" data-search={ songTagCardSearchText(song, tags) }>
+	<div class="song-tag-card" data-search={ songTagCardSearchText(song, tags) } data-tags={ songTagCardTagsAttr(tags) }>
 		@components.Card(song.Attributes.Title) {
 			if len(tags) == 0 {
-				<p class="muted">No tags yet.</p>
+				<p class="muted song-tag-empty">No tags yet.</p>
 			} else {
 				<div class="song-tag-chips">
 					for _, tag := range tags {
@@ -114,31 +166,34 @@ templ SongTagCard(song pco.SongData, tags []scheduling.SongTag, categories []sch
 					}
 				</div>
 			}
-			<form
-				id={ songTagFormID(song.ID) }
-				class="inline song-tag-add-form"
-				hx-post="/scheduling/song-tags"
-				hx-target="#song-tags-list"
-				hx-swap="outerHTML"
-				hx-on::after-request="if(event.detail.successful && event.detail.elt === this) resetSetupForm(this)"
-			>
-				<input type="hidden" name="id"/>
-				<input type="hidden" name="song_id" value={ song.ID }/>
-				<label>
-					Category
-					<select name="category">
-						for _, cat := range categories {
-							<option value={ cat.Code }>{ cat.Label }</option>
-						}
-					</select>
-				</label>
-				<label>
-					Value
-					<input type="text" name="value" placeholder="e.g. Grace, Romans 8:1, New beginnings" required/>
-				</label>
-				<button type="submit" class="primary">Add tag</button>
-				<button type="button" class="cancel-edit" onclick="cancelSetupEdit(this)" hidden>Cancel</button>
-			</form>
+			<details class="song-tag-add-details">
+				<summary class="song-tag-add-toggle">+ Add tag</summary>
+				<form
+					id={ songTagFormID(song.ID) }
+					class="inline song-tag-add-form"
+					hx-post="/scheduling/song-tags"
+					hx-target="#song-tags-list"
+					hx-swap="outerHTML"
+					hx-on::after-request="if(event.detail.successful && event.detail.elt === this) resetSetupForm(this)"
+				>
+					<input type="hidden" name="id"/>
+					<input type="hidden" name="song_id" value={ song.ID }/>
+					<label>
+						Category
+						<select name="category">
+							for _, cat := range categories {
+								<option value={ cat.Code }>{ cat.Label }</option>
+							}
+						</select>
+					</label>
+					<label>
+						Value
+						<input type="text" name="value" placeholder="e.g. Grace, Romans 8:1, New beginnings" required/>
+					</label>
+					<button type="submit" class="primary">Add tag</button>
+					<button type="button" class="cancel-edit" onclick="cancelSetupEdit(this)" hidden>Cancel</button>
+				</form>
+			</details>
 		}
 	</div>
 }
@@ -161,4 +216,22 @@ func songTagCardSearchText(song pco.SongData, tags []scheduling.SongTag) string 
 		parts = append(parts, tag.Value)
 	}
 	return strings.ToLower(strings.Join(parts, " "))
+}
+
+// songTagCardTagsAttr builds one card's data-tags attribute: its tag
+// values only (no title), lowercased and pipe-delimited with leading/
+// trailing pipes so filterSongTagCards (scheduling.js) can test exact
+// membership (`"|" + tag + "|"`) against a checked filter chip's value,
+// rather than songTagCardSearchText's substring match - a chip for tag
+// "Grace" shouldn't also match a card merely because some other tag's
+// value happens to contain "grace" as a substring.
+func songTagCardTagsAttr(tags []scheduling.SongTag) string {
+	if len(tags) == 0 {
+		return ""
+	}
+	values := make([]string, 0, len(tags))
+	for _, tag := range tags {
+		values = append(values, strings.ToLower(tag.Value))
+	}
+	return "|" + strings.Join(values, "|") + "|"
 }
