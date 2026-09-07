@@ -65,16 +65,29 @@ type SetSong struct {
 	// resolveKeyID, scheduling.go) without ever touching the arrangement's
 	// own default key.
 	KeyOverride string `json:"key_override"`
-	// InfoPending is true once Description or KeyOverride has been edited
-	// on an already-published song without that edit reaching Planning
-	// Center yet - the item-content equivalent of Moved above, for exactly
-	// the same reason: without it, an edited-but-not-yet-refreshed song
-	// looked identical to one that was already in sync. Set by
-	// UpdateSetSongDescription/UpdateSetSongKeyOverride; cleared by
+	// InfoPending is true once Description, KeyOverride, or LeaderPersonID
+	// has been edited on an already-published song without that edit
+	// reaching Planning Center yet - the item-content equivalent of Moved
+	// above, for exactly the same reason: without it, an
+	// edited-but-not-yet-refreshed song looked identical to one that was
+	// already in sync. Set by UpdateSetSongDescription/
+	// UpdateSetSongKeyOverride/UpdateSetSongLeader; cleared by
 	// ClearInfoPending once that content is actually pushed (a successful
 	// create at Publish time, or a successful update via Refresh song
 	// info).
 	InfoPending bool `json:"info_pending"`
+	// LeaderPersonID is this one occurrence's local per-occurrence song
+	// leader ("who's actually leading this song this week") - a PCO
+	// person id, not free text, so it stays a real person reference
+	// rather than a name typed in two places that can drift apart. Empty
+	// means "no leader set," same convention as Description/KeyOverride.
+	// Editing this only updates the local draft (UpdateSetSongLeader); it
+	// reaches Planning Center as a reserved first line inside the org's
+	// configured "vocal notes" Item Note category on the next Publish or
+	// Refresh song info (see syncLeaderNote, sets_publish.go, and
+	// scheduling.Store.VocalNoteCategoryID) - never a category of its
+	// own. See docs/plans/shipped/song-leader-plan.md.
+	LeaderPersonID string `json:"leader_person_id"`
 }
 
 // FindSet looks up an existing set without creating one - unlike
@@ -130,7 +143,7 @@ func (s *Store) GetOrCreateSet(ctx context.Context, organizationID, serviceTypeI
 // see ListPendingDeletions for songs awaiting removal from Planning Center.
 func (s *Store) ListSetSongs(ctx context.Context, setID int64) ([]SetSong, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, set_id, song_id, position, created_at, pco_item_id, anchor_item_id, moved, description, key_override, info_pending
+		SELECT id, set_id, song_id, position, created_at, pco_item_id, anchor_item_id, moved, description, key_override, info_pending, leader_person_id
 		FROM set_songs
 		WHERE set_id = $1 AND pending_delete = false
 		ORDER BY position ASC
@@ -144,7 +157,7 @@ func (s *Store) ListSetSongs(ctx context.Context, setID int64) ([]SetSong, error
 	for rows.Next() {
 		var ss SetSong
 		var pcoItemID sql.NullString
-		if err := rows.Scan(&ss.ID, &ss.SetID, &ss.SongID, &ss.Position, &ss.CreatedAt, &pcoItemID, &ss.AnchorItemID, &ss.Moved, &ss.Description, &ss.KeyOverride, &ss.InfoPending); err != nil {
+		if err := rows.Scan(&ss.ID, &ss.SetID, &ss.SongID, &ss.Position, &ss.CreatedAt, &pcoItemID, &ss.AnchorItemID, &ss.Moved, &ss.Description, &ss.KeyOverride, &ss.InfoPending, &ss.LeaderPersonID); err != nil {
 			return nil, err
 		}
 		ss.PCOItemID = pcoItemID.String
@@ -176,6 +189,17 @@ func (s *Store) UpdateSetSongKeyOverride(ctx context.Context, setID, rowID int64
 	_, err := s.db.ExecContext(ctx, `
 		UPDATE set_songs SET key_override = $1, info_pending = true WHERE id = $2 AND set_id = $3 AND pending_delete = false
 	`, keyOverride, rowID, setID)
+	return err
+}
+
+// UpdateSetSongLeader sets rowID's local per-occurrence song leader (see
+// SetSong.LeaderPersonID) - same local-draft-only semantics (including
+// info_pending) as UpdateSetSongKeyOverride/UpdateSetSongDescription
+// above. personID is a PCO person id, "" meaning "no leader" (clears it).
+func (s *Store) UpdateSetSongLeader(ctx context.Context, setID, rowID int64, personID string) error {
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE set_songs SET leader_person_id = $1, info_pending = true WHERE id = $2 AND set_id = $3 AND pending_delete = false
+	`, personID, rowID, setID)
 	return err
 }
 

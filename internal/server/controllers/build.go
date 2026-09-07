@@ -179,6 +179,31 @@ func (sc *SchedulingController) UpdatePlanNote(c *fiber.Ctx) error {
 	return render(c, views.PlanNoteFormFragment(serviceTypeID, planID, note, "saved"))
 }
 
+// SetVocalNoteCategory saves this service type's "which note category is
+// the vocal one" designation (scheduling.Store.SetVocalNoteCategory) -
+// see docs/plans/shipped/song-leader-plan.md's "Which note category is
+// 'the vocal one'?" decision (option 2: an explicit, one-time pick from
+// this service type's actual configured categories, not fuzzy name
+// matching). Purely local storage, no PCO call of its own; takes effect
+// the next time PublishSet/RefreshSongInfo actually pushes a song leader
+// (see syncLeaderNote, sets_publish.go) - same "saved here, applied on
+// next publish/refresh" timing as every other local field on this page.
+func (sc *SchedulingController) SetVocalNoteCategory(c *fiber.Ctx) error {
+	ctx := middleware.RequestContext(c)
+	orgID := middleware.CurrentOrganizationID(c)
+	serviceTypeID := c.Params("service_type_id")
+	planID := c.Params("plan_id")
+	categoryID := c.FormValue("category_id")
+
+	status := "saved"
+	if err := sc.store.SetVocalNoteCategory(ctx, orgID, serviceTypeID, categoryID); err != nil {
+		status = "error"
+	}
+
+	data := sc.buildSetBuilderData(ctx, orgID, serviceTypeID, planID)
+	return render(c, views.VocalNoteCategoryFormFragment(serviceTypeID, planID, data.VocalNoteCategories, data.VocalNoteCategoryID, status))
+}
+
 // fetchPlansByFilter pages through a service type's plans matching PCO's
 // own named filter ("future" or "past" - confirmed live against the
 // signed-in dev org's PCO API; go-pco's PlansParams.Filter doc comment

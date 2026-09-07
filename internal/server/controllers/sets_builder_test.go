@@ -662,7 +662,7 @@ func TestPCOItemsFingerprint(t *testing.T) {
 // resulting SetSongView.
 func renderServiceOrderRow(t *testing.T, rows []mergedRow, cache map[string]scheduling.SongArrangementInfo, titles map[string]string, repeated map[string]bool, conflictTitlesBySong map[string][]string, transitionsByRow map[int64]keyTransitionWarning, songID string) views.SetSongView {
 	t.Helper()
-	out := renderServiceOrder(context.Background(), nil, "org1", cache, nil, nil, nil, rows, titles, nil, nil, repeated, conflictTitlesBySong, transitionsByRow)
+	out := renderServiceOrder(context.Background(), nil, "org1", cache, nil, nil, nil, rows, titles, nil, nil, repeated, conflictTitlesBySong, transitionsByRow, nil)
 	for _, row := range out {
 		if row.IsSong && row.Song.SongID == songID {
 			return row.Song

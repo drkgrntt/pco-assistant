@@ -486,6 +486,11 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 			<p class="success">{ data.PublishMsg }</p>
 		}
 		@SongStatusSummary(data)
+		if !data.ReadOnly {
+			@collapsibleSection("vocal-note-category-section", "Song leader sync setting", false) {
+				@VocalNoteCategoryFormFragment(data.ServiceTypeID, data.PlanID, data.VocalNoteCategories, data.VocalNoteCategoryID, "")
+			}
+		}
 		<!--
 			ServiceLengthWarning is the one warning check that stays a
 			standalone banner rather than moving onto a song's own row (see

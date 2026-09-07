@@ -95,6 +95,16 @@ with at least Viewer access can still sign in.
   Tempo and time signature (BPM/meter) aren't offered here - Planning
   Center only models those on the arrangement itself, with no
   per-occurrence override at all
+- **Song leader (per-occurrence)** - also on the song detail card: who's
+  actually leading this song this week, picked from your Planning Center
+  people (not typed as free text, so it can't drift from what Planning
+  Center itself knows about that person). Once you designate which of a
+  service type's Item Note categories is "the vocal one" (a one-time
+  setting, since categories are named freely per org), the leader syncs in
+  as a "Leading: [name]" line at the top of that category's note on the
+  next Publish/Refresh - added, replaced, or removed as the leader
+  changes, without touching anything else a team member typed in that same
+  box by hand
 - **Build a Service (Songs tab)** - pick an upcoming plan and build its
   song lineup against the plan's *full* order of service (including
   template headers and non-song items already in Planning Center, not just

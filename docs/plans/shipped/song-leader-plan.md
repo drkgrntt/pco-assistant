@@ -1,5 +1,18 @@
 # Plan: song leader (per-occurrence), synced into the existing vocal notes
 
+**Status: shipped 2026-09-07.** Migrations `00036` (`set_songs.
+leader_person_id`) and `00037` (`service_type_vocal_note_categories`);
+`scheduling.Store.UpdateSetSongLeader`/`VocalNoteCategoryID`/
+`SetVocalNoteCategory` (`internal/scheduling/sets.go`,
+`vocal_note_category.go`); the song detail card's leader
+`PersonPickerFieldWithValue` and the Songs tab's "Song leader sync
+setting" (`internal/views/scheduling/song_detail_card.templ`,
+`build.templ`, `set_builder.templ`); the publish-time prefix-line merge
+(`composeLeaderNoteContent`/`syncLeaderNote`,
+`internal/server/controllers/leader_note.go`/`sets_publish.go`, with
+table-driven tests in `leader_note_test.go`) wired into `PublishSet`/
+`RefreshSongInfo`'s existing write loop.
+
 Written 2026-09-06, prompted by a conversation about vocal-range work
 (`docs/plans/not-started/vocal-range-plan.md`) that surfaced a related but
 distinct gap: this app has no structured concept of "who's actually

@@ -108,6 +108,17 @@ templ DescriptionFormFragment(data SetBuilderData, song SetSongView, errMsg stri
 	@songPublishPanelOOB(data)
 }
 
+// LeaderFormFragment is UpdateSetSongLeader's (sets_detail.go) htmx
+// response - same shape and same reasoning as DescriptionFormFragment
+// above (a leader edit can flip InfoPending, so the row's own badge and
+// the sidebar's Discard button/pending list both need to reflect it
+// immediately).
+templ LeaderFormFragment(data SetBuilderData, song SetSongView, errMsg string) {
+	@leaderForm(data, song, errMsg)
+	@songBadgesOOB(song)
+	@songPublishPanelOOB(data)
+}
+
 templ SongNoteFormFragment(data SetBuilderData, song SetSongView, note SongNoteView, errMsg string) {
 	@songNoteForm(data, song, note, errMsg)
 }
@@ -260,11 +271,15 @@ templ songDetailCard(data SetBuilderData, song SetSongView) {
 				if song.Key != "" {
 					<p><strong>Key (that week):</strong> { song.Key }</p>
 				}
+				if song.LeaderPersonID != "" {
+					<p><strong>Leading:</strong> { song.LeaderPersonName }</p>
+				}
 				if song.Description != "" {
 					<p><strong>Note:</strong> { song.Description }</p>
 				}
 			} else {
 				@keyForm(data, song, "")
+				@leaderForm(data, song, "")
 				@descriptionForm(data, song, "")
 			}
 		</div>
@@ -504,6 +519,34 @@ templ musicalKeyOptions() {
 		<option value="Bbm"></option>
 		<option value="Bm"></option>
 	</datalist>
+}
+
+// leaderForm is "who's leading this song this week" (SetSongView.
+// LeaderPersonID/LeaderPersonName) - a local draft edit, same
+// "reaches Planning Center on the next Publish or Refresh, not
+// immediately" timing as keyForm/descriptionForm (see UpdateSetSongLeader,
+// syncLeaderNote in sets_publish.go). A PersonPickerFieldWithValue, not a
+// plain text field, so "leader" is a real PCO person id rather than a
+// name typed here that could drift out of sync with the name typed into
+// the vocal notes category by hand - see docs/plans/shipped/
+// song-leader-plan.md. The suffix ("leader-<row id>") keeps this picker's
+// search box/hidden input/results container distinct from every other
+// song's own leader picker on the same page (see PersonPickerField's own
+// doc comment on suffix).
+templ leaderForm(data SetBuilderData, song SetSongView, errMsg string) {
+	<form
+		class="build-detail-note-form"
+		hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/leader", data.ServiceTypeID, data.PlanID, song.ID) }
+		hx-target="this"
+		hx-swap="outerHTML"
+	>
+		if errMsg != "" {
+			<p class="error">{ errMsg }</p>
+		}
+		@PersonPickerFieldWithValue("Leading this week", "leader_person_id", fmt.Sprintf("leader-%d", song.ID), song.LeaderPersonID, song.LeaderPersonName)
+		<button type="submit">Save leader</button>
+		<p class="muted">Saved here - Publish or Refresh song info to send it to Planning Center.</p>
+	</form>
 }
 
 // descriptionForm is "This week's note" (SetSongView.Description) - a
