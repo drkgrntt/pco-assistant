@@ -45,9 +45,21 @@
   margin: 0;
 }
 
+/* One row of the browse list (songBrowseRow, set_builder.templ): title
+   button, "+" add form, and the detail container all share a line, the
+   detail wrapping onto its own line below once populated/revealed - same
+   title-then-meta-underneath shape songCandidateMeta's rich rows and a
+   set song's own row already use. */
+.song-browse-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+}
+
 .song-title-browse-item {
-  display: block;
-  width: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
   background: none;
   border: none;
   text-align: left;
@@ -58,6 +70,25 @@
 
 .song-title-browse-item:hover {
   background: var(--surface-hover);
+}
+
+/* Collapsed by default (toggleSongBrowseDetail, scheduling.js) - shown
+   full-width below the title/add-button line once opened, same
+   .open-gated visibility idiom as .key-transition-badge.open above, just
+   without the floating/absolute positioning: this expands the row itself
+   rather than overlaying anything, so several rows can stay open
+   side-by-side while browsing. */
+.song-browse-detail {
+  display: none;
+  flex-basis: 100%;
+  padding: 0 var(--space-2) var(--space-1);
+}
+
+.song-browse-row.open .song-browse-detail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  align-items: center;
 }
 
 @media (min-width: 640px) {

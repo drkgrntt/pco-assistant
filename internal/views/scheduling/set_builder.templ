@@ -363,6 +363,69 @@ templ songCandidateMeta(cand CandidateSongView) {
 	}
 }
 
+// songBrowseRow is one row of the "Browse all songs" plain title list
+// (CandidateSearchResults' query=="" state) - a title button that reveals
+// that song's rich metadata/tags in place on click (lazy-fetched via
+// BuildCandidateDetails, sets_builder.go), a separate "+" button that adds
+// it to the set immediately (the same hx-post/#set-builder-body swap the
+// rich search rows' own Add form uses), and the detail container itself,
+// empty until the title's first click populates it.
+//
+// The title button carries both a plain onclick (toggleSongBrowseDetail,
+// scheduling.js - purely the CSS open/close, no network) and htmx's own
+// hx-get/hx-trigger="click once" (the actual fetch, cached client-side
+// after the first open so re-toggling never re-fetches) - both listen to
+// the same click independently, same pattern the row-menu/key-transition
+// Disclosures already use for their own toggle buttons, just without
+// routing through components.Disclosure itself: that component's fixed
+// signature has no room for a toggle button that's also an htmx trigger.
+// Unlike those two (floating popovers that close their siblings when one
+// opens), rows here stay open independently - there's no overlap risk
+// since this expands inline within the row rather than floating over
+// anything, and comparing two or three songs at once while browsing is
+// the actual point.
+templ songBrowseRow(serviceTypeID, planID string, song SongOptionView) {
+	<li class="song-browse-row">
+		<button
+			type="button"
+			class="song-title-browse-item"
+			aria-expanded="false"
+			aria-controls={ fmt.Sprintf("song-browse-detail-%s", song.SongID) }
+			onclick="toggleSongBrowseDetail(this)"
+			hx-get={ fmt.Sprintf("/scheduling/build/%s/%s/candidates/%s/details", serviceTypeID, planID, song.SongID) }
+			hx-target={ fmt.Sprintf("#song-browse-detail-%s", song.SongID) }
+			hx-swap="innerHTML"
+			hx-trigger="click once"
+		>{ song.Title }</button>
+		<form hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/songs", serviceTypeID, planID) } hx-target="#set-builder-body" hx-swap="outerHTML">
+			<input type="hidden" name="song_id" value={ song.SongID }/>
+			<button type="submit" class="icon-btn" aria-label="Add to set" title="Add to set">
+				@components.IconAdd()
+			</button>
+		</form>
+		<div class="song-browse-detail" id={ fmt.Sprintf("song-browse-detail-%s", song.SongID) }>
+			<span class="muted">Loading...</span>
+		</div>
+	</li>
+}
+
+// CandidateDetails is songBrowseRow's lazy-loaded detail content -
+// BuildCandidateDetails' whole response, just the same songCandidateMeta
+// badge/meta cluster the rich search rows and suggestion lists already
+// show, computed for the one song clicked (see that handler's doc
+// comment). errMsg covers the two failure paths there (set lookup failed,
+// song not found); HasMeta covers the common case of a song with nothing
+// on record yet, so the reveal doesn't just look like nothing happened.
+templ CandidateDetails(cand CandidateSongView, errMsg string) {
+	if errMsg != "" {
+		<p class="error">{ errMsg }</p>
+	} else if !cand.HasMeta() {
+		<p class="muted">Nothing on record for this song yet.</p>
+	} else {
+		@songCandidateMeta(cand)
+	}
+}
+
 // CandidateSearchResults is the "Browse all songs" list's actual content -
 // swapped into #set-candidates' innerHTML by the search box/role filters
 // (see set_builder.templ's candidate-search input) and by the initial page
@@ -379,15 +442,12 @@ templ songCandidateMeta(cand CandidateSongView) {
 //     searches (see BuildCandidatesSearch/searchCandidates's doc comments),
 //     but a plain list of titles is cheap enough to always show, so
 //     browsing the library doesn't require typing something first. Clicking
-//     a title adds it straight to the set (the same hx-post/#set-builder-body
-//     swap the rich rows' own Add form uses below) rather than routing
-//     through the search box first - an earlier version filled the search
-//     box and re-triggered a search instead, but that replaced this list
-//     with a single rich row (often a mostly-empty one, for a song with
-//     nothing cached yet) and left no way back to the list short of
-//     manually clearing the search box. Adding directly means the list is
-//     simply still there (minus the song just added) on the next render,
-//     same as it always is.
+//     a title reveals that one song's rich metadata/tags in place (see
+//     songBrowseRow/BuildCandidateDetails) rather than adding it - an
+//     earlier version made the click an instant add, but that gave no way
+//     to actually look at a song (arrangement info, tags, conflicts) before
+//     deciding to add it. Adding is now its own explicit "+" button per
+//     row, right next to the title.
 //   - A query/filter that matched nothing: says so, rather than looking
 //     identical to "haven't searched yet."
 //   - Normal results.
@@ -403,12 +463,7 @@ templ CandidateSearchResults(serviceTypeID, planID string, candidates []Candidat
 			if len(browsable) > 0 {
 				<ul class="song-title-browse">
 					for _, song := range browsable {
-						<li>
-							<form hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/songs", serviceTypeID, planID) } hx-target="#set-builder-body" hx-swap="outerHTML">
-								<input type="hidden" name="song_id" value={ song.SongID }/>
-								<button type="submit" class="song-title-browse-item">{ song.Title }</button>
-							</form>
-						</li>
+						@songBrowseRow(serviceTypeID, planID, song)
 					}
 				</ul>
 			}

@@ -569,6 +569,88 @@ func buildBrowsableSongs(songs []pco.SongData, inSet map[string]bool) []views.So
 	return browsable
 }
 
+// buildCandidateLookups gathers everything candidateLookups needs to
+// compute a not-yet-added song's rich CandidateSongView - factored out of
+// searchCandidates so BuildCandidateDetails (the "Browse all songs" plain
+// title list's click-to-expand detail popover, see that handler's doc
+// comment) can run the exact same lookups for a single song instead of
+// re-deriving or duplicating them. None of these are PCO calls made
+// per-song - they're bulk, org-scoped queries (local DB plus the
+// already-60s-cached fetchActiveSongs/fetchRecentPlanHistory), so running
+// this for one song costs the same handful of queries as running it for a
+// whole search's worth of matches.
+func (sc *SchedulingController) buildCandidateLookups(ctx context.Context, organizationID, serviceTypeID string, songs []pco.SongData, setID int64) candidateLookups {
+	titles := songTitleMap(songs)
+
+	roleTypes, _ := sc.store.ListSongRoleTypes(ctx)
+	roleTypeLabels := songRoleTypeLabelMap(roleTypes)
+	allRoles, _ := sc.store.ListSongRoles(ctx, organizationID, "", "")
+	rolesBySong := songRolesBySong(allRoles)
+
+	allTags, _ := sc.store.ListSongTags(ctx, organizationID, "", "")
+	tagCategories, _ := sc.store.ListSongTagCategories(ctx)
+	tagsBySong := songTagsBySong(allTags)
+	tagCategoryLabels := songTagCategoryLabelMap(tagCategories)
+
+	trackedNew, _ := sc.store.TrackedNewSongs(ctx, organizationID)
+	appearanceCounts, _ := sc.store.PublishedSongAppearanceCounts(ctx, organizationID)
+	arrangementCache, _ := sc.store.SongArrangementInfo(ctx, organizationID)
+
+	candidateConflicts, _, _ := sc.store.AvoidPairings(ctx, organizationID, setID)
+	history := fetchRecentPlanHistory(ctx, serviceTypeID)
+
+	return candidateLookups{
+		titles:             titles,
+		rolesBySong:        rolesBySong,
+		roleTypeLabels:     roleTypeLabels,
+		tagsBySong:         tagsBySong,
+		tagCategoryLabels:  tagCategoryLabels,
+		candidateConflicts: candidateConflicts,
+		repeated:           history.RepeatedSongs,
+		trackedNew:         trackedNew,
+		appearanceCounts:   appearanceCounts,
+		arrangementCache:   arrangementCache,
+	}
+}
+
+// BuildCandidateDetails backs the "Browse all songs" plain title list's
+// click-to-expand detail popover (CandidateSearchResults' query=="" state,
+// see set_builder.templ's songBrowseRow) - lazy-fetched the first time a
+// song's title is clicked there, rather than computing this for the whole
+// library up front the same way searchCandidates avoids that cost for the
+// rich search results (see that function's doc comment). Renders exactly
+// the same songCandidateMeta badge/meta cluster the rich search rows and
+// suggestion lists already show, just for one song on demand - clicking a
+// title used to instantly add the song; that's now a separate "+" button
+// (see songBrowseRow), and the title click reveals this instead.
+func (sc *SchedulingController) BuildCandidateDetails(c *fiber.Ctx) error {
+	organizationID := middleware.CurrentOrganizationID(c)
+	ctx := middleware.RequestContext(c)
+	serviceTypeID := c.Params("service_type_id")
+	planID := c.Params("plan_id")
+	songID := c.Params("song_id")
+
+	set, err := sc.store.GetOrCreateSet(ctx, organizationID, serviceTypeID, planID)
+	if err != nil {
+		return render(c, views.CandidateDetails(views.CandidateSongView{}, "Couldn't load this song's details."))
+	}
+
+	songs, _ := fetchActiveSongs(ctx, organizationID)
+	var song *pco.SongData
+	for i := range songs {
+		if songs[i].ID == songID {
+			song = &songs[i]
+			break
+		}
+	}
+	if song == nil {
+		return render(c, views.CandidateDetails(views.CandidateSongView{}, "Song not found."))
+	}
+
+	lookups := sc.buildCandidateLookups(ctx, organizationID, serviceTypeID, songs, set.ID)
+	return render(c, views.CandidateDetails(lookups.candidateSongView(*song), ""))
+}
+
 // candidateSearchLimit caps BuildCandidatesSearch's response - a broad or
 // even empty-role/broad-text query still only ever renders this many rich
 // rows, never hundreds, no matter how large the underlying library is (see
@@ -692,37 +774,7 @@ func (sc *SchedulingController) searchCandidates(ctx context.Context, organizati
 		return nil, 0, false, buildBrowsableSongs(songs, inSet)
 	}
 
-	titles := songTitleMap(songs)
-
-	roleTypes, _ := sc.store.ListSongRoleTypes(ctx)
-	roleTypeLabels := songRoleTypeLabelMap(roleTypes)
-	allRoles, _ := sc.store.ListSongRoles(ctx, organizationID, "", "")
-	rolesBySong := songRolesBySong(allRoles)
-
-	allTags, _ := sc.store.ListSongTags(ctx, organizationID, "", "")
-	tagCategories, _ := sc.store.ListSongTagCategories(ctx)
-	tagsBySong := songTagsBySong(allTags)
-	tagCategoryLabels := songTagCategoryLabelMap(tagCategories)
-
-	trackedNew, _ := sc.store.TrackedNewSongs(ctx, organizationID)
-	appearanceCounts, _ := sc.store.PublishedSongAppearanceCounts(ctx, organizationID)
-	arrangementCache, _ := sc.store.SongArrangementInfo(ctx, organizationID)
-
-	candidateConflicts, _, _ := sc.store.AvoidPairings(ctx, organizationID, set.ID)
-	history := fetchRecentPlanHistory(ctx, serviceTypeID)
-
-	lookups := candidateLookups{
-		titles:             titles,
-		rolesBySong:        rolesBySong,
-		roleTypeLabels:     roleTypeLabels,
-		tagsBySong:         tagsBySong,
-		tagCategoryLabels:  tagCategoryLabels,
-		candidateConflicts: candidateConflicts,
-		repeated:           history.RepeatedSongs,
-		trackedNew:         trackedNew,
-		appearanceCounts:   appearanceCounts,
-		arrangementCache:   arrangementCache,
-	}
+	lookups := sc.buildCandidateLookups(ctx, organizationID, serviceTypeID, songs, set.ID)
 
 	var matches []views.CandidateSongView
 	for _, song := range songs {
@@ -736,11 +788,11 @@ func (sc *SchedulingController) searchCandidates(ctx context.Context, organizati
 		// identical map lookup - simpler than threading them through, and
 		// negligible next to everything else this loop already does per
 		// song).
-		_, rolesAttr := songRoleViews(rolesBySong, roleTypeLabels, song.ID)
+		_, rolesAttr := songRoleViews(lookups.rolesBySong, lookups.roleTypeLabels, song.ID)
 		if !candidateMatchesRole(rolesAttr, role) {
 			continue
 		}
-		_, tagsAttr := songTagViews(tagsBySong, tagCategoryLabels, song.ID)
+		_, tagsAttr := songTagViews(lookups.tagsBySong, lookups.tagCategoryLabels, song.ID)
 		if !candidateMatchesSearch(song.Attributes.Title, tagsAttr, query) {
 			continue
 		}
