@@ -1,0 +1,140 @@
+package scheduling
+
+import (
+	"fmt"
+
+	"pco-assistant/internal/scheduling"
+	"pco-assistant/internal/views"
+	"pco-assistant/internal/views/components"
+)
+
+templ PersonVocalRanges(personName, organizationName string, ranges []scheduling.PersonVocalRange, personNames map[string]string, errMsg string) {
+	@views.Layout("Vocal Range", personName, organizationName) {
+		<h1>Vocal Range</h1>
+		<p class="muted">Record each vocalist's comfortable range - lowest and highest note they can sing - so "can they hit this note" is answered from a lookup instead of guessed at in rehearsal. Search for the person by name and enter their notes with the octave (e.g. "G3", "C#4", "Bb2").</p>
+		<form
+			id="vocal-range-form"
+			class="inline"
+			hx-post="/scheduling/vocal-range"
+			hx-target="#vocal-ranges-table"
+			hx-swap="outerHTML"
+			hx-on::after-request="if(event.detail.successful && event.detail.elt === this) resetSetupForm(this)"
+		>
+			@PersonPickerField("Person", "person_id", "")
+			<label>
+				Lowest note
+				<input type="text" name="lowest_note" placeholder="e.g. G3" list="vocal-note-options" required/>
+			</label>
+			<label>
+				Highest note
+				<input type="text" name="highest_note" placeholder="e.g. D5" list="vocal-note-options" required/>
+			</label>
+			@vocalNoteOptions()
+			<button type="submit" class="primary">Save</button>
+		</form>
+		@PersonVocalRangesTable(ranges, personNames, errMsg)
+	}
+}
+
+// PersonVocalRangesTable is both the initial-render fragment and the htmx
+// swap target (id="vocal-ranges-table") - see PreferencesTable for why
+// errMsg lives inside it rather than the page around it. personNames
+// resolves a range's raw PCO person id back to a display name (see
+// personNameMapForIDs in the scheduling controller); an id missing from
+// the map falls back to showing the raw id. There's no per-row edit
+// affordance (see the doc comment above PersonVocalRangePage in
+// vocal_range.go) - only delete.
+templ PersonVocalRangesTable(ranges []scheduling.PersonVocalRange, personNames map[string]string, errMsg string) {
+	<div id="vocal-ranges-table">
+		if errMsg != "" {
+			<p class="error">{ errMsg }</p>
+		}
+		@components.SortableTableWrap() {
+			<thead>
+					<tr>
+						<th>Person</th>
+						<th>Lowest note</th>
+						<th>Highest note</th>
+						<th></th>
+					</tr>
+				</thead>
+				<tbody>
+					for _, r := range ranges {
+						<tr>
+							<td>
+								if name, ok := personNames[r.PersonID]; ok {
+									{ name }
+								} else {
+									{ r.PersonID }
+								}
+							</td>
+							<td>{ formatVocalNoteDisplay(r.LowestPitchClass, r.LowestOctave) }</td>
+							<td>{ formatVocalNoteDisplay(r.HighestPitchClass, r.HighestOctave) }</td>
+							<td>
+								<button
+									class="danger icon-btn"
+									aria-label="Delete vocal range"
+									title="Delete vocal range"
+									hx-delete={ fmt.Sprintf("/scheduling/vocal-range/%d", r.ID) }
+									hx-target="#vocal-ranges-table"
+									hx-swap="outerHTML"
+									hx-confirm="Delete this vocal range?"
+								>
+									@components.IconRemove()
+								</button>
+							</td>
+						</tr>
+					}
+					if len(ranges) == 0 {
+						<tr>
+							<td colspan="4" class="muted">No vocal ranges set yet.</td>
+						</tr>
+					}
+				</tbody>
+		}
+	</div>
+}
+
+// vocalNoteDisplayNames is pitch class -> display name, sharp spelling
+// only - a stored range has one canonical display form, unlike
+// musicalKeyOptions' datalist below which offers both sharp and flat
+// spellings as separate pickable options. Kept local to this package
+// rather than shared with the controller's own parsing helpers
+// (internal/server/controllers/vocal_range.go's vocalNoteNames) since a
+// views package importing a controllers package would be a backwards
+// dependency - see CLAUDE.md's Architecture section on views/controllers
+// layering. This is display formatting only, not parsing, so the small
+// duplication is the correct-shaped seam, not a real DRY violation.
+var vocalNoteDisplayNames = [12]string{"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"}
+
+// formatVocalNoteDisplay renders a stored pitch class/octave pair back
+// into display text (e.g. pitch class 4, octave 4 -> "E4").
+func formatVocalNoteDisplay(pitchClass, octave int) string {
+	return fmt.Sprintf("%s%d", vocalNoteDisplayNames[((pitchClass%12)+12)%12], octave)
+}
+
+// vocalNoteOptionNames mirrors musicalKeyOptions' chromatic list (both
+// sharp and flat spellings for the five notes that have one), reused here
+// per octave rather than per key - see vocalNoteOptions.
+var vocalNoteOptionNames = []string{
+	"C", "C#", "Db", "D", "D#", "Eb", "E", "F", "F#", "Gb", "G", "G#", "Ab", "A", "A#", "Bb", "B",
+}
+
+// vocalNoteOctaves spans a reasonable vocal register (low bass around E2 to
+// high soprano around C6) as datalist suggestions - the underlying input
+// stays free text (see musicalKeyOptions' own doc comment on why a
+// datalist, not a strict <select>), so nothing outside this span is
+// rejected.
+var vocalNoteOctaves = []int{2, 3, 4, 5}
+
+// vocalNoteOptions is the shared <datalist> of note+octave combinations
+// backing PersonVocalRanges' lowest/highest note inputs.
+templ vocalNoteOptions() {
+	<datalist id="vocal-note-options">
+		for _, octave := range vocalNoteOctaves {
+			for _, note := range vocalNoteOptionNames {
+				<option value={ fmt.Sprintf("%s%d", note, octave) }></option>
+			}
+		}
+	</datalist>
+}

@@ -472,7 +472,13 @@ pattern as `song_tags`/`song_relationships`:**
 
 ## People
 
-- **Vocal range per vocalist** - lets the app know what someone can
+- **Vocal range per vocalist** - **Phase 1 (this bullet, standalone)
+  shipped 2026-09-07**: a dedicated `/scheduling/vocal-range` setup page
+  storing each person's lowest/highest comfortable note as a
+  pitch-class/octave pair - see
+  `docs/plans/in-progress/vocal-range-plan.md` for the rest (song vocal
+  range and the mismatch warning remain not started, which is why this
+  bullet stays open rather than struck). Lets the app know what someone can
   actually sing, not just whether PCO says they're eligible for a
   position. Simplest as a person-level field, not position-level: PCO's
   position eligibility already answers *who can serve* a position, this
