@@ -21,34 +21,39 @@ templ PersonVocalRanges(personName, organizationName string, ranges []scheduling
 			hx-on::after-request="if(event.detail.successful && event.detail.elt === this) resetSetupForm(this)"
 		>
 			@PersonPickerField("Person", "person_id", "")
-			<label>
-				Lowest note
-				<input id="vocal-lowest-note-input" type="text" name="lowest_note" placeholder="e.g. G3" list="vocal-note-options" required/>
-			</label>
-			<button
-				type="button"
-				class="icon-btn"
-				aria-label="Play lowest note"
-				title="Play lowest note"
-				onclick="playVocalNoteFromInput('vocal-lowest-note-input')"
-			>
-				@components.IconPlay()
-			</button>
-			<label>
-				Highest note
-				<input id="vocal-highest-note-input" type="text" name="highest_note" placeholder="e.g. D5" list="vocal-note-options" required/>
-			</label>
-			<button
-				type="button"
-				class="icon-btn"
-				aria-label="Play highest note"
-				title="Play highest note"
-				onclick="playVocalNoteFromInput('vocal-highest-note-input')"
-			>
-				@components.IconPlay()
-			</button>
+			<div class="form-field-group">
+				<label>
+					Lowest note
+					<input id="vocal-lowest-note-input" type="text" name="lowest_note" placeholder="e.g. G3" list="vocal-note-options" required/>
+				</label>
+				<button
+					type="button"
+					class="icon-btn"
+					aria-label="Play lowest note"
+					title="Play lowest note"
+					onclick="playVocalNoteFromInput('vocal-lowest-note-input')"
+				>
+					@components.IconPlay()
+				</button>
+			</div>
+			<div class="form-field-group">
+				<label>
+					Highest note
+					<input id="vocal-highest-note-input" type="text" name="highest_note" placeholder="e.g. D5" list="vocal-note-options" required/>
+				</label>
+				<button
+					type="button"
+					class="icon-btn"
+					aria-label="Play highest note"
+					title="Play highest note"
+					onclick="playVocalNoteFromInput('vocal-highest-note-input')"
+				>
+					@components.IconPlay()
+				</button>
+			</div>
 			@vocalNoteOptions()
 			<button type="submit" class="primary">Save</button>
+			<button type="button" class="cancel-edit" onclick="cancelSetupEdit(this)" hidden>Cancel</button>
 		</form>
 		@PersonVocalRangesTable(ranges, personNames, errMsg)
 	}
@@ -59,9 +64,14 @@ templ PersonVocalRanges(personName, organizationName string, ranges []scheduling
 // errMsg lives inside it rather than the page around it. personNames
 // resolves a range's raw PCO person id back to a display name (see
 // personNameMapForIDs in the scheduling controller); an id missing from
-// the map falls back to showing the raw id. There's no per-row edit
-// affordance (see the doc comment above PersonVocalRangePage in
-// vocal_range.go) - only delete.
+// the map falls back to showing the raw id. Each row's Edit button
+// re-populates vocal-range-form (editRow, scheduling.js) via
+// data-edit-fields (the two notes) and data-edit-people (the person
+// picker, suffix "" - see PersonPickerField/editPeopleAttr) - no hidden
+// "id" field needed, since a resubmit for the same person upserts in
+// place (scheduling.SetPersonVocalRange's ON CONFLICT clause), so
+// re-populating and resubmitting is genuinely the same request an edit
+// would make.
 templ PersonVocalRangesTable(ranges []scheduling.PersonVocalRange, personNames map[string]string, errMsg string) {
 	<div id="vocal-ranges-table">
 		if errMsg != "" {
@@ -111,6 +121,22 @@ templ PersonVocalRangesTable(ranges []scheduling.PersonVocalRange, personNames m
 								</button>
 							</td>
 							<td>
+								<button
+									class="icon-btn"
+									aria-label="Edit vocal range"
+									title="Edit vocal range"
+									data-edit-form="vocal-range-form"
+									data-edit-fields={ editFieldsAttr(map[string]string{
+										"lowest_note":  formatVocalNoteDisplay(r.LowestPitchClass, r.LowestOctave),
+										"highest_note": formatVocalNoteDisplay(r.HighestPitchClass, r.HighestOctave),
+									}) }
+									data-edit-people={ editPeopleAttr(map[string]editPerson{
+										"": {ID: r.PersonID, Name: displayNameOrID(personNames, r.PersonID)},
+									}) }
+									onclick="editRow(this)"
+								>
+									@components.IconEdit()
+								</button>
 								<button
 									class="danger icon-btn"
 									aria-label="Delete vocal range"

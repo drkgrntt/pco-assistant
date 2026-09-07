@@ -18,13 +18,13 @@ import (
 // Phase 1 of docs/plans/in-progress/vocal-range-plan.md: a standalone
 // person-level vocal range setup page, mirroring PersonRelationshipsPage/
 // CreatePersonRelationship/DeletePersonRelationship's shape (a page handler
-// plus create/delete, no separate update) - a resubmit for the same person
-// upserts in place (see scheduling.SetPersonVocalRange's ON CONFLICT
-// clause), so there's no dedicated "edit" affordance the way relationships/
-// preferences have (those can change *which* song/person/pair a row is
-// about; a vocal range's only subject is the person themselves, so
-// re-searching that same person and resubmitting is already the edit
-// flow).
+// plus create/delete, no separate update route) - a resubmit for the same
+// person upserts in place (see scheduling.SetPersonVocalRange's ON
+// CONFLICT clause), so the Edit button (PersonVocalRangesTable,
+// vocal_range.templ) just re-populates the existing form via editRow
+// rather than needing its own update endpoint or a hidden "id" field:
+// re-searching that same person and resubmitting genuinely is the same
+// request an edit would make.
 
 // parseVocalNote parses a note-with-octave string ("C#4", "Bb2", "G3")
 // into a 0-11 pitch class and an octave - a thin wrapper around

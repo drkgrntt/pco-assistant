@@ -109,6 +109,44 @@ form.inline select {
   }
 }
 
+/* Groups a label+input with an adjacent standalone button (a play/preview
+   icon button, not itself wrapped in a label - e.g. the vocal-range pages'
+   "hear this note" buttons next to their Lowest/Highest note fields) into
+   one flex item, so form.inline's row-wrap above can never split a field
+   from its own button onto two different lines - the "strange wrapping"
+   that happens when a bare label (flex: 1 1 auto) and a bare button
+   (flex: 0 0 auto) are left as separate top-level form.inline children. */
+.form-field-group {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-1);
+}
+
+@media (min-width: 640px) {
+  .form-field-group {
+    flex: 1 1 auto;
+    min-width: 10rem;
+  }
+
+  .form-field-group label {
+    min-width: 0;
+  }
+}
+
+/* An empty, invisible flex item that forces every form.inline child after
+   it onto a new row - a plain 0/0/100% flex-basis break, the standard
+   flexbox line-break trick. Only meaningful at the row-wrap breakpoint
+   above; on the mobile stacked column layout, form.inline's children are
+   already one per row, so this renders as an inert empty div. Use
+   sparingly - only where a form has genuinely too many fields for one
+   comfortable line and an even, deliberate split (e.g. "these two fields
+   together on their own row") beats letting the browser wrap wherever it
+   happens to run out of room. */
+.form-row-break {
+  flex: 1 0 100%;
+  height: 0;
+}
+
 /* A form.inline that should never flip into the side-by-side row above -
    for a form built around one multi-line field (feedback's email +
    textarea + submit), that row layout squeezes the short fields against

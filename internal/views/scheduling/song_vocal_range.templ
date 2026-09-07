@@ -54,34 +54,48 @@ templ SongVocalRanges(personName, organizationName string, songs []pco.SongData,
 				<input type="text" name="reference_key" placeholder="e.g. G, Bb, F#m" list="key-options" required/>
 			</label>
 			@musicalKeyOptions()
-			<label>
-				Lowest note
-				<input id="song-vocal-range-lowest-input" type="text" name="lowest_note" placeholder="e.g. G3" list="vocal-note-options" required/>
-			</label>
-			<button
-				type="button"
-				class="icon-btn"
-				aria-label="Play lowest note"
-				title="Play lowest note"
-				onclick="playVocalNoteFromInput('song-vocal-range-lowest-input')"
-			>
-				@components.IconPlay()
-			</button>
-			<label>
-				Highest note
-				<input id="song-vocal-range-highest-input" type="text" name="highest_note" placeholder="e.g. D5" list="vocal-note-options" required/>
-			</label>
-			<button
-				type="button"
-				class="icon-btn"
-				aria-label="Play highest note"
-				title="Play highest note"
-				onclick="playVocalNoteFromInput('song-vocal-range-highest-input')"
-			>
-				@components.IconPlay()
-			</button>
+			<!--
+				Forces the two note fields (plus Save/Cancel) onto their own
+				row rather than leaving the browser to wrap wherever it runs
+				out of room - with a Song select, a Measured-in-key field, and
+				two note-field-plus-play-button groups all fighting for space
+				on one form.inline row, that produced a lopsided wrap (see
+				.form-row-break's own doc comment, forms.css).
+			-->
+			<div class="form-row-break"></div>
+			<div class="form-field-group">
+				<label>
+					Lowest note
+					<input id="song-vocal-range-lowest-input" type="text" name="lowest_note" placeholder="e.g. G3" list="vocal-note-options" required/>
+				</label>
+				<button
+					type="button"
+					class="icon-btn"
+					aria-label="Play lowest note"
+					title="Play lowest note"
+					onclick="playVocalNoteFromInput('song-vocal-range-lowest-input')"
+				>
+					@components.IconPlay()
+				</button>
+			</div>
+			<div class="form-field-group">
+				<label>
+					Highest note
+					<input id="song-vocal-range-highest-input" type="text" name="highest_note" placeholder="e.g. D5" list="vocal-note-options" required/>
+				</label>
+				<button
+					type="button"
+					class="icon-btn"
+					aria-label="Play highest note"
+					title="Play highest note"
+					onclick="playVocalNoteFromInput('song-vocal-range-highest-input')"
+				>
+					@components.IconPlay()
+				</button>
+			</div>
 			@vocalNoteOptions()
 			<button type="submit" class="primary">Save</button>
+			<button type="button" class="cancel-edit" onclick="cancelSetupEdit(this)" hidden>Cancel</button>
 		</form>
 		@SongVocalRangesTable(ranges, songTitles, currentKeysBySong, errMsg)
 	}
@@ -92,10 +106,18 @@ templ SongVocalRanges(personName, organizationName string, songs []pco.SongData,
 // errMsg lives inside it rather than the page around it. songTitles
 // resolves a range's raw PCO song id back to a display title (see
 // songTitleMap in the scheduling controller); an id missing from the map
-// falls back to showing the raw id. There's no per-row edit affordance,
-// same convention as PersonVocalRangesTable - a resubmit for the same song
-// upserts in place (scheduling.SetSongVocalRange's ON CONFLICT clause), so
-// re-picking that song and resubmitting is already the edit flow.
+// falls back to showing the raw id. Each row's Edit button re-populates
+// song-vocal-range-form (editRow, scheduling.js) via data-edit-fields
+// (song_id - a plain <select>, editRow's generic field-fill handles it the
+// same as a text input - plus reference_key and the as-measured notes) -
+// no hidden "id" field needed, same reasoning as PersonVocalRangesTable: a
+// resubmit for the same song upserts in place
+// (scheduling.SetSongVocalRange's ON CONFLICT clause), so re-populating
+// and resubmitting genuinely is the same request an edit would make. Only
+// rendered when the as-measured pair parses (measured.OK) - a stored
+// range's own reference_key always parsed once already at write time, so
+// this is just a defensive guard, never expected to actually skip in
+// practice.
 //
 // currentKeysBySong resolves a range's song id to its current cached PCO
 // arrangement key (song_vocal_range.go's currentKeysBySong helper - a
@@ -120,6 +142,7 @@ templ SongVocalRangesTable(ranges []scheduling.SongVocalRange, songTitles, curre
 				</thead>
 				<tbody>
 					for _, r := range ranges {
+						{{ measured := computeVocalRangeNotePair(r.ReferenceKey, r.LowOffsetSemitones, r.HighOffsetSemitones, r.ReferenceKey) }}
 						<tr>
 							<td>
 								if title, ok := songTitles[r.SongID]; ok {
@@ -130,7 +153,6 @@ templ SongVocalRangesTable(ranges []scheduling.SongVocalRange, songTitles, curre
 							</td>
 							<td>{ r.ReferenceKey }</td>
 							<td>
-								{{ measured := computeVocalRangeNotePair(r.ReferenceKey, r.LowOffsetSemitones, r.HighOffsetSemitones, r.ReferenceKey) }}
 								@vocalRangeLine("As measured", r.ReferenceKey, measured)
 								{{ currentKey, hasCurrentKey := currentKeysBySong[r.SongID] }}
 								if hasCurrentKey && currentKey != "" && currentKey != r.ReferenceKey {
@@ -141,6 +163,23 @@ templ SongVocalRangesTable(ranges []scheduling.SongVocalRange, songTitles, curre
 								}
 							</td>
 							<td>
+								if measured.OK {
+									<button
+										class="icon-btn"
+										aria-label="Edit vocal range"
+										title="Edit vocal range"
+										data-edit-form="song-vocal-range-form"
+										data-edit-fields={ editFieldsAttr(map[string]string{
+											"song_id":       r.SongID,
+											"reference_key": r.ReferenceKey,
+											"lowest_note":   formatVocalNoteDisplay(measured.LowPitchClass, measured.LowOctave),
+											"highest_note":  formatVocalNoteDisplay(measured.HighPitchClass, measured.HighOctave),
+										}) }
+										onclick="editRow(this)"
+									>
+										@components.IconEdit()
+									</button>
+								}
 								<button
 									class="danger icon-btn"
 									aria-label="Delete vocal range"
