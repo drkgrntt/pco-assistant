@@ -496,13 +496,19 @@ pattern as `song_tags`/`song_relationships`:**
   needs to be stored as something transposable (a pitch-class/semitone
   pair, not a display label) from day one so it can actually be compared
   against a song's range once that exists - see **Song vocal range**
-  below, which this is a direct prerequisite for. Step 2, later:
-  reference sound bytes per note, so a director unsure what a "G4" sounds
-  like can just tap and hear it. This doesn't need to be per-org data at
-  all - a single shared static audio sample set (one recorded note per
-  semitone) covers every organization, so it's a one-time asset addition
-  to the app, not a feature that scales with usage or needs its own
-  storage/upload machinery.
+  below, which this is a direct prerequisite for. **Step 2 (reference
+  tone) shipped 2026-09-07**: a tap-to-hear button next to each note, on
+  both the add-range form and the ranges table
+  (`internal/views/scheduling/vocal_range.templ`), plays a reference tone
+  via `playVocalTone`/`playVocalNoteFromInput`
+  (`web/static/js/scheduling.js`). Built as a **synthesized** tone (a
+  Web Audio `OscillatorNode` at the correct frequency, standard
+  equal-tempered A440 tuning), not the pre-recorded sample set originally
+  imagined here - a clean sine tone is just as good a pitch reference as
+  a recorded note (the same role a tuning fork or pitch pipe plays), and
+  synthesizing it needs zero audio asset files, no licensing/sourcing
+  question, and covers the app's full note range for free rather than
+  only whatever octaves got recorded.
 - **First-time-in-this-position pairing** - mirrors the new-song bootstrap
   trick: the first time someone's assigned to a position with no prior
   history there (via the same PCO history call `servingFrequency` already
