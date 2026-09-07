@@ -4,7 +4,7 @@ Written 2026-09-06, expanding `docs/ideas.md`'s **"Browser extension
 HUD"** bullet (Reducing friction vs. Planning Center, ~line 104-118) into
 a real scoping doc. Not built, not started, and this doc does not decide
 *when* it should be - see "Non-goal" at the end. Companion doc:
-`docs/plans/not-started/pwa-install-improvements-plan.md`, the
+`docs/plans/shipped/pwa-install-improvements-plan.md`, the
 lighter-weight friction item this one is explicitly sequenced behind.
 
 ## Why this doc exists now, and what it doesn't claim
@@ -234,7 +234,7 @@ an allowed origin.
 **Option B: a dedicated lightweight API-token flow**, issued from this
 app's own `/account` page (the same page section 2 of the PWA doc
 proposes an Install action for - see
-`docs/plans/not-started/pwa-install-improvements-plan.md`) rather than
+`docs/plans/shipped/pwa-install-improvements-plan.md`) rather than
 relying on cookies at all. A person generates a long-lived, revocable
 token there; the extension stores it (`chrome.storage`, not
 `localStorage`, since a content script's `localStorage` is scoped to the
@@ -355,7 +355,7 @@ Matching Derek's own words and `docs/ideas.md`'s existing Open Questions
 entry: this stays a scoping document until real usage data from the
 lighter-weight integrations - deep linking (already shipped), the narrow/
 compact side-by-side layout (see
-`docs/plans/not-started/pwa-install-improvements-plan.md`'s companion
+`docs/plans/shipped/pwa-install-improvements-plan.md`'s companion
 scope, and `docs/ideas.md`'s own bullet #3), live sync reflection, and
 pre-publish nudges - suggests they aren't enough on their own. Nothing in
 this doc should be read as "start building this next."

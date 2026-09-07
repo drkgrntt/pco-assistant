@@ -74,6 +74,7 @@ templ Head(title string) {
 		<script src={ "/static/js/htmx.min.js?v=" + AssetVersion }></script>
 		<script src={ "/static/js/scheduling.js?v=" + AssetVersion }></script>
 		<script src={ "/static/js/register-sw.js?v=" + AssetVersion }></script>
+		<script src={ "/static/js/install-prompt.js?v=" + AssetVersion }></script>
 		{ children... }
 	</head>
 }
@@ -151,6 +152,7 @@ templ Layout(title string, personName string, organizationName string) {
 				</button>
 			</div>
 			<main>
+				@installPromptBanner()
 				{ children... }
 			</main>
 		</body>
@@ -181,4 +183,43 @@ templ navMenuContent() {
 	<a href="/scheduling/song-preferences">Song / Person Preferences</a>
 	<a href="/scheduling/person-relationships">Person Relationships</a>
 	<a href="/scheduling/position-preferences">Position Preferences</a>
+}
+
+// installPromptBanner is the dismissible "install this app" nudge (see
+// docs/plans/shipped/pwa-install-improvements-plan.md section 3) - shown
+// on top of every authenticated page's main content, not a full-width
+// site-chrome strip like the early-preview banner above, so it flows
+// inside each page's own content width instead of edge to edge.
+//
+// Reuses .import-banner's "invitation, not an alert" tinted styling
+// (components/import-banner.css) rather than components.ImportBanner
+// itself: that component's built-in dismiss button only removes the DOM
+// node, but this dismissal needs to persist to localStorage too (see
+// install-prompt.js's dismissInstallBanner) so the banner doesn't just
+// reappear on the very next page load.
+//
+// The whole banner starts hidden (this is the transient nudge, not the
+// findable settings-page home - see account.templ's AccountInstallBody
+// for that one) - install-prompt.js only reveals it once both an install
+// path is actually available (Chromium beforeinstallprompt fired, or iOS
+// Safari not yet standalone) and the day-count/dismissal gate passes, and
+// in that same pass picks exactly one of the button/instructional-copy
+// pair below to reveal - see that file's installPromptRefreshUI.
+templ installPromptBanner() {
+	<div id="install-prompt-banner" class="import-banner" hidden>
+		<p>
+			Install Resonance as an app for quicker access alongside Planning
+			Center.
+			<button type="button" class="icon-btn" aria-label="Dismiss" title="Dismiss this notice" onclick="dismissInstallBanner()">
+				@components.IconX()
+			</button>
+		</p>
+		<button type="button" id="install-banner-button" class="button primary" onclick="handleInstallPromptClick('banner')">
+			Install app
+		</button>
+		<p id="install-banner-ios-copy" class="muted">
+			@components.IconShare()
+			On iPhone or iPad: tap the <strong>Share</strong> icon in Safari, then <strong>"Add to Home Screen."</strong>
+		</p>
+	</div>
 }
