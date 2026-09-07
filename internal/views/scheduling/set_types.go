@@ -364,6 +364,55 @@ type SetSongView struct {
 	// load, and what read-only past-plan rendering shows as plain text.
 	LeaderPersonID   string
 	LeaderPersonName string
+
+	// TransitionNotePrompts is the resurfacing prompt(s) for this row - the
+	// latest debrief/talking-point note for this song alone (single-song),
+	// or for the pair ending here (this song immediately following another
+	// one in the order), computed the same adjacency-walk way
+	// KeyTransitionLabel is (see the controller's transitionNotePrompts) -
+	// see docs/plans/shipped/transition-notes-plan.md. Rendered as its own
+	// informational badge in songBadgeSpans (set_builder.templ),
+	// deliberately styled distinctly from ConflictBadge/KeyTransitionLabel
+	// above - it's history being handed back to the director, not a
+	// problem being flagged. Distinct from TransitionNotes below: this is
+	// latest-only and adjacency-gated (the resurfacing banner);
+	// TransitionNotes is this song's full log, shown unconditionally on its
+	// own detail card.
+	TransitionNotePrompts []TransitionNotePromptView
+	// TransitionNotes is every debrief/talking-point note on file that
+	// touches this song - either as the sole subject of a single-song note,
+	// or on either side of a pair (see ListTransitionNotesForSong's "either
+	// side" query, mirroring ListSongRelationships) - newest first. Powers
+	// the song detail card's own notes subsection (song_detail_card.templ):
+	// a full chronological log, not just the latest ("post-service
+	// debrief **log**" - see that plan's own Schema section on why this
+	// stays append-only rather than a single overwritten value).
+	TransitionNotes []TransitionNoteEntryView
+}
+
+// TransitionNotePromptView is one resurfacing prompt on a song's own row -
+// see SetSongView.TransitionNotePrompts and the controller's
+// transitionNotePrompts.
+type TransitionNotePromptView struct {
+	Kind    string // "debrief" or "talking_point"
+	Label   string // short, always-visible badge text (e.g. "Debrief on file")
+	Message string // the note text (plus context for a pair), revealed via click-to-expand
+}
+
+// TransitionNoteEntryView is one entry in a song's full transition-note
+// log - see SetSongView.TransitionNotes. Direction/OtherTitle are both ""
+// for a single-song note; otherwise Direction is "into" (this song was
+// entered as song_id_a, transitioning into OtherTitle) or "from" (this
+// song was song_id_b, the destination of a transition entered from
+// OtherTitle) - see the controller's buildTransitionNoteViews.
+type TransitionNoteEntryView struct {
+	ID         int64
+	Kind       string
+	KindLabel  string
+	Direction  string
+	OtherTitle string
+	Note       string
+	CreatedAt  string
 }
 
 // SongNoteView is one Planning Center note category's state for a specific

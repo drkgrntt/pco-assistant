@@ -105,6 +105,20 @@ with at least Viewer access can still sign in.
   next Publish/Refresh - added, replaced, or removed as the leader
   changes, without touching anything else a team member typed in that same
   box by hand
+- **Debrief log / talking points (per-song, persistent)** - also on the
+  song detail card, but unlike "This week's note" above, these aren't tied
+  to one occurrence and never touch Planning Center: a running log of
+  short notes about a song, or a specific song-to-song transition, that
+  carries forward across plans. Two kinds - a **debrief** ("the bridge ran
+  long," written after a Sunday) and a **talking point** ("say this right
+  before the key change," written ahead of one) - each entered against
+  just a song, or a directional pairing (into/out of another specific
+  song, picked from a plain song list). The latest one resurfaces
+  automatically, as a click-to-expand badge (not a warning), the next time
+  that same song or that exact pairing back-to-back comes up in a new
+  draft; the latest talking point per song/pair also prints on the Run
+  Sheet. Writable even on a past, read-only plan, since a debrief is
+  naturally written about a plan that's already happened
 - **Build a Service (Songs tab)** - pick an upcoming plan and build its
   song lineup against the plan's *full* order of service (including
   template headers and non-song items already in Planning Center, not just
@@ -189,7 +203,8 @@ glance, matched by the picker's own search box alongside title and date.
 
 **Run sheet** - a one-click printable page (a Print button using the
 browser's own print-to-PDF, no separate PDF library) combining the full
-order of service, each song's key/tempo/length and item notes, and the
+order of service, each song's key/tempo/length and item notes, any
+talking point on file for that song or the transition into it, and the
 roster grouped by team/position, flagging any still-short-handed spots -
 the artifact a worship leader would otherwise assemble by hand every
 week. Linked from the Build page next to "Open in Planning Center."

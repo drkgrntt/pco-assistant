@@ -267,6 +267,34 @@ templ songBadgeSpans(song SetSongView) {
 			keyTransitionMenu(song.KeyTransitionMessage, song.KeyTransitionSuggestion),
 		)
 	}
+	for _, prompt := range song.TransitionNotePrompts {
+		@components.Disclosure(
+			"transition-note-badge",
+			"badge transition-note-toggle",
+			"toggleTransitionNoteBadge(this)",
+			"",
+			"",
+			transitionNoteToggle(prompt.Label),
+			transitionNoteMenu(prompt.Message),
+		)
+	}
+}
+
+// transitionNoteToggle/transitionNoteMenu are the transition-note
+// resurfacing prompt's Disclosure toggle-button content and popup contents
+// (see songBadgeSpans above and SetSongView.TransitionNotePrompts) - same
+// click-to-expand shape as keyTransitionToggle/keyTransitionMenu above,
+// but deliberately styled as a plain, non-warning .badge pill rather than
+// reusing .conflict-badge's look: this is history being handed back to the
+// director, not a problem being flagged - see
+// docs/plans/shipped/transition-notes-plan.md's Resurfacing trigger
+// section.
+templ transitionNoteToggle(label string) {
+	{ label }
+}
+
+templ transitionNoteMenu(message string) {
+	<p>{ message }</p>
 }
 
 // rowMenuToggle/rowMenuItems are the row-menu Disclosure's toggle-button

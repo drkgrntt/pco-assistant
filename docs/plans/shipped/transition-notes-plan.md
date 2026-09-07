@@ -1,5 +1,22 @@
 # Plan: post-service debrief log / transition notes
 
+**Status: shipped 2026-09-07.** Built per this doc's own "Suggested build
+order," with its three "genuinely unresolved" open questions resolved as:
+table name `song_transition_notes` (kept as drafted below); a note entered
+against a pair is listed from **both** songs' own detail cards (the
+"either side" query already supported this - the UI now actually surfaces
+it that way); and "latest only," no history view, is sufficient for this
+build (the append-only schema still supports adding one later without a
+migration change). The song-picker dependency noted below never landed
+(still not built elsewhere in this codebase) - the "into/out of" picker
+uses a plain `<select>` of every active song, same as every other setup
+page, per this doc's own fallback guidance. See
+`internal/scheduling/song_transition_notes.go` (store),
+`internal/server/controllers/transition_notes.go` (matching logic +
+handlers), `internal/views/scheduling/song_detail_card.templ`'s
+`transitionNotesSection`, `songBadgeSpans`' new badge
+(`set_builder.templ`), and `run_sheet.templ`'s `talkingPointsFor`.
+
 Written 2026-09-05, expanding `docs/ideas.md`'s "Run sheet (day-of output)"
 section's **Post-service debrief log / transition notes** brainstorm bullet
 into a real design. Not built yet. Distinct from the bullet immediately

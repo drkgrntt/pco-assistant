@@ -3,8 +3,30 @@ package scheduling
 import (
 	"fmt"
 
+	"pco-assistant/internal/scheduling"
 	"pco-assistant/internal/views"
 )
+
+// talkingPointsFor filters a song's TransitionNotePrompts down to just the
+// talking_point kind - see docs/plans/shipped/transition-notes-plan.md's
+// "moment 2" (Run Sheet display): the run sheet is specifically where a
+// talking point needs to physically be for it to do any good (carried
+// into the service), unlike a debrief, which is only ever useful back on
+// the Build page where it was written. Reuses the exact same
+// TransitionNotePrompts SetBuilderData already computes (see the
+// controller's transitionNotePrompts) - no separate fetch or computation
+// of its own, keeping RunSheet's "pure view, no new storage of its own"
+// framing (see RunSheetPage's doc comment) as true as it can be for this
+// one deliberate exception.
+func talkingPointsFor(prompts []TransitionNotePromptView) []TransitionNotePromptView {
+	var out []TransitionNotePromptView
+	for _, p := range prompts {
+		if p.Kind == scheduling.TransitionNoteTalkingPoint {
+			out = append(out, p)
+		}
+	}
+	return out
+}
 
 // hasAnyNoteContent reports whether at least one of a song's note
 // categories actually has something written in it - see
@@ -130,6 +152,16 @@ templ RunSheet(setData SetBuilderData, rosterData RosterBuilderData) {
 															<dd>{ note.Content }</dd>
 														</div>
 													}
+												}
+											</dl>
+										}
+										if points := talkingPointsFor(row.Song.TransitionNotePrompts); len(points) > 0 {
+											<dl class="run-sheet-notes run-sheet-talking-points">
+												for _, p := range points {
+													<div class="run-sheet-note">
+														<dt>Talking point</dt>
+														<dd>{ p.Message }</dd>
+													</div>
 												}
 											</dl>
 										}
