@@ -237,11 +237,13 @@ different pages:
    per-occurrence `Description` field but clearly separated from it (this
    is persistent, cross-plan data, not a per-occurrence one) - a small
    add-entry form (kind toggle debrief/talking-point, an optional "into/
-   out of" song picker reusing the existing song-search pattern from
-   `docs/plans/not-started/song-tags-setup-redesign-plan.md`'s proposed
-   `SongPickerField` if that's landed by then, or a plain `<select>`
-   otherwise, plus a text field) and a list of that song's existing notes
-   (via `ListTransitionNotesForSong`).
+   out of" song picker - `docs/plans/shipped/song-tags-setup-redesign-plan.md`
+   has since shipped, but its decided scope didn't need a `SongPickerField`/
+   song-search endpoint (every song already renders unconditionally on that
+   page, so there was nothing for a picker to narrow down) - so there's
+   still no reusable song picker to reach for here; use a plain `<select>`
+   of the whole library, same as every other setup page, plus a text field)
+   and a list of that song's existing notes (via `ListTransitionNotesForSong`).
 
    **This needs a deliberate carve-out from `songDetailCard`'s
    `data.ReadOnly` guard.** Today, `data.ReadOnly` (true for past plans)
@@ -316,9 +318,13 @@ recommends and the one the build order below assumes.
 - **Song-picker dependency** - moment 1's "into/out of" picker would
   ideally reuse a searchable song picker rather than a plain `<select>`
   of the whole library (same pain point `song-tags-setup-redesign-plan.md`
-  documents for the setup pages). That plan isn't built yet; this one
-  shouldn't block on it, but should reuse `SongPickerField` if it lands
-  first rather than building a second one-off picker.
+  documented for the setup pages). That plan has since shipped
+  (`docs/plans/shipped/song-tags-setup-redesign-plan.md`), but without
+  introducing a reusable `SongPickerField` - its decided scope (every song
+  card renders unconditionally, so a song's own card already fixes which
+  song an inline add-tag form targets) never needed one. So there's
+  nothing to reuse yet; this plan should keep using a plain `<select>`
+  unless/until some other page actually builds a real song-search picker.
 
 ## Suggested build order
 
@@ -359,4 +365,5 @@ recommends and the one the build order below assumes.
   local-database storage keyed to song ids already available from
   `fetchActiveSongs`/the set's own data; it makes no new PCO calls of any
   kind (same conclusion, same reasoning, as
-  `song-tags-setup-redesign-plan.md`'s own Verification section).
+  `docs/plans/shipped/song-tags-setup-redesign-plan.md`'s own Verification
+  section).

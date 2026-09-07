@@ -18,6 +18,11 @@ import (
 // descriptive - for finding a song later by sermon theme, related scripture,
 // or a loose idea, both here and (see buildSetBuilderData) as search text on
 // the set builder's candidate list.
+//
+// The page itself (song_tags.templ) shows one persistent card per active
+// song - see docs/plans/shipped/song-tags-setup-redesign-plan.md - so every
+// handler here groups the flat tag list by song id (songTagsBySong) rather
+// than resolving a song_id -> title lookup the way the old flat table did.
 
 func (sc *SchedulingController) SongTagsPage(c *fiber.Ctx) error {
 	_, personName := middleware.CurrentPerson(c)
@@ -28,12 +33,12 @@ func (sc *SchedulingController) SongTagsPage(c *fiber.Ctx) error {
 
 	categories, err := sc.store.ListSongTagCategories(c.Context())
 	if err != nil {
-		return render(c, views.SongTags(personName, orgName, songs, nil, nil, songTitleMap(songs), nil, err.Error()))
+		return render(c, views.SongTags(personName, orgName, songs, nil, nil, nil, err.Error()))
 	}
 
 	tags, err := sc.store.ListSongTags(c.Context(), orgID, "", "")
 	if err != nil {
-		return render(c, views.SongTags(personName, orgName, songs, nil, categories, songTitleMap(songs), songTagCategoryLabelMap(categories), err.Error()))
+		return render(c, views.SongTags(personName, orgName, songs, nil, categories, songTagCategoryLabelMap(categories), err.Error()))
 	}
 
 	errMsg := ""
@@ -41,7 +46,7 @@ func (sc *SchedulingController) SongTagsPage(c *fiber.Ctx) error {
 		errMsg = "loading songs from Planning Center: " + songsErr.Error()
 	}
 
-	return render(c, views.SongTags(personName, orgName, songs, tags, categories, songTitleMap(songs), songTagCategoryLabelMap(categories), errMsg))
+	return render(c, views.SongTags(personName, orgName, songs, songTagsBySong(tags), categories, songTagCategoryLabelMap(categories), errMsg))
 }
 
 func (sc *SchedulingController) CreateSongTag(c *fiber.Ctx) error {
@@ -69,7 +74,7 @@ func (sc *SchedulingController) CreateSongTag(c *fiber.Ctx) error {
 	songs, _ := fetchActiveSongs(middleware.RequestContext(c), orgID)
 	categories, _ := sc.store.ListSongTagCategories(c.Context())
 
-	return render(c, views.SongTagsTable(tags, songTitleMap(songs), songTagCategoryLabelMap(categories), errMsg))
+	return render(c, views.SongTagsList(songs, songTagsBySong(tags), categories, songTagCategoryLabelMap(categories), errMsg))
 }
 
 func (sc *SchedulingController) DeleteSongTag(c *fiber.Ctx) error {
@@ -91,5 +96,5 @@ func (sc *SchedulingController) DeleteSongTag(c *fiber.Ctx) error {
 	songs, _ := fetchActiveSongs(middleware.RequestContext(c), orgID)
 	categories, _ := sc.store.ListSongTagCategories(c.Context())
 
-	return render(c, views.SongTagsTable(tags, songTitleMap(songs), songTagCategoryLabelMap(categories), errMsg))
+	return render(c, views.SongTagsList(songs, songTagsBySong(tags), categories, songTagCategoryLabelMap(categories), errMsg))
 }

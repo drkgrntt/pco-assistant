@@ -455,7 +455,15 @@ pattern as `song_tags`/`song_relationships`:**
   box - no new filter logic. **Still open,
   deliberately not tackled by that fix**: this only surfaces tags someone
   already applied by hand; the two angles below (a structured scripture
-  field, lyric-derived tags) are unaffected.
+  field, lyric-derived tags) are unaffected. (The Song Tags *setup* page
+  itself - where these tags actually get created, as opposed to this
+  picking-while-building-a-set workflow - was separately redesigned for
+  browsability: a persistent card per song instead of a flat one-row-per-
+  tag table, so "what's already tagged" is visible at a glance while
+  managing tags. See
+  `docs/plans/shipped/song-tags-setup-redesign-plan.md`. That's about
+  managing tags, not this section's build-time picking UX, and doesn't
+  change either of the two still-open angles above.)
   Two angles worth chasing before committing to scope:
   - **Scripture reference as a structured field**, not a free-text tag -
     would let "what covers Romans 8" work as a real filter instead of

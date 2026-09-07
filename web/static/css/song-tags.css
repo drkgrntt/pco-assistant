@@ -1,0 +1,46 @@
+/* Backs internal/views/scheduling/song_tags.templ - one persistent card
+   per active song (components.Card's .position-group, see card.css)
+   showing that song's tags as chips with inline edit/remove, plus its own
+   small "add a tag" form scoped to that song. Every active song renders up
+   front (no search gate - see
+   docs/plans/shipped/song-tags-setup-redesign-plan.md - a plain local-DB
+   read is cheap regardless of library size); #song-tag-filter just hides
+   non-matching cards client-side (filterSongTagCards, scheduling.js) for a
+   large library, it never limits what's rendered. */
+
+.song-tags-filter {
+  max-width: 24rem;
+  margin-bottom: var(--space-4);
+}
+
+.song-tags-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.song-tag-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-2) 0;
+}
+
+/* One tag's badge plus its own edit/remove icon buttons, inline - the
+   badge's own default right margin (badge.css) is redundant now that
+   .song-tag-chips supplies spacing via gap, so it's zeroed here. */
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.tag-chip .badge {
+  margin-right: 0;
+}
+
+.song-tag-add-form {
+  margin-top: var(--space-2);
+  margin-bottom: 0;
+}

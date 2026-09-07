@@ -1,6 +1,33 @@
 /* Backs internal/views/card.templ's Card, and (combined with .collapsible)
    scheduling/collapsible.templ's collapsibleCard. */
 
+/* Base bordered-card look for components.Card/collapsibleCard's own
+   .position-group div (billing plan boxes, account page sections, the
+   style guide demo, song-tag-suggestion groups, and - since the Song Tags
+   setup redesign, see
+   docs/plans/shipped/song-tags-setup-redesign-plan.md - one card per song
+   on /scheduling/song-tags). Regressed to nothing when the roster
+   builder's own .position-group usage got nested under .team-group below
+   (that commit renamed the *roster's* card look to .team-group and gave
+   the nested .position-group a compact-row look instead, but never left a
+   base rule behind for every other, non-nested caller of
+   components.Card) - restored here since Card's own doc comment still
+   promises a "bordered div + h3 title" for every caller, not just the
+   roster's. .team-group .position-group below wins on specificity
+   wherever a position-group actually is nested inside a team-group, so
+   this doesn't change the roster builder's own compact-row look. */
+.position-group {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-5);
+  margin-block: var(--space-4);
+}
+
+.position-group h3 {
+  margin-top: 0;
+}
+
 /* Team cards laid out side by side, like Planning Center's own "My Teams"
    columns, rather than stacked full-width - most services have 2-4 teams,
    and a single-column stack meant a lot of scrolling to see them all

@@ -758,6 +758,38 @@ function cancelSetupEdit(button) {
   resetSetupForm(button.closest("form"));
 }
 
+// filterSongTagCards backs the Song Tags setup page's own filter box
+// (song_tags.templ) - purely client-side, hiding/showing each already-
+// rendered .song-tag-card by its own data-search text (song title + tag
+// values, see songTagCardSearchText). Every song renders unconditionally
+// on that page (unlike the Build page's search-gated candidate list,
+// which re-fetches from the server as you type - see the comment above
+// #candidate-search's own handling below), so there's nothing to fetch
+// here, just hide/show against data already in the DOM.
+function filterSongTagCards(input) {
+  var query = input.value.trim().toLowerCase();
+  document.querySelectorAll(".song-tag-card").forEach(function (card) {
+    var haystack = card.dataset.search || "";
+    card.hidden = query !== "" && haystack.indexOf(query) === -1;
+  });
+}
+
+// Re-applies that same filter after any htmx swap of the card list itself
+// (adding/editing/removing a tag all swap the whole #song-tags-list) -
+// without this, a filtered view would flash back to showing every song
+// again after each mutation, even though #song-tag-filter (outside the
+// swapped div, so untouched by the swap) still shows the typed query.
+document.addEventListener("htmx:afterSwap", function (event) {
+  var target = event.detail && event.detail.target;
+  if (!target || target.id !== "song-tags-list") {
+    return;
+  }
+  var input = document.getElementById("song-tag-filter");
+  if (input && input.value) {
+    filterSongTagCards(input);
+  }
+});
+
 // Generic collapsible sections used across the build page (see
 // collapsibleSection in the scheduling views package, and the position-
 // group cards in roster_builder.templ, which build the same .collapsible/

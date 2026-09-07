@@ -39,7 +39,7 @@ and let this app flip PCO's real `hidden` attribute.** It also folds in the
 adjacent "Not sung in a long time" nudge bullet from the same section, which
 is the natural *prompt* leading a director to actually archive something.
 Not built yet; written up for later, same spirit as
-`docs/plans/not-started/song-tags-setup-redesign-plan.md`.
+`docs/plans/shipped/song-tags-setup-redesign-plan.md` was before it shipped.
 
 ## Current state
 
@@ -329,16 +329,16 @@ nudge, which is about a song that *used to* get sung and has gone cold).
   slice - it's a per-song `time.Since` check, not a fetch), so it doesn't
   conflict with that principle, but it does mean `SongOptionView` would
   need a new field, and `buildBrowsableSongs` would need to populate it -
-  a small, real addition to confirm before assuming it's free. A separate,
-  not-yet-built plan
-  (`docs/plans/not-started/song-tags-setup-redesign-plan.md`) proposes a
-  song-picker/grouped-by-song browse view for the Song Tags setup page -
-  if that ships first, its per-song groups would be an equally natural (or
-  better - genuinely library-management-scoped rather than tucked inside
-  one plan's build page) home for this same badge and the Archive action
-  below. This plan doesn't depend on that one landing first, and shouldn't
-  be blocked waiting for it, but whoever builds this should check whether
-  it has landed by then rather than duplicating the browse UI twice.
+  a small, real addition to confirm before assuming it's free. A separate
+  plan, `docs/plans/shipped/song-tags-setup-redesign-plan.md`, has since
+  shipped a per-song-card grouped browse view for the Song Tags setup
+  page - those per-song cards would be an equally natural (or better -
+  genuinely library-management-scoped rather than tucked inside one
+  plan's build page) home for this same badge and the Archive action
+  below, now that it exists. This plan still doesn't depend on that one,
+  but whoever builds this should look at those cards
+  (`internal/views/scheduling/song_tags.templ`) before duplicating the
+  browse UI a third time.
 - **Archive's own UI entry point** (see above) is the same open question -
   most likely the same "Browse all songs" row, an icon-button action next
   to the reinforcement/nudge badges, following `songDetailCard`'s existing
