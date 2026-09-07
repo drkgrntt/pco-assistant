@@ -210,8 +210,12 @@ templ songBadgesOOB(song SetSongView) {
 // toggle-button content and popup contents (see songBadgeSpans below) - a
 // short, always-visible caption (e.g. "half-step from previous song") that
 // expands, on click, to the full explanatory sentence
-// (SetSongView.KeyTransitionMessage). Kept as a click-to-expand Disclosure
-// rather than a hover-only title= tooltip per
+// (SetSongView.KeyTransitionMessage), plus one more paragraph suggesting
+// the actual move that eases the transition
+// (SetSongView.KeyTransitionSuggestion, e.g. "Try hitting Ab7 (the V7 of
+// Db) right before the change...") - see
+// docs/plans/shipped/key-change-tip-plan.md. Kept as a click-to-expand
+// Disclosure rather than a hover-only title= tooltip per
 // docs/plans/shipped/in-place-set-warnings-plan.md's resolved decision -
 // keyboard/screen-reader accessible, matching this app's existing pattern
 // for the same tradeoff (see components.Disclosure's own doc comment).
@@ -219,8 +223,11 @@ templ keyTransitionToggle(label string) {
 	⚠ { label }
 }
 
-templ keyTransitionMenu(message string) {
+templ keyTransitionMenu(message string, suggestion string) {
 	<p>{ message }</p>
+	if suggestion != "" {
+		<p>{ suggestion }</p>
+	}
 }
 
 // songBadgeSpans is the badge cluster in a song row's own Tags column -
@@ -257,7 +264,7 @@ templ songBadgeSpans(song SetSongView) {
 			"",
 			"",
 			keyTransitionToggle(song.KeyTransitionLabel),
-			keyTransitionMenu(song.KeyTransitionMessage),
+			keyTransitionMenu(song.KeyTransitionMessage, song.KeyTransitionSuggestion),
 		)
 	}
 }

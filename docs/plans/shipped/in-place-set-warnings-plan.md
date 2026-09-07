@@ -26,9 +26,10 @@ owner rather than left to a mockup:
   Label, Message}` instead of pre-formatted strings, keyed by the second
   song's own `set_songs` row id.
 
-`docs/plans/not-started/key-change-tip-plan.md`, written concurrently and
+`docs/plans/shipped/key-change-tip-plan.md`, written concurrently and
 explicitly deferred to whatever this plan settled on for these same two
-questions, was updated to point at this outcome.
+questions, was updated to point at this outcome (and has itself since
+shipped).
 
 Written 2026-09-05, expanding item 6 of `docs/ideas.md`'s "Reducing
 friction vs. Planning Center" section into a real plan. Item 5 right above

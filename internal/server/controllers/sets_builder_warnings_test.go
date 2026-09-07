@@ -2,13 +2,16 @@ package controllers
 
 // Unit tests for the set builder's plan-level/positional warning checks:
 // total service length vs. this service type's recent average
-// (SetBuilderData.ServiceLengthWarning), and a half-step/tritone key change
+// (SetBuilderData.ServiceLengthWarning), a half-step/tritone key change
 // between two back-to-back songs (keyTransitionWarnings - see
 // docs/plans/shipped/in-place-set-warnings-plan.md for why this returns a
-// structured []keyTransitionWarning rather than pre-formatted strings).
-// Both checks are pure functions over already-in-hand data, same as
-// mergeServiceOrder/songsInBoth in sets_builder_test.go, so they're tested
-// directly here rather than through buildSetBuilderData.
+// structured []keyTransitionWarning rather than pre-formatted strings), and
+// the suggested-move tip appended to that same warning
+// (suggestedDominantSeventh/suggestedKeyChangeMove - see
+// docs/plans/shipped/key-change-tip-plan.md). All are pure functions over
+// already-in-hand data, same as mergeServiceOrder/songsInBoth in
+// sets_builder_test.go, so they're tested directly here rather than through
+// buildSetBuilderData.
 
 import (
 	"strings"
@@ -257,5 +260,97 @@ func TestKeyTransitionWarningsSkipsUnparseableKey(t *testing.T) {
 	got := keyTransitionWarnings(rows, cache, map[string]string{})
 	if len(got) != 0 {
 		t.Errorf("expected no warning when one song has no parseable key, got %+v", got)
+	}
+}
+
+// TestSuggestedDominantSeventhCanonicalKeys covers all 17 canonical-key rows
+// of docs/plans/shipped/key-change-tip-plan.md's worked table (all 12 pitch
+// classes, both spellings where musicalKeyOptions' own datalist offers two)
+// - the V7-of-destination chord suggestedKeyChangeMove/defaultKeyChangeMove
+// suggest right before a flagged key change, independent of which interval
+// (half-step or tritone) triggered it.
+func TestSuggestedDominantSeventhCanonicalKeys(t *testing.T) {
+	cases := []struct {
+		destKey string
+		want    string
+	}{
+		{"C", "G7"},
+		{"C#", "G#7"},
+		{"Db", "Ab7"},
+		{"D", "A7"},
+		{"D#", "A#7"},
+		{"Eb", "Bb7"},
+		{"E", "B7"},
+		{"F", "C7"},
+		{"F#", "C#7"},
+		{"Gb", "Db7"},
+		{"G", "D7"},
+		{"G#", "D#7"},
+		{"Ab", "Eb7"},
+		{"A", "E7"},
+		{"A#", "F7"},
+		{"Bb", "F7"},
+		{"B", "F#7"},
+	}
+	for _, tc := range cases {
+		if got := suggestedDominantSeventh(tc.destKey); got != tc.want {
+			t.Errorf("suggestedDominantSeventh(%q) = %q, want %q", tc.destKey, got, tc.want)
+		}
+	}
+}
+
+// TestSuggestedDominantSeventhNonCanonicalKeys confirms the formula degrades
+// gracefully outside the 34 keys musicalKeyOptions' datalist actually lists
+// - the key input is free-text, so an unlisted spelling can still reach
+// this code. Both cases share a pitch class with a canonical key above (Cb
+// == B, E# == F) but resolve differently: Cb's own flat spelling drives an
+// ambiguous dominant to Gb7 (not the B-natural exception's F#7, since Cb
+// isn't the bare-natural-letter case that exception exists for), and E#'s
+// dominant (pitch class 0) isn't ambiguous at all, so it resolves the same
+// as F's regardless of E#'s own sharp spelling.
+func TestSuggestedDominantSeventhNonCanonicalKeys(t *testing.T) {
+	if got := suggestedDominantSeventh("Cb"); got != "Gb7" {
+		t.Errorf("suggestedDominantSeventh(%q) = %q, want %q", "Cb", got, "Gb7")
+	}
+	if got := suggestedDominantSeventh("E#"); got != "C7" {
+		t.Errorf("suggestedDominantSeventh(%q) = %q, want %q", "E#", got, "C7")
+	}
+}
+
+// TestSuggestedKeyChangeMoveFallsThroughToDefault confirms both intervals
+// keyTransitionWarnings actually calls this with today (1: half-step, 6:
+// tritone) fall through keyChangeTips (empty today) to
+// defaultKeyChangeMove's V7-of-destination suggestion, and that the
+// rendered sentence names both the chord and the destination key.
+func TestSuggestedKeyChangeMoveFallsThroughToDefault(t *testing.T) {
+	for _, distance := range []int{1, 6} {
+		got := suggestedKeyChangeMove(distance, "Db")
+		if !strings.Contains(got, "Ab7") {
+			t.Errorf("suggestedKeyChangeMove(%d, %q) = %q, expected it to name the V7 chord Ab7", distance, "Db", got)
+		}
+		if !strings.Contains(got, "Db") {
+			t.Errorf("suggestedKeyChangeMove(%d, %q) = %q, expected it to name the destination key Db", distance, "Db", got)
+		}
+	}
+}
+
+// TestKeyTransitionWarningsIncludesSuggestion confirms the suggestion text
+// actually reaches keyTransitionWarnings' own returned Suggestion field
+// (not just the standalone helpers above) for both flagged intervals.
+func TestKeyTransitionWarningsIncludesSuggestion(t *testing.T) {
+	g := setSong("song-g", "", 0)
+	ab := setSong("song-ab", "", 1)
+	rows := []mergedRow{{Song: &g}, {Song: &ab}}
+	cache := map[string]scheduling.SongArrangementInfo{
+		"song-g":  {Key: "G"},
+		"song-ab": {Key: "Ab"},
+	}
+
+	got := keyTransitionWarnings(rows, cache, map[string]string{})
+	if len(got) != 1 {
+		t.Fatalf("expected exactly 1 warning, got %d: %+v", len(got), got)
+	}
+	if !strings.Contains(got[0].Suggestion, "Eb7") {
+		t.Errorf("expected the suggestion to name Eb7 (the V7 of Ab), got %q", got[0].Suggestion)
 	}
 }
