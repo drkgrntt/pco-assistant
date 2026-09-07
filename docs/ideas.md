@@ -277,13 +277,13 @@ pattern as `song_tags`/`song_relationships`:**
   raw published `KeyName`, so it reacts to an in-progress edit immediately.
   The "all one key/tempo family, needs contrast" half of this idea isn't
   built.
-- **Key-change tip surfaced inline** - a step past the key-transition
-  warning above: once it fires, suggest the actual move that makes the
-  transition work - e.g. hit the V7 (dominant seventh) of the *next* key
-  right before the change, which pulls strongly toward that key's tonic.
-  Cheap: a static lookup off the same interval the warning already
-  computes (`parseKeyPitchClass`), not new music-theory code - just a
-  message per interval size shown alongside the existing warning.
+- ~~Key-change tip surfaced inline~~ - **shipped**, see
+  `docs/plans/shipped/key-change-tip-plan.md`: once `keyTransitionWarnings`
+  fires on a half-step or tritone, its popover now appends a second sentence
+  suggesting the V7-of-destination move (`suggestedDominantSeventh`/
+  `suggestedKeyChangeMove`, `sets_builder.go`). A 4th/5th/relative-major-
+  minor "smooth pairing" affirmation is a separate, still-open product-scope
+  decision, not built.
 - ~~Import/merge/revert seeding the wrong key for a multi-arrangement
   song~~ - **the display bug fixed** (a plan with real Planning Center keys
   "B A A A" was showing "B A Bb A" after a revert): `deriveImportRows`/

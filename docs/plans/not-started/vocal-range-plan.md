@@ -11,9 +11,10 @@ song range plus the key engine it needs, **then** a presentation-only
 matrix view once both exist. This plan does not strike anything in
 `docs/ideas.md` - per this task's own instructions, a brainstorm bullet
 stays open/unstruck until something is actually built, the same
-convention `docs/plans/not-started/key-change-tip-plan.md` and
-`docs/plans/not-started/song-tags-setup-redesign-plan.md` already follow
-for their own source bullets.
+convention `docs/plans/not-started/song-tags-setup-redesign-plan.md`
+follows for its own source bullet (`docs/plans/shipped/key-change-tip-
+plan.md` has since built and struck its own bullet the same way, once it
+actually shipped).
 
 ## Current state
 
@@ -239,14 +240,14 @@ transposition step:
   offer one), so this is additive, not a signature change to existing
   callers.
 
-**Explicitly NOT moved**: `docs/plans/not-started/key-change-tip-plan.md`'s
-proposed dominant-seventh spelling table/`suggestedDominantSeventh`
-helpers (if that plan is ever built) stay wherever that plan puts them
-(recommended there as `sets_builder.go`-local, since their need is
-"transient and render-time only," not storage-shaped). This plan's key
-engine only takes over the pitch-class parsing/distance primitives - flag
-this explicitly so a future implementer building both plans doesn't
-assume one file's entire music-theory surface moves together.
+**Explicitly NOT moved**: `docs/plans/shipped/key-change-tip-plan.md`'s
+dominant-seventh spelling table/`suggestedDominantSeventh` helpers (now
+built, `sets_builder.go`-local per that plan's own recommendation, since
+their need is "transient and render-time only," not storage-shaped) stay
+put. This plan's key engine only takes over the pitch-class parsing/
+distance primitives - flag this explicitly so a future implementer
+building this plan doesn't assume the whole file's music-theory surface
+moves together.
 
 ## Phase 2: song vocal range
 

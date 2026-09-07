@@ -1297,6 +1297,112 @@ func semitoneDistance(a, b int) int {
 	return d
 }
 
+// dominantSpellings maps a pitch class (0-11) to its conventional spelled
+// note name, used by suggestedDominantSeventh below to turn the destination
+// key's V7 (dominantPC = (destPC+7)%12) back into a chord name a director
+// would actually recognize - see
+// docs/plans/shipped/key-change-tip-plan.md's worked table for how each
+// entry was derived, including why a naive letter-cycling transposition
+// (reject) was replaced by this static table (it produces an absurd
+// spelling - "E#7" - for A# major's dominant, where this table says "F7").
+// The 7 natural pitch classes (0,2,4,5,7,9,11) have exactly one entry; the
+// 5 black-key pitch classes (1,3,6,8,10) are ambiguous (sharp or flat) and
+// are resolved by suggestedDominantSeventh matching the destination key's
+// own accidental style, not by this table alone.
+var dominantSpellings = map[int]string{
+	0: "C", 1: "C#", 2: "D", 3: "D#", 4: "E", 5: "F",
+	6: "F#", 7: "G", 8: "G#", 9: "A", 10: "A#", 11: "B",
+}
+
+// dominantSpellingsFlat is the flat-spelled alternative for the 5 ambiguous
+// (black-key) pitch classes only - see dominantSpellings.
+var dominantSpellingsFlat = map[int]string{
+	1: "Db", 3: "Eb", 6: "Gb", 8: "Ab", 10: "Bb",
+}
+
+// suggestedDominantSeventh returns the V7 chord (e.g. "Ab7") to suggest
+// playing right before a key change into destKey - a secondary/applied
+// dominant, standard functional-harmony practice for pulling strongly into
+// a target key regardless of how far away the previous key was (see
+// docs/plans/shipped/key-change-tip-plan.md's "The formula and the table").
+// destKey must already have parsed via parseKeyPitchClass; this only
+// re-derives the pitch class, it doesn't re-validate the string. Returns ""
+// if destKey doesn't parse (defensive - callers only reach this after
+// parseKeyPitchClass already succeeded on the same string).
+func suggestedDominantSeventh(destKey string) string {
+	destPC, ok := parseKeyPitchClass(destKey)
+	if !ok {
+		return ""
+	}
+	dominantPC := (destPC + 7) % 12
+
+	flatName, ambiguous := dominantSpellingsFlat[dominantPC]
+	if !ambiguous {
+		return dominantSpellings[dominantPC] + "7"
+	}
+
+	hasFlat := strings.ContainsAny(destKey, "b♭")
+	hasSharp := strings.ContainsAny(destKey, "#♯")
+	switch {
+	case hasFlat:
+		return flatName + "7"
+	case hasSharp:
+		return dominantSpellings[dominantPC] + "7"
+	default:
+		// A bare natural-letter destination with an ambiguous dominant and
+		// no accidental of its own to match against - only ever reached by
+		// "B" (destPC 11, the one natural letter whose dominant, pitch
+		// class 6, is one of the 5 ambiguous black keys). Hard-code the
+		// real-world/circle-of-fifths answer (F#, never "Gb") rather than
+		// guessing generically. A non-canonical bare-flat/bare-sharp
+		// spelling like "Cb" (also pitch class 11) hits the hasFlat branch
+		// above instead, correctly resolving to its own flat spelling
+		// (Gb7) rather than this exception - see the plan doc's "The
+		// formula and the table" section.
+		return "F#7"
+	}
+}
+
+// keyChangeTips holds a specific suggested-move override for a semitone
+// distance (semitoneDistance), when the generic V7-of-destination default
+// (defaultKeyChangeMove) isn't the best available tip for that interval.
+// Empty today - neither interval keyTransitionWarnings currently flags
+// (1, 6) has a better-known alternative to V7, per
+// docs/plans/shipped/key-change-tip-plan.md's music-theory research - but
+// the shape exists so a future specific tip is a one-line addition, not a
+// refactor: add an entry here, suggestedKeyChangeMove already checks it
+// first.
+//
+// IMPORTANT: adding an entry here alone does nothing for a distance
+// keyTransitionWarnings doesn't already flag (e.g. distance 5, a 4th/5th -
+// see the plan doc's "Per-interval tips" section on why that one's a
+// strong future candidate). That function's own `change != 1 && change !=
+// 6` gate has to change too before this map's entry for a new distance is
+// ever reached - and widening that gate is a real product-scope decision
+// (a "smooth transition" note is a different kind of message than a
+// warning), not a data change, so don't add one silently.
+var keyChangeTips = map[int]func(destKey string) string{}
+
+// defaultKeyChangeMove is the fallback for any interval without its own
+// entry in keyChangeTips above - the V7-of-destination move
+// (suggestedDominantSeventh), which the plan doc's research found works
+// correctly regardless of interval size, so it's a real answer here, not a
+// placeholder standing in for one.
+func defaultKeyChangeMove(destKey string) string {
+	chord := suggestedDominantSeventh(destKey)
+	return fmt.Sprintf("Try hitting %s (the V7 of %s) right before the change - it resolves strongly into the new key.", chord, destKey)
+}
+
+// suggestedKeyChangeMove is what keyTransitionWarnings actually calls: an
+// interval-specific override if one exists in keyChangeTips, the shared
+// default otherwise. See docs/plans/shipped/key-change-tip-plan.md.
+func suggestedKeyChangeMove(distance int, destKey string) string {
+	if tip, ok := keyChangeTips[distance]; ok {
+		return tip(destKey)
+	}
+	return defaultKeyChangeMove(destKey)
+}
+
 // keyTransitionWarning is one flagged key change between two songs that are
 // truly back-to-back in the order (see keyTransitionWarnings). SongRowID is
 // the set_songs row id (SetSong.ID) of the *second*, later song in the
@@ -1307,11 +1413,15 @@ func semitoneDistance(a, b int) int {
 // Label is the short, always-visible badge text; Message is the full
 // sentence, revealed via a click-to-expand components.Disclosure rather
 // than shown inline (too long for a badge - see songBadgeSpans,
-// set_builder.templ).
+// set_builder.templ). Suggestion is one more sentence, appended after
+// Message in that same popover, suggesting the actual move that eases the
+// transition (suggestedKeyChangeMove) - see
+// docs/plans/shipped/key-change-tip-plan.md.
 type keyTransitionWarning struct {
-	SongRowID int64
-	Label     string
-	Message   string
+	SongRowID  int64
+	Label      string
+	Message    string
+	Suggestion string
 }
 
 // keyTransitionWarnings flags two songs that are truly back-to-back in the
@@ -1359,6 +1469,7 @@ func keyTransitionWarnings(rows []mergedRow, arrangementCache map[string]schedul
 				titleOrID(titles, cur.Song.SongID), curKey,
 				kind,
 			),
+			Suggestion: suggestedKeyChangeMove(change, curKey),
 		})
 	}
 	return warnings
@@ -1519,6 +1630,7 @@ func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizati
 		if transition, ok := transitionsByRow[ss.ID]; ok {
 			songView.KeyTransitionLabel = transition.Label
 			songView.KeyTransitionMessage = transition.Message
+			songView.KeyTransitionSuggestion = transition.Suggestion
 		}
 
 		out[i] = views.ServiceOrderRow{IsSong: true, Song: songView}

@@ -328,9 +328,14 @@ type SetSongView struct {
 	// decision. KeyTransitionMessage is the full explanatory sentence,
 	// revealed via a click-to-expand components.Disclosure rather than
 	// shown inline (too long for a badge) - see songBadgeSpans,
-	// set_builder.templ.
-	KeyTransitionLabel   string
-	KeyTransitionMessage string
+	// set_builder.templ. KeyTransitionSuggestion is one more sentence
+	// appended after KeyTransitionMessage in that same popover, suggesting
+	// the actual move that eases the transition (e.g. hitting the V7 of
+	// the destination key right before the change) - see
+	// docs/plans/shipped/key-change-tip-plan.md.
+	KeyTransitionLabel      string
+	KeyTransitionMessage    string
+	KeyTransitionSuggestion string
 }
 
 // SongNoteView is one Planning Center note category's state for a specific

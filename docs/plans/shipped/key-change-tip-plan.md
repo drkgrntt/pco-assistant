@@ -1,5 +1,16 @@
 # Plan: key-change tip surfaced inline
 
+**Status: shipped 2026-09-07.** Implemented in `sets_builder.go`
+(`suggestedDominantSeventh`, `defaultKeyChangeMove`, `keyChangeTips`,
+`suggestedKeyChangeMove`, wired onto `keyTransitionWarning.Suggestion`) and
+`set_builder.templ` (`keyTransitionMenu` renders it as a second paragraph
+in the existing Disclosure popover, after the warning sentence) - see
+`docs/ideas.md`'s Songs section for the struck bullet. The "genuine open
+questions" section below (widening `keyTransitionWarnings`' own trigger to
+cover 4th/5th/relative-major-minor pairings, exact copy, V7 terminology,
+capo alternatives) was left as-is per the build task's explicit scope -
+none of those were resolved by this change.
+
 Written 2026-09-05, expanding the "Key-change tip surfaced inline" bullet
 in `docs/ideas.md`'s "Songs" section into a real plan. Not built yet.
 
