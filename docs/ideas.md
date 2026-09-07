@@ -338,7 +338,7 @@ pattern as `song_tags`/`song_relationships`:**
   own note below turned out to be the right call once actually weighed:
   there's no real payoff to a second, local "retired" concept that PCO's
   existing hidden/archived state doesn't already cover, once this app can
-  set that flag itself. See `docs/plans/not-started/song-archive-plan.md`
+  set that flag itself. See `docs/plans/shipped/song-archive-plan.md`
   for the resulting plan, which folds in the "not sung in a long time"
   nudge below and requires adding an `UpdateSong` wrapper to `go-pco`
   (currently only wraps Create/Get/GetSongs/Delete) - a deliberate,
@@ -346,16 +346,15 @@ pattern as `song_tags`/`song_relationships`:**
   touching it.
   - Note from Derek, perhaps to reevaluate next time you see this,
     could we not just leverage PCO's existing archive functionality?
-- **"Not sung in a long time" nudge** - the reinforcement idea's mirror
-  image: PCO's own `Song.LastScheduledAt`/`LastScheduledShortDates`
-  (`go-pco` v0.21.0's `SongAttributes`, already fetched on every song list
-  call via `FetchActiveSongs` - no new PCO traffic) surfaces a song that's
-  gone cold, as a soft "haven't done this in a while" signal while
-  browsing/selecting songs. Feeds the archive decision above rather than
-  automating it - a long gap is a *prompt* to consider archiving, never an
-  automatic suggestion, since a seasonal song (Christmas, Easter) has a
-  long, entirely intentional gap by design; a seasonal tag is the natural
-  exemption once one exists. See `docs/plans/not-started/song-archive-plan.md`.
+- ~~"Not sung in a long time" nudge~~ - **shipped**: a "Not sung recently"
+  badge on the Build page's "Browse all songs" candidate rows (same badge
+  slot as the reinforcement label), computed from PCO's
+  `Song.LastScheduledAt` (already fetched, no new PCO traffic) - shown
+  once a song has gone ≥180 days since it was last scheduled, exempted
+  for any song carrying the new `seasonal` song-tag category (Christmas,
+  Easter, ...) so an intentional long gap never nags. See
+  `docs/plans/shipped/song-archive-plan.md` and
+  `internal/server/controllers/sets_builder.go`'s `notSungInLabel`.
 - **Per-person key fit** - "this key works for Sarah, too low for Mike."
   A different axis than the existing preferred/discouraged binary (that's
   about *wanting* to sing it, not *being able to* in that arrangement's

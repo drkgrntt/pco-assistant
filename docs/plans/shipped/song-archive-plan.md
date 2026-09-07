@@ -1,17 +1,25 @@
 # Plan: archive songs via PCO's own `hidden` flag, plus a "not sung in a while" nudge
 
-**Status: partially built (2026-09-06).** This doc's "Suggested build
-order" step 3 (the archive action itself) is done: an Archive icon-button
-on each rich row of the Build page's "Browse all songs" search results
-(`CandidateSearchResults`, `internal/views/scheduling/set_builder.templ`),
-confirm-guarded via `hx-confirm`, posting to
+**Status: shipped (2026-09-07).** All of this doc's "Suggested build
+order" steps except the optional step 6 are done. Steps 1 and 2
+(live-verifying and building `go-pco`'s `UpdateSong`) shipped first, per
+commit `8bee9f7`. Step 3 (the archive action itself) followed: an Archive
+icon-button on each rich row of the Build page's "Browse all songs" search
+results (`CandidateSearchResults`, `internal/views/scheduling/
+set_builder.templ`), confirm-guarded via `hx-confirm`, posting to
 `sc.ArchiveSong` (`internal/server/controllers/sets_builder.go`) which
 calls `pco.UpdateSong` to flip `hidden` to `true` and invalidates the
-active-songs cache. Steps 1 and 2 (live-verifying and building `go-pco`'s
-`UpdateSong`) shipped earlier, per commit `8bee9f7`. Step 4 (the "not sung
-in a while" nudge) and step 6 (an optional archived-songs browse view) are
-still not started - this doc stays in `docs/plans/not-started/` until
-those land too.
+active-songs cache. Steps 4 and 5 (the "not sung in a while" nudge and its
+seasonal exemption) shipped together: `notSungInLabel`
+(`internal/server/controllers/sets_builder.go`) computes
+`CandidateSongView.NotSungInLabel` from `Song.LastScheduledAt` at a fixed
+180-day threshold, skipped entirely for a song carrying the new
+`seasonal` song-tag category (migration `00039`,
+`scheduling.TagCategorySeasonal`) - rendered via `songCandidateMeta`
+(`set_builder.templ`) next to the reinforcement badge. Step 6 (an
+optional archived-songs browse view) remains genuinely optional and is
+not built - see that step's own "not yet decided" framing below, which
+still holds.
 
 Written 2026-09-05, replacing the "Retired / don't resurrect flag" brainstorm
 bullet in `docs/ideas.md`'s Songs section. That bullet originally proposed a

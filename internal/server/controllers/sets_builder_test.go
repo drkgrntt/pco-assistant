@@ -749,6 +749,41 @@ func TestRenderServiceOrderAttachesKeyTransitionToSecondSongOnly(t *testing.T) {
 	}
 }
 
+// TestNotSungInLabel covers notSungInLabel's threshold/seasonal-exemption
+// logic (docs/plans/shipped/song-archive-plan.md step 4/5): never
+// scheduled -> no badge (that's TrackNewSong's reinforcement path
+// instead), scheduled recently -> no badge, scheduled well past the
+// threshold with no seasonal tag -> badge, and the same long gap exempted
+// by a seasonal tag -> no badge.
+func TestNotSungInLabel(t *testing.T) {
+	seasonalTag := []scheduling.SongTag{{Category: scheduling.TagCategorySeasonal, Value: "Christmas"}}
+	themeTag := []scheduling.SongTag{{Category: scheduling.TagCategoryTheme, Value: "Hope"}}
+	recently := time.Now().Add(-10 * 24 * time.Hour)
+	longAgo := time.Now().Add(-200 * 24 * time.Hour)
+
+	tests := []struct {
+		name          string
+		lastScheduled *time.Time
+		tags          []scheduling.SongTag
+		wantHasLabel  bool
+	}{
+		{name: "never scheduled", lastScheduled: nil, tags: nil, wantHasLabel: false},
+		{name: "scheduled recently", lastScheduled: &recently, tags: nil, wantHasLabel: false},
+		{name: "scheduled 200 days ago, no seasonal tag", lastScheduled: &longAgo, tags: themeTag, wantHasLabel: true},
+		{name: "scheduled 200 days ago, seasonal tag", lastScheduled: &longAgo, tags: seasonalTag, wantHasLabel: false},
+		{name: "scheduled 200 days ago, no tags at all", lastScheduled: &longAgo, tags: nil, wantHasLabel: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := notSungInLabel(tt.lastScheduled, tt.tags)
+			if hasLabel := got != ""; hasLabel != tt.wantHasLabel {
+				t.Errorf("notSungInLabel() = %q, wantHasLabel %v", got, tt.wantHasLabel)
+			}
+		})
+	}
+}
+
 func assertRowOrder(t *testing.T, got []mergedRow, want []string) {
 	t.Helper()
 

@@ -17,12 +17,20 @@ import (
 // tags are, with no Go-side special-casing either way. Tags in particular
 // let a song be found later by sermon theme, related scripture, or a loose
 // idea. They're seeded into song_tag_categories by
-// migration 00016, which is the source of truth for which categories
-// actually exist - add a row there for another one, no code change needed.
+// migration 00016 (theme/scripture/idea) and 00039 (seasonal), which is
+// the source of truth for which categories actually exist - add a row
+// there for another one, no code change needed.
+//
+// TagCategorySeasonal is the one exception to "no Go-side special-casing":
+// a song tagged seasonal (Christmas, Easter, ...) has an intentional long
+// gap between scheduled dates by design, so it's exempted from the
+// candidate list's "not sung in a while" nudge - see notSungInLabel,
+// internal/server/controllers/sets_builder.go.
 const (
 	TagCategoryTheme     = "theme"
 	TagCategoryScripture = "scripture"
 	TagCategoryIdea      = "idea"
+	TagCategorySeasonal  = "seasonal"
 )
 
 type SongTagCategory struct {

@@ -461,6 +461,15 @@ type CandidateSongView struct {
 	// (not tracked as new, never sung, or already graduated past
 	// reinforcement).
 	NewSongLabel string
+	// NotSungInLabel is a short badge ("Not sung recently") for a song
+	// that HAS been scheduled before (unlike NewSongLabel's never-sung
+	// case) but not within the "not sung in a while" threshold - see
+	// notSungInLabel (sets_builder.go), which computes this. "" means not
+	// applicable: never scheduled at all, scheduled recently enough, or
+	// exempted because the song carries a seasonal tag (see
+	// scheduling.TagCategorySeasonal) - a long gap there is by design, not
+	// a signal.
+	NotSungInLabel string
 	// ArrangementInfo mirrors SetSongView.ArrangementInfo, but is populated
 	// cache-only (see candidateLookups.candidateSongView, sets_builder.go) -
 	// "" whenever this song hasn't been cached yet (never added to a set,
@@ -484,6 +493,7 @@ type CandidateSongView struct {
 // change on click.
 func (c CandidateSongView) HasMeta() bool {
 	return c.NewSongLabel != "" ||
+		c.NotSungInLabel != "" ||
 		c.ArrangementInfo != "" ||
 		len(c.Roles) > 0 ||
 		len(c.Tags) > 0 ||
