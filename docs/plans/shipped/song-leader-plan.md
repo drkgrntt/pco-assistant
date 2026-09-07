@@ -5,13 +5,31 @@ leader_person_id`) and `00038` (`service_type_vocal_note_categories`);
 `scheduling.Store.UpdateSetSongLeader`/`VocalNoteCategoryID`/
 `SetVocalNoteCategory` (`internal/scheduling/sets.go`,
 `vocal_note_category.go`); the song detail card's leader
-`PersonPickerFieldWithValue` and the Songs tab's "Song leader sync
-setting" (`internal/views/scheduling/song_detail_card.templ`,
-`build.templ`, `set_builder.templ`); the publish-time prefix-line merge
+`PersonPickerFieldWithValue` (`internal/views/scheduling/
+song_detail_card.templ`) and the "Song leader sync setting"
+(`internal/views/scheduling/build.templ`'s `VocalNoteCategoryFormFragment`/
+`BuildPlansList`); the publish-time prefix-line merge
 (`composeLeaderNoteContent`/`syncLeaderNote`,
 `internal/server/controllers/leader_note.go`/`sets_publish.go`, with
 table-driven tests in `leader_note_test.go`) wired into `PublishSet`/
 `RefreshSongInfo`'s existing write loop.
+
+**Setting placement, revised 2026-09-07 (live user feedback):** the "Song
+leader sync setting" initially shipped inside `SetBuilderBodyContent`
+(`set_builder.templ`), rendering at the top of the Songs tab on *every
+single plan* for a given service type - a judgment call made to ship
+something rather than invent a new settings surface, and known at the
+time to be a stopgap (see the now-superseded "Suggested build order"
+step 3 below, which had flagged this as needing its own real home).
+Derek's own feedback after using it: it was "weirdly placed." It moved to
+`BuildPlansList` (`build.templ`) instead - the plan-picker page, rendered
+once per chosen service type rather than once per plan - since that's
+already the one surface in the app shaped like "settings for this
+service type," and `/account` has no existing concept of "per service
+type" settings that inventing one there would fit into. The route also
+dropped `:plan_id` (`/scheduling/build/:service_type_id/vocal-note-category`)
+since the setting was never plan-scoped to begin with - see
+`SetVocalNoteCategory` (`internal/server/controllers/build.go`).
 
 Written 2026-09-06, prompted by a conversation about vocal-range work
 (`docs/plans/in-progress/vocal-range-plan.md`) that surfaced a related but

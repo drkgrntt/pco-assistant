@@ -63,7 +63,7 @@ func (sc *SchedulingController) BuildPage(c *fiber.Ctx) error {
 	ctx := middleware.RequestContext(c)
 	serviceTypes, err := scheduling.FetchServiceTypes(ctx, orgID)
 	if err != nil {
-		return render(c, views.Build(personName, orgName, nil, "", nil, 1, 1, "upcoming", err.Error()))
+		return render(c, views.Build(personName, orgName, nil, "", nil, 1, 1, "upcoming", nil, "", err.Error()))
 	}
 
 	serviceTypeID := c.Query("service_type_id")
@@ -79,10 +79,31 @@ func (sc *SchedulingController) BuildPage(c *fiber.Ctx) error {
 
 	if serviceTypeID != "" {
 		rows, page, totalPages, errMsg := sc.combinedPlansForServiceType(ctx, orgID, serviceTypeID, "", 1, false)
-		return render(c, views.Build(personName, orgName, serviceTypes, serviceTypeID, rows, page, totalPages, "upcoming", errMsg))
+		vocalNoteCategories, vocalNoteCategoryID := sc.vocalNoteCategoryData(ctx, orgID, serviceTypeID)
+		return render(c, views.Build(personName, orgName, serviceTypes, serviceTypeID, rows, page, totalPages, "upcoming", vocalNoteCategories, vocalNoteCategoryID, errMsg))
 	}
 
-	return render(c, views.Build(personName, orgName, serviceTypes, "", nil, 1, 1, "upcoming", ""))
+	return render(c, views.Build(personName, orgName, serviceTypes, "", nil, 1, 1, "upcoming", nil, "", ""))
+}
+
+// vocalNoteCategoryData fetches this service type's actual configured
+// Planning Center note categories, plus whichever one (if any) is already
+// picked as "the vocal one" (scheduling.Store.VocalNoteCategoryID) - the
+// "Song leader syncs into" setting's own data (VocalNoteCategoryFormFragment,
+// build.templ). Deliberately org+service-type scoped only, no planID: this
+// is a one-time per-service-type pick, not a per-plan one, which is also
+// why it's fetched here (BuildPage/BuildPlans, whenever a service type is
+// selected) rather than as part of any one plan's own builder data. Same
+// two calls buildSetBuilderData (sets_builder.go) used to make just to
+// populate these same two fields on SetBuilderData before this setting
+// moved off the per-plan builder page - GetItemNoteCategories is a real
+// PCO call, VocalNoteCategoryID a local Postgres read; both best-effort
+// (a failure just leaves the setting showing "not configured yet"/empty
+// rather than failing the whole plan-picker render).
+func (sc *SchedulingController) vocalNoteCategoryData(ctx context.Context, orgID, serviceTypeID string) ([]views.NoteCategoryOptionView, string) {
+	noteCategories, _ := pco.GetItemNoteCategories(ctx, serviceTypeID, nil)
+	categoryID, _ := sc.store.VocalNoteCategoryID(ctx, orgID, serviceTypeID)
+	return vocalNoteCategoryOptions(noteCategories.Data), categoryID
 }
 
 // serviceTypeKnown reports whether id names one of serviceTypes - see
@@ -114,13 +135,16 @@ func (sc *SchedulingController) BuildPlans(c *fiber.Ctx) error {
 	serviceTypeID := c.Query("service_type_id")
 	tab := planTab(c)
 	if serviceTypeID == "" {
-		return render(c, views.BuildPlansList(nil, "", "", 1, 1, tab, ""))
+		return render(c, views.BuildPlansList(nil, "", "", 1, 1, tab, nil, "", ""))
 	}
 
 	c.Set("HX-Push-Url", "/scheduling/build?service_type_id="+url.QueryEscape(serviceTypeID))
 
-	rows, page, totalPages, errMsg := sc.combinedPlansForServiceType(middleware.RequestContext(c), middleware.CurrentOrganizationID(c), serviceTypeID, "", 1, tab == "past")
-	return render(c, views.BuildPlansList(rows, serviceTypeID, "", page, totalPages, tab, errMsg))
+	ctx := middleware.RequestContext(c)
+	orgID := middleware.CurrentOrganizationID(c)
+	rows, page, totalPages, errMsg := sc.combinedPlansForServiceType(ctx, orgID, serviceTypeID, "", 1, tab == "past")
+	vocalNoteCategories, vocalNoteCategoryID := sc.vocalNoteCategoryData(ctx, orgID, serviceTypeID)
+	return render(c, views.BuildPlansList(rows, serviceTypeID, "", page, totalPages, tab, vocalNoteCategories, vocalNoteCategoryID, errMsg))
 }
 
 // BuildPlansSearch backs the plan picker's search box and pagination links -
@@ -188,11 +212,15 @@ func (sc *SchedulingController) UpdatePlanNote(c *fiber.Ctx) error {
 // the next time PublishSet/RefreshSongInfo actually pushes a song leader
 // (see syncLeaderNote, sets_publish.go) - same "saved here, applied on
 // next publish/refresh" timing as every other local field on this page.
+// No planID here (the route is service-type-scoped only - see routes.go)
+// since this is a one-time per-service-type setting, not a per-plan one;
+// re-reads the same two calls vocalNoteCategoryData makes, rather than
+// buildSetBuilderData's much heavier full-plan-builder rebuild this used
+// to call just to read two fields back off the result.
 func (sc *SchedulingController) SetVocalNoteCategory(c *fiber.Ctx) error {
 	ctx := middleware.RequestContext(c)
 	orgID := middleware.CurrentOrganizationID(c)
 	serviceTypeID := c.Params("service_type_id")
-	planID := c.Params("plan_id")
 	categoryID := c.FormValue("category_id")
 
 	status := "saved"
@@ -200,8 +228,8 @@ func (sc *SchedulingController) SetVocalNoteCategory(c *fiber.Ctx) error {
 		status = "error"
 	}
 
-	data := sc.buildSetBuilderData(ctx, orgID, serviceTypeID, planID)
-	return render(c, views.VocalNoteCategoryFormFragment(serviceTypeID, planID, data.VocalNoteCategories, data.VocalNoteCategoryID, status))
+	vocalNoteCategories, vocalNoteCategoryID := sc.vocalNoteCategoryData(ctx, orgID, serviceTypeID)
+	return render(c, views.VocalNoteCategoryFormFragment(serviceTypeID, vocalNoteCategories, vocalNoteCategoryID, status))
 }
 
 // fetchPlansByFilter pages through a service type's plans matching PCO's

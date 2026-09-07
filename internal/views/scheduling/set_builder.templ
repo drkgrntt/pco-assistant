@@ -248,7 +248,7 @@ templ songBadgeSpans(song SetSongView) {
 		@components.BadgeTitled("status-pending", "Moved", "Moved since it was last published")
 	}
 	if song.InfoPending {
-		@components.BadgeTitled("status-pending", "Note/key pending", "This week's note or key changed since it was last published - Refresh song info (or Publish) to send it to Planning Center")
+		@components.BadgeTitled("status-pending", "Note/key/leader pending", "This week's note, key, or leader changed since it was last published - Refresh song info (or Publish) to send it to Planning Center")
 	}
 	if len(song.ConflictTitles) > 0 {
 		@components.ConflictBadge(fmt.Sprintf("avoid pairing with %s", strings.Join(song.ConflictTitles, ", ")))
@@ -548,11 +548,6 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 			<p class="success">{ data.PublishMsg }</p>
 		}
 		@SongStatusSummary(data)
-		if !data.ReadOnly {
-			@collapsibleSection("vocal-note-category-section", "Song leader sync setting", false) {
-				@VocalNoteCategoryFormFragment(data.ServiceTypeID, data.PlanID, data.VocalNoteCategories, data.VocalNoteCategoryID, "")
-			}
-		}
 		<!--
 			ServiceLengthWarning is the one warning check that stays a
 			standalone banner rather than moving onto a song's own row (see

@@ -100,11 +100,12 @@ with at least Viewer access can still sign in.
   people (not typed as free text, so it can't drift from what Planning
   Center itself knows about that person). Once you designate which of a
   service type's Item Note categories is "the vocal one" (a one-time
-  setting, since categories are named freely per org), the leader syncs in
-  as a "Leading: [name]" line at the top of that category's note on the
-  next Publish/Refresh - added, replaced, or removed as the leader
-  changes, without touching anything else a team member typed in that same
-  box by hand
+  per-service-type setting, since categories are named freely per org -
+  set on the plan picker page once a service type is chosen, not on any
+  one plan's own builder), the leader syncs in as a "Leading: [name]"
+  line at the top of that category's note on the next Publish/Refresh -
+  added, replaced, or removed as the leader changes, without touching
+  anything else a team member typed in that same box by hand
 - **Build a Service (Songs tab)** - pick an upcoming plan and build its
   song lineup against the plan's *full* order of service (including
   template headers and non-song items already in Planning Center, not just

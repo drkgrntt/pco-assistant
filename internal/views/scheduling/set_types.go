@@ -152,20 +152,6 @@ type SetBuilderData struct {
 	// everything else built from that response.
 	PCOSyncFingerprint string
 
-	// VocalNoteCategories is this service type's Planning Center note
-	// categories (id + name only - see NoteCategoryOptionView), backing
-	// the "Song leader syncs into" setting's <select>
-	// (vocalNoteCategorySection, set_builder.templ). Reuses the exact
-	// GetItemNoteCategories response buildSongNoteViews already resolves
-	// per song (see buildSetBuilderData) - no extra PCO call.
-	// VocalNoteCategoryID is which of those categories (by id) the song
-	// leader currently syncs into on Publish/Refresh song info - ""
-	// means not configured yet, in which case the sync is a no-op (see
-	// scheduling.Store.VocalNoteCategoryID and docs/plans/shipped/
-	// song-leader-plan.md).
-	VocalNoteCategories []NoteCategoryOptionView
-	VocalNoteCategoryID string
-
 	// SongPairPrompt, when set, offers a one-shot inline "remember that
 	// these two go together?" relationship capture right after adding a
 	// song that landed right after another one - see SongPairPromptView
@@ -242,9 +228,9 @@ type SetSongView struct {
 	// a badge right on the row, since "the order changed" without saying
 	// which songs moved is easy to lose track of.
 	Moved bool
-	// InfoPending is true once Description or Key has been edited on an
-	// already-published song without that edit reaching Planning Center
-	// yet - see scheduling.SetSong.InfoPending, the item-content
+	// InfoPending is true once Description, Key, or Leader has been edited
+	// on an already-published song without that edit reaching Planning
+	// Center yet - see scheduling.SetSong.InfoPending, the item-content
 	// equivalent of Moved above. Shown as its own badge for the same
 	// reason Moved is: without it, an edited-but-not-yet-refreshed song
 	// looked identical to one already in sync, with nothing anywhere on
@@ -442,8 +428,8 @@ type SongOptionView struct {
 // NoteCategoryOptionView is a lightweight Planning Center Item Note
 // category option - just an id and a name, the same "enough to populate
 // a plain native <select>" shape as SongOptionView above. Backs the "Song
-// leader syncs into" setting (SetBuilderData.VocalNoteCategories) - see
-// scheduling.Store.VocalNoteCategoryID.
+// leader syncs into" setting (BuildPlansList's vocalNoteCategories param,
+// build.templ) - see scheduling.Store.VocalNoteCategoryID.
 type NoteCategoryOptionView struct {
 	ID   string
 	Name string
