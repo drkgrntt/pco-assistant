@@ -179,6 +179,22 @@ function closeKeyTransitionBadges() {
   });
 }
 
+// The "Browse all songs" plain title list's per-row detail toggle
+// (songBrowseRow, set_builder.templ) - purely the CSS open/close; the
+// row's title button also carries its own hx-get/hx-trigger="click once"
+// fetching the actual metadata into .song-browse-detail the first time a
+// row opens (htmx handles that independently of this). Unlike
+// toggleRowMenu/toggleKeyTransitionBadge above, this doesn't close
+// sibling rows - see songBrowseRow's own doc comment for why several rows
+// staying open at once is the point here, not a floating popover that'd
+// need to avoid overlapping.
+function toggleSongBrowseDetail(button) {
+  var row = button.closest(".song-browse-row");
+  var opening = !row.classList.contains("open");
+  row.classList.toggle("open", opening);
+  button.setAttribute("aria-expanded", opening ? "true" : "false");
+}
+
 // Reveals the hidden tag/relate/role form for one song row and hides its
 // two siblings - each song gets one <tr class="quick-action-row"> "slot"
 // per action, all sharing the same data-row-id as the song's own row (see

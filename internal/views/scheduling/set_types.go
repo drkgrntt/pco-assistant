@@ -453,6 +453,20 @@ type CandidateSongView struct {
 	TagsAttr string
 }
 
+// HasMeta reports whether c has anything at all to show in
+// songCandidateMeta - used by CandidateDetails (set_builder.templ) to tell
+// "nothing on record for this song yet" apart from a rendering bug, since
+// an empty candidate otherwise renders as a blank space with no visible
+// change on click.
+func (c CandidateSongView) HasMeta() bool {
+	return c.NewSongLabel != "" ||
+		c.ArrangementInfo != "" ||
+		len(c.Roles) > 0 ||
+		len(c.Tags) > 0 ||
+		len(c.ConflictTitles) > 0 ||
+		c.RecentlyRepeated
+}
+
 // SongTagView is one tag on a candidate song, already resolved to its
 // display category label (see songTagCategoryLabelMap) rather than the raw
 // category code.
