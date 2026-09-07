@@ -143,6 +143,12 @@ with at least Viewer access can still sign in.
   `PersonTeamPositionAssignment.schedule_preference` field ("Every other
   week," "Once a month," etc.) - this writes back to real PCO data, so it's
   respected by Planning Center's own scheduling tools too, not just here
+- **Vocal Range** - record each vocalist's lowest and highest comfortable
+  note (e.g. "G3" to "D5") on a dedicated setup page, so "can they hit this
+  note" is answered from a lookup instead of guessed at in rehearsal.
+  Person-level only for now - a per-song vocal range and the mismatch
+  warning that compares the two are still on the roadmap (see
+  `docs/plans/in-progress/vocal-range-plan.md`)
 - **Build a Service (Team tab)** - the same page as the Songs tab above,
   filling an upcoming plan's open positions from each position's real PCO
   eligibility list, with avoid-pairing conflict warnings, works-well/

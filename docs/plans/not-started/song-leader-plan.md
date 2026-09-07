@@ -1,7 +1,7 @@
 # Plan: song leader (per-occurrence), synced into the existing vocal notes
 
 Written 2026-09-06, prompted by a conversation about vocal-range work
-(`docs/plans/not-started/vocal-range-plan.md`) that surfaced a related but
+(`docs/plans/in-progress/vocal-range-plan.md`) that surfaced a related but
 distinct gap: this app has no structured concept of "who's actually
 leading this song," even though that information already exists informally
 today - directors type a name into the "Vocals" Item Note box (see
@@ -49,13 +49,13 @@ itself (a different worship leader can lead the same song next month),
 exactly the same reasoning that puts `KeyOverride`/`Description` on
 `set_songs` rather than on a song-level table.
 
-**Migration numbering conflict, flagged up front**: the latest applied
-migration is `00034_song_arrangement_structure.sql`.
-`vocal-range-plan.md` (also not started) already tentatively claims
-`00035` for its own `person_vocal_range` table. Whichever of these two
-plans is built first gets `00035`; the other renumbers to the next
-available number at build time - not a design conflict, just a
-bookkeeping note so neither implementer assumes their number is fixed.
+**Migration numbering, updated**: `vocal-range-plan.md`'s Phase 1 has since
+shipped (2026-09-07) as `00036_person_vocal_range.sql` (its own `00035`
+guess was stale by build time - `00035` had already gone to
+`song_attachment_cache`). The latest applied migration as of this note is
+therefore `00036`; whatever this plan's own migration ends up being should
+just take the next available number at build time rather than assuming a
+fixed one - not a design conflict, just a bookkeeping note.
 
 ## Which product promise this serves
 

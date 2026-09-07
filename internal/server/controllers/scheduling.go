@@ -495,6 +495,10 @@ func (sc *SchedulingController) RegisterRoutes(router fiber.Router) {
 	group.Post("/person-relationships", sc.CreatePersonRelationship)
 	group.Delete("/person-relationships/:id", sc.DeletePersonRelationship)
 
+	group.Get("/vocal-range", sc.PersonVocalRangePage)
+	group.Post("/vocal-range", sc.SetPersonVocalRange)
+	group.Delete("/vocal-range/:id", sc.DeletePersonVocalRange)
+
 	group.Get("/position-preferences", sc.PositionPreferencesPage)
 	group.Get("/position-preferences/assignments", sc.PositionAssignments)
 	group.Post("/position-preferences", sc.SetPositionPreference)

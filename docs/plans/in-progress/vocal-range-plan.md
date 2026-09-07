@@ -1,5 +1,16 @@
 # Plan: vocal range (person + song) and the key engine
 
+**Status: Phase 1 shipped 2026-09-07** - the standalone person vocal range
+setup page (migration `00036_person_vocal_range.sql` - `00035` was already
+taken by `song_attachment_cache` by the time this landed, so the number
+shifted from this doc's own `00035` guess; `internal/scheduling/
+person_vocal_range.go`'s `Store` methods; `internal/server/controllers/
+vocal_range.go`'s page/set/delete handlers and standalone note-with-octave
+parser; `internal/views/scheduling/vocal_range.templ`; the `/scheduling/
+vocal-range` route and Setup nav link). Phases 2-3 (song vocal range, the
+key engine extraction it needs, and the mismatch warning) remain not
+started - see those sections below, unchanged from the original plan.
+
 Written 2026-09-06, expanding two related `docs/ideas.md` bullets into one
 coherent build plan: **"Vocal range per vocalist"** (People section,
 ~line 462) and **"Song vocal range (relative to key)"** (Songs section,
