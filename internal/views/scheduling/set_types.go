@@ -351,6 +351,17 @@ type SetSongView struct {
 	LeaderPersonID   string
 	LeaderPersonName string
 
+	// VocalRangeDisplay is this song's practical sung range, already
+	// transposed into this row's own effective key (see the controller's
+	// songVocalRangeDisplay) and formatted as "G3-D5" - "" when no range is
+	// on record for this song (see internal/scheduling/song_vocal_range.go
+	// and the /scheduling/song-vocal-range setup page), in which case the
+	// detail card shows nothing rather than a placeholder. Detail-card
+	// only, same scope as Structure/HasChordChart above - Phase 2 of
+	// docs/plans/in-progress/vocal-range-plan.md; the mismatch warning
+	// this is a prerequisite for (Phase 3) isn't built yet.
+	VocalRangeDisplay string
+
 	// TransitionNotePrompts is the resurfacing prompt(s) for this row - the
 	// latest debrief/talking-point note for this song alone (single-song),
 	// or for the pair ending here (this song immediately following another

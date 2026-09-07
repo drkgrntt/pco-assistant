@@ -17,9 +17,44 @@ tone (`playVocalTone`/`parseVocalNoteText`/`playVocalNoteFromInput` in
 `OscillatorNode` at the correct A440-tuned frequency, not the
 pre-recorded audio sample set the original brainstorm imagined, since a
 clean sine tone is just as good a pitch reference and needs no asset
-files. Phases 2-3 (song vocal range, the key engine extraction it needs,
-and the mismatch warning) remain not started - see those sections below,
-unchanged from the original plan.
+files.
+
+**Phase 2 (key engine + song vocal range) also shipped 2026-09-07** - the
+key engine extraction (`internal/scheduling/key_engine.go`:
+`ParseKeyPitchClass`/`SemitoneDistance` moved verbatim out of
+`sets_builder.go`, plus new `SignedSemitoneDelta`/`ParseNote`/
+`AbsoluteSemitone`/`PitchClassAndOctave`; `sets_builder.go`'s
+`keyTransitionWarnings`/`suggestedDominantSeventh` now call the
+`scheduling.` versions; `vocal_range.go`'s `parseVocalNote`/
+`absoluteVocalSemitone` are now thin wrappers around
+`scheduling.ParseNote`/`scheduling.AbsoluteSemitone` rather than a second
+copy of the same parsing logic; tests relocated to
+`internal/scheduling/key_engine_test.go`), the `song_vocal_ranges` table
+(migration `00041_song_vocal_range.sql` - `00039`/`00040` were reserved for
+other concurrent work landing in the same batch, so the number shifted
+from this doc's own `00036` guess), `internal/scheduling/
+song_vocal_range.go`'s `Store` methods plus `ComputeVocalRangeOffsets`
+(the anchoring rule) and `EffectiveVocalRange` (transposition),
+`internal/server/controllers/song_vocal_range.go`'s page/set/delete
+handlers, `internal/views/scheduling/song_vocal_range.templ`, the
+`/scheduling/song-vocal-range` route and Setup nav link, and a "Vocal
+range: G3-D5 (in this key)" line on the Build page's song detail card
+(`song_detail_card.templ`) showing the transposed result live - see this
+plan's own "Phase 2 prerequisite: the key engine" and "Phase 2: song
+vocal range" sections below for the exact math, unchanged from what's
+written there, with one flagged deviation: `EffectiveVocalRange` anchors
+the reference key's tonic at a **fixed** octave (3) when reconstructing a
+display value at render time, rather than the original entry-time octave
+- the `song_vocal_ranges` schema, as specified, only persists the two
+offsets and the reference key text, not the octave the low/high notes
+were actually typed in, so the exact original register can't be
+recovered byte-for-byte; a fixed anchor preserves the interval's real
+width and the correct transposition shift (the two things that actually
+matter for a display), just not necessarily the exact octave a director
+had in mind. See that function's own doc comment for the full reasoning.
+Phase 3 (the mismatch warning/matrix view) and the crowdsourced-default
+question remain not started - see those sections below, unchanged from
+the original plan.
 
 Written 2026-09-06, expanding two related `docs/ideas.md` bullets into one
 coherent build plan: **"Vocal range per vocalist"** (People section,

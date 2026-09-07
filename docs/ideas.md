@@ -377,7 +377,18 @@ pattern as `song_tags`/`song_relationships`:**
   whether a key works for someone, actually know the song's sung range
   and compare it against a person's own vocal range (see People, below)
   to flag a real mismatch automatically, not just show a note someone has
-  to read. Still not built - see
+  to read. **The key engine and manual per-song entry piece shipped
+  2026-09-07** - see `docs/plans/in-progress/vocal-range-plan.md`'s Phase
+  2 status note: a `/scheduling/song-vocal-range` setup page storing each
+  song's range as a semitone interval from a reference key
+  (`internal/scheduling/song_vocal_range.go`), transposed at Build-page
+  render time into whatever key the arrangement is actually in right now
+  and shown on the song detail card. Still open: the actual mismatch
+  warning comparing a song's transposed range against a roster'd
+  vocalist's stored range (Phase 3, this bullet stays open rather than
+  struck until that lands), and the crowdsourced-default piece
+  immediately below, which remains a genuine cross-org product decision,
+  not a coding question. See
   `docs/plans/shipped/song-lead-sheet-attachments-plan.md` for why
   *automatic* range extraction from a song's lead sheet specifically is
   out of scope (Planning Center's Attachments are arbitrary file blobs,
@@ -386,17 +397,20 @@ pattern as `song_tags`/`song_relationships`:**
   as its own standalone manual aid (a director can open the real chart
   while eyeballing a range) rather than as a prerequisite of this bullet.
   Two real design pieces, not one:
-  - **A key engine.** A song's range only means something relative to the
-    key it was measured in, so it has to be stored as an interval
-    (semitone offsets from a reference key), then transposed using the
-    same pitch-class math the key-transition warning already has
-    (`parseKeyPitchClass` in `sets_builder.go`) to get the effective
-    range for whatever key the arrangement is actually in right now.
-    That reuses existing logic rather than inventing new music-theory
-    code, but it's currently inlined for one warning check - a second
-    consumer is a real reason to factor it into an actual shared "key
-    engine" (canonical pitch-class representation + transposition
-    helper) rather than copy-pasting the parser again.
+  - ~~A key engine.~~ **Shipped 2026-09-07** as
+    `internal/scheduling/key_engine.go` - `ParseKeyPitchClass`/
+    `SemitoneDistance` moved out of `sets_builder.go` (where they were
+    inlined for the key-transition warning alone), plus new
+    `SignedSemitoneDelta`/`ParseNote`/`AbsoluteSemitone` for the signed
+    transposition and octave-aware parsing a stored range needs beyond
+    the transition warning's own bare pitch-class comparison. A song's
+    range only means something relative to the key it was measured in,
+    so it's stored as an interval (semitone offsets from a reference
+    key), then transposed using this same shared pitch-class math to get
+    the effective range for whatever key the arrangement is actually in
+    right now - see `docs/plans/in-progress/vocal-range-plan.md`'s "Phase
+    2 prerequisite" section for the full reasoning on why this became a
+    real second consumer rather than another copy-paste of the parser.
   - **Crowdsourced default.** Most directors won't know a song's range
     offhand and won't want to work it out by ear, so most songs would sit
     blank forever without some way to pre-fill a guess. If it could be
@@ -490,8 +504,9 @@ pattern as `song_tags`/`song_relationships`:**
   storing each person's lowest/highest comfortable note as a
   pitch-class/octave pair - see
   `docs/plans/in-progress/vocal-range-plan.md` for the rest (song vocal
-  range and the mismatch warning remain not started, which is why this
-  bullet stays open rather than struck). Lets the app know what someone can
+  range and its key engine shipped as Phase 2, 2026-09-07; the mismatch
+  warning comparing the two, Phase 3, remains not started, which is why
+  this bullet stays open rather than struck). Lets the app know what someone can
   actually sing, not just whether PCO says they're eligible for a
   position. Simplest as a person-level field, not position-level: PCO's
   position eligibility already answers *who can serve* a position, this
@@ -721,14 +736,18 @@ already model the storage; the gap is the warning, not the data).
 but unlike those two, it costs a real PCO call per assignment (same tier
 as today's serving-frequency check).
 
-**Vocal range** splits by half: per-person range is cheap and standalone
-(one small new table, useful even with zero song data). Per-song range
-costs more - needs a real key engine factored out of the key-transition
-warning's one-off pitch-class parser - and its crowdsourced-default piece
-is the priciest single item in this file: the first genuinely cross-org
-data pattern this app would have, needing a reliable join key and a real
+**Vocal range** split by half, and both halves have now shipped: per-person
+range was cheap and standalone (one small new table, useful even with
+zero song data); per-song range cost more (needed a real key engine
+factored out of the key-transition warning's one-off pitch-class parser -
+see `docs/plans/in-progress/vocal-range-plan.md`'s Phase 2 status note).
+What's left is genuinely still open, and still the pricier remainder: the
+mismatch warning (a roster-cross-referenced check, Phase 3) is a
+moderate, well-scoped lift; the crowdsourced-default piece remains the
+priciest single item in this file - the first genuinely cross-org data
+pattern this app would have, needing a reliable join key and a real
 consent story before it's shippable. The eventual key matrix is
-presentation-only once both ranges exist.
+presentation-only once the mismatch warning exists too.
 
 Priciest of the rest: **stage density/band-balance checking** (a new
 capability/profile axis on both people and services, nothing existing to

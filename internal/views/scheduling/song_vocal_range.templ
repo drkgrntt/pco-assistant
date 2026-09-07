@@ -1,0 +1,153 @@
+package scheduling
+
+import (
+	"fmt"
+
+	pco "github.com/drkgrntt/go-pco"
+
+	"pco-assistant/internal/scheduling"
+	"pco-assistant/internal/views"
+	"pco-assistant/internal/views/components"
+)
+
+// SongVocalRanges is Phase 2 of docs/plans/in-progress/vocal-range-plan.md:
+// a standalone song-level vocal range setup page, mirroring the Song Tags/
+// Song Roles setup-page pattern (a song <select>, a small inline form, a
+// SortableTableWrap of existing entries below it) - deliberately NOT on
+// the Build page's song detail card, since a song's range is a fact about
+// the song itself, reused across every plan it appears in, not a
+// per-occurrence value (see that plan doc's own reasoning). The reference
+// key is entered alongside the low/high notes so the range can be stored
+// as a transposable interval (scheduling.ComputeVocalRangeOffsets) rather
+// than a bare note pair that would be meaningless without knowing what key
+// it was measured against.
+templ SongVocalRanges(personName, organizationName string, songs []pco.SongData, ranges []scheduling.SongVocalRange, songTitles map[string]string, errMsg string) {
+	@views.Layout("Song Vocal Range", personName, organizationName) {
+		<h1>Song Vocal Range</h1>
+		<p class="muted">Record each song's sung range - lowest and highest note, measured against the key you played it in - so the Build page can show its practical range transposed into whatever key the arrangement is actually in right now. Reused across every plan the song appears in, like Song Tags/Song Roles - not something to re-enter per plan.</p>
+		<form
+			id="song-vocal-range-form"
+			class="inline"
+			hx-post="/scheduling/song-vocal-range"
+			hx-target="#song-vocal-ranges-table"
+			hx-swap="outerHTML"
+			hx-on::after-request="if(event.detail.successful && event.detail.elt === this) resetSetupForm(this)"
+		>
+			<label>
+				Song
+				<select name="song_id" required>
+					<option value="" selected disabled>Choose a song</option>
+					for _, song := range songs {
+						<option value={ song.ID }>{ song.Attributes.Title }</option>
+					}
+				</select>
+			</label>
+			<label>
+				Measured in key
+				<input type="text" name="reference_key" placeholder="e.g. G, Bb, F#m" list="key-options" required/>
+			</label>
+			@musicalKeyOptions()
+			<label>
+				Lowest note
+				<input type="text" name="lowest_note" placeholder="e.g. G3" list="vocal-note-options" required/>
+			</label>
+			<label>
+				Highest note
+				<input type="text" name="highest_note" placeholder="e.g. D5" list="vocal-note-options" required/>
+			</label>
+			@vocalNoteOptions()
+			<button type="submit" class="primary">Save</button>
+		</form>
+		@SongVocalRangesTable(ranges, songTitles, errMsg)
+	}
+}
+
+// SongVocalRangesTable is both the initial-render fragment and the htmx
+// swap target (id="song-vocal-ranges-table") - see SongTagsTable for why
+// errMsg lives inside it rather than the page around it. songTitles
+// resolves a range's raw PCO song id back to a display title (see
+// songTitleMap in the scheduling controller); an id missing from the map
+// falls back to showing the raw id. There's no per-row edit affordance,
+// same convention as PersonVocalRangesTable - a resubmit for the same song
+// upserts in place (scheduling.SetSongVocalRange's ON CONFLICT clause), so
+// re-picking that song and resubmitting is already the edit flow.
+templ SongVocalRangesTable(ranges []scheduling.SongVocalRange, songTitles map[string]string, errMsg string) {
+	<div id="song-vocal-ranges-table">
+		if errMsg != "" {
+			<p class="error">{ errMsg }</p>
+		}
+		@components.SortableTableWrap() {
+			<thead>
+					<tr>
+						<th>Song</th>
+						<th>Measured in key</th>
+						<th>Lowest note</th>
+						<th>Highest note</th>
+						<th></th>
+					</tr>
+				</thead>
+				<tbody>
+					for _, r := range ranges {
+						<tr>
+							<td>
+								if title, ok := songTitles[r.SongID]; ok {
+									{ title }
+								} else {
+									{ r.SongID }
+								}
+							</td>
+							<td>{ r.ReferenceKey }</td>
+							<td>{ songVocalRangeLowDisplay(r) }</td>
+							<td>{ songVocalRangeHighDisplay(r) }</td>
+							<td>
+								<button
+									class="danger icon-btn"
+									aria-label="Delete vocal range"
+									title="Delete vocal range"
+									hx-delete={ fmt.Sprintf("/scheduling/song-vocal-range/%d", r.ID) }
+									hx-target="#song-vocal-ranges-table"
+									hx-swap="outerHTML"
+									hx-confirm="Delete this vocal range?"
+								>
+									@components.IconRemove()
+								</button>
+							</td>
+						</tr>
+					}
+					if len(ranges) == 0 {
+						<tr>
+							<td colspan="5" class="muted">No song vocal ranges set yet.</td>
+						</tr>
+					}
+				</tbody>
+		}
+	</div>
+}
+
+// songVocalRangeLowDisplay/songVocalRangeHighDisplay reconstruct a stored
+// song vocal range's low/high notes for table display, reusing
+// scheduling.EffectiveVocalRange against the row's own reference key (no
+// transposition - delta ends up 0) so the table shows the range in the key
+// it was actually measured in, formatted with the same display helper
+// Phase 1's person ranges use (formatVocalNoteDisplay). See
+// EffectiveVocalRange's own doc comment for why the resulting octave is a
+// fixed, reasonable anchor rather than a byte-exact reconstruction of
+// whatever real octave was originally typed - the stored offsets alone
+// don't retain that.
+func songVocalRangeLowDisplay(r scheduling.SongVocalRange) string {
+	lowAbs, _, ok := scheduling.EffectiveVocalRange(r.ReferenceKey, r.LowOffsetSemitones, r.HighOffsetSemitones, r.ReferenceKey)
+	if !ok {
+		return "?"
+	}
+	pc, oct := scheduling.PitchClassAndOctave(lowAbs)
+	return formatVocalNoteDisplay(pc, oct)
+}
+
+func songVocalRangeHighDisplay(r scheduling.SongVocalRange) string {
+	_, highAbs, ok := scheduling.EffectiveVocalRange(r.ReferenceKey, r.LowOffsetSemitones, r.HighOffsetSemitones, r.ReferenceKey)
+	if !ok {
+		return "?"
+	}
+	pc, oct := scheduling.PitchClassAndOctave(highAbs)
+	return formatVocalNoteDisplay(pc, oct)
+}

@@ -77,6 +77,17 @@ with at least Viewer access can still sign in.
   aid, not automatic vocal-range extraction - Planning Center's attachments
   are arbitrary file blobs (often scanned PDFs), not structured notation,
   so there's nothing to compute a range from automatically
+- **Song Vocal Range** - record each song's lowest and highest sung note,
+  measured against the key you played it in, on a dedicated setup page
+  (mirroring Song Tags/Song Roles - a fact about the song itself, reused
+  across every plan it appears in, not a per-occurrence value). The Build
+  page's song detail card shows the transposed result live - "Vocal
+  range: G3-D5 (in this key)" - re-derived from the stored interval into
+  whatever key the arrangement is actually in right now, whether or not
+  that matches the key it was originally measured in. Pairs with the
+  People section's **Vocal Range** above; the mismatch warning comparing
+  a song's range against a roster'd vocalist's is still on the roadmap
+  (see `docs/plans/in-progress/vocal-range-plan.md`)
 - **Song / Person Preferences** - note who's preferred or discouraged for a
   given song
 - **Song notes** - click a song's row on the Build page to open its detail
@@ -179,8 +190,8 @@ with at least Viewer access can still sign in.
   note has a small tap-to-hear button next to it that plays a synthesized
   reference tone (Web Audio, standard A440 tuning) at that pitch, so a
   director unsure what a stored note actually sounds like doesn't have to
-  work it out by ear or on an instrument. Person-level only for now - a
-  per-song vocal range and the mismatch warning that compares the two are
+  work it out by ear or on an instrument. Pairs with **Song Vocal Range**
+  below (Songs section) - the mismatch warning that compares the two is
   still on the roadmap (see `docs/plans/in-progress/vocal-range-plan.md`)
 - **Build a Service (Team tab)** - the same page as the Songs tab above,
   filling an upcoming plan's open positions from each position's real PCO

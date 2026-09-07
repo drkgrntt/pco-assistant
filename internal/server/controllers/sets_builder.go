@@ -161,6 +161,12 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 	// docs/plans/shipped/song-lead-sheet-attachments-plan.md.
 	attachmentCache, _ := sc.store.SongAttachments(ctx, organizationID)
 
+	// vocalRangesBySong backs the detail card's "Vocal range" line
+	// (SetSongView.VocalRangeDisplay) - one bulk local-DB read, same
+	// shape as arrangementCache/attachmentCache above, no PCO call. See
+	// docs/plans/in-progress/vocal-range-plan.md's Phase 2 section.
+	vocalRangesBySong, _ := sc.store.ListSongVocalRanges(ctx, organizationID)
+
 	// AllSongs/TagCategories/RelationshipTypes/RoleTypes back the "Quick
 	// add" panel's <select> pickers (see views.SetBuilderData) - best-effort
 	// like the lookups above, since a failure here only costs that one
@@ -336,7 +342,7 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 		// set has a leader set. Feeds SetSongView.LeaderPersonName below,
 		// the same "resolve once here, not per-row" shape as titles.
 		leaderNames := personNameMapForIDs(ctx, distinctLeaderPersonIDs(setSongs))
-		data.ServiceOrder = renderServiceOrder(ctx, sc.store, organizationID, arrangementCache, attachmentCache, noteCategories.Data, itemNotes, merged, titles, rolesBySong, roleTypeLabels, history.RepeatedSongs, conflictTitlesBySong, transitionsByRow, leaderNames, transitionNotesBySongID, transitionNotePromptsByRow)
+		data.ServiceOrder = renderServiceOrder(ctx, sc.store, organizationID, arrangementCache, attachmentCache, vocalRangesBySong, noteCategories.Data, itemNotes, merged, titles, rolesBySong, roleTypeLabels, history.RepeatedSongs, conflictTitlesBySong, transitionsByRow, leaderNames, transitionNotesBySongID, transitionNotePromptsByRow)
 
 		// ServiceLengthWarning: the one warning that stays a standalone,
 		// whole-plan banner rather than moving onto a row - it isn't
@@ -1373,56 +1379,16 @@ func formatTotalDuration(seconds int) string {
 	return fmt.Sprintf("%dh %dm", minutes/60, minutes%60)
 }
 
-// keyPitchClasses maps a note letter to its pitch class (C=0 .. B=11) -
-// keyTransitionWarnings' only music-theory lookup table.
-var keyPitchClasses = map[string]int{
-	"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11,
-}
-
-// parseKeyPitchClass parses a key string ("Bb", "F#m", "G") into a 0-11
-// pitch class, ignoring major/minor quality entirely - a trailing "m"
-// (minor - see resolveKeyID's own comment on this convention) is accepted
-// but doesn't change the result, since this warning is about root
-// movement, not mode. Returns ok=false for anything that isn't a bare note
-// letter A-G optionally followed by a single "#"/"♯" or "b"/"♭" - good
-// enough for what this app and Planning Center's own key picker actually
-// produce, not a general music-notation parser.
-func parseKeyPitchClass(key string) (int, bool) {
-	key = strings.TrimSpace(key)
-	key = strings.TrimSuffix(key, "m")
-	if key == "" {
-		return 0, false
-	}
-
-	root, ok := keyPitchClasses[strings.ToUpper(key[:1])]
-	if !ok {
-		return 0, false
-	}
-	switch key[1:] {
-	case "":
-	case "#", "♯":
-		root++
-	case "b", "♭":
-		root--
-	default:
-		return 0, false
-	}
-	return ((root % 12) + 12) % 12, true
-}
-
-// semitoneDistance is the minimal circular distance (0-6) between two pitch
-// classes - 1 either direction (e.g. E to F, or B to C) is a half step, the
-// interval keyTransitionWarnings actually flags.
-func semitoneDistance(a, b int) int {
-	d := a - b
-	if d < 0 {
-		d = -d
-	}
-	if d > 6 {
-		d = 12 - d
-	}
-	return d
-}
+// Pitch-class parsing/distance (formerly keyPitchClasses/
+// parseKeyPitchClass/semitoneDistance, inlined here for keyTransitionWarnings
+// alone) moved to scheduling.ParseKeyPitchClass/scheduling.SemitoneDistance -
+// see internal/scheduling/key_engine.go and
+// docs/plans/in-progress/vocal-range-plan.md's "Phase 2 prerequisite: the
+// key engine" section for why (song vocal range, Phase 2, is a second
+// consumer that also needs to transpose a stored interval, not just
+// compare two bare keys - that needed a shared, storage-reachable home,
+// not another controller-local copy). suggestedDominantSeventh/
+// suggestedKeyChangeMove below still call the scheduling. versions.
 
 // dominantSpellings maps a pitch class (0-11) to its conventional spelled
 // note name, used by suggestedDominantSeventh below to turn the destination
@@ -1452,12 +1418,13 @@ var dominantSpellingsFlat = map[int]string{
 // dominant, standard functional-harmony practice for pulling strongly into
 // a target key regardless of how far away the previous key was (see
 // docs/plans/shipped/key-change-tip-plan.md's "The formula and the table").
-// destKey must already have parsed via parseKeyPitchClass; this only
-// re-derives the pitch class, it doesn't re-validate the string. Returns ""
-// if destKey doesn't parse (defensive - callers only reach this after
-// parseKeyPitchClass already succeeded on the same string).
+// destKey must already have parsed via scheduling.ParseKeyPitchClass; this
+// only re-derives the pitch class, it doesn't re-validate the string.
+// Returns "" if destKey doesn't parse (defensive - callers only reach this
+// after scheduling.ParseKeyPitchClass already succeeded on the same
+// string).
 func suggestedDominantSeventh(destKey string) string {
-	destPC, ok := parseKeyPitchClass(destKey)
+	destPC, ok := scheduling.ParseKeyPitchClass(destKey)
 	if !ok {
 		return ""
 	}
@@ -1491,7 +1458,7 @@ func suggestedDominantSeventh(destKey string) string {
 }
 
 // keyChangeTips holds a specific suggested-move override for a semitone
-// distance (semitoneDistance), when the generic V7-of-destination default
+// distance (scheduling.SemitoneDistance), when the generic V7-of-destination default
 // (defaultKeyChangeMove) isn't the best available tip for that interval.
 // Empty today - neither interval keyTransitionWarnings currently flags
 // (1, 6) has a better-known alternative to V7, per
@@ -1557,8 +1524,8 @@ type keyTransitionWarning struct {
 // a mistake rather than an intentional change, and the hardest for a
 // guitarist to prepare for (a full re-fret, not a capo move). A song with
 // no key set, or a key string that doesn't parse (see
-// parseKeyPitchClass), is silently skipped - same best-effort convention as
-// fetchRecentPlanHistory above.
+// scheduling.ParseKeyPitchClass), is silently skipped - same best-effort
+// convention as fetchRecentPlanHistory above.
 func keyTransitionWarnings(rows []mergedRow, arrangementCache map[string]scheduling.SongArrangementInfo, titles map[string]string) []keyTransitionWarning {
 	var warnings []keyTransitionWarning
 	for i := 1; i < len(rows); i++ {
@@ -1569,15 +1536,15 @@ func keyTransitionWarnings(rows []mergedRow, arrangementCache map[string]schedul
 
 		prevKey := effectiveKey(*prev.Song, arrangementCache[prev.Song.SongID])
 		curKey := effectiveKey(*cur.Song, arrangementCache[cur.Song.SongID])
-		prevPitch, ok := parseKeyPitchClass(prevKey)
+		prevPitch, ok := scheduling.ParseKeyPitchClass(prevKey)
 		if !ok {
 			continue
 		}
-		curPitch, ok := parseKeyPitchClass(curKey)
+		curPitch, ok := scheduling.ParseKeyPitchClass(curKey)
 		if !ok {
 			continue
 		}
-		change := semitoneDistance(prevPitch, curPitch)
+		change := scheduling.SemitoneDistance(prevPitch, curPitch)
 		// minor second or tri tone
 		if change != 1 && change != 6 {
 			continue
@@ -1703,7 +1670,16 @@ func vocalNoteCategoryOptions(categories []pco.ItemNoteCategoryData) []views.Not
 // (SetSongView.LeaderPersonName) - see distinctLeaderPersonIDs/
 // personNameMapForIDs in buildSetBuilderData, batched once for the whole
 // render rather than a per-row lookup.
-func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizationID string, arrangementCache map[string]scheduling.SongArrangementInfo, attachmentCache map[string][]scheduling.SongAttachmentInfo, noteCategories []pco.ItemNoteCategoryData, itemNotes map[string][]pco.ItemNoteData, rows []mergedRow, titles map[string]string, rolesBySong map[string][]scheduling.SongRole, roleTypeLabels map[string]string, repeated map[string]bool, conflictTitlesBySong map[string][]string, transitionsByRow map[int64]keyTransitionWarning, leaderNames map[string]string, transitionNotesBySongID map[string][]scheduling.TransitionNote, transitionNotePromptsByRow map[int64][]transitionNotePrompt) []views.ServiceOrderRow {
+//
+// vocalRangesBySong is Phase 2 of docs/plans/in-progress/vocal-range-plan.md
+// (scheduling.ListSongVocalRanges, buildSetBuilderData) - a song with a
+// stored range gets its practical sung range transposed into this row's
+// own effective key (scheduling.EffectiveVocalRange) and rendered on the
+// detail card as SetSongView.VocalRangeDisplay; a song with no range on
+// file, or an effective/reference key that doesn't parse, gets "" (no line
+// shown) - same best-effort convention as keyTransitionWarnings' own
+// unparseable-key skip.
+func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizationID string, arrangementCache map[string]scheduling.SongArrangementInfo, attachmentCache map[string][]scheduling.SongAttachmentInfo, vocalRangesBySong map[string]scheduling.SongVocalRange, noteCategories []pco.ItemNoteCategoryData, itemNotes map[string][]pco.ItemNoteData, rows []mergedRow, titles map[string]string, rolesBySong map[string][]scheduling.SongRole, roleTypeLabels map[string]string, repeated map[string]bool, conflictTitlesBySong map[string][]string, transitionsByRow map[int64]keyTransitionWarning, leaderNames map[string]string, transitionNotesBySongID map[string][]scheduling.TransitionNote, transitionNotePromptsByRow map[int64][]transitionNotePrompt) []views.ServiceOrderRow {
 	// A plain sequential loop, not scheduling.RunConcurrently - unlike
 	// before Phase 2 (docs/plans/shipped/pco-call-efficiency-rollout-plan.md), a song
 	// row's only per-row lookup, resolveArrangementCacheInfo, no longer
@@ -1752,27 +1728,28 @@ func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizati
 		displayInfo.Key = key
 
 		songView := views.SetSongView{
-			ID:               ss.ID,
-			SongID:           ss.SongID,
-			Title:            titleOrID(titles, ss.SongID),
-			Position:         ss.Position,
-			Roles:            roleViews,
-			Published:        ss.PCOItemID != "",
-			AnchorItemID:     ss.AnchorItemID,
-			Moved:            ss.Moved,
-			InfoPending:      ss.InfoPending,
-			ArrangementInfo:  formatArrangementInfo(displayInfo),
-			Structure:        displayInfo.Structure,
-			HasChordChart:    displayInfo.HasChordChart,
-			Description:      ss.Description,
-			Key:              key,
-			PCOItemID:        ss.PCOItemID,
-			Notes:            buildSongNoteViews(ss.PCOItemID, noteCategories, itemNotes),
-			RecentlyRepeated: repeated[ss.SongID],
-			ConflictTitles:   conflictTitlesBySong[ss.SongID],
-			Attachments:      songAttachmentViews(attachmentCache[ss.SongID]),
-			LeaderPersonID:   ss.LeaderPersonID,
-			LeaderPersonName: titleOrID(leaderNames, ss.LeaderPersonID),
+			ID:                ss.ID,
+			SongID:            ss.SongID,
+			Title:             titleOrID(titles, ss.SongID),
+			Position:          ss.Position,
+			Roles:             roleViews,
+			Published:         ss.PCOItemID != "",
+			AnchorItemID:      ss.AnchorItemID,
+			Moved:             ss.Moved,
+			InfoPending:       ss.InfoPending,
+			ArrangementInfo:   formatArrangementInfo(displayInfo),
+			Structure:         displayInfo.Structure,
+			HasChordChart:     displayInfo.HasChordChart,
+			Description:       ss.Description,
+			Key:               key,
+			PCOItemID:         ss.PCOItemID,
+			Notes:             buildSongNoteViews(ss.PCOItemID, noteCategories, itemNotes),
+			RecentlyRepeated:  repeated[ss.SongID],
+			ConflictTitles:    conflictTitlesBySong[ss.SongID],
+			Attachments:       songAttachmentViews(attachmentCache[ss.SongID]),
+			VocalRangeDisplay: songVocalRangeDisplay(vocalRangesBySong, ss.SongID, key),
+			LeaderPersonID:    ss.LeaderPersonID,
+			LeaderPersonName:  titleOrID(leaderNames, ss.LeaderPersonID),
 		}
 		if transition, ok := transitionsByRow[ss.ID]; ok {
 			songView.KeyTransitionLabel = transition.Label
@@ -1792,6 +1769,32 @@ func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizati
 	}
 
 	return out
+}
+
+// songVocalRangeDisplay formats a song's practical sung range, transposed
+// into effectiveKey (this row's own effective key - the local override
+// when set, falling back to the arrangement's default, same as
+// effectiveKey/displayInfo.Key above), for the detail card's "Vocal range"
+// line - see docs/plans/in-progress/vocal-range-plan.md's Phase 2 section.
+// "" (no line shown) when this song has no range on record
+// (vocalRangesBySong misses), or when either the stored reference key or
+// effectiveKey fails to parse (scheduling.EffectiveVocalRange) - same
+// best-effort convention as keyTransitionWarnings' own unparseable-key
+// skip.
+func songVocalRangeDisplay(vocalRangesBySong map[string]scheduling.SongVocalRange, songID, effectiveKey string) string {
+	vr, ok := vocalRangesBySong[songID]
+	if !ok {
+		return ""
+	}
+
+	lowAbs, highAbs, ok := scheduling.EffectiveVocalRange(vr.ReferenceKey, vr.LowOffsetSemitones, vr.HighOffsetSemitones, effectiveKey)
+	if !ok {
+		return ""
+	}
+
+	lowPC, lowOct := scheduling.PitchClassAndOctave(lowAbs)
+	highPC, highOct := scheduling.PitchClassAndOctave(highAbs)
+	return fmt.Sprintf("%s-%s", formatVocalNote(lowPC, lowOct), formatVocalNote(highPC, highOct))
 }
 
 // songRolesBySong buckets every one of an org's song roles by song id - the

@@ -107,47 +107,12 @@ func TestServiceLengthWarningFloorProtectsSmallAverages(t *testing.T) {
 	}
 }
 
-func TestParseKeyPitchClassBareNote(t *testing.T) {
-	got, ok := parseKeyPitchClass("G")
-	if !ok || got != 7 {
-		t.Errorf("expected G -> 7, true, got %d, %v", got, ok)
-	}
-}
-
-func TestParseKeyPitchClassSharpAndFlat(t *testing.T) {
-	if got, ok := parseKeyPitchClass("F#"); !ok || got != 6 {
-		t.Errorf("expected F# -> 6, true, got %d, %v", got, ok)
-	}
-	if got, ok := parseKeyPitchClass("Bb"); !ok || got != 10 {
-		t.Errorf("expected Bb -> 10, true, got %d, %v", got, ok)
-	}
-}
-
-// TestParseKeyPitchClassIgnoresMinor confirms a trailing "m" (see
-// resolveKeyID's comment on this convention) is stripped without changing
-// the pitch class - this warning is about root movement, not mode.
-func TestParseKeyPitchClassIgnoresMinor(t *testing.T) {
-	got, ok := parseKeyPitchClass("Em")
-	if !ok || got != 4 {
-		t.Errorf("expected Em -> 4, true, got %d, %v", got, ok)
-	}
-}
-
-func TestParseKeyPitchClassRejectsUnparseable(t *testing.T) {
-	for _, key := range []string{"", "H", "Cx", "capo 2"} {
-		if _, ok := parseKeyPitchClass(key); ok {
-			t.Errorf("expected %q to fail to parse, but it did", key)
-		}
-	}
-}
-
-func TestSemitoneDistanceWrapsAround(t *testing.T) {
-	// B (11) to C (0) is a half step going up through the octave boundary,
-	// not an 11-semitone gap.
-	if got := semitoneDistance(11, 0); got != 1 {
-		t.Errorf("expected B->C to be a 1-semitone distance, got %d", got)
-	}
-}
+// TestParseKeyPitchClass*/TestSemitoneDistanceWrapsAround relocated to
+// internal/scheduling/key_engine_test.go - see
+// docs/plans/in-progress/vocal-range-plan.md's "Phase 2 prerequisite: the
+// key engine" section (pure relocation, no behavior change; the parser/
+// distance functions they test now live as scheduling.ParseKeyPitchClass/
+// scheduling.SemitoneDistance, called by keyTransitionWarnings below).
 
 // TestKeyTransitionWarningsFlagsHalfStep also confirms the structured
 // return value's SongRowID identifies the *second*, later song's own

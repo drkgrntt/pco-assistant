@@ -92,9 +92,20 @@ templ songDetailCardsLazyOOB(data SetBuilderData) {
 // this second OOB push, the row right after a key edit stayed stuck
 // showing its pre-edit transition badge (or lack of one) until some
 // unrelated action happened to re-render the whole page.
+//
+// Also re-pushes the card's own "Vocal range" line (song-vocal-range-<id>)
+// when one is on record - a key edit changes this song's effective key,
+// which the transposed range shown there depends on (see the controller's
+// songVocalRangeDisplay, sets_builder.go) - same "did that actually
+// change anything visible" reasoning as #song-meta-<id> above. No-op
+// (nothing rendered) for a song with no vocal range on file, same as the
+// card's own initial render.
 templ KeyFormFragment(data SetBuilderData, song SetSongView, errMsg string) {
 	@keyForm(data, song, errMsg)
 	<div class="muted song-meta" id={ fmt.Sprintf("song-meta-%d", song.ID) } hx-swap-oob="true">{ song.ArrangementInfo }</div>
+	if song.VocalRangeDisplay != "" {
+		<p class="muted" id={ fmt.Sprintf("song-vocal-range-%d", song.ID) } hx-swap-oob="true"><strong>Vocal range:</strong> { song.VocalRangeDisplay } (in this key)</p>
+	}
 	@songBadgesOOB(song)
 	if next, ok := nextSongRowAfter(data.ServiceOrder, song.ID); ok {
 		@songBadgesOOB(next)
@@ -147,11 +158,15 @@ templ SongNoteFormFragment(data SetBuilderData, song SetSongView, note SongNoteV
 // same as an edited key override would), and that neighbor's own badges.
 //
 // Also pushes Structure/HasChordChart (song-structure-<id>, song-chord-
-// chart-badge-<id>) and the attachments "Files" list (song-attachments-<id>,
-// via songAttachmentsList's own oob=true branch) via the same OOB
-// mechanism - all three can change on a real refresh (an arrangement's
-// structure edited, a chord chart or attachment added/removed, directly in
-// Planning Center) same as key/BPM/meter/length can. Each is only ever
+// chart-badge-<id>), the "Vocal range" line (song-vocal-range-<id> - a
+// refetched arrangement can change the arrangement's own default key,
+// which the transposed range shown there depends on, same as
+// KeyFormFragment's own reasoning above), and the attachments "Files" list
+// (song-attachments-<id>, via songAttachmentsList's own oob=true branch)
+// via the same OOB mechanism - all four can change on a real refresh (an
+// arrangement's structure/key edited, a chord chart or attachment added/
+// removed, directly in Planning Center) same as key/BPM/meter/length can.
+// Each is only ever
 // rendered (in songDetailCard, initially) when it has something to show, so
 // an OOB update here only actually appears once that element already
 // exists in the DOM - a song going from "no structure yet"/"no attachments
@@ -175,6 +190,9 @@ templ SongArrangementInfoRefreshFragment(data SetBuilderData, song SetSongView, 
 	<div class="muted song-meta" id={ fmt.Sprintf("song-meta-%d", song.ID) } hx-swap-oob="true">{ song.ArrangementInfo }</div>
 	if song.Structure != "" {
 		<p class="muted" id={ fmt.Sprintf("song-structure-%d", song.ID) } hx-swap-oob="true"><strong>Structure:</strong> { song.Structure }</p>
+	}
+	if song.VocalRangeDisplay != "" {
+		<p class="muted" id={ fmt.Sprintf("song-vocal-range-%d", song.ID) } hx-swap-oob="true"><strong>Vocal range:</strong> { song.VocalRangeDisplay } (in this key)</p>
 	}
 	@songAttachmentsList(data, song, true)
 	if song.HasChordChart {
@@ -242,6 +260,9 @@ templ songDetailCard(data SetBuilderData, song SetSongView) {
 		</p>
 		if song.Structure != "" {
 			<p class="muted" id={ fmt.Sprintf("song-structure-%d", song.ID) }><strong>Structure:</strong> { song.Structure }</p>
+		}
+		if song.VocalRangeDisplay != "" {
+			<p class="muted" id={ fmt.Sprintf("song-vocal-range-%d", song.ID) }><strong>Vocal range:</strong> { song.VocalRangeDisplay } (in this key)</p>
 		}
 		@songAttachmentsList(data, song, false)
 		<div class="build-detail-badges">
