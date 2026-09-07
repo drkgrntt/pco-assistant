@@ -82,10 +82,10 @@
 /* Tighter than the shared .song-tags-list flex gap other pages might
    assume - at a library's real song count (dozens+), var(--space-4)
    between every card added up to a lot of scrolling for what's meant to
-   be a quick scan-and-tag list. Capped at half of main's own 60rem
-   measure from tablet up - full-width read as unnecessarily sprawling
-   for a list of short, single-line cards; stays full-width below that
-   breakpoint, where there's no width to spare. */
+   be a quick scan-and-tag list. Two columns from tablet up (each card is
+   short and single-line, so one long full-width column read as
+   unnecessarily sprawling); a single column below that breakpoint, where
+   there's no width to spare for a second. */
 .song-tags-list {
   display: flex;
   flex-direction: column;
@@ -94,7 +94,9 @@
 
 @media (min-width: 768px) {
   .song-tags-list {
-    max-width: 30rem;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
   }
 }
 
