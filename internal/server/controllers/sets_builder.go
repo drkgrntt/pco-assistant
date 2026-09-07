@@ -637,9 +637,23 @@ func (sc *SchedulingController) buildCandidateLookups(ctx context.Context, organ
 // suggestion lists already show, just for one song on demand - clicking a
 // title used to instantly add the song; that's now a separate "+" button
 // (see songBrowseRow), and the title click reveals this instead.
+//
+// Unlike candidateSongView's general-purpose arrangement-info lookup
+// (cache-only, no fetch - see that method's own doc comment on why: a
+// broad search matching up to candidateSearchLimit songs would otherwise
+// enqueue a background sync per match), this handler is exactly one song
+// per click - safe to resolve through resolveArrangementInfo instead,
+// the same enqueue-on-miss path the main service order already uses (see
+// that function/resolveArrangementCacheInfo's own doc comments): a cache
+// hit returns the same value candidateSongView already computed; a miss
+// enqueues a background fetch (deferred triggerSongInfoQueueSync below
+// actually starts draining it) so the *next* click on this same song
+// shows it filled in, rather than staying blank forever the way a plain
+// cache-only lookup would.
 func (sc *SchedulingController) BuildCandidateDetails(c *fiber.Ctx) error {
 	organizationID := middleware.CurrentOrganizationID(c)
 	ctx := middleware.RequestContext(c)
+	defer triggerSongInfoQueueSync(ctx, sc.store, organizationID)
 	serviceTypeID := c.Params("service_type_id")
 	planID := c.Params("plan_id")
 	songID := c.Params("song_id")
@@ -662,7 +676,9 @@ func (sc *SchedulingController) BuildCandidateDetails(c *fiber.Ctx) error {
 	}
 
 	lookups := sc.buildCandidateLookups(ctx, organizationID, serviceTypeID, songs, set.ID)
-	return render(c, views.CandidateDetails(lookups.candidateSongView(*song), ""))
+	cand := lookups.candidateSongView(*song)
+	cand.ArrangementInfo = resolveArrangementInfo(ctx, sc.store, organizationID, lookups.arrangementCache, songID)
+	return render(c, views.CandidateDetails(cand, ""))
 }
 
 // candidateSearchLimit caps BuildCandidatesSearch's response - a broad or
