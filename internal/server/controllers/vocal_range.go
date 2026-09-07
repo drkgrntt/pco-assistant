@@ -4,10 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"regexp"
 	"sort"
-	"strconv"
-	"strings"
 
 	"pco-assistant/internal/scheduling"
 	"pco-assistant/internal/server/middleware"
@@ -29,66 +26,27 @@ import (
 // re-searching that same person and resubmitting is already the edit
 // flow).
 
-// vocalNoteRe matches a note-with-octave string like "C#4", "Bb2", "G3" - a
-// note letter A-G, an optional single sharp/flat accidental (ASCII or
-// Unicode), then a signed integer octave. This is standalone parsing, not
-// an extension of parseKeyPitchClass (sets_builder.go): a vocal range's
-// notes always carry an octave (a bare "G" doesn't say whether it's G3 or
-// G5, which matters for a vocal range), and parseKeyPitchClass has no
-// octave concept at all - see
-// docs/plans/in-progress/vocal-range-plan.md's Phase 1 section.
-var vocalNoteRe = regexp.MustCompile(`^([A-Ga-g])(#|♯|b|♭)?(-?[0-9]+)$`)
-
-// minVocalOctave/maxVocalOctave bound what parseVocalNote accepts - wide
-// enough for any real human vocal range (the lowest bass notes sit around
-// E1/E2, the highest sopranos/countertenors reach around C6/C7) without
-// accepting garbage like "C99".
-const (
-	minVocalOctave = 0
-	maxVocalOctave = 8
-)
-
 // parseVocalNote parses a note-with-octave string ("C#4", "Bb2", "G3")
-// into a 0-11 pitch class and an octave. It reuses keyPitchClasses
-// (sets_builder.go) for the letter -> pitch class table parseKeyPitchClass
-// also uses (a letter means the same pitch class either way - only the
-// surrounding parse logic, an accidental followed by a required octave
-// digit rather than nothing, is new). Returns ok=false for anything that
-// isn't a note letter, an optional single accidental, then an integer
-// octave within [minVocalOctave, maxVocalOctave].
+// into a 0-11 pitch class and an octave - a thin wrapper around
+// scheduling.ParseNote. This used to carry its own standalone regex/letter
+// table (predating the key engine, docs/plans/in-progress/
+// vocal-range-plan.md's Phase 2 prerequisite); now that
+// internal/scheduling/key_engine.go exists as the single place this
+// parsing logic lives, this just delegates rather than keeping a second
+// copy - see that file's own ParseNote doc comment for the actual parsing
+// rules (letter, optional single accidental, required octave digit,
+// [scheduling.MinNoteOctave, scheduling.MaxNoteOctave]).
 func parseVocalNote(s string) (pitchClass, octave int, ok bool) {
-	s = strings.TrimSpace(s)
-	m := vocalNoteRe.FindStringSubmatch(s)
-	if m == nil {
-		return 0, 0, false
-	}
-
-	root, found := keyPitchClasses[strings.ToUpper(m[1])]
-	if !found {
-		return 0, 0, false
-	}
-	switch m[2] {
-	case "#", "♯":
-		root++
-	case "b", "♭":
-		root--
-	}
-
-	octave, err := strconv.Atoi(m[3])
-	if err != nil || octave < minVocalOctave || octave > maxVocalOctave {
-		return 0, 0, false
-	}
-
-	return ((root % 12) + 12) % 12, octave, true
+	return scheduling.ParseNote(s)
 }
 
 // absoluteVocalSemitone combines a pitch class + octave into one
-// internally-consistent absolute integer for comparison (octave*12 +
-// pitch_class - no requirement to match real MIDI note numbering, just
-// that two absolute values are directly comparable and subtractable), per
-// docs/plans/in-progress/vocal-range-plan.md's storage-shape section.
+// internally-consistent absolute integer for comparison - a thin wrapper
+// around scheduling.AbsoluteSemitone, kept under this name so call sites
+// in this file don't need to change; see that function's own doc comment
+// for the storage-shape reasoning.
 func absoluteVocalSemitone(pitchClass, octave int) int {
-	return octave*12 + pitchClass
+	return scheduling.AbsoluteSemitone(pitchClass, octave)
 }
 
 // vocalNoteNames is pitch class -> display name, sharp spelling only - a
