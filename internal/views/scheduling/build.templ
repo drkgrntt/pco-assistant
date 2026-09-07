@@ -9,7 +9,7 @@ import (
 	"pco-assistant/internal/views/components"
 )
 
-templ Build(personName, organizationName string, serviceTypes []pco.ServiceTypeData, selectedServiceTypeID string, initialPlans []PlanRow, page, totalPages int, tab, errMsg string) {
+templ Build(personName, organizationName string, serviceTypes []pco.ServiceTypeData, selectedServiceTypeID string, initialPlans []PlanRow, page, totalPages int, tab string, vocalNoteCategories []NoteCategoryOptionView, vocalNoteCategoryID, errMsg string) {
 	@views.Layout("Build a Service", personName, organizationName) {
 		<h1>Build a Service</h1>
 		<p class="muted">Pick a service type, then a plan, to build its song lineup and fill its team - both on one page.</p>
@@ -34,7 +34,7 @@ templ Build(personName, organizationName string, serviceTypes []pco.ServiceTypeD
 		if errMsg != "" {
 			<p class="error">{ errMsg }</p>
 		}
-		@BuildPlansList(initialPlans, selectedServiceTypeID, "", page, totalPages, tab, "")
+		@BuildPlansList(initialPlans, selectedServiceTypeID, "", page, totalPages, tab, vocalNoteCategories, vocalNoteCategoryID, "")
 	}
 }
 
@@ -103,12 +103,26 @@ templ buildPlansTabBar(serviceTypeID, tab string) {
 // fields - including whichever submit button was actually clicked, see
 // BuildPlansResults' page buttons below - are always included, no
 // per-element htmx wiring to get subtly wrong.
-templ BuildPlansList(plans []PlanRow, serviceTypeID, search string, page, totalPages int, tab, errMsg string) {
+//
+// vocalNoteCategories/vocalNoteCategoryID back the "Song leader syncs
+// into" setting (VocalNoteCategoryFormFragment), rendered here rather
+// than inside any one plan's own builder (set_builder.templ) - it's a
+// one-time pick per service type, not per plan, and this is already the
+// one surface in the app shaped like "settings for this service type"
+// (a user reported the old per-plan placement as "weirdly placed," since
+// it rendered identically on every single plan every week - see
+// docs/plans/shipped/song-leader-plan.md). Both are zero-valued
+// (nil/"") whenever serviceTypeID == "" (no service type picked yet),
+// which is also when this whole block doesn't render at all.
+templ BuildPlansList(plans []PlanRow, serviceTypeID, search string, page, totalPages int, tab string, vocalNoteCategories []NoteCategoryOptionView, vocalNoteCategoryID, errMsg string) {
 	<div id="build-plans">
 		if errMsg != "" {
 			<p class="error">{ errMsg }</p>
 		}
 		if serviceTypeID != "" {
+			@collapsibleSection("vocal-note-category-section", "Song leader sync setting", false) {
+				@VocalNoteCategoryFormFragment(serviceTypeID, vocalNoteCategories, vocalNoteCategoryID, "")
+			}
 			@buildPlansTabBar(serviceTypeID, tab)
 			<!--
 				Deliberately not class="inline" - that class flex-rows its
@@ -297,21 +311,24 @@ templ planNoteSection(serviceTypeID, planID, note string) {
 }
 
 // VocalNoteCategoryFormFragment is SetVocalNoteCategory's (build.go) htmx
-// response, and also the initial render inside vocalNoteCategorySection
-// (set_builder.templ) - the "Song leader syncs into" setting: a plain
+// response, and also the initial render inside BuildPlansList's own
+// collapsibleSection - the "Song leader syncs into" setting: a plain
 // native <select> of this service type's actual configured Planning
-// Center note categories (SetBuilderData.VocalNoteCategories), saved as a
-// one-time per-service-type pick rather than guessed at by name (see
-// docs/plans/shipped/song-leader-plan.md's "Which note category is 'the
-// vocal one'?" decision, option 2). hx-target="this" swaps only this
-// form, same reasoning as PlanNoteFormFragment above.
+// Center note categories, saved as a one-time per-service-type pick
+// rather than guessed at by name (see docs/plans/shipped/
+// song-leader-plan.md's "Which note category is 'the vocal one'?"
+// decision, option 2). hx-target="this" swaps only this form, same
+// reasoning as PlanNoteFormFragment above. Scoped to serviceTypeID alone
+// (no planID) - this is a one-time per-service-type setting, not
+// per-plan, which is also why it lives on the plan-picker page
+// (BuildPlansList) rather than inside any one plan's own builder.
 //
 // status is "" (initial page load), "saved" (SetVocalNoteCategory's
 // happy path), or "error" (the upsert failed) - same three-state shape as
 // PlanNoteFormFragment's own status, including the self-dismissing
 // "Saved" indicator (plan-note-status-saved's CSS fade).
-templ VocalNoteCategoryFormFragment(serviceTypeID, planID string, categories []NoteCategoryOptionView, selectedID, status string) {
-	<form class="plan-note-form" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/vocal-note-category", serviceTypeID, planID) } hx-target="this" hx-swap="outerHTML">
+templ VocalNoteCategoryFormFragment(serviceTypeID string, categories []NoteCategoryOptionView, selectedID, status string) {
+	<form class="plan-note-form" hx-post={ fmt.Sprintf("/scheduling/build/%s/vocal-note-category", serviceTypeID) } hx-target="this" hx-swap="outerHTML">
 		<label>
 			Song leader syncs into
 			<select name="category_id" disabled?={ len(categories) == 0 }>

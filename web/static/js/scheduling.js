@@ -642,7 +642,25 @@ function selectPerson(el) {
   var suffix = el.dataset.suffix ? "-" + el.dataset.suffix : "";
   document.getElementById("person-id-input" + suffix).value = el.dataset.personId;
   document.getElementById("person-search-input" + suffix).value = el.dataset.personName;
-  document.getElementById("person-search-results" + suffix).innerHTML = "";
+  // Deferred, not synchronous: this handler runs during the click event's
+  // target phase (invoked by the clicked .search-result div's own
+  // onclick), before the event finishes bubbling up to document.
+  // Clearing this container's innerHTML synchronously would detach the
+  // just-clicked element (the event's own target) from the DOM right
+  // then, so by the time the click reaches document's own listener
+  // further down this file, event.target.closest(...) can no longer find
+  // ancestors that were genuinely there when the click happened (e.g. a
+  // picker embedded inside a .build-detail-card, like the song leader
+  // picker) - closest() on a detached node returns null, so that listener
+  // wrongly concludes the click landed outside the card and closes it.
+  // setTimeout(fn, 0) pushes this mutation to a fresh task, after the
+  // current event has fully finished bubbling, so every listener sees the
+  // real DOM as it was at click time. The value assignments above stay
+  // synchronous - only this container's clear needs deferring.
+  var resultsContainer = document.getElementById("person-search-results" + suffix);
+  setTimeout(function () {
+    resultsContainer.innerHTML = "";
+  }, 0);
 }
 
 // Any further edit to a person search box invalidates whatever was

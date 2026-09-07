@@ -309,14 +309,6 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 		// rather than one GetItemNotes call per published song - see
 		// itemNotesFromIncluded's own doc comment.
 		itemNotes := itemNotesFromIncluded(pcoItems.Included)
-		// VocalNoteCategories/VocalNoteCategoryID back the "Song leader
-		// syncs into" setting (vocalNoteCategorySection, set_builder.templ)
-		// - the same noteCategories list buildSongNoteViews already
-		// resolves per song, reused here for the setting's own <select>, no
-		// extra PCO call. VocalNoteCategoryID is a local Postgres read
-		// (scheduling.Store.VocalNoteCategoryID), not a PCO call either.
-		data.VocalNoteCategories = vocalNoteCategoryOptions(noteCategories.Data)
-		data.VocalNoteCategoryID, _ = sc.store.VocalNoteCategoryID(ctx, organizationID, serviceTypeID)
 		// leaderNames resolves every distinct song leader's PCO person id
 		// to a display name in one batched where[id]=... call
 		// (personNameMapForIDs) - empty (and free) when no song in this
@@ -1624,8 +1616,8 @@ func buildSongNoteViews(itemID string, noteCategories []pco.ItemNoteCategoryData
 
 // vocalNoteCategoryOptions converts a service type's Planning Center note
 // categories into the lightweight id+name options the "Song leader syncs
-// into" setting's <select> needs (SetBuilderData.VocalNoteCategories) -
-// same "just enough for a plain native <select>" shape as
+// into" setting's <select> needs (see vocalNoteCategoryData below) - same
+// "just enough for a plain native <select>" shape as
 // buildBrowsableSongs/SongOptionView.
 func vocalNoteCategoryOptions(categories []pco.ItemNoteCategoryData) []views.NoteCategoryOptionView {
 	opts := make([]views.NoteCategoryOptionView, 0, len(categories))
