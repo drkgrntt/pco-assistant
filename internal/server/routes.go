@@ -27,6 +27,15 @@ func (s *FiberServer) RegisterFiberRoutes() {
 
 	s.App.Static("/static", "./web/static")
 
+	// Piano sample audio for the vocal-range reference tone
+	// (web/static/js/scheduling.js's playVocalTone) - a separate mount from
+	// /static since the samples live in a top-level assets/ directory, not
+	// under web/static/ (see assets/piano-sound-samples/MAPPING.md). Just
+	// audio files with no auth-relevant content, same trust level as
+	// /static/*'s CSS/JS/images - exempted from RequireAuth alongside it
+	// (see publicPrefixes, internal/server/middleware/auth.go).
+	s.App.Static("/piano-samples", "./assets/piano-sound-samples")
+
 	// Served from the root, not /static/, so the service worker's default
 	// scope covers the whole app rather than just /static/* - see
 	// register-sw.js. The URL is still root-level /sw.js regardless of
@@ -38,8 +47,9 @@ func (s *FiberServer) RegisterFiberRoutes() {
 		return c.SendFile("./web/static/manifest.json")
 	})
 
-	// RequireAuth allowlists /health, /login, /auth/*, and /static/*
-	// internally, so it's safe to apply globally ahead of every route.
+	// RequireAuth allowlists /health, /login, /auth/*, /static/*, and
+	// /piano-samples/* internally, so it's safe to apply globally ahead of
+	// every route.
 	s.App.Use(middleware.RequireAuth(s.authStore))
 	// RequireActiveOrganization runs after RequireAuth - it reads the
 	// organization id RequireAuth just resolved into locals, so it has to

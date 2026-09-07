@@ -20,7 +20,11 @@ const SessionCookieName = "church_session"
 const refreshBuffer = 5 * time.Minute
 
 // publicPrefixes never require a session: infra health checks, the sign-in
-// flow itself, static assets, the PWA manifest/service worker (which
+// flow itself, static assets, /piano-samples/* (the vocal-range reference
+// tone's real piano recordings, registered as a separate static mount in
+// routes.go since they live under top-level assets/, not web/static/ - a
+// sound file carries no auth-relevant content, same trust level as
+// /static/*), the PWA manifest/service worker (which
 // must be reachable pre-login for install prompts and are root-served, not
 // under /static/, so they need their own entries here), Stripe's
 // webhook (which authenticates itself via a signature - see
@@ -29,7 +33,7 @@ const refreshBuffer = 5 * time.Minute
 // (MarketingController) - unlike "/" (Landing) these have no signed-in
 // variant at all, so they don't need Landing's soft-auth special case
 // below, just a straight allowlist entry like /login.
-var publicPrefixes = []string{"/health", "/login", "/auth/", "/static/", "/sw.js", "/manifest.json", "/billing/webhook", "/pricing", "/how-it-works"}
+var publicPrefixes = []string{"/health", "/login", "/auth/", "/static/", "/piano-samples/", "/sw.js", "/manifest.json", "/billing/webhook", "/pricing", "/how-it-works"}
 
 // RequireAuth gates every route not covered by publicPrefixes behind a
 // valid, unexpired session. On success it stashes the signed-in person's id

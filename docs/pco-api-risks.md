@@ -88,6 +88,7 @@ that first. Facts worth adding here that aren't in CLAUDE.md:
 | Song attachments (lead sheets/chord charts) | shipped | cached at sync time alongside arrangement info (`fetchAndCacheSongAttachments`, one more PCO call per uncached song - Song Info sync is now 2 calls/song, not 1); the attachment's own `url` is never cached, a click-triggered route live-fetches a fresh one instead |
 | Song leader -> vocal notes sync (`syncLeaderNote`, `sets_publish.go`) | shipped | `PublishSet` rides its existing `GetItems` call (adds `Include: []string{"item_notes"}` only when a vocal category is actually configured - zero new calls otherwise); `RefreshSongInfo` previously made no `GetItems` call at all, so it gains one new per-plan `GetItems(Include: item_notes)` call, but only when a service type has configured the vocal notes category setting (opt-in cost, not paid by every org) |
 | "Browse all songs" title-click detail popover (`BuildCandidateDetails`, `sets_builder.go`) | shipped | one song per click, not the whole library - `candidateSongView`'s general-purpose lookup (used by the up-to-50-row search results too) stays cache-only with no fetch, but this single-song handler resolves arrangement info through `resolveArrangementInfo`/`resolveArrangementCacheInfo` instead, the same enqueue-on-miss path the main service order already uses: a cache hit costs nothing new, a miss enqueues into the existing paced Song Info sync queue (`enqueueSongSync` + a `triggerSongInfoQueueSync` deferred in this handler) rather than fetching inline, so an uncached song's info fills in on a later click/reload instead of staying blank forever - never a synchronous per-click PCO call |
+| Song Vocal Range page's current-key transposed line (`song_vocal_range.go`'s `currentKeysBySong`) | shipped | zero new PCO calls - one bulk cache-only `SongArrangementInfo` read per render plus the existing `resolveArrangementCacheInfo` enqueue-on-miss lookup (a miss enqueues into the same paced Song Info sync queue above, never a live fetch), scoped only to the songs this page actually lists (a song must already have a stored vocal range to appear here - a small subset of the active song library, not a full-library fan-out) |
 
 ## Live-verified PCO API facts (worth not re-checking)
 
@@ -678,3 +679,16 @@ out to 100-200 sequential round trips per load.
   display (`SetSongView.LeaderPersonName`) reuses the existing
   `personNameMapForIDs` batched `where[id]=...` lookup, the same pattern
   rosters/preferences already use - not a new category of call.
+- **Song Vocal Range page's current-key line adds no new PCO call** -
+  `song_vocal_range.go`'s new `currentKeysBySong` resolves each listed
+  range's song to its current cached arrangement key via one bulk
+  cache-only `store.SongArrangementInfo` read plus the existing
+  `resolveArrangementCacheInfo`/`enqueueSongSync` enqueue-on-miss path
+  (`scheduling.go`) - the same contract `sets_builder.go` already relies
+  on, not a new mechanism. All three handlers touching this page
+  (`SongVocalRangePage`/`SetSongVocalRange`/`DeleteSongVocalRange`) defer
+  `triggerSongInfoQueueSync` the same way `buildSetBuilderData` does, so a
+  miss enqueued here still drains through the existing paced background
+  sync. Fan-out stays small regardless: this page only ever lists songs
+  that already have a stored vocal range on file, a subset of the active
+  song library, not every song in it.
