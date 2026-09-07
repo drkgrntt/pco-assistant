@@ -28,30 +28,21 @@
 }
 
 /* Distinct tag values as toggleable filter chips (songTagFilterChips,
-   song_tags.templ), one .tag-filter-item per tag. Two columns from
-   tablet up rather than one long flex-wrap row - a wide library's tag
-   vocabulary wrapped edge-to-edge across the full page width read as
-   more sprawling than useful; a single column on mobile, where there's
-   no width to spare for a second. max-width caps it well short of full
-   width even in two columns, per the same reasoning. */
+   song_tags.templ), one .tag-filter-item per tag - a plain wrapped row,
+   not constrained to the text filter's own 24rem, since a wide library's
+   tag vocabulary reads better wrapped full-width than squeezed into a
+   narrow column. */
 .song-tag-filter-chips {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: var(--space-1) var(--space-4);
-  max-width: 32rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
   margin-top: var(--space-3);
   margin-bottom: var(--space-4);
 }
 
-@media (min-width: 640px) {
-  .song-tag-filter-chips {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
 .tag-filter-item {
   position: relative;
-  display: flex;
+  display: inline-flex;
 }
 
 /* The real checkbox stays in the DOM (so :checked, keyboard focus, and
@@ -91,11 +82,20 @@
 /* Tighter than the shared .song-tags-list flex gap other pages might
    assume - at a library's real song count (dozens+), var(--space-4)
    between every card added up to a lot of scrolling for what's meant to
-   be a quick scan-and-tag list. */
+   be a quick scan-and-tag list. Capped at half of main's own 60rem
+   measure from tablet up - full-width read as unnecessarily sprawling
+   for a list of short, single-line cards; stays full-width below that
+   breakpoint, where there's no width to spare. */
 .song-tags-list {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+}
+
+@media (min-width: 768px) {
+  .song-tags-list {
+    max-width: 30rem;
+  }
 }
 
 /* Overrides components.Card's shared .position-group padding/margin
