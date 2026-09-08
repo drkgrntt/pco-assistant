@@ -142,11 +142,16 @@ templ Home(personName, organizationName string, data HomeData) {
 // closeOnboardingTour/tourBack/tourNext drive which .tour-step is visible
 // and the dot indicator; a DOMContentLoaded check there auto-opens this
 // once per browser (localStorage "onboardingTourSeen"), and a manual
-// ?tour=1 (linked from the Account page's "Replay the intro tour") forces
-// it open regardless of that flag - same "auto-trigger plus a manual way
-// back in" shape as Phase 2 used, but entirely client-side this time
-// (nothing server-rendered depends on whether this has been seen, unlike
-// Phase 2's now-removed ShowOnboardingNudge).
+// ?tour=1 still forces it open regardless of that flag - same "auto-trigger
+// plus a manual way back in" shape as Phase 2 used, but entirely
+// client-side this time (nothing server-rendered depends on whether this
+// has been seen, unlike Phase 2's now-removed ShowOnboardingNudge). The
+// manual way back in used to be a dedicated Account page link
+// ("Replay the intro tour"); that link is gone (see
+// docs/plans/in-progress/help-system-and-nav-consolidation-plan.md) now
+// that the footer's Help button (openPageHelp, scheduling.js) finds and
+// opens this same dialog directly on any page that has it - ?tour=1
+// itself is unchanged and still works if linked to by hand.
 templ onboardingTour() {
 	<dialog id="onboarding-tour" class="tour-dialog">
 		<button type="button" class="icon-btn tour-close" aria-label="Skip the tour" title="Skip the tour" onclick="closeOnboardingTour()">
@@ -206,7 +211,7 @@ templ onboardingTour() {
 			(not only on the last step) so it's seen no matter which step
 			someone closes from.
 		-->
-		<p class="muted tour-footnote">Need this again later? Find it on your <a href="/account">Account</a> page.</p>
+		<p class="muted tour-footnote">Need this again later? Look for Help at the bottom of any page.</p>
 		<div class="tour-actions">
 			<div class="tour-actions-nav">
 				<button type="button" id="tour-back" class="button" onclick="tourBack()" hidden>Back</button>

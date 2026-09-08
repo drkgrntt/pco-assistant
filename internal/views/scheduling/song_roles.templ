@@ -13,6 +13,7 @@ import (
 
 templ SongRoles(personName, organizationName string, songs []pco.SongData, roles []scheduling.SongRole, roleTypes []scheduling.SongRoleType, songTitles map[string]string, roleLabels map[string]string, errMsg string) {
 	@views.Layout("Song Roles", personName, organizationName) {
+		@songRolesHelp()
 		<h1>Song Roles</h1>
 		<p class="muted">Tag songs as good openers or good response songs, for use when building a set.</p>
 		<form
@@ -115,4 +116,23 @@ templ SongRolesTable(roles []scheduling.SongRole, songTitles map[string]string, 
 				</tbody>
 		}
 	</div>
+}
+
+// songRolesHelp is this page's Help-triggered dialog - see
+// songRelationshipsHelp's own doc comment (relationships.templ) for the
+// full reasoning shared by every setup-page help dialog (single step, no
+// createTourController, .page-help-dialog for openPageHelp's dispatch).
+templ songRolesHelp() {
+	<dialog id="song-roles-help" class="tour-dialog page-help-dialog">
+		<div class="tour-step">
+			<h2>Song Roles</h2>
+			<p>
+				Tag songs as good openers or good response songs. Build uses these
+				to anchor a set's shape instead of starting from a blank order.
+			</p>
+		</div>
+		<div class="tour-actions">
+			<button type="button" class="button primary" onclick="closeHelpDialog('song-roles-help')">Got it</button>
+		</div>
+	</dialog>
 }

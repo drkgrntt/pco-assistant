@@ -330,6 +330,78 @@ function forceBuildTourReplay() {
   }
 }
 
+// openHelpDialog/closeHelpDialog are the minimal show/hide pair backing
+// every plain, single-step help <dialog> - the 8 setup-page dialogs (see
+// each scheduling/*.templ's own "-help" dialog) and layout.templ's
+// genericHelpDialog fallback. Deliberately NOT routed through
+// createTourController: that factory exists specifically for the
+// auto-open-once-per-browser + localStorage dismissal-tracking +
+// forced-reopen-via-query-string behavior the Home/Build tours need: none
+// of that applies here - these only ever open because someone clicked
+// Help, and have exactly one step, so there's no back/next/dot state to
+// track either. A controller object per dialog would be pure overhead.
+function openHelpDialog(id) {
+  var dialog = document.getElementById(id);
+  if (!dialog) {
+    return;
+  }
+  if (dialog.showModal) {
+    dialog.showModal();
+  } else {
+    dialog.setAttribute("open", "");
+  }
+}
+
+function closeHelpDialog(id) {
+  var dialog = document.getElementById(id);
+  if (!dialog) {
+    return;
+  }
+  if (dialog.close) {
+    dialog.close();
+  } else {
+    dialog.removeAttribute("open");
+  }
+}
+
+// openPageHelp is the site footer's Help button (layout.templ) - the one
+// Help control on every authenticated page, dispatching to whichever
+// dialog actually belongs to the current page. Dispatch is by
+// presence-of-element (does this page's own DOM have an #onboarding-tour,
+// a #build-tour, or a .page-help-dialog?), not a data attribute on <body>
+// or a second argument threaded through Layout's own call signature:
+// Layout is called by every page in this app and its signature doesn't
+// change here, so the simplest thing that works is to just look for
+// whichever dialog that page's own {children...} already rendered -
+// findable by id/class regardless of where in the DOM it actually sits.
+// Checked in this order:
+//   1. #onboarding-tour (home.templ) - reuses onboardingTourController.open()
+//      rather than a raw .showModal(), so Help gets the same reset-to-step-0
+//      and focus-trap behavior a real tour open always gets.
+//   2. #build-tour (build.templ) - same reasoning, via buildTourController.
+//   3. The first .page-help-dialog on the page - the 8 single-step setup-
+//      page dialogs (relationships.templ, song_roles.templ, etc.) all share
+//      this class; each page only ever renders one, so "first" is safe.
+//   4. #generic-help-dialog (layout.templ's genericHelpDialog) - the
+//      last-resort fallback for every other page (Account, Billing, the
+//      style guide, ...), so this button is never a dead end.
+function openPageHelp() {
+  if (document.getElementById("onboarding-tour")) {
+    onboardingTourController.open();
+    return;
+  }
+  if (document.getElementById("build-tour")) {
+    buildTourController.open();
+    return;
+  }
+  var pageDialog = document.querySelector(".page-help-dialog");
+  if (pageDialog) {
+    openHelpDialog(pageDialog.id);
+    return;
+  }
+  openHelpDialog("generic-help-dialog");
+}
+
 // The header nav's "Setup" dropdown (see layout.templ) - a plain
 // open/closed toggle, closed by clicking its button again, clicking
 // anywhere else on the page, or pressing Escape.

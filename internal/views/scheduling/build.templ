@@ -576,15 +576,19 @@ templ BuildPlan(personName, organizationName string, setData SetBuilderData, ros
 // tours off the same shared open/close/step-render logic (see its own doc
 // comment); buildTourController is the instance wired to this dialog. It
 // additionally carries a sessionStorage handoff (sessionForceKey
-// "buildTourForce") the home tour doesn't need: unlike the home tour's
-// plain ?tour=1 (linkable straight from / itself), Build has no fixed URL
-// to link a manual-replay query string at - BuildPlanPage requires a real
-// :service_type_id/:plan_id, and the Account page has no specific plan in
-// mind - so its "Replay the Build page tour" link
-// (AccountGettingStartedBody, account.templ) sets that sessionStorage flag
-// instead, right before navigating to the plan-picker page; whichever real
-// plan someone lands on next picks it up and forces this tour open, same
-// as ?build-tour=1 would.
+// "buildTourForce", consumed via forceBuildTourReplay) the home tour
+// doesn't need: unlike the home tour's plain ?tour=1 (linkable straight
+// from / itself), Build has no fixed URL to link a manual-replay query
+// string at - BuildPlanPage requires a real :service_type_id/:plan_id, and
+// there's no one specific plan to link a "replay" flow at ahead of time.
+// That handoff's only caller used to be the Account page's own "Replay
+// the Build page tour" link, since removed (see
+// docs/plans/in-progress/help-system-and-nav-consolidation-plan.md) now
+// that the footer's Help button (openPageHelp, scheduling.js) opens this
+// dialog directly whenever it's actually on screen, on any real plan's
+// Build page - forceBuildTourReplay/?build-tour=1 both still work exactly
+// as before for anyone linking to them by hand, just with no in-app link
+// pointing at them any more.
 //
 // Gating is per-browser only (localStorage "buildTourSeen"), not
 // per-plan/per-service-type - once dismissed from any plan's Build page,
@@ -634,7 +638,7 @@ templ buildTour() {
 			<span class="tour-dot"></span>
 			<span class="tour-dot"></span>
 		</div>
-		<p class="muted tour-footnote">Need this again later? Find it on your <a href="/account">Account</a> page.</p>
+		<p class="muted tour-footnote">Need this again later? Look for Help at the bottom of any page.</p>
 		<div class="tour-actions">
 			<div class="tour-actions-nav">
 				<button type="button" id="build-tour-back" class="button" onclick="buildTourBack()" hidden>Back</button>

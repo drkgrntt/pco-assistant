@@ -10,6 +10,7 @@ import (
 
 templ PersonVocalRanges(personName, organizationName string, ranges []scheduling.PersonVocalRange, personNames map[string]string, errMsg string) {
 	@views.Layout("Vocal Range", personName, organizationName) {
+		@vocalRangeHelp()
 		<h1>Vocal Range</h1>
 		<p class="muted">Record each vocalist's comfortable range - lowest and highest note they can sing - so "can they hit this note" is answered from a lookup instead of guessed at in rehearsal. Search for the person by name and enter their notes with the octave (e.g. "G3", "C#4", "Bb2").</p>
 		<form
@@ -57,6 +58,25 @@ templ PersonVocalRanges(personName, organizationName string, ranges []scheduling
 		</form>
 		@PersonVocalRangesTable(ranges, personNames, errMsg)
 	}
+}
+
+// vocalRangeHelp is this page's Help-triggered dialog - see
+// songRelationshipsHelp's own doc comment (relationships.templ) for the
+// full reasoning shared by every setup-page help dialog (single step, no
+// createTourController, .page-help-dialog for openPageHelp's dispatch).
+templ vocalRangeHelp() {
+	<dialog id="vocal-range-help" class="tour-dialog page-help-dialog">
+		<div class="tour-step">
+			<h2>Vocal Range</h2>
+			<p>
+				Record each vocalist's comfortable range, so "can they hit this
+				note" is a lookup instead of a guess in rehearsal.
+			</p>
+		</div>
+		<div class="tour-actions">
+			<button type="button" class="button primary" onclick="closeHelpDialog('vocal-range-help')">Got it</button>
+		</div>
+	</dialog>
 }
 
 // PersonVocalRangesTable is both the initial-render fragment and the htmx

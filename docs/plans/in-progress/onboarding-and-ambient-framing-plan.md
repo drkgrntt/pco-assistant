@@ -14,6 +14,16 @@ remains in the codebase; its section further down is kept only as
 design-rationale history, per this file's own convention of not deleting
 superseded reasoning outright.
 
+The "Proposed, not started" section's recommendation to skip per-setup-page
+guidance was itself revisited and built after all, under a genuinely
+different mechanism (a Help-triggered, click-to-open dialog per page,
+never auto-popping) that sidesteps the "overbearing" objection that
+recommendation was built on - see
+`docs/plans/in-progress/help-system-and-nav-consolidation-plan.md` for what
+shipped and why that mechanism specifically doesn't re-raise the original
+concern. The recommendation text below is kept as-is, not rewritten, per
+this doc's own "don't delete superseded reasoning" convention.
+
 Phase 1: `home.templ`'s Setup section regrouped under the two promises
 (including the two vocal-range pages, split across both groups per "Which
 product promise this serves" reasoning below), plus the empty-state copy
@@ -454,7 +464,16 @@ against whether it fills a genuine gap that mechanism doesn't already
 cover, not against "would this be nice to have."
 
 **Per-setup-page first-visit guidance: recommend skipping, it's already
-covered.** Reasons against the two options Derek raised:
+covered.** **Revisited and built anyway, same day - see
+`docs/plans/in-progress/help-system-and-nav-consolidation-plan.md`.** Both
+options Derek raised here were auto-popping (a modal that shows itself, or
+a guided sequence someone is walked through) - what actually got built
+instead is a click-to-open Help button per page, never auto-shown, which
+doesn't re-raise the "overbearing" objection below at all: something that
+only ever does anything when clicked can't be overbearing. Kept verbatim
+as design-rationale history, per this doc's own convention of not deleting
+superseded reasoning outright - the reasoning below is still sound *against
+the two auto-popping options it was actually written about*:
 
 - *A separate modal per setup page* (7 more dialogs) directly contradicts
   "don't want to be overbearing" - that's tour fatigue by definition, and

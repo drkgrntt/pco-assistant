@@ -30,6 +30,7 @@ import (
 // against.
 templ SongVocalRanges(personName, organizationName string, songs []pco.SongData, ranges []scheduling.SongVocalRange, songTitles, currentKeysBySong map[string]string, errMsg string) {
 	@views.Layout("Song Vocal Range", personName, organizationName) {
+		@songVocalRangeHelp()
 		<h1>Song Vocal Range</h1>
 		<p class="muted">Record each song's sung range - lowest and highest note, measured against the key you played it in - so the Build page can show its practical range transposed into whatever key the arrangement is actually in right now. Reused across every plan the song appears in, like Song Tags/Song Roles - not something to re-enter per plan.</p>
 		<form
@@ -99,6 +100,25 @@ templ SongVocalRanges(personName, organizationName string, songs []pco.SongData,
 		</form>
 		@SongVocalRangesTable(ranges, songTitles, currentKeysBySong, errMsg)
 	}
+}
+
+// songVocalRangeHelp is this page's Help-triggered dialog - see
+// songRelationshipsHelp's own doc comment (relationships.templ) for the
+// full reasoning shared by every setup-page help dialog (single step, no
+// createTourController, .page-help-dialog for openPageHelp's dispatch).
+templ songVocalRangeHelp() {
+	<dialog id="song-vocal-range-help" class="tour-dialog page-help-dialog">
+		<div class="tour-step">
+			<h2>Song Vocal Range</h2>
+			<p>
+				Record each song's sung range, so Build can catch a range mismatch
+				before it's discovered live in rehearsal.
+			</p>
+		</div>
+		<div class="tour-actions">
+			<button type="button" class="button primary" onclick="closeHelpDialog('song-vocal-range-help')">Got it</button>
+		</div>
+	</dialog>
 }
 
 // SongVocalRangesTable is both the initial-render fragment and the htmx
