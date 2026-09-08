@@ -110,3 +110,27 @@ button.danger:hover {
   background: color-mix(in srgb, var(--danger) 14%, transparent);
   border-color: transparent;
 }
+
+/* Play (reference tone) buttons - the vocal range setup pages' tap-to-hear
+   icon buttons (vocal_range.templ, song_vocal_range.templ). A filled
+   circular accent chip rather than the plain ghost-square every other
+   .icon-btn uses, so a play glyph sitting next to a note in a dense row
+   reads immediately as "tap to hear this note" instead of a stray
+   triangle. */
+.icon-btn.play {
+  border-radius: var(--radius-full);
+  background: var(--accent-subtle);
+  color: var(--accent);
+  transition: background-color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
+}
+
+.icon-btn.play:hover {
+  background: color-mix(in srgb, var(--accent-solid) 22%, var(--accent-subtle));
+  border-color: transparent;
+}
+
+.icon-btn.play:active {
+  background: color-mix(in srgb, var(--accent-solid) 32%, var(--accent-subtle));
+  transform: scale(0.92);
+}

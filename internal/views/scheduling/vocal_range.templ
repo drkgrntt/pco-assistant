@@ -29,7 +29,7 @@ templ PersonVocalRanges(personName, organizationName string, ranges []scheduling
 				</label>
 				<button
 					type="button"
-					class="icon-btn"
+					class="icon-btn play"
 					aria-label="Play lowest note"
 					title="Play lowest note"
 					onclick="playVocalNoteFromInput('vocal-lowest-note-input')"
@@ -44,7 +44,7 @@ templ PersonVocalRanges(personName, organizationName string, ranges []scheduling
 				</label>
 				<button
 					type="button"
-					class="icon-btn"
+					class="icon-btn play"
 					aria-label="Play highest note"
 					title="Play highest note"
 					onclick="playVocalNoteFromInput('vocal-highest-note-input')"
@@ -121,7 +121,7 @@ templ PersonVocalRangesTable(ranges []scheduling.PersonVocalRange, personNames m
 								{ formatVocalNoteDisplay(r.LowestPitchClass, r.LowestOctave) }
 								<button
 									type="button"
-									class="icon-btn"
+									class="icon-btn play"
 									aria-label="Play lowest note"
 									title="Play lowest note"
 									onclick={ templ.JSFuncCall("playVocalTone", r.LowestPitchClass, r.LowestOctave) }
@@ -133,7 +133,7 @@ templ PersonVocalRangesTable(ranges []scheduling.PersonVocalRange, personNames m
 								{ formatVocalNoteDisplay(r.HighestPitchClass, r.HighestOctave) }
 								<button
 									type="button"
-									class="icon-btn"
+									class="icon-btn play"
 									aria-label="Play highest note"
 									title="Play highest note"
 									onclick={ templ.JSFuncCall("playVocalTone", r.HighestPitchClass, r.HighestOctave) }
