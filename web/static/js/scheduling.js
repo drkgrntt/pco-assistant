@@ -555,6 +555,59 @@ function closeTransitionNoteBadges() {
   });
 }
 
+// The set builder's per-row vocal-range mismatch/tip badge (see
+// songBadgeSpans, set_builder.templ) - Phase 3 of docs/plans/in-progress/
+// vocal-range-plan.md. Same open/close idiom as toggleKeyTransitionBadge/
+// toggleTransitionNoteBadge above, kept as its own wrapper class for the
+// same reason: this popup is an explanation, not an action menu, and
+// shouldn't close (or be closed by) the row's other menus/badges.
+function toggleVocalRangeBadge(button) {
+  var wrapper = button.closest(".vocal-range-badge");
+  var opening = !wrapper.classList.contains("open");
+  closeVocalRangeBadges();
+  if (opening) {
+    wrapper.classList.add("open");
+    button.setAttribute("aria-expanded", "true");
+  }
+}
+
+function closeVocalRangeBadges() {
+  document.querySelectorAll(".vocal-range-badge.open").forEach(function (wrapper) {
+    wrapper.classList.remove("open");
+    var toggle = wrapper.querySelector(".vocal-range-toggle");
+    if (toggle) {
+      toggle.setAttribute("aria-expanded", "false");
+    }
+  });
+}
+
+// The set builder's per-row/per-candidate "+N more" badge overflow (see
+// songBadgeSpans/songCandidateMeta, set_builder.templ) - collapses the
+// lower-priority badges (roles, tags, resurfaced transition-note prompts)
+// once a row's total badge count crosses badgeCollapseThreshold, per
+// docs/issues.md's "busy row" feedback. Same open/close idiom as
+// toggleRowMenu above (only one open across the page at a time - a plain
+// dropdown, not several independently-open popovers).
+function toggleBadgeOverflow(button) {
+  var wrapper = button.closest(".badge-overflow");
+  var opening = !wrapper.classList.contains("open");
+  closeBadgeOverflows();
+  if (opening) {
+    wrapper.classList.add("open");
+    button.setAttribute("aria-expanded", "true");
+  }
+}
+
+function closeBadgeOverflows() {
+  document.querySelectorAll(".badge-overflow.open").forEach(function (wrapper) {
+    wrapper.classList.remove("open");
+    var toggle = wrapper.querySelector(".badge-overflow-toggle");
+    if (toggle) {
+      toggle.setAttribute("aria-expanded", "false");
+    }
+  });
+}
+
 // The "Browse all songs" plain title list's per-row detail toggle
 // (songBrowseRow, set_builder.templ) - purely the CSS open/close; the
 // row's title button also carries its own hx-get/hx-trigger="click once"
@@ -605,16 +658,19 @@ function openQuickAction(button, action) {
 // the room a table cell doesn't have. Clicking the same row again, or its
 // card's own Close button, closes it - a plain toggle, same idiom as
 // toggleRowMenu. Ignores clicks on the row's own action cell (buttons,
-// forms, the replace <select>), drag handle, and key-transition/
-// transition-note badges - those already do something on their own;
-// selecting the row on top of that would just be noise (and, for the drag
-// handle, fire on every drag as an unwanted side effect).
+// forms, the replace <select>), drag handle, and the key-transition/
+// transition-note/vocal-range/badge-overflow badges - those already do
+// something on their own; selecting the row on top of that would just be
+// noise (and, for the drag handle, fire on every drag as an unwanted side
+// effect).
 function selectSongRow(row, event) {
   if (
     event.target.closest(".set-song-actions") ||
     event.target.closest(".drag-handle") ||
     event.target.closest(".key-transition-badge") ||
-    event.target.closest(".transition-note-badge")
+    event.target.closest(".transition-note-badge") ||
+    event.target.closest(".vocal-range-badge") ||
+    event.target.closest(".badge-overflow")
   ) {
     return;
   }
@@ -742,6 +798,12 @@ document.addEventListener("click", function (event) {
   if (!event.target.closest(".transition-note-badge")) {
     closeTransitionNoteBadges();
   }
+  if (!event.target.closest(".vocal-range-badge")) {
+    closeVocalRangeBadges();
+  }
+  if (!event.target.closest(".badge-overflow")) {
+    closeBadgeOverflows();
+  }
   if (!event.target.closest("tr.song-row") && !event.target.closest(".build-detail-card")) {
     closeSongDetail();
   }
@@ -760,6 +822,8 @@ document.addEventListener("keydown", function (event) {
     closeRowMenus();
     closeKeyTransitionBadges();
     closeTransitionNoteBadges();
+    closeVocalRangeBadges();
+    closeBadgeOverflows();
     closeMobileMenu();
     closeSongDetail();
     closePersonDetail();

@@ -232,3 +232,112 @@
 .transition-note-badge.open .transition-note-badge-menu {
   display: block;
 }
+
+/* The set builder's per-row vocal-range mismatch/tip badge (see
+   songBadgeSpans, set_builder.templ) - Phase 3 of docs/plans/in-progress/
+   vocal-range-plan.md. Same floating-popover shape as .key-transition-badge/
+   .transition-note-badge above (see toggleVocalRangeBadge/
+   closeVocalRangeBadges, scheduling.js); the toggle itself carries either
+   .conflict-badge (a hard mismatch) or .badge (an octave-shift-fixes-it
+   tip) alongside .vocal-range-toggle for its at-rest color, mirroring the
+   same real-warning-vs-informational split .key-transition-toggle/
+   .transition-note-toggle already draw - only the hover treatment lives
+   here, generically. */
+.vocal-range-badge {
+  position: relative;
+  display: inline-flex;
+}
+
+.vocal-range-toggle {
+  display: inline-block;
+  min-height: 0;
+  border: none;
+  line-height: 1;
+}
+
+.vocal-range-toggle:hover {
+  background: var(--danger-subtle);
+  border-color: transparent;
+}
+
+.vocal-range-toggle.badge:hover {
+  background: var(--accent-subtle);
+}
+
+.vocal-range-badge-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 20;
+  max-width: 20rem;
+  margin-top: 0.3rem;
+  padding: var(--space-2) calc(var(--space-2) + 0.1rem);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+
+.vocal-range-badge-menu p {
+  margin: 0;
+}
+
+.vocal-range-badge.open .vocal-range-badge-menu {
+  display: block;
+}
+
+/* The set builder's "+N more" badge overflow (see songBadgeSpans/
+   songCandidateMeta, set_builder.templ) - collapses a row's
+   lower-priority badges (roles, tags, resurfaced transition-note prompts)
+   once badgeCollapseThreshold is crossed, per docs/issues.md's "busy row"
+   feedback. Same floating-popover shape as the badge Disclosures above,
+   but its menu holds a wrapped list of real badges rather than
+   explanatory text (see .badge-overflow-list below), and it closes like
+   .row-menu (only one open across the page at a time) rather than like
+   the explanation badges. */
+.badge-overflow {
+  position: relative;
+  display: inline-flex;
+}
+
+.badge-overflow-toggle {
+  display: inline-block;
+  min-height: 0;
+  border: none;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.badge-overflow-toggle:hover {
+  background: var(--accent-subtle);
+  border-color: transparent;
+}
+
+.badge-overflow-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 20;
+  min-width: 10rem;
+  max-width: 20rem;
+  margin-top: 0.3rem;
+  padding: var(--space-2) calc(var(--space-2) + 0.1rem);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+
+.badge-overflow-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.badge-overflow.open .badge-overflow-menu {
+  display: block;
+}

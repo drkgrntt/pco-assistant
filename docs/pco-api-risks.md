@@ -89,7 +89,6 @@ that first. Facts worth adding here that aren't in CLAUDE.md:
 | Song attachments (lead sheets/chord charts) | shipped | cached at sync time alongside arrangement info (`fetchAndCacheSongAttachments`, one more PCO call per uncached song - Song Info sync is now 2 calls/song, not 1); the attachment's own `url` is never cached, a click-triggered route live-fetches a fresh one instead |
 | Song leader -> vocal notes sync (`syncLeaderNote`, `sets_publish.go`) | shipped | `PublishSet` rides its existing `GetItems` call (adds `Include: []string{"item_notes"}` only when a vocal category is actually configured - zero new calls otherwise); `RefreshSongInfo` previously made no `GetItems` call at all, so it gains one new per-plan `GetItems(Include: item_notes)` call, but only when a service type has configured the vocal notes category setting (opt-in cost, not paid by every org) |
 | "Browse all songs" title-click detail popover (`BuildCandidateDetails`, `sets_builder.go`) | shipped | one song per click, not the whole library - `candidateSongView`'s general-purpose lookup (used by the up-to-50-row search results too) stays cache-only with no fetch, but this single-song handler resolves arrangement info through `resolveArrangementInfo`/`resolveArrangementCacheInfo` instead, the same enqueue-on-miss path the main service order already uses: a cache hit costs nothing new, a miss enqueues into the existing paced Song Info sync queue (`enqueueSongSync` + a `triggerSongInfoQueueSync` deferred in this handler) rather than fetching inline, so an uncached song's info fills in on a later click/reload instead of staying blank forever - never a synchronous per-click PCO call |
-| Song Vocal Range page's current-key transposed line (`song_vocal_range.go`'s `currentKeysBySong`) | shipped | zero new PCO calls - one bulk cache-only `SongArrangementInfo` read per render plus the existing `resolveArrangementCacheInfo` enqueue-on-miss lookup (a miss enqueues into the same paced Song Info sync queue above, never a live fetch), scoped only to the songs this page actually lists (a song must already have a stored vocal range to appear here - a small subset of the active song library, not a full-library fan-out) |
 
 ## Live-verified PCO API facts (worth not re-checking)
 
@@ -680,19 +679,14 @@ out to 100-200 sequential round trips per load.
   display (`SetSongView.LeaderPersonName`) reuses the existing
   `personNameMapForIDs` batched `where[id]=...` lookup, the same pattern
   rosters/preferences already use - not a new category of call.
-- **Song Vocal Range page's current-key line adds no new PCO call** -
-  `song_vocal_range.go`'s new `currentKeysBySong` resolves each listed
-  range's song to its current cached arrangement key via one bulk
-  cache-only `store.SongArrangementInfo` read plus the existing
-  `resolveArrangementCacheInfo`/`enqueueSongSync` enqueue-on-miss path
-  (`scheduling.go`) - the same contract `sets_builder.go` already relies
-  on, not a new mechanism. All three handlers touching this page
-  (`SongVocalRangePage`/`SetSongVocalRange`/`DeleteSongVocalRange`) defer
-  `triggerSongInfoQueueSync` the same way `buildSetBuilderData` does, so a
-  miss enqueued here still drains through the existing paced background
-  sync. Fan-out stays small regardless: this page only ever lists songs
-  that already have a stored vocal range on file, a subset of the active
-  song library, not every song in it.
+- **Song Vocal Range page's current-key line, removed (2026-09-08)** -
+  `song_vocal_range.go`'s `currentKeysBySong` (added no new PCO call, per
+  this same changelog just above previously) has been deleted along with
+  the "current key" display line it fed: a song can have more than one
+  PCO arrangement in different keys, so "the" current key was never a
+  well-defined single answer, and the preview-key control added the same
+  day (client-side, no PCO call at all) already covers "show this range in
+  some other key" for whichever key the reader actually wants.
 - **Home page "needs attention" widget's bounded look-ahead row** - the
   widget used to show only the single chronologically-next plan per
   service type (`homeServiceTypesCap`), even when that plan was already
@@ -708,3 +702,19 @@ out to 100-200 sequential round trips per load.
   worst case 3 extra candidate checks per service type, still fanned out
   concurrently across service types via the same `RunConcurrently` call
   `buildHomeData` already used.
+- **Vocal-range mismatch warning (Phase 3, 2026-09-08) adds one new
+  render-path call, bounded and batched, not a new risk category** -
+  `buildSetBuilderData`'s new roster-vocalist cross-reference
+  (`vocalRangeWarningForSong`, `sets_builder.go`) fetches the plan's
+  roster assignments (`scheduling.Store.FindRoster`/
+  `ListRosterAssignments`) and every `PersonVocalRange` on file, both
+  local-DB reads with no PCO call at all. The one real addition is a
+  `personNameMapForIDs` call to resolve display names for the mismatch
+  message - the exact same batched `where[id]=...` pattern `leaderNames`
+  already uses on this same render (see the Song leader entry above) -
+  and its input is intersected down to just the roster members who are
+  *both* assigned to this plan and have a range on file
+  (`vocalistsWithRangesOnFile`), not the whole roster: 0 calls when
+  nobody assigned has a range recorded (the common case today, since
+  Phase 1 person ranges are still new), and never more than one batched
+  call bounded by a single plan's own roster size otherwise.

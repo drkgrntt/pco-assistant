@@ -389,15 +389,16 @@ func (sc *SchedulingController) ReplaceSetSong(c *fiber.Ctx) error {
 	return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(middleware.RequestContext(c), orgID, serviceTypeID, planID, errMsg)))
 }
 
-// QuickAddSongTag/QuickAddSongRelationship/QuickAddSongRole back the set
-// builder's "Quick add" panel (set_builder.templ) - the same setup-level
-// entities as SongTagsPage/RelationshipsPage/SongRolesPage's own create
-// forms (same Store methods, same params structs), just posted from the
-// build page and re-rendering SetBuilderBody instead of a setup-page
-// table, so e.g. a newly-tagged song's badge shows up immediately on its
-// candidate row without leaving this page. Deliberately create-only - see
-// the build-page redesign plan for why editing these stays the dedicated
-// setup pages' job.
+// QuickAddSongTag/QuickAddSongRelationship/QuickAddSongRole/
+// QuickAddSongVocalRange back the set builder's "Quick add" panel
+// (set_builder.templ) - the same setup-level entities as
+// SongTagsPage/RelationshipsPage/SongRolesPage/SongVocalRangePage's own
+// create forms (same Store methods, same params/parsing), just posted
+// from the build page and re-rendering SetBuilderBody instead of a
+// setup-page table, so e.g. a newly-tagged song's badge shows up
+// immediately on its candidate row without leaving this page.
+// Deliberately create-only - see the build-page redesign plan for why
+// editing these stays the dedicated setup pages' job.
 
 func (sc *SchedulingController) QuickAddSongTag(c *fiber.Ctx) error {
 	orgID := middleware.CurrentOrganizationID(c)
@@ -445,4 +446,37 @@ func (sc *SchedulingController) QuickAddSongRole(c *fiber.Ctx) error {
 	}
 
 	return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(middleware.RequestContext(c), orgID, serviceTypeID, planID, errMsg)))
+}
+
+// QuickAddSongVocalRange is Part C of docs/plans/in-progress/
+// vocal-range-plan.md - the Build page's quick-add-panel/row-kebab-menu
+// entry point for scheduling.Store's SetSongVocalRange, the same Store
+// method (via setSongVocalRangeFromForm, song_vocal_range.go) the
+// dedicated /scheduling/song-vocal-range setup page's own form already
+// uses - see that helper's own doc comment for why the validation lives
+// there instead of being duplicated here. No explicit
+// triggerSongInfoQueueSync call here (unlike that setup page's own
+// handlers) - buildSetBuilderDataWithErr below already defers one for
+// every render it backs, same as QuickAddSongTag/QuickAddSongRelationship/
+// QuickAddSongRole above.
+func (sc *SchedulingController) QuickAddSongVocalRange(c *fiber.Ctx) error {
+	orgID := middleware.CurrentOrganizationID(c)
+	serviceTypeID := c.Params("service_type_id")
+	planID := c.Params("plan_id")
+	ctx := middleware.RequestContext(c)
+
+	var body struct {
+		SongID       string `form:"song_id"`
+		ReferenceKey string `form:"reference_key"`
+		Lowest       string `form:"lowest_note"`
+		Highest      string `form:"highest_note"`
+	}
+	errMsg := ""
+	if err := c.BodyParser(&body); err != nil {
+		errMsg = err.Error()
+	} else {
+		errMsg = sc.setSongVocalRangeFromForm(ctx, orgID, body.SongID, body.ReferenceKey, body.Lowest, body.Highest)
+	}
+
+	return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(ctx, orgID, serviceTypeID, planID, errMsg)))
 }

@@ -529,6 +529,7 @@ func (sc *SchedulingController) RegisterRoutes(router fiber.Router) {
 	group.Post("/build/:service_type_id/:plan_id/song-tags", sc.QuickAddSongTag)
 	group.Post("/build/:service_type_id/:plan_id/song-relationships", sc.QuickAddSongRelationship)
 	group.Post("/build/:service_type_id/:plan_id/song-roles", sc.QuickAddSongRole)
+	group.Post("/build/:service_type_id/:plan_id/song-vocal-range", sc.QuickAddSongVocalRange)
 	group.Post("/build/:service_type_id/:plan_id/person-relationships", sc.QuickAddPersonRelationship)
 	group.Post("/build/:service_type_id/:plan_id/position-preferences", sc.QuickAddPositionPreference)
 	// Transition notes (docs/plans/shipped/transition-notes-plan.md) - same

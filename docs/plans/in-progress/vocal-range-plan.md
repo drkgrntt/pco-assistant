@@ -60,9 +60,10 @@ recovered byte-for-byte; a fixed anchor preserves the interval's real
 width and the correct transposition shift (the two things that actually
 matter for a display), just not necessarily the exact octave a director
 had in mind. See that function's own doc comment for the full reasoning.
-Phase 3 (the mismatch warning/matrix view) and the crowdsourced-default
-question remain not started - see those sections below, unchanged from
-the original plan.
+Phase 3's own mismatch warning has since shipped too - see the status
+paragraph below. The matrix view and the crowdsourced-default question
+remain not started - see those sections below, unchanged from the
+original plan.
 
 **Song Vocal Range page gets play buttons + a current-key line, also
 2026-09-07** (the same day the piano samples above landed, and the
@@ -117,6 +118,92 @@ control's layout; the play buttons it generates duplicate `IconPlay`'s
 exact SVG markup by hand (see that JS section's own doc comment) rather
 than sharing a template, so a client-side-generated button still matches
 every server-rendered `.icon-btn` on the page.
+
+**Song Vocal Range page's "Current key" line removed, same day
+(2026-09-08)** - `docs/issues.md` follow-up feedback, after the preview
+control above shipped: a song can have more than one PCO arrangement in
+different keys, so "the" current key was never actually a single
+well-defined answer, and the preview control already covers "show me this
+range in some other key" on demand for whichever key the reader actually
+wants - a strictly more useful, always-correct replacement for a line that
+could only ever guess at one cached key. Removed: the "Current key
+(`<key>`)" line itself, `song_vocal_range.go`'s `currentKeysBySong`
+helper (and its dedicated DB test), and the `currentKeysBySong`
+parameter threaded through `SongVocalRanges`/`SongVocalRangesTable`. The
+"As measured" line and `computeVocalRangeNotePair` helper are unaffected -
+both are still used, now for exactly one line per row instead of two.
+
+**Phase 3 (the mismatch warning) shipped 2026-09-08**, exactly as specced
+above: `vocalRangeWarningForSong`/`vocalRangeFitsShifted`/
+`vocalRangeViolationNotes` (`internal/server/controllers/sets_builder.go`)
+cross-reference a plan's roster assignments (`scheduling.Store.FindRoster`/
+`ListRosterAssignments` - roster assignments, not an eligibility pool, per
+this section's own "who counts" rule) against `ListPersonVocalRanges`, both
+local-DB reads with no new PCO call; the one new PCO call this phase adds
+is a `personNameMapForIDs` lookup for display names, batched and bounded to
+just the roster members who both are assigned and have a range on file (0
+calls whenever nobody assigned has one) - the same established pattern
+`leaderNames` already uses on this same render path, not a new risk
+category, so `docs/pco-api-risks.md` needed no new mitigation entry.
+`SetSongView.VocalRangeWarningLabel`/`Message`/`IsTip` feed a new badge in
+`songBadgeSpans` (`internal/views/scheduling/set_builder.templ`), reusing
+`components.Disclosure` exactly the way `keyTransitionWarnings`' own badge
+already does: a hard mismatch renders like the key-transition badge
+(conflict-badge styling, a leading ⚠), the octave-shift-fixable case (see
+this section's own "Octave-shift tip" paragraph, implemented unchanged)
+downgrades to a plain, non-warning pill like the transition-note prompt's
+badge - both share one popup with one sentence per affected vocalist
+("Sarah's range is A3-D5; this song's current key needs Sarah to reach up
+to F5.", naming the person again rather than a pronoun, since no
+gender/pronoun data exists anywhere in this codebase to draw one from - a
+deviation from this section's own illustrative wording, not from its
+substance). Severity/threshold shipped exactly as this section already
+called as the default: warn on any note outside range, no tolerance band.
+New tests: `TestVocalRangeWarningForSong*`/`TestVocalRangeFitsShifted*`/
+`TestVocalRangeViolationNotes*` in `sets_builder_warnings_test.go`. The
+matrix view remains its own separate future plan doc, unchanged from this
+plan's original "Suggested build order" step 6.
+
+**Two more Build-page pieces landed the same day, both from `docs/issues.md`
+feedback rather than this plan's own original scope:**
+
+- **Busy-row decluttering**: once a Songs-tab row's total badge count
+  passes a new `badgeCollapseThreshold` (4 - a judgment call, not specified
+  anywhere before this), the lower-priority badges collapse behind a "+N
+  more" `components.Disclosure` - role badges and resurfaced
+  transition-note prompts on a set song's own row (`songBadgeExtras`), role
+  and tag badges on a not-yet-added candidate's row (`candidateBadgeExtras`)
+  - while status/warning badges (published/moved/info-pending, avoid-pairing,
+  repeat, key-transition, and this phase's own vocal-range mismatch) always
+  stay directly on the row regardless of count. Same
+  `internal/views/scheduling/set_builder.templ`/`web/static/js/
+  scheduling.js`/`web/static/css/components/disclosure.css` files as the
+  mismatch badge above.
+- **Vocal range as a fourth build-page setup surface**: song vocal range
+  now has the same three Build-page entry points song key/tags/
+  relationships/roles already have - a "Set song vocal range" quick-add
+  item (`quickAddItem`, mirroring Tag a song/Relate two songs/Add a role
+  exactly), a "Set vocal range" row kebab-menu action opening a fourth
+  per-row `quickActionRow` (mirroring Tag/Relate/Mark role exactly, same
+  build-scoped route/whole-builder-re-render shape), and a matching jump
+  button on the song detail card sidebar (`songDetailCard`,
+  `internal/views/scheduling/song_detail_card.templ`) - all three post to
+  a new `QuickAddSongVocalRange` handler
+  (`internal/server/controllers/sets_detail.go`) that calls
+  `setSongVocalRangeFromForm`, a helper factored out of the dedicated setup
+  page's own `SetSongVocalRange` handler (`song_vocal_range.go`) so the two
+  posting surfaces can never validate/anchor a range differently from each
+  other - the exact same `scheduling.Store.SetSongVocalRange` upsert either
+  way. This does **not** reverse this section's own "deliberately NOT
+  embedded in the Build page's song detail card" decision above: that
+  decision was specifically against an always-visible inline form there
+  (the way `keyForm`/`descriptionForm` work for genuinely per-occurrence
+  values); what shipped here is the same "quick-add panel + kebab-menu
+  jump-to-a-hidden-row" pattern song tags/relationships/roles already use
+  for their own equally song-level (not per-occurrence) facts, just newly
+  extended to cover vocal range too. The card's own read-only "Vocal range:
+  G3-D5 (in this key)" line (Phase 2, unchanged) is still the only thing
+  permanently visible on the card itself.
 
 Written 2026-09-06, expanding two related `docs/ideas.md` bullets into one
 coherent build plan: **"Vocal range per vocalist"** (People section,

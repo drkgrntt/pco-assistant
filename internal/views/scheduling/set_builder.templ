@@ -230,17 +230,77 @@ templ keyTransitionMenu(message string, suggestion string) {
 	}
 }
 
+// vocalRangeMismatchToggle/vocalRangeTipToggle/vocalRangeMenu are the
+// vocal-range warning Disclosure's toggle-button content and popup
+// contents (see songBadgeSpans above and SetSongView.VocalRangeWarning*) -
+// Phase 3 of docs/plans/in-progress/vocal-range-plan.md. Two toggle
+// variants, the same split keyTransitionToggle (a real problem, styled
+// with a leading ⚠ like ConflictBadge) vs. transitionNoteToggle (an
+// informational surfacing, plain pill, no warning icon) already
+// establish: a hard mismatch (SetSongView.VocalRangeWarningIsTip false)
+// renders as the former, an octave-shift-fixes-it tip (IsTip true) renders
+// as the latter (see the controller's vocalRangeWarningForSong). Both
+// variants share one popup content component, since the combined message
+// string already carries everything (one sentence per affected
+// vocalist).
+templ vocalRangeMismatchToggle(label string) {
+	⚠ { label }
+}
+
+templ vocalRangeTipToggle(label string) {
+	{ label }
+}
+
+templ vocalRangeMenu(message string) {
+	<p>{ message }</p>
+}
+
+// badgeCollapseThreshold is how many total badges a row (songBadgeSpans)
+// or candidate meta cluster (songCandidateMeta) can carry before its
+// lower-priority ones collapse behind a "+N more" toggle - see
+// docs/issues.md's "busy row" feedback and each caller's own doc comment
+// for which badges count as "lower-priority" on that particular row. Kept
+// as one shared constant so the two rows agree on what "too busy" means,
+// even though what actually collapses differs between them.
+const badgeCollapseThreshold = 4
+
+// badgeOverflowToggle/badgeOverflowMenu back the "+N more" Disclosure both
+// songBadgeSpans and songCandidateMeta fall back to once a row's own badge
+// count crosses badgeCollapseThreshold - see those two doc comments for
+// what counts as an "extra" on each. Same click-to-expand idiom as
+// keyTransitionToggle/transitionNoteToggle above, just for "there's more
+// here, but it's not urgent enough to always show" rather than a warning
+// or a resurfaced note.
+templ badgeOverflowToggle(count int) {
+	{ fmt.Sprintf("+%d more", count) }
+}
+
+templ badgeOverflowMenu(extras templ.Component) {
+	<div class="badge-overflow-list">
+		@extras
+	</div>
+}
+
 // songBadgeSpans is the badge cluster in a song row's own Tags column -
 // role/published/moved/info-pending badges, plus the same-set avoid-pairing
-// conflict, recently-repeated, and key-transition warnings, all rendered
-// inline right on this row instead of a separate top-of-page list - see
-// docs/plans/shipped/in-place-set-warnings-plan.md. Mirrors
-// songCandidateMeta's identical ConflictBadge usage for a not-yet-added
-// candidate's ConflictTitles/RecentlyRepeated.
+// conflict, recently-repeated, key-transition, and vocal-range-mismatch
+// warnings, all rendered inline right on this row instead of a separate
+// top-of-page list - see docs/plans/shipped/in-place-set-warnings-plan.md
+// and, for the vocal-range warning, docs/plans/in-progress/
+// vocal-range-plan.md's Phase 3. Mirrors songCandidateMeta's identical
+// ConflictBadge usage for a not-yet-added candidate's
+// ConflictTitles/RecentlyRepeated.
+//
+// Once a row's total badge count passes badgeCollapseThreshold, the
+// lower-priority badges (roles, resurfaced transition-note prompts - see
+// songBadgeExtras) collapse behind a "+N more" Disclosure instead of
+// stacking directly on the row - see that const's own doc comment for why
+// and docs/issues.md's "busy row" feedback this responds to. The
+// higher-priority ones above (published/moved/info-pending status,
+// avoid-pairing/repeat/key-transition/vocal-range warnings) always stay
+// directly on the row regardless of count - they're each capped at one
+// badge anyway, so they were never what made a row feel busy.
 templ songBadgeSpans(song SetSongView) {
-	for _, role := range song.Roles {
-		@components.Badge("", role.Label)
-	}
 	if song.Published {
 		@components.Badge("published", "Published")
 	}
@@ -266,6 +326,91 @@ templ songBadgeSpans(song SetSongView) {
 			keyTransitionToggle(song.KeyTransitionLabel),
 			keyTransitionMenu(song.KeyTransitionMessage, song.KeyTransitionSuggestion),
 		)
+	}
+	if song.VocalRangeWarningLabel != "" {
+		if song.VocalRangeWarningIsTip {
+			@components.Disclosure(
+				"vocal-range-badge",
+				"badge vocal-range-toggle",
+				"toggleVocalRangeBadge(this)",
+				"",
+				"",
+				vocalRangeTipToggle(song.VocalRangeWarningLabel),
+				vocalRangeMenu(song.VocalRangeWarningMessage),
+			)
+		} else {
+			@components.Disclosure(
+				"vocal-range-badge",
+				"conflict-badge vocal-range-toggle",
+				"toggleVocalRangeBadge(this)",
+				"",
+				"",
+				vocalRangeMismatchToggle(song.VocalRangeWarningLabel),
+				vocalRangeMenu(song.VocalRangeWarningMessage),
+			)
+		}
+	}
+	{{ extrasCount := len(song.Roles) + len(song.TransitionNotePrompts) }}
+	if extrasCount > 0 && songAlwaysVisibleBadgeCount(song)+extrasCount > badgeCollapseThreshold {
+		@components.Disclosure(
+			"badge-overflow",
+			"badge badge-overflow-toggle",
+			"toggleBadgeOverflow(this)",
+			fmt.Sprintf("Show %d more badges", extrasCount),
+			fmt.Sprintf("Show %d more badges", extrasCount),
+			badgeOverflowToggle(extrasCount),
+			badgeOverflowMenu(songBadgeExtras(song)),
+		)
+	} else {
+		@songBadgeExtras(song)
+	}
+}
+
+// songAlwaysVisibleBadgeCount counts the badges songBadgeSpans always
+// renders directly on the row (never collapsed) - published/moved/
+// info-pending status plus every warning kind, each capped at one badge
+// regardless of how many titles/vocalists it names internally. Used
+// alongside len(song.Roles)+len(song.TransitionNotePrompts) (the
+// collapsible "extras" - see songBadgeExtras) to decide whether this row's
+// total badge count crosses badgeCollapseThreshold.
+func songAlwaysVisibleBadgeCount(song SetSongView) int {
+	n := 0
+	if song.Published {
+		n++
+	}
+	if song.Moved {
+		n++
+	}
+	if song.InfoPending {
+		n++
+	}
+	if len(song.ConflictTitles) > 0 {
+		n++
+	}
+	if song.RecentlyRepeated {
+		n++
+	}
+	if song.KeyTransitionLabel != "" {
+		n++
+	}
+	if song.VocalRangeWarningLabel != "" {
+		n++
+	}
+	return n
+}
+
+// songBadgeExtras is songBadgeSpans' own "collapsible extras" group - role
+// badges and transition-note resurfacing prompts, the two "there's more
+// here, but it's not urgent" badge kinds a row can accumulate several of
+// (multiple assigned roles, more than one past debrief) - as opposed to
+// the warnings/status badges above, which always stay visible regardless
+// of count (see songAlwaysVisibleBadgeCount). Rendered either directly
+// inline (a row under badgeCollapseThreshold) or inside the "+N more"
+// Disclosure's popup (see songBadgeSpans) - the same component either way,
+// so the two can never drift out of sync with each other.
+templ songBadgeExtras(song SetSongView) {
+	for _, role := range song.Roles {
+		@components.Badge("", role.Label)
 	}
 	for _, prompt := range song.TransitionNotePrompts {
 		@components.Disclosure(
@@ -298,10 +443,11 @@ templ transitionNoteMenu(message string) {
 }
 
 // rowMenuToggle/rowMenuItems are the row-menu Disclosure's toggle-button
-// content and popup contents - the same 3 fixed actions (tag/relate/mark
-// role) for every song row, jumping to (and revealing) that row's own
-// hidden quick-action-row via openQuickAction (scheduling.js), so neither
-// needs any per-row data passed in.
+// content and popup contents - the same 4 fixed actions (tag/relate/mark
+// role/set vocal range - the last one added by Part C of docs/plans/
+// in-progress/vocal-range-plan.md) for every song row, jumping to (and
+// revealing) that row's own hidden quick-action-row via openQuickAction
+// (scheduling.js), so neither needs any per-row data passed in.
 templ rowMenuToggle() {
 	@components.IconMore()
 }
@@ -318,6 +464,10 @@ templ rowMenuItems() {
 	<button type="button" onclick="openQuickAction(this, 'role')">
 		@components.IconRole()
 		Mark a role
+	</button>
+	<button type="button" onclick="openQuickAction(this, 'vocal-range')">
+		@components.IconMusicNote()
+		Set vocal range
 	</button>
 }
 
@@ -363,6 +513,13 @@ templ replaceMenuItems(data SetBuilderData, row ServiceOrderRow) {
 // li's first line by itself, and everything this renders wraps onto the
 // line(s) below it, the same title-then-meta-underneath shape
 // set_builder.templ's own .song-meta already uses for a set song's row.
+//
+// Same busy-row collapse as songBadgeSpans above (see badgeCollapseThreshold's
+// own doc comment): role and tag badges are this row's "there could be a
+// lot of these" kind (a song can carry several theme/scripture/idea tags),
+// so once the row's total badge count crosses the threshold, those two
+// collapse behind a "+N more" toggle - the status/conflict badges above
+// them always stay visible regardless of count.
 templ songCandidateMeta(cand CandidateSongView) {
 	if cand.NewSongLabel != "" {
 		@components.BadgeTitled("status-pending", cand.NewSongLabel, "New to the church - a repeat helps it stick")
@@ -380,17 +537,58 @@ templ songCandidateMeta(cand CandidateSongView) {
 		-->
 		<span class="muted arrangement-info">{ cand.ArrangementInfo }</span>
 	}
-	for _, role := range cand.Roles {
-		@components.Badge("", role.Label)
-	}
-	for _, tag := range cand.Tags {
-		@components.BadgeTitled("tag-badge", tag.Value, tag.Category)
-	}
 	if len(cand.ConflictTitles) > 0 {
 		@components.ConflictBadge(fmt.Sprintf("avoid pairing with %s", strings.Join(cand.ConflictTitles, ", ")))
 	}
 	if cand.RecentlyRepeated {
 		@components.ConflictBadge("sung in each of the last two plans")
+	}
+	{{ extrasCount := len(cand.Roles) + len(cand.Tags) }}
+	if extrasCount > 0 && candidateAlwaysVisibleBadgeCount(cand)+extrasCount > badgeCollapseThreshold {
+		@components.Disclosure(
+			"badge-overflow",
+			"badge badge-overflow-toggle",
+			"toggleBadgeOverflow(this)",
+			fmt.Sprintf("Show %d more badges", extrasCount),
+			fmt.Sprintf("Show %d more badges", extrasCount),
+			badgeOverflowToggle(extrasCount),
+			badgeOverflowMenu(candidateBadgeExtras(cand)),
+		)
+	} else {
+		@candidateBadgeExtras(cand)
+	}
+}
+
+// candidateAlwaysVisibleBadgeCount is songAlwaysVisibleBadgeCount's
+// songCandidateMeta counterpart - see that function's own doc comment.
+func candidateAlwaysVisibleBadgeCount(cand CandidateSongView) int {
+	n := 0
+	if cand.NewSongLabel != "" {
+		n++
+	}
+	if cand.NotSungInLabel != "" {
+		n++
+	}
+	if len(cand.ConflictTitles) > 0 {
+		n++
+	}
+	if cand.RecentlyRepeated {
+		n++
+	}
+	return n
+}
+
+// candidateBadgeExtras is songCandidateMeta's own collapsible-extras group
+// - role and tag badges, the two kinds a not-yet-added song can carry
+// several of. See songBadgeExtras' own doc comment (set_builder.templ) for
+// why this is one component rendered either inline or inside the "+N
+// more" Disclosure's popup, never two separate copies.
+templ candidateBadgeExtras(cand CandidateSongView) {
+	for _, role := range cand.Roles {
+		@components.Badge("", role.Label)
+	}
+	for _, tag := range cand.Tags {
+		@components.BadgeTitled("tag-badge", tag.Value, tag.Category)
 	}
 }
 
@@ -827,6 +1025,26 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 										<button type="submit" class="primary">Mark role</button>
 									</form>
 								}
+								@quickActionRow(fmt.Sprintf("%d", row.Song.ID), "vocal-range", fmt.Sprintf("Set vocal range for %q", row.Song.Title), 4) {
+									<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/song-vocal-range", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
+										<input type="hidden" name="song_id" value={ row.Song.SongID }/>
+										<label>
+											Measured in key
+											<input type="text" name="reference_key" placeholder="e.g. G, Bb, F#m" list="key-options" required/>
+										</label>
+										@musicalKeyOptions()
+										<label>
+											Lowest note
+											<input type="text" name="lowest_note" placeholder="e.g. G3" list="vocal-note-options" required/>
+										</label>
+										<label>
+											Highest note
+											<input type="text" name="highest_note" placeholder="e.g. D5" list="vocal-note-options" required/>
+										</label>
+										@vocalNoteOptions()
+										<button type="submit" class="primary">Save range</button>
+									</form>
+								}
 							}
 						} else if row.ItemType == pco.ItemTypeHeader {
 							<tr class="section-row" data-token={ "item:" + row.ItemID }>
@@ -1101,6 +1319,34 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 							</select>
 						</label>
 						<button type="submit" class="primary">Mark role</button>
+					</form>
+				}
+				@quickAddItem("Set song vocal range") {
+					<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/song-vocal-range", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
+						<label>
+							Song
+							<select name="song_id" required>
+								<option value="" selected disabled>Choose a song</option>
+								for _, song := range data.AllSongs {
+									<option value={ song.ID }>{ song.Attributes.Title }</option>
+								}
+							</select>
+						</label>
+						<label>
+							Measured in key
+							<input type="text" name="reference_key" placeholder="e.g. G, Bb, F#m" list="key-options" required/>
+						</label>
+						@musicalKeyOptions()
+						<label>
+							Lowest note
+							<input type="text" name="lowest_note" placeholder="e.g. G3" list="vocal-note-options" required/>
+						</label>
+						<label>
+							Highest note
+							<input type="text" name="highest_note" placeholder="e.g. D5" list="vocal-note-options" required/>
+						</label>
+						@vocalNoteOptions()
+						<button type="submit" class="primary">Save range</button>
 					</form>
 				}
 			</div>

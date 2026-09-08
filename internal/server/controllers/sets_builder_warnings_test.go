@@ -5,13 +5,15 @@ package controllers
 // (SetBuilderData.ServiceLengthWarning), a half-step/tritone key change
 // between two back-to-back songs (keyTransitionWarnings - see
 // docs/plans/shipped/in-place-set-warnings-plan.md for why this returns a
-// structured []keyTransitionWarning rather than pre-formatted strings), and
-// the suggested-move tip appended to that same warning
+// structured []keyTransitionWarning rather than pre-formatted strings), the
+// suggested-move tip appended to that same warning
 // (suggestedDominantSeventh/suggestedKeyChangeMove - see
-// docs/plans/shipped/key-change-tip-plan.md). All are pure functions over
-// already-in-hand data, same as mergeServiceOrder/songsInBoth in
-// sets_builder_test.go, so they're tested directly here rather than through
-// buildSetBuilderData.
+// docs/plans/shipped/key-change-tip-plan.md), and the vocal-range mismatch/
+// octave-shift-tip check (vocalRangeWarningForSong/vocalRangeFitsShifted/
+// vocalRangeViolationNotes - see docs/plans/in-progress/
+// vocal-range-plan.md's Phase 3). All are pure functions over already-in-hand
+// data, same as mergeServiceOrder/songsInBoth in sets_builder_test.go, so
+// they're tested directly here rather than through buildSetBuilderData.
 
 import (
 	"strings"
@@ -317,5 +319,188 @@ func TestKeyTransitionWarningsIncludesSuggestion(t *testing.T) {
 	}
 	if !strings.Contains(got[0].Suggestion, "Eb7") {
 		t.Errorf("expected the suggestion to name Eb7 (the V7 of Ab), got %q", got[0].Suggestion)
+	}
+}
+
+// --- Phase 3: vocal range mismatch/tip (docs/plans/in-progress/vocal-range-plan.md) ---
+
+func TestVocalRangeWarningForSongNoVocalistsYieldsNoWarning(t *testing.T) {
+	got := vocalRangeWarningForSong(50, 65, nil, map[string]scheduling.PersonVocalRange{}, map[string]string{})
+	if got.Label != "" {
+		t.Errorf("expected no warning with no roster vocalists at all, got %+v", got)
+	}
+}
+
+func TestVocalRangeWarningForSongSkipsVocalistWithNoRangeOnFile(t *testing.T) {
+	// "sam" is on the roster but has never had a range recorded - not a
+	// vocalist to check at all, per the plan's own "who counts" rule.
+	got := vocalRangeWarningForSong(50, 65, []string{"sam"}, map[string]scheduling.PersonVocalRange{}, map[string]string{})
+	if got.Label != "" {
+		t.Errorf("expected no warning for a roster member with no PersonVocalRange on file, got %+v", got)
+	}
+}
+
+func TestVocalRangeWarningForSongFitsAsWrittenYieldsNoWarning(t *testing.T) {
+	ranges := map[string]scheduling.PersonVocalRange{
+		"sarah": {LowestPitchClass: 9, LowestOctave: 3, HighestPitchClass: 2, HighestOctave: 5}, // A3-D5
+	}
+	// The song's own range (A3-D5, absolute 45-62) sits fully inside
+	// Sarah's stored range - no mismatch.
+	got := vocalRangeWarningForSong(45, 62, []string{"sarah"}, ranges, map[string]string{"sarah": "Sarah"})
+	if got.Label != "" {
+		t.Errorf("expected no warning when the song's range fits fully inside the vocalist's own, got %+v", got)
+	}
+}
+
+func TestVocalRangeWarningForSongHardMismatchNamesTheReach(t *testing.T) {
+	// Sarah's range is A3-D5 (absolute 45-62); the song needs up to F5
+	// (absolute 65) - too high even shifted an octave either direction -
+	// mirrors the plan's own worked example.
+	ranges := map[string]scheduling.PersonVocalRange{
+		"sarah": {LowestPitchClass: 9, LowestOctave: 3, HighestPitchClass: 2, HighestOctave: 5},
+	}
+	got := vocalRangeWarningForSong(50, 65, []string{"sarah"}, ranges, map[string]string{"sarah": "Sarah"})
+
+	if got.Label != "range mismatch" {
+		t.Errorf("expected Label %q, got %q", "range mismatch", got.Label)
+	}
+	if got.IsTip {
+		t.Errorf("expected a hard mismatch (IsTip false), got IsTip true")
+	}
+	if !strings.Contains(got.Message, "Sarah") {
+		t.Errorf("expected the message to name Sarah, got %q", got.Message)
+	}
+	if !strings.Contains(got.Message, "A3-D5") {
+		t.Errorf("expected the message to name Sarah's stored range A3-D5, got %q", got.Message)
+	}
+	if !strings.Contains(got.Message, "F5") {
+		t.Errorf("expected the message to name the specific violating note F5, got %q", got.Message)
+	}
+}
+
+func TestVocalRangeWarningForSongOctaveShiftDowngradesToTip(t *testing.T) {
+	ranges := map[string]scheduling.PersonVocalRange{
+		"tom": {LowestPitchClass: 9, LowestOctave: 3, HighestPitchClass: 2, HighestOctave: 5}, // A3-D5
+	}
+	// The song's own range is A4-D6 (absolute 57-74) - exactly Tom's own
+	// range shifted a full octave up, so sung an octave lower it fits
+	// perfectly.
+	got := vocalRangeWarningForSong(57, 74, []string{"tom"}, ranges, map[string]string{"tom": "Tom"})
+
+	if got.Label != "range tip" {
+		t.Errorf("expected Label %q, got %q", "range tip", got.Label)
+	}
+	if !got.IsTip {
+		t.Errorf("expected an octave-shift tip (IsTip true), got IsTip false")
+	}
+	if !strings.Contains(got.Message, "Tom") || !strings.Contains(got.Message, "lower") {
+		t.Errorf("expected the message to name Tom and suggest singing it lower, got %q", got.Message)
+	}
+}
+
+// TestVocalRangeWarningForSongHardMismatchWinsOverTip confirms that when
+// one assigned vocalist has a real, unfixable mismatch and another's own
+// issue is merely octave-shift-fixable, the whole row's badge renders as a
+// warning (not a tip) - see vocalRangeWarningForSong's own doc comment on
+// why a hard mismatch always wins - while both vocalists' own lines still
+// appear in the combined message.
+func TestVocalRangeWarningForSongHardMismatchWinsOverTip(t *testing.T) {
+	ranges := map[string]scheduling.PersonVocalRange{
+		"sarah": {LowestPitchClass: 9, LowestOctave: 3, HighestPitchClass: 2, HighestOctave: 5}, // A3-D5
+		"tom":   {LowestPitchClass: 2, LowestOctave: 5, HighestPitchClass: 5, HighestOctave: 6}, // D5-F6
+	}
+	// Song range 50-65 (absolute): a hard mismatch against Sarah (needs up
+	// to F5, no octave shift fixes it), but exactly Tom's own range shifted
+	// up an octave (fits sung higher).
+	got := vocalRangeWarningForSong(50, 65, []string{"sarah", "tom"}, ranges, map[string]string{"sarah": "Sarah", "tom": "Tom"})
+
+	if got.Label != "range mismatch" || got.IsTip {
+		t.Errorf("expected a hard mismatch verdict when any vocalist has one, got %+v", got)
+	}
+	if !strings.Contains(got.Message, "Sarah") {
+		t.Errorf("expected the message to include Sarah's hard-mismatch line, got %q", got.Message)
+	}
+	if !strings.Contains(got.Message, "Tom") {
+		t.Errorf("expected the message to still include Tom's tip line, got %q", got.Message)
+	}
+}
+
+// TestVocalRangeWarningForSongDedupesRepeatedPersonID confirms a person
+// assigned to more than one roster position (so appearing twice in
+// vocalistPersonIDs) is only ever checked, and only ever named in the
+// message, once.
+func TestVocalRangeWarningForSongDedupesRepeatedPersonID(t *testing.T) {
+	ranges := map[string]scheduling.PersonVocalRange{
+		"sarah": {LowestPitchClass: 9, LowestOctave: 3, HighestPitchClass: 2, HighestOctave: 5},
+	}
+	got := vocalRangeWarningForSong(50, 65, []string{"sarah", "sarah"}, ranges, map[string]string{"sarah": "Sarah"})
+
+	if n := strings.Count(got.Message, "Sarah"); n != 2 {
+		// Sarah's name is named twice within her own single sentence
+		// ("Sarah's range is ...; ... needs Sarah to reach ...") - a
+		// duplicated line (not deduped) would push this to 4.
+		t.Errorf("expected Sarah's name to appear exactly twice (once per mention in her one line), got %d in %q", n, got.Message)
+	}
+}
+
+func TestVocalRangeFitsShiftedDownOneOctave(t *testing.T) {
+	fits, direction := vocalRangeFitsShifted(57, 74, 45, 62)
+	if !fits || direction != "lower" {
+		t.Errorf("expected fits=true direction=%q, got fits=%v direction=%q", "lower", fits, direction)
+	}
+}
+
+func TestVocalRangeFitsShiftedUpOneOctave(t *testing.T) {
+	fits, direction := vocalRangeFitsShifted(50, 65, 62, 77)
+	if !fits || direction != "higher" {
+		t.Errorf("expected fits=true direction=%q, got fits=%v direction=%q", "higher", fits, direction)
+	}
+}
+
+func TestVocalRangeFitsShiftedNeitherDirectionFits(t *testing.T) {
+	fits, _ := vocalRangeFitsShifted(50, 65, 45, 62)
+	if fits {
+		t.Errorf("expected fits=false when neither a one-octave-up nor one-octave-down shift fits")
+	}
+}
+
+func TestVocalRangeViolationNotesLowOnly(t *testing.T) {
+	got := vocalRangeViolationNotes(40, 60, 45, 62)
+	want := []string{"down to E3"}
+	if len(got) != len(want) || got[0] != want[0] {
+		t.Errorf("expected %v, got %v", want, got)
+	}
+}
+
+func TestVocalRangeViolationNotesHighOnly(t *testing.T) {
+	got := vocalRangeViolationNotes(50, 65, 45, 62)
+	want := []string{"up to F5"}
+	if len(got) != len(want) || got[0] != want[0] {
+		t.Errorf("expected %v, got %v", want, got)
+	}
+}
+
+func TestVocalRangeViolationNotesBothBounds(t *testing.T) {
+	got := vocalRangeViolationNotes(40, 70, 45, 62)
+	want := []string{"down to E3", "up to A#5"}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Errorf("expected %v, got %v", want, got)
+	}
+}
+
+func TestSongEffectiveVocalRangeAbsMissingSongYieldsNotOK(t *testing.T) {
+	_, _, ok := songEffectiveVocalRangeAbs(map[string]scheduling.SongVocalRange{}, "song-a", "G")
+	if ok {
+		t.Errorf("expected ok=false for a song with no stored vocal range")
+	}
+}
+
+func TestVocalistsWithRangesOnFileFiltersAndDedupes(t *testing.T) {
+	ranges := map[string]scheduling.PersonVocalRange{
+		"sarah": {},
+	}
+	got := vocalistsWithRangesOnFile([]string{"sarah", "sarah", "tom", ""}, ranges)
+	if len(got) != 1 || got[0] != "sarah" {
+		t.Errorf("expected exactly [\"sarah\"] (deduped, and tom/\"\" excluded - no range on file), got %v", got)
 	}
 }

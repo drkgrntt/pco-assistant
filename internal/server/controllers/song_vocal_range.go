@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -68,6 +69,49 @@ func sortedSongVocalRanges(ranges map[string]scheduling.SongVocalRange) []schedu
 	return sorted
 }
 
+// setSongVocalRangeFromForm parses/validates a reference key + low/high
+// note string triple - the same three fields both this setup page's own
+// form and the Build page's quick-add-panel/kebab-menu counterpart submit
+// (see QuickAddSongVocalRange, sets_detail.go) - and upserts
+// scheduling.Store's SetSongVocalRange. Factored out of SetSongVocalRange
+// below so the two call sites' validation/anchoring logic can never drift
+// out of sync with each other, the same "one shared setter, two posting
+// surfaces" shape QuickAddSongTag/QuickAddSongRelationship/QuickAddSongRole
+// already established for their own Store methods. Returns "" on success.
+func (sc *SchedulingController) setSongVocalRangeFromForm(ctx context.Context, organizationID, songID, referenceKey, lowest, highest string) string {
+	if songID == "" {
+		return "song is required"
+	}
+	if _, ok := scheduling.ParseKeyPitchClass(referenceKey); !ok {
+		return fmt.Sprintf("%q isn't a key - try something like G, Bb, F#m", referenceKey)
+	}
+	lowPC, lowOct, ok := scheduling.ParseNote(lowest)
+	if !ok {
+		return fmt.Sprintf("%q isn't a note - try something like G3", lowest)
+	}
+	highPC, highOct, ok := scheduling.ParseNote(highest)
+	if !ok {
+		return fmt.Sprintf("%q isn't a note - try something like D5", highest)
+	}
+	if scheduling.AbsoluteSemitone(lowPC, lowOct) > scheduling.AbsoluteSemitone(highPC, highOct) {
+		return "lowest note must be at or below the highest note"
+	}
+
+	// ok already confirmed above via ParseKeyPitchClass on the same
+	// string - ComputeVocalRangeOffsets re-derives it, it doesn't
+	// re-validate.
+	lowOffset, highOffset, _ := scheduling.ComputeVocalRangeOffsets(referenceKey, lowPC, lowOct, highPC, highOct)
+	if _, err := sc.store.SetSongVocalRange(ctx, organizationID, scheduling.SetSongVocalRangeParams{
+		SongID:              songID,
+		ReferenceKey:        referenceKey,
+		LowOffsetSemitones:  lowOffset,
+		HighOffsetSemitones: highOffset,
+	}); err != nil {
+		return err.Error()
+	}
+	return ""
+}
+
 func (sc *SchedulingController) SetSongVocalRange(c *fiber.Ctx) error {
 	orgID := middleware.CurrentOrganizationID(c)
 	ctx := middleware.RequestContext(c)
@@ -82,29 +126,8 @@ func (sc *SchedulingController) SetSongVocalRange(c *fiber.Ctx) error {
 	errMsg := ""
 	if err := c.BodyParser(&body); err != nil {
 		errMsg = err.Error()
-	} else if body.SongID == "" {
-		errMsg = "song is required"
-	} else if _, ok := scheduling.ParseKeyPitchClass(body.ReferenceKey); !ok {
-		errMsg = fmt.Sprintf("%q isn't a key - try something like G, Bb, F#m", body.ReferenceKey)
-	} else if lowPC, lowOct, ok := scheduling.ParseNote(body.Lowest); !ok {
-		errMsg = fmt.Sprintf("%q isn't a note - try something like G3", body.Lowest)
-	} else if highPC, highOct, ok := scheduling.ParseNote(body.Highest); !ok {
-		errMsg = fmt.Sprintf("%q isn't a note - try something like D5", body.Highest)
-	} else if scheduling.AbsoluteSemitone(lowPC, lowOct) > scheduling.AbsoluteSemitone(highPC, highOct) {
-		errMsg = "lowest note must be at or below the highest note"
 	} else {
-		// ok already confirmed above via ParseKeyPitchClass on the same
-		// string - ComputeVocalRangeOffsets re-derives it, it doesn't
-		// re-validate.
-		lowOffset, highOffset, _ := scheduling.ComputeVocalRangeOffsets(body.ReferenceKey, lowPC, lowOct, highPC, highOct)
-		if _, err := sc.store.SetSongVocalRange(ctx, orgID, scheduling.SetSongVocalRangeParams{
-			SongID:              body.SongID,
-			ReferenceKey:        body.ReferenceKey,
-			LowOffsetSemitones:  lowOffset,
-			HighOffsetSemitones: highOffset,
-		}); err != nil {
-			errMsg = err.Error()
-		}
+		errMsg = sc.setSongVocalRangeFromForm(ctx, orgID, body.SongID, body.ReferenceKey, body.Lowest, body.Highest)
 	}
 
 	rangeMap, err := sc.store.ListSongVocalRanges(ctx, orgID)
