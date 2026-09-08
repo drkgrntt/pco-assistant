@@ -155,16 +155,45 @@ templ RelationshipsTable(relationships []scheduling.SongRelationship, songTitles
 // setup pages get one at all - a genuinely different mechanism from the
 // Home/Build tours' auto-popping ones, so the "overbearing" objection that
 // ruled out a per-page tour in the original onboarding plan doesn't apply
-// here). One .tour-step, no dots or Back/Next - a single step never needs
-// step navigation - so this is opened/closed via openHelpDialog/
+// here). One .tour-step, no dots or Back - a single step never needs
+// in-dialog step navigation - so this is opened/closed via openHelpDialog/
 // closeHelpDialog (scheduling.js) directly rather than
 // createTourController, which exists specifically for the auto-open/
 // dismissal-tracking machinery a Help-triggered, single-step dialog has no
 // use for. .page-help-dialog is the class openPageHelp() looks for on a
 // page with no tour of its own; reuses .tour-dialog for the same visual
-// shell as the Home/Build tours, just with one step and one button. The
-// heading matches this page's own <h1> exactly, so the dialog clearly maps
-// back to the page it opened from.
+// shell as the Home/Build tours, just with one step and (here) two buttons.
+// The heading matches this page's own <h1> exactly, so the dialog clearly
+// maps back to the page it opened from.
+//
+// This one also carries an optional "Next: <page> ->" link, the first of a
+// forward-only chain through all 8 setup-page dialogs that lets someone
+// click through them in sequence like a full guided tour if they want,
+// while "Got it" still just dismisses and stays put - opt-in only, nothing
+// auto-advances. The chain order mirrors home.go's buildOnboardingChecklist
+// exactly (Song Relationships -> Song Roles -> Song Tags -> Song Vocal
+// Range -> Song/Person Preferences -> Person Relationships -> Position
+// Preferences -> Vocal Range), the same grouping/order already used for the
+// Home page's setup checklist - not a separately-invented sequence. One
+// direction only (Derek's explicit call): each page's Next points at the
+// following one, none has a Back: page 1 (here) gets a Next to page 2,
+// pages 2-7 each get a Next to the following page, page 8 (Vocal Range, the
+// person one) ends the chain with no Next at all, same as before this
+// addition.
+//
+// The mechanism is a full page navigation, not an htmx swap or in-dialog
+// step, so "click Next, land on the next page with its own Help dialog
+// already open" needs a value that survives the navigation:
+// setPageHelpForce() (scheduling.js) sets a one-shot sessionStorage flag
+// from the Next link's onclick (no preventDefault - the plain <a href>
+// navigation proceeds exactly as it would without the onclick at all), and
+// a DOMContentLoaded listener on the destination page checks that flag
+// once, clears it immediately, and calls openPageHelp() if it was set.
+// Generalizes the same one-shot-handoff idea buildTourController's
+// now-removed "buildTourForce"/forceBuildTourReplay one-off used for the
+// Account page's old Build-tour replay link (see build.templ's buildTour
+// doc comment) - that Build-specific copy is gone now that this shared
+// version covers the same need.
 templ songRelationshipsHelp() {
 	<dialog id="song-relationships-help" class="tour-dialog page-help-dialog">
 		<div class="tour-step">
@@ -176,6 +205,7 @@ templ songRelationshipsHelp() {
 			</p>
 		</div>
 		<div class="tour-actions">
+			<a class="button" href="/scheduling/song-roles" onclick="setPageHelpForce()">Next: Song Roles →</a>
 			<button type="button" class="button primary" onclick="closeHelpDialog('song-relationships-help')">Got it</button>
 		</div>
 	</dialog>

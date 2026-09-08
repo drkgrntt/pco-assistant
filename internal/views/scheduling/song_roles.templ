@@ -121,7 +121,9 @@ templ SongRolesTable(roles []scheduling.SongRole, songTitles map[string]string, 
 // songRolesHelp is this page's Help-triggered dialog - see
 // songRelationshipsHelp's own doc comment (relationships.templ) for the
 // full reasoning shared by every setup-page help dialog (single step, no
-// createTourController, .page-help-dialog for openPageHelp's dispatch).
+// createTourController, .page-help-dialog for openPageHelp's dispatch, and
+// the forward-only Next-link chain / setPageHelpForce mechanism). This is
+// page 2 of that chain (Song Relationships -> here -> Song Tags -> ...).
 templ songRolesHelp() {
 	<dialog id="song-roles-help" class="tour-dialog page-help-dialog">
 		<div class="tour-step">
@@ -132,6 +134,7 @@ templ songRolesHelp() {
 			</p>
 		</div>
 		<div class="tour-actions">
+			<a class="button" href="/scheduling/song-tags" onclick="setPageHelpForce()">Next: Song Tags →</a>
 			<button type="button" class="button primary" onclick="closeHelpDialog('song-roles-help')">Got it</button>
 		</div>
 	</dialog>

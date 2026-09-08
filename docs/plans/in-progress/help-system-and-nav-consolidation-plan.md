@@ -76,9 +76,16 @@ purpose.
 class="tour-dialog page-help-dialog">` with exactly one `.tour-step` (the
 page's own `<h1>` text as the heading, one paragraph of "what this is for
 and what Build does with it" copy) and a single `.button.primary` "Got it"
-- no dots, no Back/Next, closed via `closeHelpDialog('<page>-help')`.
-Placed right after each page's `@views.Layout(...) {` opens, same spot
-`@onboardingTour()`/`@buildTour()` sit in `home.templ`/`build.templ`:
+- no dots, no Back, closed via `closeHelpDialog('<page>-help')`. Placed
+right after each page's `@views.Layout(...) {` opens, same spot
+`@onboardingTour()`/`@buildTour()` sit in `home.templ`/`build.templ`. (A
+later addition, documented below in "Optional Next-link chain across the 8
+setup pages", gives 7 of the 8 an optional forward-only `Next` *link* to
+the following page's own dialog - still no dots, no Back, and still not a
+multi-step dialog: the "step navigation" a single `.tour-step` never needs
+stays exactly as true as when this was first built, the Next link just
+points at a different page's dialog rather than a second step inside this
+one.)
 
 | Page | Dialog id | File |
 |---|---|---|
@@ -96,19 +103,88 @@ get one - same reasoning the onboarding checklist already applied to
 exclude it from trackable setup items: it's a queue to work through, not a
 one-time setup item with "what is this page for" as an open question.
 
+**Optional Next-link chain across the 8 setup pages** (added after the
+above shipped, same day): each of the 7 non-final setup-page dialogs got a
+second `.tour-actions` element, a plain `.button` (not `.primary` - `Got
+it` stays the one accent-colored action, same "primary reserved for the
+actual exit action" convention the Home/Build tours already use for Done
+vs. Back/Next) reading `Next: <next page> →`, linking straight to the next
+page in sequence. Clicking it navigates there and that page's own Help
+dialog opens automatically - so someone can click through all 8 like a
+full guided tour if they want, while `Got it` still just dismisses and
+stays put. Opt-in only: nothing auto-advances on its own.
+
+The sequence mirrors `internal/server/controllers/home.go`'s
+`buildOnboardingChecklist` order exactly - the same grouping/order already
+canonical for the Home page's setup checklist, not a separately-invented
+one:
+
+1. Song Relationships (`/scheduling/song-relationships`)
+2. Song Roles (`/scheduling/song-roles`)
+3. Song Tags (`/scheduling/song-tags`)
+4. Song Vocal Range (`/scheduling/song-vocal-range`)
+5. Song / Person Preferences (`/scheduling/song-preferences`)
+6. Person Relationships (`/scheduling/person-relationships`)
+7. Position Preferences (`/scheduling/position-preferences`)
+8. Vocal Range (`/scheduling/vocal-range`)
+
+One-directional only (Derek's explicit call) - a page's Next always points
+at the following page, never a Back to the previous one. Page 1 gets a
+Next to page 2; pages 2-7 each get a Next to the following page; page 8
+(Vocal Range, the person one) is the end of the chain - unchanged, no Next
+link, same single "Got it" button it always had.
+
+**Mechanism**: since this is a full page navigation (no SPA here, no htmx
+swap for a whole-page nav like this), "click Next, land on the next page
+with its own Help dialog already open" needs a value that survives the
+navigation - the same one-shot `sessionStorage` handoff shape
+`buildTourController`'s now-removed `buildTourForce`/`forceBuildTourReplay`
+one-off used for the Account page's old Build-tour replay link (see "Why
+the setup-page recommendation flipped"'s sibling note above and
+`build.templ`'s `buildTour` doc comment). Generalized into one reusable
+pair in `scheduling.js` instead of writing the same handoff 7 times:
+
+- `setPageHelpForce()` - the Next link's `onclick`, sets a `pageHelpForce`
+  `sessionStorage` flag, wrapped in try/catch (storage blocked just means
+  the destination doesn't auto-open Help; navigation itself is never
+  blocked by this). No `preventDefault` - same non-preventDefault shape
+  `forceBuildTourReplay` had, so the plain `<a href="...">`'s normal
+  navigation does the actual page load.
+- A `DOMContentLoaded` listener checks that flag once, clears it
+  immediately (so it can never linger and force-open Help on some later,
+  unrelated visit to that page), and calls `openPageHelp()` if it was set.
+
+This fully subsumes the old Build-specific version, not just duplicates
+it: `buildTourController`'s `sessionForceKey: "buildTourForce"` config,
+the `sessionForceKey` handling block inside `createTourController`'s
+auto-open check, and `forceBuildTourReplay()` itself are all removed as
+part of this change - genuine cleanup, not a leftover left in place
+alongside the new generic version. Confirmed no remaining caller of
+`forceBuildTourReplay` anywhere in `internal/views/**/*.templ` before
+deleting it (the Account page's link that used to call it was already
+removed in the prior change documented above). Build's own manual-replay
+path (`?build-tour=1` in the URL) is unaffected either way - it was always
+handled entirely by the plain `queryParam` check in `createTourController`,
+never by `sessionForceKey`.
+
 **Account page** (`internal/views/account.templ`): the "Getting started"
 section's two tour-replay links (`/?tour=1`, and the
 `forceBuildTourReplay()` Build-tour link) are gone, replaced by one
 sentence: *"Look for **Help** at the bottom of any page for a quick tour of
 what's there."* Both links are now genuinely redundant, not just
 duplicated - Help finds and opens the exact same dialogs from wherever
-someone already is, without a trip to Account first. The underlying
-replay mechanisms (`?tour=1`, `?build-tour=1`,
-`forceBuildTourReplay`/`sessionStorage` handoff) are **not** removed - they
-still work if linked to by hand - only the in-app links pointing at them
-are gone; see `home.templ`'s `onboardingTour` and `build.templ`'s
-`buildTour` doc comments for where their own "how someone gets back here"
-notes were updated to match.
+someone already is, without a trip to Account first. The query-param replay
+mechanisms (`?tour=1`, `?build-tour=1`) are **not** removed - they still
+work if linked to by hand - only the in-app links pointing at them are
+gone; see `home.templ`'s `onboardingTour` and `build.templ`'s `buildTour`
+doc comments for where their own "how someone gets back here" notes were
+updated to match. The `forceBuildTourReplay`/`buildTourForce`
+`sessionStorage` handoff itself, unlike the query params, *was* later
+removed outright rather than left in place unused - see "Optional
+Next-link chain across the 8 setup pages" below for why: the same
+one-shot-handoff idea it pioneered got a second, genuine use once the
+setup-page dialogs needed one too, so it was generalized into one shared
+mechanism instead of keeping a redundant Build-specific copy around.
 
 **Both tours' footnote**: "Need this again later? Find it on your Account
 page." became "Need this again later? Look for Help at the bottom of any
@@ -239,8 +315,15 @@ redundant option alongside Help.
 - Grepped the whole repo for `?tour=1`/`forceBuildTourReplay`/"Replay the
   intro tour"/"Replay the Build page tour" to confirm no other in-app link
   still points at the now-removed Account-page replay UI (doc comments
-  describing the still-functional underlying mechanisms are expected hits,
-  not bugs).
+  describing the still-functional `?tour=1`/`?build-tour=1` query-param
+  mechanisms are expected hits, not bugs).
+- After the Next-link chain addition: grepped for `forceBuildTourReplay`
+  and `buildTourForce` again to confirm both are now fully gone from
+  live code (only historical doc-comment mentions of the removed
+  mechanism remain, e.g. in `build.templ`'s and `relationships.templ`'s
+  doc comments and this doc's own text above) - `sessionForceKey` no
+  longer has any caller either, since `buildTourController` was its only
+  one.
 - Still worth a live check once deployed:
   - Help opens the right dialog per page type - Home (`onboarding-tour`),
     a real plan's Build page (`build-tour`), each of the 8 setup pages

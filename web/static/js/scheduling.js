@@ -72,9 +72,6 @@ function dismissSiteBanner() {
 //     button, Escape, or backdrop click all fire "close" alike).
 //   - queryParam: a location.search flag (e.g. "tour" for ?tour=1) that
 //     forces this tour open on load regardless of the storageKey flag.
-//   - sessionForceKey (optional): a one-shot sessionStorage flag treated
-//     the same as queryParam being present - see buildTourController's own
-//     instance below for why it needs this and the home tour doesn't.
 //
 // Every DOM lookup below is scoped to this tour's own <dialog> element
 // (dialog.querySelectorAll(...), never a bare document-wide query), so two
@@ -200,16 +197,14 @@ function createTourController(config) {
   });
 
   // Auto-opens once per browser, or unconditionally when forced (the
-  // queryParam query string, or - Build tour only - a one-shot
-  // sessionForceKey; see buildTourController's own instance below for why
-  // it needs a second forcing mechanism the home tour doesn't). Fails
-  // *closed* on a storage-blocked browser (skip auto-opening) rather than
-  // the "fail open" convention used elsewhere in this file (theme, site
-  // banner, install prompt) - those are small, low-cost affordances where
-  // showing once too often costs nothing; a full-screen dialog reappearing
-  // on every single page load for someone whose browser blocks storage
-  // would be a real annoyance, not a minor miss. Neither forcing path is
-  // affected either way, since neither consults localStorage.
+  // queryParam query string). Fails *closed* on a storage-blocked browser
+  // (skip auto-opening) rather than the "fail open" convention used
+  // elsewhere in this file (theme, site banner, install prompt) - those are
+  // small, low-cost affordances where showing once too often costs
+  // nothing; a full-screen dialog reappearing on every single page load for
+  // someone whose browser blocks storage would be a real annoyance, not a
+  // minor miss. The forcing path is unaffected either way, since it never
+  // consults localStorage.
   document.addEventListener("DOMContentLoaded", function () {
     var dialog = dialogEl();
     if (!dialog) {
@@ -217,22 +212,6 @@ function createTourController(config) {
     }
 
     var forced = new RegExp("(^|[?&])" + config.queryParam + "=1(&|$)").test(window.location.search);
-
-    // sessionForceKey is read and cleared unconditionally, even when the
-    // query param already forced this open - a flag left behind would
-    // otherwise linger and force-reopen this same tour on some unrelated
-    // later visit (e.g. the Build tour, on a different plan entirely).
-    if (config.sessionForceKey) {
-      try {
-        if (sessionStorage.getItem(config.sessionForceKey)) {
-          forced = true;
-        }
-        sessionStorage.removeItem(config.sessionForceKey);
-      } catch (err) {
-        // Storage blocked - forced stays whatever the query check above
-        // already decided.
-      }
-    }
 
     if (forced) {
       open();
@@ -280,22 +259,22 @@ function tourNext() {
 // The Build page's own guided first-run tour (build.templ's buildTour,
 // Phase 5 of docs/plans/in-progress/onboarding-and-ambient-framing-plan.md)
 // - same mechanics as the home tour above, via the same
-// createTourController. sessionForceKey ("buildTourForce") is this tour's
-// own addition: unlike the home tour's plain ?tour=1 (linkable from / -
-// see the Account page's link), Build has no fixed URL to link a
-// manual-replay query string at, since BuildPlanPage requires a real
-// :service_type_id/:plan_id and the Account page has no specific plan in
-// mind. Its replay link (AccountGettingStartedBody, account.templ) instead
-// sets this sessionStorage flag right before navigating to the
-// plan-picker page (see forceBuildTourReplay below); whichever real plan
-// someone lands on next picks it up here, once, then clears it
-// immediately (see createTourController's own doc comment) so it can't
-// linger and force-reopen the tour on some later, unrelated plan visit.
+// createTourController. Manual replay is via its plain ?build-tour=1 query
+// param only (BuildPlanPage requires a real :service_type_id/:plan_id, so
+// there's no one fixed URL to link a replay flow at ahead of time, but
+// nothing needs one any more - a page's own Help dialog no longer needs a
+// session handoff to reach it, since Help finds and opens this tour
+// directly once someone is actually on a real plan's Build page). Used to
+// also carry a sessionForceKey ("buildTourForce") session-storage handoff
+// for the Account page's now-removed "Replay the Build page tour" link -
+// removed once help-system-and-nav-consolidation-plan.md's own setup-page
+// Next-link chain generalized that same one-shot-handoff idea into
+// setPageHelpForce()/pageHelpForce below, making this Build-specific copy
+// redundant.
 var buildTourController = createTourController({
   dialogId: "build-tour",
   storageKey: "buildTourSeen",
   queryParam: "build-tour",
-  sessionForceKey: "buildTourForce",
 });
 
 function openBuildTour() {
@@ -312,22 +291,6 @@ function buildTourBack() {
 
 function buildTourNext() {
   buildTourController.next();
-}
-
-// forceBuildTourReplay is the Account page's "Replay the Build page tour"
-// link's onclick (AccountGettingStartedBody, account.templ) - sets the
-// sessionStorage handoff flag buildTourController's own auto-open check
-// consumes (see createTourController's doc comment above) just before the
-// plain <a href> navigation to the plan-picker page proceeds. Doesn't
-// preventDefault - a blocked/failed write just means that navigation
-// happens without forcing the tour open, same fail-quiet convention as the
-// rest of this file's storage access.
-function forceBuildTourReplay() {
-  try {
-    sessionStorage.setItem("buildTourForce", "1");
-  } catch (err) {
-    // Storage blocked - navigation still proceeds normally.
-  }
 }
 
 // openHelpDialog/closeHelpDialog are the minimal show/hide pair backing
@@ -401,6 +364,49 @@ function openPageHelp() {
   }
   openHelpDialog("generic-help-dialog");
 }
+
+// setPageHelpForce/pageHelpForce are the one-shot sessionStorage handoff
+// behind each setup-page help dialog's optional "Next: <page> ->" link (see
+// songRelationshipsHelp's doc comment, relationships.templ, for the full
+// chain reasoning and home.go's buildOnboardingChecklist for the sequence
+// it mirrors) - a full page navigation, not an htmx swap, so "land on the
+// next page with its own Help dialog already open" needs a flag that
+// survives the navigation, the same shape buildTourController's now-removed
+// "buildTourForce" one-off used for the Account page's old Build-tour
+// replay link. Generalized here into one reusable pair instead of a copy
+// per page.
+//
+// setPageHelpForce is the plain <a href="..."> Next link's onclick - sets
+// the flag just before the browser's normal navigation to the next page
+// proceeds. Doesn't preventDefault - a blocked/failed write just means the
+// destination doesn't auto-open Help, same fail-quiet convention as the
+// rest of this file's storage access; navigation itself must never be
+// blocked by this.
+function setPageHelpForce() {
+  try {
+    sessionStorage.setItem("pageHelpForce", "1");
+  } catch (err) {
+    // Storage blocked - navigation still proceeds normally.
+  }
+}
+
+// Checked once per page load, then cleared immediately regardless of
+// whether it was set - so it can never linger and force-open Help on some
+// later, unrelated visit to that page (the same one-shot shape
+// createTourController's own forced-reopen check uses for its queryParam
+// flag).
+document.addEventListener("DOMContentLoaded", function () {
+  var forced = false;
+  try {
+    forced = !!sessionStorage.getItem("pageHelpForce");
+    sessionStorage.removeItem("pageHelpForce");
+  } catch (err) {
+    // Storage blocked - just means this page load never auto-opens Help.
+  }
+  if (forced) {
+    openPageHelp();
+  }
+});
 
 // The header nav's "Setup" dropdown (see layout.templ) - a plain
 // open/closed toggle, closed by clicking its button again, clicking
