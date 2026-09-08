@@ -164,7 +164,12 @@ templ RelationshipsTable(relationships []scheduling.SongRelationship, songTitles
 // page with no tour of its own; reuses .tour-dialog for the same visual
 // shell as the Home/Build tours, just with one step and (here) two buttons.
 // The heading matches this page's own <h1> exactly, so the dialog clearly
-// maps back to the page it opened from.
+// maps back to the page it opened from. Carries the same .tour-footnote
+// line the Home/Build tours use ("Need this again later? Look for Help at
+// the bottom of any page.") - closing this dialog and coming back to it
+// (via the footer's Help button, openPageHelp) is exactly the point, not
+// something to lose track of: read it, click out, go do something on this
+// page, reopen it to pick back up.
 //
 // This one also carries an optional "Next: <page> ->" link, the first of a
 // forward-only chain through all 8 setup-page dialogs that lets someone
@@ -179,7 +184,10 @@ templ RelationshipsTable(relationships []scheduling.SongRelationship, songTitles
 // following one, none has a Back: page 1 (here) gets a Next to page 2,
 // pages 2-7 each get a Next to the following page, page 8 (Vocal Range, the
 // person one) ends the chain with no Next at all, same as before this
-// addition.
+// addition. The Home tour's own last step ("Get started", onboardingTour,
+// home.templ) got the same "Next: Song Relationships ->" link right after
+// this shipped, making it this chain's de facto step 0 - same mechanism,
+// no changes needed here.
 //
 // The mechanism is a full page navigation, not an htmx swap or in-dialog
 // step, so "click Next, land on the next page with its own Help dialog
@@ -204,6 +212,7 @@ templ songRelationshipsHelp() {
 				flag a bad pairing before it lands back to back.
 			</p>
 		</div>
+		<p class="muted tour-footnote">Need this again later? Look for Help at the bottom of any page.</p>
 		<div class="tour-actions">
 			<a class="button" href="/scheduling/song-roles" onclick="setPageHelpForce()">Next: Song Roles →</a>
 			<button type="button" class="button primary" onclick="closeHelpDialog('song-relationships-help')">Got it</button>
