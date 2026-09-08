@@ -358,9 +358,27 @@ type SetSongView struct {
 	// and the /scheduling/song-vocal-range setup page), in which case the
 	// detail card shows nothing rather than a placeholder. Detail-card
 	// only, same scope as Structure/HasChordChart above - Phase 2 of
-	// docs/plans/in-progress/vocal-range-plan.md; the mismatch warning
-	// this is a prerequisite for (Phase 3) isn't built yet.
+	// docs/plans/in-progress/vocal-range-plan.md.
 	VocalRangeDisplay string
+
+	// VocalRangeWarningLabel/VocalRangeWarningMessage/VocalRangeWarningIsTip
+	// are Phase 3 of docs/plans/in-progress/vocal-range-plan.md: a
+	// range-mismatch warning (or downgraded octave-shift tip) when a
+	// vocalist assigned to this plan's roster has a stored
+	// scheduling.PersonVocalRange that doesn't cover this song's own
+	// VocalRangeDisplay range - see the controller's
+	// vocalRangeWarningForSong for the full "who counts as a vocalist to
+	// check"/octave-shift-downgrade logic. VocalRangeWarningLabel == ""
+	// means nobody assigned mismatches at all (by far the common case - no
+	// roster yet, no vocalist with a range on file, or every fitting range
+	// already covers this song), in which case the row shows no badge at
+	// all. VocalRangeWarningIsTip distinguishes a hard mismatch (rendered
+	// like KeyTransitionLabel - a conflict-badge-styled warning) from an
+	// octave-shift-fixes-it tip (rendered like TransitionNotePrompts - a
+	// plain, non-warning badge) - see songBadgeSpans, set_builder.templ.
+	VocalRangeWarningLabel   string
+	VocalRangeWarningMessage string
+	VocalRangeWarningIsTip   bool
 
 	// TransitionNotePrompts is the resurfacing prompt(s) for this row - the
 	// latest debrief/talking-point note for this song alone (single-song),

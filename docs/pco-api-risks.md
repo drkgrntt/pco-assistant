@@ -692,3 +692,19 @@ out to 100-200 sequential round trips per load.
   sync. Fan-out stays small regardless: this page only ever lists songs
   that already have a stored vocal range on file, a subset of the active
   song library, not every song in it.
+- **Vocal-range mismatch warning (Phase 3, 2026-09-08) adds one new
+  render-path call, bounded and batched, not a new risk category** -
+  `buildSetBuilderData`'s new roster-vocalist cross-reference
+  (`vocalRangeWarningForSong`, `sets_builder.go`) fetches the plan's
+  roster assignments (`scheduling.Store.FindRoster`/
+  `ListRosterAssignments`) and every `PersonVocalRange` on file, both
+  local-DB reads with no PCO call at all. The one real addition is a
+  `personNameMapForIDs` call to resolve display names for the mismatch
+  message - the exact same batched `where[id]=...` pattern `leaderNames`
+  already uses on this same render (see the Song leader entry above) -
+  and its input is intersected down to just the roster members who are
+  *both* assigned to this plan and have a range on file
+  (`vocalistsWithRangesOnFile`), not the whole roster: 0 calls when
+  nobody assigned has a range recorded (the common case today, since
+  Phase 1 person ranges are still new), and never more than one batched
+  call bounded by a single plan's own roster size otherwise.

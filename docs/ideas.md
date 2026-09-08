@@ -383,10 +383,16 @@ pattern as `song_tags`/`song_relationships`:**
   song's range as a semitone interval from a reference key
   (`internal/scheduling/song_vocal_range.go`), transposed at Build-page
   render time into whatever key the arrangement is actually in right now
-  and shown on the song detail card. Still open: the actual mismatch
-  warning comparing a song's transposed range against a roster'd
-  vocalist's stored range (Phase 3, this bullet stays open rather than
-  struck until that lands), and the crowdsourced-default piece
+  and shown on the song detail card - also now settable straight from the
+  Build page's own quick-add/kebab-menu/song-detail-card entry points, not
+  just the dedicated setup page (`internal/server/controllers/
+  sets_detail.go`'s `QuickAddSongVocalRange`). **The mismatch warning
+  itself (Phase 3) shipped 2026-09-08** - a "range mismatch"/"range tip"
+  badge on a song's Build-page row whenever a roster-assigned vocalist's
+  stored range doesn't cover the song's own transposed range, including
+  the octave-shift downgrade-to-tip logic this bullet always intended (see
+  `vocalRangeWarningForSong`, `sets_builder.go`, and the plan doc's own
+  Phase 3 status note). Still open: only the crowdsourced-default piece
   immediately below, which remains a genuine cross-org product decision,
   not a coding question. See
   `docs/plans/shipped/song-lead-sheet-attachments-plan.md` for why
@@ -505,8 +511,8 @@ pattern as `song_tags`/`song_relationships`:**
   pitch-class/octave pair - see
   `docs/plans/in-progress/vocal-range-plan.md` for the rest (song vocal
   range and its key engine shipped as Phase 2, 2026-09-07; the mismatch
-  warning comparing the two, Phase 3, remains not started, which is why
-  this bullet stays open rather than struck). Lets the app know what someone can
+  warning comparing the two shipped as Phase 3, 2026-09-08 - see **Song
+  vocal range (relative to key)** above). Lets the app know what someone can
   actually sing, not just whether PCO says they're eligible for a
   position. Simplest as a person-level field, not position-level: PCO's
   position eligibility already answers *who can serve* a position, this
@@ -746,13 +752,15 @@ range was cheap and standalone (one small new table, useful even with
 zero song data); per-song range cost more (needed a real key engine
 factored out of the key-transition warning's one-off pitch-class parser -
 see `docs/plans/in-progress/vocal-range-plan.md`'s Phase 2 status note).
-What's left is genuinely still open, and still the pricier remainder: the
-mismatch warning (a roster-cross-referenced check, Phase 3) is a
-moderate, well-scoped lift; the crowdsourced-default piece remains the
+**The mismatch warning (Phase 3, the roster-cross-referenced check) has
+also now shipped, 2026-09-08** - the moderate, well-scoped lift this
+section previously called it. What's left is genuinely still open, and
+now the only remaining piece: the crowdsourced-default piece remains the
 priciest single item in this file - the first genuinely cross-org data
 pattern this app would have, needing a reliable join key and a real
 consent story before it's shippable. The eventual key matrix is
-presentation-only once the mismatch warning exists too.
+presentation-only, and now buildable, since both per-person/per-song
+range and the mismatch warning it would visualize all exist.
 
 Priciest of the rest: **stage density/band-balance checking** (a new
 capability/profile axis on both people and services, nothing existing to

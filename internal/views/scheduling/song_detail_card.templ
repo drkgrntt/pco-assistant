@@ -369,6 +369,10 @@ templ songDetailCard(data SetBuilderData, song SetSongView) {
 					@components.IconRole()
 					Mark a role
 				</button>
+				<button type="button" data-row-id={ fmt.Sprintf("%d", song.ID) } onclick="openQuickAction(this, 'vocal-range')">
+					@components.IconMusicNote()
+					Set vocal range
+				</button>
 			</div>
 		}
 		<!--

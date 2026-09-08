@@ -80,18 +80,31 @@ with at least Viewer access can still sign in.
 - **Song Vocal Range** - record each song's lowest and highest sung note,
   measured against the key you played it in, on a dedicated setup page
   (mirroring Song Tags/Song Roles - a fact about the song itself, reused
-  across every plan it appears in, not a per-occurrence value). The setup
-  page itself shows each stored range as-measured, plus a second line
-  transposed into the song's actual current Planning Center key when it's
-  known and differs from the key it was measured in - each note has its
-  own tap-to-hear play button, same as the Vocal Range page above. The
-  Build page's song detail card shows the transposed result live too -
-  "Vocal range: G3-D5 (in this key)" - re-derived from the stored interval
-  into whatever key the arrangement is actually in right now, whether or
-  not that matches the key it was originally measured in. Pairs with the
-  People section's **Vocal Range** above; the mismatch warning comparing
-  a song's range against a roster'd vocalist's is still on the roadmap
-  (see `docs/plans/in-progress/vocal-range-plan.md`)
+  across every plan it appears in, not a per-occurrence value) - or, just
+  as easily, right from the Build page's Songs tab: a "Set song vocal
+  range" quick-add item, a "Set vocal range" action in each row's "more
+  actions" menu, and a matching jump button on the song's own detail card,
+  same as tags/relationships/roles already offer. The setup page itself
+  shows each stored range as-measured, plus a second line transposed into
+  the song's actual current Planning Center key when it's known and
+  differs from the key it was measured in - each note has its own
+  tap-to-hear play button, same as the Vocal Range page above. The Build
+  page's song detail card shows the transposed result live too - "Vocal
+  range: G3-D5 (in this key)" - re-derived from the stored interval into
+  whatever key the arrangement is actually in right now, whether or not
+  that matches the key it was originally measured in. Pairs with the
+  People section's **Vocal Range** below: whenever someone assigned to a
+  plan's roster has a stored range that doesn't cover a song's own
+  transposed range, that song's Build-page row gets a "range mismatch"
+  badge naming who and by how much - or, when the mismatch is just a
+  register difference an octave up or down fixes, a softer "range tip"
+  badge suggesting that instead of flagging a conflict
+- **Busy-row decluttering (Build page)** - once a Songs-tab row's badges
+  pile up (several tags, several roles, a debrief prompt, a mismatch
+  warning all at once), the lower-priority ones collapse behind a "+N
+  more" toggle so the row stays scannable; anything that's actually a
+  warning (avoid-pairing, repeated song, key change, vocal-range mismatch)
+  always stays visible regardless of how many other badges a row has
 - **Song / Person Preferences** - note who's preferred or discouraged for a
   given song
 - **Song notes** - click a song's row on the Build page to open its detail
@@ -196,9 +209,11 @@ with at least Viewer access can still sign in.
   set, covering typical choir range - falling back to a synthesized Web
   Audio tone only for the rare note outside that span), so a director
   unsure what a stored note actually sounds like doesn't have to work it
-  out by ear or on an instrument. Pairs with **Song Vocal Range** below
-  (Songs section) - the mismatch warning that compares the two is still on
-  the roadmap (see `docs/plans/in-progress/vocal-range-plan.md`)
+  out by ear or on an instrument. Pairs with **Song Vocal Range** above
+  (Songs section): anyone assigned to a plan's roster who has a range on
+  file gets checked against that plan's own songs automatically, surfacing
+  as a badge on the Build page's Songs tab - see that entry for the
+  mismatch-vs-tip distinction
 - **Build a Service (Team tab)** - the same page as the Songs tab above,
   filling an upcoming plan's open positions from each position's real PCO
   eligibility list, with avoid-pairing conflict warnings, works-well/
