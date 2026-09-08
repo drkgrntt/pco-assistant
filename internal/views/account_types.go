@@ -6,8 +6,12 @@ import "time"
 // package from importing internal/auth types directly, the same boundary
 // BillingData already keeps between itself and auth.Organization (see
 // BillingData's own doc comment / buildBillingData, which copies fields
-// across rather than embedding the auth type).
+// across rather than embedding the auth type). SessionID (auth.
+// ActiveSession.ID) is what the row's own "Sign out" form actually posts
+// - PersonID alone isn't enough to identify one row, since a person
+// signed in on two devices renders two rows sharing a PersonID.
 type AccountSession struct {
+	SessionID            string
 	PersonID, PersonName string
 	CreatedAt, ExpiresAt time.Time
 }
@@ -47,7 +51,7 @@ type AccountData struct {
 	SessionsErr string
 
 	// SignOutMsg/SignOutErr report the result of the last
-	// POST /account/sessions/:personID/sign-out on this render - mirrors
+	// POST /account/sessions/:sessionID/sign-out on this render - mirrors
 	// SongInfoCacheMsg/SongInfoCacheErr's style.
 	SignOutMsg string
 	SignOutErr string

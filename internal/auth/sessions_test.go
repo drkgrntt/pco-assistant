@@ -1,8 +1,8 @@
 package auth
 
-// DB-backed tests for ListActiveSessions/DeleteSessionsForPerson - the
-// "who's signed in" list and "sign this person out" action behind the
-// Account page. This package has no other DB-backed test file yet, so
+// DB-backed tests for ListActiveSessions/DeleteSessionByID - the "who's
+// signed in" list and its per-row "Sign out" action behind the Account
+// page. This package has no other DB-backed test file yet, so
 // this follows internal/scheduling/person_data_cache_db_test.go's
 // established pattern exactly (see that file's doc comment for the full
 // rationale): gated behind RUN_DB_TESTS=1 so a plain `go test
@@ -131,52 +131,60 @@ func TestListActiveSessions(t *testing.T) {
 		if sess.ExpiresAt.IsZero() {
 			t.Errorf("session %s ExpiresAt is zero, want a real timestamp", sess.PersonName)
 		}
+		if sess.ID == "" {
+			t.Errorf("session %s ID is empty, want the row's hashed session id (needed to sign out just this one session)", sess.PersonName)
+		}
+	}
+	if sessions[0].ID == sessions[1].ID {
+		t.Errorf("Bob and Alice's sessions both returned ID %q, want distinct ids per session", sessions[0].ID)
 	}
 }
 
-func TestDeleteSessionsForPerson(t *testing.T) {
+// TestSignOutOneSessionLeavesOthersLive proves the fix for the "sign-out
+// bug" this replaced: DeleteSessionsForPerson used to be keyed by
+// person_id, so ending one of a person's two sessions (e.g. mobile vs.
+// desktop, both rows sharing PersonID) silently ended the other too. The
+// Account page's sign-out form now posts ActiveSession.ID instead and
+// deletes via DeleteSessionByID, which only ever touches the one row it
+// names.
+func TestSignOutOneSessionLeavesOthersLive(t *testing.T) {
 	store := dbTestStore(t)
 	ctx := context.Background()
 	orgID := testScopeID("org")
 	cleanupSessions(t, store, orgID)
 
 	personA := testScopeID("person")
-	personB := testScopeID("person")
 
-	// personA signs in on two devices.
+	// personA signs in on two devices - two rows, one PersonID.
 	if _, err := store.CreateSession(ctx, personA, "Alice", orgID, "Test Org", "tok-a1", "ref-a1", time.Now().Add(time.Hour)); err != nil {
 		t.Fatalf("CreateSession (personA, device 1): %v", err)
 	}
 	if _, err := store.CreateSession(ctx, personA, "Alice", orgID, "Test Org", "tok-a2", "ref-a2", time.Now().Add(time.Hour)); err != nil {
 		t.Fatalf("CreateSession (personA, device 2): %v", err)
 	}
-	if _, err := store.CreateSession(ctx, personB, "Bob", orgID, "Test Org", "tok-b", "ref-b", time.Now().Add(time.Hour)); err != nil {
-		t.Fatalf("CreateSession (personB): %v", err)
-	}
-
-	// A person with no sessions: 0 deleted, no error.
-	count, err := store.DeleteSessionsForPerson(ctx, orgID, testScopeID("person"))
-	if err != nil {
-		t.Fatalf("DeleteSessionsForPerson (no sessions): unexpected error: %v", err)
-	}
-	if count != 0 {
-		t.Errorf("DeleteSessionsForPerson (no sessions) = %d, want 0", count)
-	}
-
-	count, err = store.DeleteSessionsForPerson(ctx, orgID, personA)
-	if err != nil {
-		t.Fatalf("DeleteSessionsForPerson (personA): %v", err)
-	}
-	if count != 2 {
-		t.Errorf("DeleteSessionsForPerson (personA) = %d, want 2 (both devices)", count)
-	}
 
 	sessions, err := store.ListActiveSessions(ctx, orgID)
 	if err != nil {
-		t.Fatalf("ListActiveSessions (after delete): %v", err)
+		t.Fatalf("ListActiveSessions: %v", err)
 	}
-	if len(sessions) != 1 || sessions[0].PersonName != "Bob" {
-		t.Fatalf("ListActiveSessions (after delete) = %+v, want exactly [Bob] (personB untouched)", sessions)
+	if len(sessions) != 2 {
+		t.Fatalf("ListActiveSessions = %d sessions, want 2 (both of personA's devices)", len(sessions))
+	}
+
+	// Sign out only the first listed session.
+	if err := store.DeleteSessionByID(ctx, sessions[0].ID); err != nil {
+		t.Fatalf("DeleteSessionByID: %v", err)
+	}
+
+	remaining, err := store.ListActiveSessions(ctx, orgID)
+	if err != nil {
+		t.Fatalf("ListActiveSessions (after sign-out): %v", err)
+	}
+	if len(remaining) != 1 {
+		t.Fatalf("ListActiveSessions (after sign-out) = %d sessions, want exactly 1 (the other device should still be signed in)", len(remaining))
+	}
+	if remaining[0].ID != sessions[1].ID {
+		t.Errorf("ListActiveSessions (after sign-out) left ID %q, want the untouched session %q", remaining[0].ID, sessions[1].ID)
 	}
 }
 

@@ -139,7 +139,7 @@ func (s *Store) MostRecentSession(ctx context.Context) (Session, error) {
 //
 // Which live session gets picked doesn't matter much when more than one
 // exists for the org - every signed-in person is a full admin with
-// equivalent PCO access (see SignOutPerson's doc comment, account.go) -
+// equivalent PCO access (see SignOutSession's doc comment, account.go) -
 // but "most recently created" is a deliberate, documented choice rather
 // than an arbitrary LIMIT 1: it's the same tiebreak MostRecentSession
 // already uses, and skews toward whichever session is most likely to
@@ -205,15 +205,28 @@ func (s *Store) UpdateSessionTokensByID(ctx context.Context, id, accessToken, re
 // see UpdateSessionTokensByID's identical reasoning. The background-sync
 // cron uses this when a session's refresh token is no longer honored by
 // PCO (see jobs.PCOJobs): a stronger, earlier "this session is actually
-// useless" signal than deleteExpiredSessions' 30-day TTL sweep alone.
+// useless" signal than deleteExpiredSessions' 30-day TTL sweep alone. Also
+// backs the Account page's per-row "Sign out" action
+// (controllers.AccountController.SignOutSession) - ActiveSession.ID hands
+// back exactly the id this expects, so ending one listed session no longer
+// requires (and no longer risks) ending every session that person has -
+// see ActiveSession's doc comment for the bug this replaced.
 func (s *Store) DeleteSessionByID(ctx context.Context, id string) error {
 	_, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE id = $1`, id)
 	return err
 }
 
 // ActiveSession is one row from ListActiveSessions - enough to show and
-// act on a currently signed-in person from the Account page.
+// act on one currently-live session from the Account page. ID is that
+// row's own hashed session id (same value as Session.ID/
+// SessionForBackgroundSync's ID) - the Account page's "Sign out" form
+// posts *this*, not PersonID, since a person signed in on two devices
+// shows up as two rows sharing one PersonID but each with its own ID:
+// keying the sign-out action off PersonID instead (as it once did) meant
+// clicking either row's button deleted both sessions, not just the one
+// clicked.
 type ActiveSession struct {
+	ID                   string
 	PersonID, PersonName string
 	CreatedAt, ExpiresAt time.Time
 }
@@ -224,7 +237,7 @@ type ActiveSession struct {
 // the deduped billed count, this is just a visibility/action list).
 func (s *Store) ListActiveSessions(ctx context.Context, orgID string) ([]ActiveSession, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT person_id, person_name, created_at, expires_at
+		SELECT id, person_id, person_name, created_at, expires_at
 		FROM sessions
 		WHERE organization_id = $1 AND expires_at > now()
 		ORDER BY created_at DESC
@@ -237,29 +250,13 @@ func (s *Store) ListActiveSessions(ctx context.Context, orgID string) ([]ActiveS
 	var sessions []ActiveSession
 	for rows.Next() {
 		var sess ActiveSession
-		if err := rows.Scan(&sess.PersonID, &sess.PersonName, &sess.CreatedAt, &sess.ExpiresAt); err != nil {
+		if err := rows.Scan(&sess.ID, &sess.PersonID, &sess.PersonName, &sess.CreatedAt, &sess.ExpiresAt); err != nil {
 			return nil, err
 		}
 		sessions = append(sessions, sess)
 	}
 
 	return sessions, rows.Err()
-}
-
-// DeleteSessionsForPerson ends every live session a specific person has in
-// this org - the "sign this person out" action from the Account page.
-// Unlike DeleteSession (keyed by one raw token, for self-logout via
-// /auth/logout), this is keyed by person id since whoever's performing
-// this action doesn't have the target person's session token. Returns how
-// many sessions were deleted (0 if the person had none - not an error).
-func (s *Store) DeleteSessionsForPerson(ctx context.Context, orgID, personID string) (int64, error) {
-	result, err := s.db.ExecContext(ctx, `
-		DELETE FROM sessions WHERE organization_id = $1 AND person_id = $2
-	`, orgID, personID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
 }
 
 // DeleteExpiredSessions purges expired rows. Called periodically from
