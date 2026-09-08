@@ -180,6 +180,19 @@ for other volunteer-heavy ministries on the same backend.
 
 - Whether the browser-extension HUD is worth building at all before there's
   real usage data suggesting the lighter integrations aren't enough.
+- Whether/when a native mobile app is worth building over the existing
+  PWA - **scoped, not decided**: see
+  `docs/plans/not-started/mobile-app-strategy-plan.md`. Current call is
+  to stay on PWA (auth is cookie-only today, so a true native HTTP
+  client needs a new token mechanism that nothing currently forces) until
+  push notifications, offline, or app-store distribution become real
+  wants.
+- How Derek (the app's operator, not any org's admin) gets cross-org
+  visibility (starting with reading the `feedback` table) given the app
+  has no role concept at all - **scoped, not decided**: see
+  `docs/plans/not-started/admin-tooling-plan.md`. Current call is a
+  second, separate `cmd/` web app with its own shared-secret auth,
+  deliberately outside the multi-tenant PCO-OAuth session model.
 - ~~Whether Planning Center exposes any real third-party plugin/embed
   surface (vs. just its public API)~~ - **checked**: PCO's official
   "Add-Ons" program (`api.planningcenteronline.com/docs/overview/add-ons`,
