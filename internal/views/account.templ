@@ -21,6 +21,9 @@ templ Account(personName, organizationName string, data AccountData) {
 				<p class="muted">Planning Center organization id: { data.OrganizationID }.</p>
 			}
 		}
+		<h2>Getting started</h2>
+		<p class="muted">A short walkthrough of what Resonance does and why - worth another look after joining an existing org, or any time as a refresher. The setup checklist itself always lives on the home page.</p>
+		<a class="button" href="/?tour=1">Replay the intro tour</a>
 		<h2>Billing</h2>
 		@BillingBody(data.Billing)
 		<h2>Data &amp; Caches</h2>

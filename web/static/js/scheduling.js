@@ -58,6 +58,136 @@ function dismissSiteBanner() {
   sessionStorage.setItem("bannerDismissed", "true");
 }
 
+// The home page's guided first-run tour (home.templ's onboardingTour) -
+// native <dialog>, one visible .tour-step at a time. tourStepCount is
+// read from the DOM rather than hardcoded, so adding/removing a step in
+// the template never needs a matching edit here.
+var tourStep = 0;
+
+function tourStepCount() {
+  return document.querySelectorAll(".tour-step").length;
+}
+
+// Shows step 0 through .showModal() (falls back to the open attribute for
+// a browser without the method, though every current browser has it) -
+// always resets to the first step, so a manual replay (see
+// openOnboardingTour's caller below) never opens mid-way through wherever
+// a previous visit left off.
+function openOnboardingTour() {
+  var dialog = document.getElementById("onboarding-tour");
+  if (!dialog) {
+    return;
+  }
+  tourStep = 0;
+  renderTourStep();
+  if (dialog.showModal) {
+    dialog.showModal();
+  } else {
+    dialog.setAttribute("open", "");
+  }
+}
+
+// Closing (Skip, or the final step's "Let's go") just closes the dialog -
+// recording the dismissal is handled once, centrally, by the "close"
+// listener below, which also covers the two ways of closing this doesn't
+// go through (Escape, clicking the backdrop) - <dialog> fires "close" for
+// all of them alike, native buttons included.
+function closeOnboardingTour() {
+  var dialog = document.getElementById("onboarding-tour");
+  if (!dialog) {
+    return;
+  }
+  if (dialog.close) {
+    dialog.close();
+  } else {
+    dialog.removeAttribute("open");
+  }
+}
+
+document.addEventListener("DOMContentLoaded", function () {
+  var dialog = document.getElementById("onboarding-tour");
+  if (!dialog) {
+    return;
+  }
+  // This is one-time orientation, not something to reopen on every visit
+  // once it's been seen once - recorded here regardless of how the dialog
+  // closed (button, Escape, or backdrop click all fire "close" alike).
+  dialog.addEventListener("close", function () {
+    try {
+      localStorage.setItem("onboardingTourSeen", "true");
+    } catch (err) {
+      // Storage blocked - dismissal only lasts this page view; see the
+      // auto-open check below for why that's an acceptable trade here.
+    }
+  });
+});
+
+// Auto-opens the tour once per browser, or every load when explicitly
+// asked for (?tour=1, linked from the Account page's "Replay the intro
+// tour" - see AccountGettingStartedBody). Fails *closed* on a
+// storage-blocked browser (skip auto-opening) rather than the "fail open"
+// convention used elsewhere in this file (theme, site banner, install
+// prompt) - those are small, low-cost affordances where showing once too
+// often costs nothing; a full-screen dialog reappearing on every single
+// home page load for someone whose browser blocks storage would be a real
+// annoyance, not a minor miss. The manual ?tour=1 path is unaffected
+// either way, since it doesn't consult localStorage at all.
+document.addEventListener("DOMContentLoaded", function () {
+  var dialog = document.getElementById("onboarding-tour");
+  if (!dialog) {
+    return;
+  }
+  var forced = /(^|[?&])tour=1(&|$)/.test(window.location.search);
+  if (forced) {
+    openOnboardingTour();
+    return;
+  }
+  try {
+    if (localStorage.getItem("onboardingTourSeen") !== "true") {
+      openOnboardingTour();
+    }
+  } catch (err) {
+    // Storage blocked - see doc comment above.
+  }
+});
+
+function renderTourStep() {
+  var count = tourStepCount();
+  document.querySelectorAll(".tour-step").forEach(function (step) {
+    step.hidden = Number(step.dataset.step) !== tourStep;
+  });
+  document.querySelectorAll(".tour-dot").forEach(function (dot, index) {
+    dot.classList.toggle("active", index === tourStep);
+  });
+  var back = document.getElementById("tour-back");
+  var next = document.getElementById("tour-next");
+  var done = document.getElementById("tour-done");
+  var isLast = tourStep === count - 1;
+  if (back) {
+    back.hidden = tourStep === 0;
+  }
+  if (next) {
+    next.hidden = isLast;
+  }
+  if (done) {
+    done.hidden = !isLast;
+  }
+}
+
+function tourBack() {
+  if (tourStep > 0) {
+    tourStep--;
+    renderTourStep();
+  }
+}
+
+function tourNext() {
+  if (tourStep < tourStepCount() - 1) {
+    tourStep++;
+    renderTourStep();
+  }
+}
+
 // The header nav's "Setup" dropdown (see layout.templ) - a plain
 // open/closed toggle, closed by clicking its button again, clicking
 // anywhere else on the page, or pressing Escape.

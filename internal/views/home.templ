@@ -10,6 +10,8 @@ templ Home(personName, organizationName string, data HomeData) {
 	@Layout("Home", personName, organizationName) {
 		<h1>Welcome, { personName }</h1>
 
+		@onboardingTour()
+
 		if data.OrgStatus != "" && data.OrgStatus != "active" {
 			<p class="warning">
 				if data.OrgStatus == "trialing" {
@@ -119,4 +121,83 @@ templ Home(personName, organizationName string, data HomeData) {
 			</ul>
 		}
 	}
+}
+
+// onboardingTour is the guided first-run orientation - the heavier option
+// (alongside Phase 3's checklist) from the "richer" round of feedback in
+// docs/plans/in-progress/onboarding-and-ambient-framing-plan.md, built as
+// a real multi-step dialog rather than folding more content into the
+// checklist itself. Unlike Phase 3 (which reflects an org's real setup
+// data), this is pure orientation - the same for every person regardless
+// of what their org has configured, so a new admin joining an
+// already-set-up org gets it too, not just a brand-new org. Content is a
+// condensed version of how_it_works.templ's own two feature grids, same
+// voice, far fewer scenarios per promise (a full-screen dialog step isn't
+// the place for all 11 how-it-works cards).
+//
+// Native <dialog> rather than a hand-rolled overlay - no modal pattern
+// existed anywhere in this codebase before this, and <dialog> gets
+// focus-trapping, Escape-to-close, and backdrop dimming for free (see
+// tour-dialog rules in home.css). scheduling.js's openOnboardingTour/
+// closeOnboardingTour/tourBack/tourNext drive which .tour-step is visible
+// and the dot indicator; a DOMContentLoaded check there auto-opens this
+// once per browser (localStorage "onboardingTourSeen"), and a manual
+// ?tour=1 (linked from the Account page's "Replay the intro tour") forces
+// it open regardless of that flag - same "auto-trigger plus a manual way
+// back in" shape as Phase 2 used, but entirely client-side this time
+// (nothing server-rendered depends on whether this has been seen, unlike
+// Phase 2's now-removed ShowOnboardingNudge).
+templ onboardingTour() {
+	<dialog id="onboarding-tour" class="tour-dialog">
+		<button type="button" class="icon-btn tour-close" aria-label="Skip the tour" title="Skip the tour" onclick="closeOnboardingTour()">
+			@components.IconX()
+		</button>
+		<div class="tour-step" data-step="0">
+			<p class="muted">Welcome to Resonance</p>
+			<h2>Two promises, checked automatically.</h2>
+			<p>
+				Planning Center is the system of record - it stores what's already
+				decided. Resonance is where the decision actually gets made,
+				checked against everything Planning Center itself has no way to
+				know, before it ever reaches your team.
+			</p>
+		</div>
+		<div class="tour-step" data-step="1" hidden>
+			<h2>Protect the service</h2>
+			<p class="muted">Repetition fatigue, a broken set flow, a conflict nobody caught - surfaced while you're still drafting, well before the plan goes out.</p>
+			<ul>
+				<li>A heads-up before a repeated song quietly becomes three in a row.</li>
+				<li>A jarring key change flagged before the band finds out live.</li>
+				<li>Songs that flow well get suggested next; songs that clash get flagged if they land back to back.</li>
+			</ul>
+		</div>
+		<div class="tour-step" data-step="2" hidden>
+			<h2>Protect the team</h2>
+			<p class="muted">Burnout, stated preferences, relational friction, mentorship pairing - the calls a director already carries in their head, turned into guardrails.</p>
+			<ul>
+				<li>Avoid-pairing relationships flagged before the roster goes out.</li>
+				<li>Mentorship pairing suggested, not just whoever's easiest to slot in.</li>
+				<li>A Planning Center blockout shows up right in the roster picker, no separate calendar to cross-check.</li>
+			</ul>
+		</div>
+		<div class="tour-step" data-step="3" hidden>
+			<h2>Get started</h2>
+			<p>
+				The checklist below on this page tracks what's set up so far - each
+				item feeds a warning or suggestion on the Build page. Set up as
+				much or as little as you want; Build gets smarter as you go.
+			</p>
+		</div>
+		<div class="tour-dots">
+			<span class="tour-dot active"></span>
+			<span class="tour-dot"></span>
+			<span class="tour-dot"></span>
+			<span class="tour-dot"></span>
+		</div>
+		<div class="tour-actions">
+			<button type="button" id="tour-back" class="button" onclick="tourBack()" hidden>Back</button>
+			<button type="button" id="tour-next" class="button primary" onclick="tourNext()">Next</button>
+			<button type="button" id="tour-done" class="button primary" onclick="closeOnboardingTour()" hidden>Let's go</button>
+		</div>
+	</dialog>
 }

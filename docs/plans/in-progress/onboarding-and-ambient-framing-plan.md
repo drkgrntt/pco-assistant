@@ -1,6 +1,6 @@
 # Plan: ambient promise-framing + first-run onboarding nudge
 
-**Status: Phase 1 and Phase 3 built 2026-09-08** (not yet deployed). Phase
+**Status: Phases 1, 3, and 4 built 2026-09-08** (not yet deployed). Phase
 2 (the dismissible nudge card) was also built same-day, then fully
 **superseded and removed** a few hours later once it turned out too thin
 ("weak sauce" feedback, widened once, still not enough) - see "Phase 2
@@ -20,6 +20,10 @@ pass across `person_relationships.templ`, `relationships.templ`,
 Phase 3 (see its own section below) replaced Phase 1's plain Setup list
 *and* Phase 2 entirely: the Setup section is now itself the checklist -
 permanent, not dismissible, real per-item done/not-done state.
+
+Phase 4 (see its own section below) is additive, not a replacement of
+anything: a separate guided first-run `<dialog>` tour, pure per-person
+orientation independent of the checklist's per-org data.
 
 Written 2026-09-08, expanding `docs/ideas.md`'s "Reducing friction vs.
 Planning Center" section - specifically the already-flagged-but-unbuilt
@@ -243,6 +247,57 @@ still renders as a conditional plain `<li>` appended to the "Protect the
 service" group only while `SuggestionCount > 0`, exactly as it did before
 this phase (unchanged logic, just relocated into the loop's own group).
 
+## Phase 4: guided first-run tour (built 2026-09-08)
+
+Derek's explicit direction, right after Phase 3: build the "guided
+first-run tour" option that had been offered alongside the checklist and
+left deferred (see "Open questions" below, pre-edit) - not because the
+checklist was insufficient, but as a genuinely separate, additive piece:
+pure orientation ("what is this app, why do these two promises matter"),
+distinct from the checklist's "what's configured so far."
+
+**What it is**: a 4-step `<dialog>` (`home.templ`'s `onboardingTour`) -
+welcome/two-promises framing, then one step each for "Protect the
+service"/"Protect the team" (2-3 condensed scenarios apiece, same voice as
+`how_it_works.templ`'s feature grids but far fewer per step - a dialog
+step isn't the place for all 11 how-it-works cards), then a "Get started"
+step pointing at the checklist already on the page below. Back/Next
+buttons, dot indicator, a Skip (✕) button, and native dialog affordances
+(Escape, backdrop click) all close it.
+
+**First new modal pattern in this codebase** - native `<dialog>` chosen
+specifically because nothing here had to be hand-built: `.showModal()`
+gets focus-trapping, Escape-to-close, and `::backdrop` dimming for free.
+
+**Trigger, deliberately different shape from Phase 3's**: this is
+per-person orientation, not per-org configuration state, so it doesn't
+consult any org data at all - auto-opens once per *browser*
+(`localStorage` `onboardingTourSeen`, checked entirely client-side in
+`scheduling.js`, no server involvement) regardless of whether the org has
+anything configured yet. A new admin joining an already-set-up org still
+gets it, which is the same "even an old account's new adopter should be
+able to see this" principle Derek asked for on Phase 2, applied to a
+different mechanism here since there's no org-level data driving this
+one.
+
+**Manual replay**: `/?tour=1` (read client-side only, via a regex against
+`location.search` - no `home.go` change needed, unlike Phase 2's
+server-side `?onboarding=1`) linked from a new "Getting started" section
+on the Account page - same permanent-findable-home role
+`AccountInstallBody` plays for the install banner, brought back
+specifically for the tour (Phase 3 removed the org-checklist-flavored
+version of this same idea since there was nothing left to replay once the
+checklist became permanent).
+
+**Fails closed on blocked storage, not open** - a deliberate exception to
+this file's usual localStorage convention (theme, site banner, install
+prompt all fail open: show it, cost nothing). A full-screen dialog
+reopening on *every* home page load for someone whose browser blocks
+storage would be a real annoyance, not a minor miss, so a thrown
+`localStorage` read simply skips auto-opening rather than defaulting to
+show. The manual `?tour=1` path is unaffected either way, since it never
+touches `localStorage`.
+
 ## Adjacent, deliberately out of scope: marketing-copy coverage audit
 
 Noted in passing (2026-09-08) and worth recording rather than losing:
@@ -272,9 +327,13 @@ doesn't block either phase above.
   context (e.g. first time someone opens Build with zero relationships
   configured) rather than only on Home - not built; Home-only for now,
   expanding surface is a later decision, not this pass's.
-- The guided first-run tour (the other option offered alongside the
-  checklist) - explicitly deferred, not rejected. Worth revisiting once
-  there's a read on whether the checklist alone is enough.
+- Exact tour copy (Phase 4) - same caveat as the checklist's: drafted
+  against `how_it_works.templ`'s voice, not treated as final without an
+  actual read-through in the running dialog.
+- Whether the tour should ever re-open itself automatically again (e.g. a
+  "what's new" variant after a big feature ships) rather than staying
+  purely once-per-browser plus manual replay - not built, no clear need
+  yet.
 
 ## Suggested build order
 
@@ -289,6 +348,11 @@ any more - everything below is built:
    `HomeController.buildOnboardingChecklist`, and `home.templ`'s
    checklist rendering, replacing both Phase 1's plain link list and every
    trace of Phase 2.
+5. Phase 4: the `<dialog>` markup and its four content steps
+   (`home.templ`'s `onboardingTour`), `scheduling.js`'s open/close/
+   step-navigation functions plus the two `DOMContentLoaded` listeners
+   (auto-open, close-records-dismissal), `home.css`'s `.tour-*` rules, and
+   the Account page's "Getting started" section linking `/?tour=1`.
 
 ## Verification
 
@@ -304,3 +368,10 @@ any more - everything below is built:
   shift on `/` or any touched setup page's empty state (reusing
   `.plan-list`/`.muted`/`components.Badge` throughout - no new CSS beyond
   what already existed).
+- Also worth a live check for the tour: opens automatically on first visit
+  to `/` in a fresh browser profile (or after clearing `localStorage`),
+  Back/Next/dots track the right step, Escape and backdrop-click both
+  close it and record the dismissal (reload `/` afterward and confirm it
+  does *not* reopen), `/?tour=1` reopens it regardless of that recorded
+  dismissal, and the Account page's "Replay the intro tour" link actually
+  reaches `/?tour=1`.
