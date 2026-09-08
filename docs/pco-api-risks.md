@@ -78,6 +78,7 @@ that first. Facts worth adding here that aren't in CLAUDE.md:
 | `GetServiceTypes` (called independently by 3 pages) | fixed | cached `FetchServiceTypes`, 60s TTL, same shape as `FetchActiveSongs` |
 | `fetchRecentPlanHistory` (uncached, would've fired per debounced keystroke once candidates went search-driven) | fixed | cached per service type, 60s TTL |
 | Home page (`buildHomeData`, sequential per-service-type) | fixed | `RunConcurrently` fan-out |
+| Home page "needs attention" look-ahead (second row when the next plan's already fully planned) | mitigated | bounded to `homeLookAheadPlansCap` (3) candidates, rides the existing `GetPlans` call (`PerPage` bumped, not a second call) - checked in order, stops at the first unplanned candidate |
 | Publish/Refresh writes (sequential per song/assignment) | fixed | `RunConcurrently` fan-out, with ordering/error-collection made goroutine-safe (see Design decisions) |
 | Sustained-rate ceiling across all traffic on one token | enabled (prod) | go-pco `ConfigureThrottle`, `PCO_THROTTLE_ENABLED=true`, 60 req/20s default, background syncs tagged low-priority |
 | A 429 that gets through anyway | enabled (prod) | go-pco `ConfigureRetry`, `PCO_RETRY_ON_429_ENABLED=true`, waits `Retry-After`, 1 retry |
@@ -692,3 +693,18 @@ out to 100-200 sequential round trips per load.
   sync. Fan-out stays small regardless: this page only ever lists songs
   that already have a stored vocal range on file, a subset of the active
   song library, not every song in it.
+- **Home page "needs attention" widget's bounded look-ahead row** - the
+  widget used to show only the single chronologically-next plan per
+  service type (`homeServiceTypesCap`), even when that plan was already
+  fully planned and the real next-*unplanned* plan was further out.
+  `buildHomeData` (`home.go`) now optionally shows a second row per
+  service type in that case, capped at `homeLookAheadPlansCap` (3)
+  candidate plans - see that const's doc comment for the full reasoning.
+  Costs zero extra `GetPlans` calls (the existing per-service-type call's
+  `PerPage` is bumped from 1 to `1+homeLookAheadPlansCap`, still one
+  request); the only added cost is `planStatus`/`rosterStatus` checks on
+  those extra candidates, and only when the primary plan is already fully
+  planned, checked in plan order and stopped at the first unplanned one -
+  worst case 3 extra candidate checks per service type, still fanned out
+  concurrently across service types via the same `RunConcurrently` call
+  `buildHomeData` already used.

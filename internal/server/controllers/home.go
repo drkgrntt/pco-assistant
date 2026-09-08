@@ -19,6 +19,25 @@ import (
 // pricing table), so it's generous rather than tight.
 const homeServiceTypesCap = 5
 
+// homeLookAheadPlansCap bounds how many plans past the chronologically-next
+// one get checked for the "needs attention" widget's second row (see
+// buildHomeData) when that next plan is already fully planned. Without a
+// bound, a service type whose next several months are all fully planned
+// ahead of time would mean paging forward indefinitely just to render the
+// home page - unbounded PCO-call cost on a hot render path, exactly what
+// docs/pco-api-risks.md warns against. Capped at 3: small enough that the
+// worst case (every one of those 3 candidates needs its own
+// planStatus/rosterStatus check, each of which can itself fall back to a
+// live PCO call - see those methods' doc comments) stays bounded and
+// cheap, one service type's look-ahead work fanned out concurrently
+// alongside every other service type's (see buildHomeData's
+// scheduling.RunConcurrently call). If none of those 3 turn up unplanned,
+// the widget simply shows nothing extra for that service type rather than
+// looking further - a deliberately conservative trade (a plan that's
+// unplanned 4+ services out won't surface here) in exchange for a bounded
+// cost per home page load.
+const homeLookAheadPlansCap = 3
+
 type HomeController struct {
 	// schedulingController is shared (constructed once in routes.go, not
 	// duplicated) so Home can reuse its private page-builder methods
@@ -66,6 +85,21 @@ func (hc *HomeController) Index(c *fiber.Ctx) error {
 // here any more - that nudge is gone now that a miss syncs itself in the
 // background instead of needing anyone to notice and click something (see
 // docs/plans/shipped/pco-call-efficiency-rollout-plan.md's Phase 2).
+//
+// Each service type's row can now be followed by a second, bounded
+// look-ahead row (see homeLookAheadPlansCap) when the chronologically-next
+// plan is already fully planned on both Set and Roster status - otherwise
+// the widget would only ever point at a plan with nothing left to do,
+// while the actual next *unplanned* plan sits further out, unseen. The
+// extra candidates for that look-ahead ride the exact same GetPlans call
+// as the primary "next plan" fetch (PerPage bumped from 1 to
+// 1+homeLookAheadPlansCap) - zero additional GetPlans calls, since PCO
+// charges the same for a small page regardless of PerPage. The only added
+// cost is the planStatus/rosterStatus checks themselves, and only when the
+// primary plan is already "planned": those run in plan order, stopping at
+// the first candidate that isn't fully planned, so a service type whose
+// very next unplanned plan is the second one checked pays for exactly one
+// extra status check, not homeLookAheadPlansCap-many.
 func (hc *HomeController) buildHomeData(ctx context.Context, organizationID string) views.HomeData {
 	var data views.HomeData
 
@@ -92,19 +126,25 @@ func (hc *HomeController) buildHomeData(ctx context.Context, organizationID stri
 			indexes[i] = i
 		}
 
+		// lookAheadRows mirrors rows - one slot per service type, filled in
+		// only when that service type's next plan is already fully planned
+		// and a later, still-unplanned candidate was found within
+		// homeLookAheadPlansCap plans (see that const's doc comment).
+		lookAheadRows := make([]*views.HomePlanRow, len(sts))
+
 		scheduling.RunConcurrently(indexes, func(i int) {
 			st := sts[i]
 			plans, err := pco.GetPlans(ctx, st.ID, &pco.PlansParams{
 				Filter:  "future",
 				OrderBy: "sort_date",
-				PerPage: 1,
+				PerPage: 1 + homeLookAheadPlansCap,
 			})
 			if err != nil || len(plans.Data) == 0 {
 				return
 			}
 
 			plan := plans.Data[0]
-			rows[i] = &views.HomePlanRow{
+			row := &views.HomePlanRow{
 				ServiceTypeID:   st.ID,
 				PlanID:          plan.ID,
 				ServiceTypeName: st.Attributes.Name,
@@ -113,11 +153,42 @@ func (hc *HomeController) buildHomeData(ctx context.Context, organizationID stri
 				SetStatus:       hc.schedulingController.planStatus(ctx, organizationID, st.ID, plan.ID),
 				RosterStatus:    hc.schedulingController.rosterStatus(ctx, organizationID, st.ID, plan.ID),
 			}
+			rows[i] = row
+
+			// Only look further if the very next plan is already fully
+			// planned - otherwise this row already needs attention and
+			// there's nothing more useful to add underneath it.
+			if row.SetStatus != "planned" || row.RosterStatus != "planned" {
+				return
+			}
+
+			for _, candidate := range plans.Data[1:] {
+				setStatus := hc.schedulingController.planStatus(ctx, organizationID, st.ID, candidate.ID)
+				rosterStatus := hc.schedulingController.rosterStatus(ctx, organizationID, st.ID, candidate.ID)
+				if setStatus == "planned" && rosterStatus == "planned" {
+					continue
+				}
+				lookAheadRows[i] = &views.HomePlanRow{
+					ServiceTypeID:   st.ID,
+					PlanID:          candidate.ID,
+					ServiceTypeName: st.Attributes.Name,
+					Title:           candidate.Attributes.Title,
+					Dates:           candidate.Attributes.Dates,
+					SetStatus:       setStatus,
+					RosterStatus:    rosterStatus,
+					IsNextUnplanned: true,
+				}
+				break
+			}
 		})
 
-		for _, row := range rows {
-			if row != nil {
-				data.UpcomingPlans = append(data.UpcomingPlans, *row)
+		for i, row := range rows {
+			if row == nil {
+				continue
+			}
+			data.UpcomingPlans = append(data.UpcomingPlans, *row)
+			if lookAheadRows[i] != nil {
+				data.UpcomingPlans = append(data.UpcomingPlans, *lookAheadRows[i])
 			}
 		}
 	}

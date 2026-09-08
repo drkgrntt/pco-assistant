@@ -6,9 +6,12 @@ package views
 // breaking the page, same tolerance as every other page-builder in this
 // codebase.
 type HomeData struct {
-	// UpcomingPlans is at most one row per service type (its next plan,
-	// if any) - a "needs attention" list, not a full picker (that's what
-	// Build a Service is for).
+	// UpcomingPlans is at most one row per service type (its next plan, if
+	// any), optionally followed immediately by a second row (see
+	// HomePlanRow.IsNextUnplanned) when that next plan is already fully
+	// planned and a later plan within HomeController's
+	// homeLookAheadPlansCap still needs work - a "needs attention" list,
+	// not a full picker (that's what Build a Service is for).
 	UpcomingPlans []HomePlanRow
 	// SuggestionCount is how many Song Tag Suggestions groups are
 	// waiting for review (see the controller's songTagSuggestions) - 0
@@ -81,6 +84,13 @@ type HomePlanRow struct {
 	ServiceTypeName         string
 	Title, Dates            string
 	SetStatus, RosterStatus string
+	// IsNextUnplanned marks a second, look-ahead row (see
+	// HomeController.homeLookAheadPlansCap) rendered directly beneath its
+	// service type's primary "next plan" row - true only when the primary
+	// row is already fully planned and this later plan still needs work.
+	// home.templ uses it to style this row as a distinct follow-up rather
+	// than a second, unrelated "next plan".
+	IsNextUnplanned bool
 }
 
 // TargetURL is where this row's link actually goes - straight into
