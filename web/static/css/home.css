@@ -30,12 +30,18 @@
   }
 }
 
-/* The home page's guided first-run tour (home.templ's onboardingTour) -
-   native <dialog>, the first modal pattern in this codebase (see that
-   templ's own doc comment for why <dialog> specifically). ::backdrop is
-   the browser's own dimming layer, painted behind the dialog automatically
-   once it's opened via .showModal() - nothing here needs to build that by
-   hand. */
+/* Shared by both this app's guided first-run <dialog> tours - the home
+   page's (home.templ's onboardingTour) and the Build page's
+   (internal/views/scheduling/build.templ's buildTour, Phase 5 of
+   docs/plans/in-progress/onboarding-and-ambient-framing-plan.md). Native
+   <dialog> was the first modal pattern in this codebase (see
+   onboardingTour's own doc comment for why <dialog> specifically); kept
+   here in home.css rather than split into a new file since home.css
+   already loads on every authenticated page (designSystemCSSFiles,
+   layout.templ), so there was nothing to gain from moving it just because
+   a second tour now reuses it. ::backdrop is the browser's own dimming
+   layer, painted behind the dialog automatically once it's opened via
+   .showModal() - nothing here needs to build that by hand. */
 .tour-dialog {
   max-width: 32rem;
   width: calc(100% - var(--space-8));
