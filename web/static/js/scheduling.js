@@ -58,133 +58,275 @@ function dismissSiteBanner() {
   sessionStorage.setItem("bannerDismissed", "true");
 }
 
-// The home page's guided first-run tour (home.templ's onboardingTour) -
-// native <dialog>, one visible .tour-step at a time. tourStepCount is
-// read from the DOM rather than hardcoded, so adding/removing a step in
-// the template never needs a matching edit here.
-var tourStep = 0;
+// createTourController builds a small driver behind a guided <dialog> tour
+// - shared by the home page's onboardingTour (home.templ) and the Build
+// page's buildTour (build.templ, Phase 5 of
+// docs/plans/in-progress/onboarding-and-ambient-framing-plan.md), so the
+// open/close/step-render/auto-open logic that used to be hand-written once
+// for the home tour alone exists in exactly one place, not copied for each
+// new one. config:
+//   - dialogId: id of this tour's own <dialog>.
+//   - storageKey: localStorage flag recording "seen" - checked once per
+//     browser on load (see the auto-open wiring below), set once, on the
+//     dialog's native "close" event, regardless of how it closed (a
+//     button, Escape, or backdrop click all fire "close" alike).
+//   - queryParam: a location.search flag (e.g. "tour" for ?tour=1) that
+//     forces this tour open on load regardless of the storageKey flag.
+//   - sessionForceKey (optional): a one-shot sessionStorage flag treated
+//     the same as queryParam being present - see buildTourController's own
+//     instance below for why it needs this and the home tour doesn't.
+//
+// Every DOM lookup below is scoped to this tour's own <dialog> element
+// (dialog.querySelectorAll(...), never a bare document-wide query), so two
+// tour instances' .tour-step/.tour-dot elements can never cross-wire, even
+// though only one of these dialogs is ever actually on screen at a time in
+// practice. Step state (`step`) lives in this closure, private to each
+// controller instance, rather than one shared module-level variable the way
+// the original single-tour implementation had it - that would have been
+// actively wrong the moment a second tour's controller existed alongside
+// this one.
+function createTourController(config) {
+  var step = 0;
 
-function tourStepCount() {
-  return document.querySelectorAll(".tour-step").length;
-}
+  function dialogEl() {
+    return document.getElementById(config.dialogId);
+  }
 
-// Shows step 0 through .showModal() (falls back to the open attribute for
-// a browser without the method, though every current browser has it) -
-// always resets to the first step, so a manual replay (see
-// openOnboardingTour's caller below) never opens mid-way through wherever
-// a previous visit left off.
-function openOnboardingTour() {
-  var dialog = document.getElementById("onboarding-tour");
-  if (!dialog) {
-    return;
+  function stepCount(dialog) {
+    return dialog.querySelectorAll(".tour-step").length;
   }
-  tourStep = 0;
-  renderTourStep();
-  if (dialog.showModal) {
-    dialog.showModal();
-  } else {
-    dialog.setAttribute("open", "");
-  }
-}
 
-// Closing (Skip, or the final step's "Let's go") just closes the dialog -
-// recording the dismissal is handled once, centrally, by the "close"
-// listener below, which also covers the two ways of closing this doesn't
-// go through (Escape, clicking the backdrop) - <dialog> fires "close" for
-// all of them alike, native buttons included.
-function closeOnboardingTour() {
-  var dialog = document.getElementById("onboarding-tour");
-  if (!dialog) {
-    return;
+  // Back/Next/Done are looked up by an id *suffix* ("-back"/"-next"/
+  // "-done"), not one exact id both tours share - the home tour's are
+  // "tour-back" etc., the Build tour's are "build-tour-back" etc. (kept
+  // distinct per-dialog on purpose, see buildTour's own doc comment,
+  // build.templ) - but both do follow this same suffix convention.
+  function actionButton(dialog, suffix) {
+    return dialog.querySelector('[id$="' + suffix + '"]');
   }
-  if (dialog.close) {
-    dialog.close();
-  } else {
-    dialog.removeAttribute("open");
-  }
-}
 
-document.addEventListener("DOMContentLoaded", function () {
-  var dialog = document.getElementById("onboarding-tour");
-  if (!dialog) {
-    return;
+  function render(dialog) {
+    var count = stepCount(dialog);
+    dialog.querySelectorAll(".tour-step").forEach(function (el) {
+      el.hidden = Number(el.dataset.step) !== step;
+    });
+    dialog.querySelectorAll(".tour-dot").forEach(function (dot, index) {
+      dot.classList.toggle("active", index === step);
+    });
+    var back = actionButton(dialog, "-back");
+    var next = actionButton(dialog, "-next");
+    var done = actionButton(dialog, "-done");
+    var isLast = step === count - 1;
+    if (back) {
+      back.hidden = step === 0;
+    }
+    if (next) {
+      next.hidden = isLast;
+    }
+    if (done) {
+      done.hidden = !isLast;
+    }
   }
-  // This is one-time orientation, not something to reopen on every visit
-  // once it's been seen once - recorded here regardless of how the dialog
-  // closed (button, Escape, or backdrop click all fire "close" alike).
-  dialog.addEventListener("close", function () {
+
+  // Shows step 0 through .showModal() (falls back to the open attribute
+  // for a browser without the method, though every current browser has
+  // it) - always resets to the first step, so a manual replay (a forced
+  // query/session flag, or the Account page's links) never opens mid-way
+  // through wherever a previous visit left off.
+  function open() {
+    var dialog = dialogEl();
+    if (!dialog) {
+      return;
+    }
+    step = 0;
+    render(dialog);
+    if (dialog.showModal) {
+      dialog.showModal();
+    } else {
+      dialog.setAttribute("open", "");
+    }
+  }
+
+  // Closing (Skip, or the final step's "Got it, thanks!") just closes the
+  // dialog - recording the dismissal is handled once, centrally, by the
+  // "close" listener wired below, which also covers the two ways of
+  // closing this doesn't go through (Escape, clicking the backdrop) -
+  // <dialog> fires "close" for all of them alike, native buttons included.
+  function close() {
+    var dialog = dialogEl();
+    if (!dialog) {
+      return;
+    }
+    if (dialog.close) {
+      dialog.close();
+    } else {
+      dialog.removeAttribute("open");
+    }
+  }
+
+  function back() {
+    var dialog = dialogEl();
+    if (dialog && step > 0) {
+      step--;
+      render(dialog);
+    }
+  }
+
+  function next() {
+    var dialog = dialogEl();
+    if (dialog && step < stepCount(dialog) - 1) {
+      step++;
+      render(dialog);
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", function () {
+    var dialog = dialogEl();
+    if (!dialog) {
+      return;
+    }
+    // This is one-time orientation, not something to reopen on every visit
+    // once it's been seen once - recorded here regardless of how the
+    // dialog closed (button, Escape, or backdrop click all fire "close"
+    // alike).
+    dialog.addEventListener("close", function () {
+      try {
+        localStorage.setItem(config.storageKey, "true");
+      } catch (err) {
+        // Storage blocked - dismissal only lasts this page view; see the
+        // auto-open check below for why that's an acceptable trade here.
+      }
+    });
+  });
+
+  // Auto-opens once per browser, or unconditionally when forced (the
+  // queryParam query string, or - Build tour only - a one-shot
+  // sessionForceKey; see buildTourController's own instance below for why
+  // it needs a second forcing mechanism the home tour doesn't). Fails
+  // *closed* on a storage-blocked browser (skip auto-opening) rather than
+  // the "fail open" convention used elsewhere in this file (theme, site
+  // banner, install prompt) - those are small, low-cost affordances where
+  // showing once too often costs nothing; a full-screen dialog reappearing
+  // on every single page load for someone whose browser blocks storage
+  // would be a real annoyance, not a minor miss. Neither forcing path is
+  // affected either way, since neither consults localStorage.
+  document.addEventListener("DOMContentLoaded", function () {
+    var dialog = dialogEl();
+    if (!dialog) {
+      return;
+    }
+
+    var forced = new RegExp("(^|[?&])" + config.queryParam + "=1(&|$)").test(window.location.search);
+
+    // sessionForceKey is read and cleared unconditionally, even when the
+    // query param already forced this open - a flag left behind would
+    // otherwise linger and force-reopen this same tour on some unrelated
+    // later visit (e.g. the Build tour, on a different plan entirely).
+    if (config.sessionForceKey) {
+      try {
+        if (sessionStorage.getItem(config.sessionForceKey)) {
+          forced = true;
+        }
+        sessionStorage.removeItem(config.sessionForceKey);
+      } catch (err) {
+        // Storage blocked - forced stays whatever the query check above
+        // already decided.
+      }
+    }
+
+    if (forced) {
+      open();
+      return;
+    }
     try {
-      localStorage.setItem("onboardingTourSeen", "true");
+      if (localStorage.getItem(config.storageKey) !== "true") {
+        open();
+      }
     } catch (err) {
-      // Storage blocked - dismissal only lasts this page view; see the
-      // auto-open check below for why that's an acceptable trade here.
+      // Storage blocked - see doc comment above.
     }
   });
+
+  return { open: open, close: close, back: back, next: next };
+}
+
+// The home page's guided first-run tour (home.templ's onboardingTour) -
+// see createTourController's own doc comment for the shared mechanics.
+var onboardingTourController = createTourController({
+  dialogId: "onboarding-tour",
+  storageKey: "onboardingTourSeen",
+  queryParam: "tour",
 });
 
-// Auto-opens the tour once per browser, or every load when explicitly
-// asked for (?tour=1, linked from the Account page's "Replay the intro
-// tour" - see AccountGettingStartedBody). Fails *closed* on a
-// storage-blocked browser (skip auto-opening) rather than the "fail open"
-// convention used elsewhere in this file (theme, site banner, install
-// prompt) - those are small, low-cost affordances where showing once too
-// often costs nothing; a full-screen dialog reappearing on every single
-// home page load for someone whose browser blocks storage would be a real
-// annoyance, not a minor miss. The manual ?tour=1 path is unaffected
-// either way, since it doesn't consult localStorage at all.
-document.addEventListener("DOMContentLoaded", function () {
-  var dialog = document.getElementById("onboarding-tour");
-  if (!dialog) {
-    return;
-  }
-  var forced = /(^|[?&])tour=1(&|$)/.test(window.location.search);
-  if (forced) {
-    openOnboardingTour();
-    return;
-  }
-  try {
-    if (localStorage.getItem("onboardingTourSeen") !== "true") {
-      openOnboardingTour();
-    }
-  } catch (err) {
-    // Storage blocked - see doc comment above.
-  }
-});
+// Inline onclick="" attributes in home.templ need real global function
+// names, not a reference to the controller object itself - these just
+// delegate straight through to it.
+function openOnboardingTour() {
+  onboardingTourController.open();
+}
 
-function renderTourStep() {
-  var count = tourStepCount();
-  document.querySelectorAll(".tour-step").forEach(function (step) {
-    step.hidden = Number(step.dataset.step) !== tourStep;
-  });
-  document.querySelectorAll(".tour-dot").forEach(function (dot, index) {
-    dot.classList.toggle("active", index === tourStep);
-  });
-  var back = document.getElementById("tour-back");
-  var next = document.getElementById("tour-next");
-  var done = document.getElementById("tour-done");
-  var isLast = tourStep === count - 1;
-  if (back) {
-    back.hidden = tourStep === 0;
-  }
-  if (next) {
-    next.hidden = isLast;
-  }
-  if (done) {
-    done.hidden = !isLast;
-  }
+function closeOnboardingTour() {
+  onboardingTourController.close();
 }
 
 function tourBack() {
-  if (tourStep > 0) {
-    tourStep--;
-    renderTourStep();
-  }
+  onboardingTourController.back();
 }
 
 function tourNext() {
-  if (tourStep < tourStepCount() - 1) {
-    tourStep++;
-    renderTourStep();
+  onboardingTourController.next();
+}
+
+// The Build page's own guided first-run tour (build.templ's buildTour,
+// Phase 5 of docs/plans/in-progress/onboarding-and-ambient-framing-plan.md)
+// - same mechanics as the home tour above, via the same
+// createTourController. sessionForceKey ("buildTourForce") is this tour's
+// own addition: unlike the home tour's plain ?tour=1 (linkable from / -
+// see the Account page's link), Build has no fixed URL to link a
+// manual-replay query string at, since BuildPlanPage requires a real
+// :service_type_id/:plan_id and the Account page has no specific plan in
+// mind. Its replay link (AccountGettingStartedBody, account.templ) instead
+// sets this sessionStorage flag right before navigating to the
+// plan-picker page (see forceBuildTourReplay below); whichever real plan
+// someone lands on next picks it up here, once, then clears it
+// immediately (see createTourController's own doc comment) so it can't
+// linger and force-reopen the tour on some later, unrelated plan visit.
+var buildTourController = createTourController({
+  dialogId: "build-tour",
+  storageKey: "buildTourSeen",
+  queryParam: "build-tour",
+  sessionForceKey: "buildTourForce",
+});
+
+function openBuildTour() {
+  buildTourController.open();
+}
+
+function closeBuildTour() {
+  buildTourController.close();
+}
+
+function buildTourBack() {
+  buildTourController.back();
+}
+
+function buildTourNext() {
+  buildTourController.next();
+}
+
+// forceBuildTourReplay is the Account page's "Replay the Build page tour"
+// link's onclick (AccountGettingStartedBody, account.templ) - sets the
+// sessionStorage handoff flag buildTourController's own auto-open check
+// consumes (see createTourController's doc comment above) just before the
+// plain <a href> navigation to the plan-picker page proceeds. Doesn't
+// preventDefault - a blocked/failed write just means that navigation
+// happens without forcing the tour open, same fail-quiet convention as the
+// rest of this file's storage access.
+function forceBuildTourReplay() {
+  try {
+    sessionStorage.setItem("buildTourForce", "1");
+  } catch (err) {
+    // Storage blocked - navigation still proceeds normally.
   }
 }
 

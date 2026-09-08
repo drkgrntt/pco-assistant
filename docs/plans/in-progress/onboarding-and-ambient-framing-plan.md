@@ -1,12 +1,16 @@
 # Plan: ambient promise-framing + first-run onboarding nudge
 
-**Status: Phases 1, 3, and 4 built 2026-09-08** (not yet deployed). Phase
-2 (the dismissible nudge card) was also built same-day, then fully
-**superseded and removed** a few hours later once it turned out too thin
-("weak sauce" feedback, widened once, still not enough) - see "Phase 2
-history (superseded)" below for what existed and why it's gone, and
-"Phase 3: persistent setup checklist" for what replaced it. Nothing from
-Phase 2 remains in the codebase; its section further down is kept only as
+**Status: Phases 1, 3, 4, and 5 built 2026-09-08** (not yet deployed).
+Phase 5 (the Build-page tour) was built overriding this doc's own prior
+"Proposed, not started" recommendation to hold off - Derek's explicit
+direction, after Phase 4 shipped, to build it anyway rather than wait for
+signal - see "Phase 5: Build-page tour" below. Phase 2 (the dismissible
+nudge card) was also built same-day, then fully **superseded and
+removed** a few hours later once it turned out too thin ("weak sauce"
+feedback, widened once, still not enough) - see "Phase 2 history
+(superseded)" below for what existed and why it's gone, and "Phase 3:
+persistent setup checklist" for what replaced it. Nothing from Phase 2
+remains in the codebase; its section further down is kept only as
 design-rationale history, per this file's own convention of not deleting
 superseded reasoning outright.
 
@@ -310,6 +314,84 @@ storage would be a real annoyance, not a minor miss, so a thrown
 show. The manual `?tour=1` path is unaffected either way, since it never
 touches `localStorage`.
 
+## Phase 5: Build-page tour (built 2026-09-08)
+
+Derek's explicit direction, later the same day: build the Build-page tour
+this doc's own "Proposed, not started" section (below) had just
+recommended holding off on - not because that recommendation's reasoning
+was wrong, but as an explicit override of the "wait for signal" call it
+made. The "core principle: escalating disclosure" and "scope it to the
+page's shape, not a feature-by-feature walkthrough" guidance from that
+section was followed as written; only the "hold off starting it now"
+sequencing call was overridden.
+
+**What it is**: a second 4-step `<dialog>` -
+(`internal/views/scheduling/build.templ`'s `buildTour`), same shape as
+Phase 4's home tour but oriented on the Build page's own structure rather
+than the app's two promises: (1) welcome - one plan, two tabs, one page;
+(2) the Songs/Team tabs switch instantly, and the sidebar always glances
+at whichever tab isn't open; (3) warnings (repeat song, key change,
+avoid-pairing) show up inline on the row they're about, the moment
+there's something to flag - deliberately *not* re-explained in the
+abstract, since `ConflictBadge`/`Disclosure` already teach each one at
+the one moment it's actually relevant, per the "escalating disclosure"
+principle; (4) nothing is live until Publish, which syncs to real
+Planning Center - Discard reverts to what's currently live there instead.
+Same Back/Next/dots/Skip/native-dialog-affordances shape as the home
+tour, and the exact same `.tour-footnote` line pointing at the Account
+page.
+
+**Shared CSS, shared JS driver, distinct ids.** `home.css`'s `.tour-*`
+rules needed zero changes to reuse (already generic class names, and
+`home.css` already loads on every authenticated page) - its own doc
+comment was updated to say so rather than the CSS being moved to a new
+file. `scheduling.js`'s ~90 lines of open/close/step-render/auto-open
+logic were refactored into `createTourController(config)`, a small
+factory taking `{dialogId, storageKey, queryParam, sessionForceKey}` and
+returning `{open, close, back, next}` - every DOM lookup inside it is
+scoped to that tour's own `<dialog>` element (`dialog.querySelectorAll(
+".tour-step")` etc., and `<dialog>.querySelector('[id$="-back"]')` for
+the id-suffixed action buttons), not a bare global query, so the two
+tour instances' steps/dots/buttons can never cross-wire even though only
+one dialog is ever on screen at a time in practice. Two named instances -
+`onboardingTourController` (home tour, unchanged behavior) and
+`buildTourController` (this one) - with small top-level delegating
+functions (`openBuildTour`/`closeBuildTour`/`buildTourBack`/
+`buildTourNext`, mirroring the home tour's `openOnboardingTour`/etc.)
+since inline `onclick=` attributes need real global function names, not a
+reference to the controller object. Dialog id `build-tour`, button ids
+`build-tour-back`/`build-tour-next`/`build-tour-done` - kept distinct from
+the home tour's `onboarding-tour`/`tour-back`/`tour-next`/`tour-done`
+even though the two dialogs never coexist on one page, to avoid any
+future ambiguity.
+
+**The sessionStorage handoff, and why it exists.** The home tour's manual
+replay is a plain query string (`/?tour=1`) because `/` itself takes no
+parameters. Build has no equivalent fixed URL: `BuildPlanPage` requires a
+real `:service_type_id/:plan_id`
+(`GET /scheduling/build/:service_type_id/:plan_id`,
+`internal/server/controllers/scheduling.go`), and the Account page has no
+specific plan in mind when someone clicks "Replay the Build page tour."
+That link instead sets a one-shot `sessionStorage` flag
+(`buildTourForce`, via `scheduling.js`'s `forceBuildTourReplay`) before
+the plain `<a href="/scheduling/build">` navigation to the plan-picker
+page proceeds; whichever real plan the person picks up next reads and
+immediately clears that flag on load (`createTourController`'s own
+auto-open wiring), treating it exactly like `?build-tour=1` would have.
+Cleared unconditionally, whether or not it ends up forcing the tour open,
+so it can never linger and force-reopen the tour on some later,
+unrelated plan visit.
+
+**Gating**: per-browser only, via `localStorage buildTourSeen` - "has
+this person ever opened Build" is satisfied for free the first time the
+tour is dismissed from any plan's Build page; it never auto-opens again
+on a different plan or service type after that. Same fail-closed-on-
+blocked-storage behavior as the home tour (skip auto-opening rather than
+show, since a full-screen dialog reappearing on every single Build page
+load would be a real annoyance for someone whose browser blocks storage)
+- see Phase 4's own section above for the full reasoning, shared
+verbatim by `createTourController`.
+
 ## Marketing-copy coverage audit (done 2026-09-08)
 
 Was noted as adjacent/out-of-scope, then actually done same day (Derek's
@@ -411,13 +493,17 @@ already present in Phase 1's "why" clauses) stays the lower-maintenance
 choice; revisit only if actual feedback says a picture is specifically
 what's missing, not as a default enhancement.
 
-**Build-page tour: recommend yes, eventually - but hold off starting it
-now.** Build is a genuinely different case from the 7 setup pages: it's
-the single highest-traffic page in the app (CLAUDE.md calls it "the
-combined Songs/Team build workflow" - the app's actual reason for being),
-with real structural density (Songs/Team tabs, drag reorder, quick-action
-rows, detail cards, publish flow) that a first-time visitor could
-plausibly miss the shape of. If/when this gets built:
+**Build-page tour: built - see "Phase 5: Build-page tour" above.** The
+recommendation below was written the same day, arguing to hold off
+starting this until there was real signal that the first two onboarding
+surfaces weren't already doing the job. Derek asked for it anyway, later
+the same day, as an explicit override of that sequencing call rather than
+a disagreement with the reasoning underneath it - the scoping guidance
+(orientation on the page's shape, not a feature-by-feature walkthrough;
+same trigger shape as the Home tour, distinct storage key and query
+param) was followed exactly as recommended below. Kept verbatim as
+design-rationale history, per this doc's own convention of not deleting
+superseded reasoning outright:
 
 - Scope it to *orientation on the page's shape* - two tabs, warnings
   appear inline as you work, Publish syncs back to real Planning Center -
@@ -443,6 +529,7 @@ plausibly miss the shape of. If/when this gets built:
   actual signal (a demo/onboarding call still needing to manually explain
   Build's tabs, a support question about something the checklist/tour
   should have already covered) rather than building ahead of evidence.
+  **Overridden same day** - see "Phase 5" above.
 
 ## Open questions
 
@@ -491,6 +578,12 @@ any more - everything below is built:
 7. Marketing-copy audit: four new `how_it_works.templ` cards (three
    "Protect the service", one "Protect the team" - see that section above
    for exactly which and why), `landing.templ` deliberately left alone.
+8. Phase 5: `scheduling.js`'s `createTourController` factory (refactored
+   out of Phase 4's home-tour-only functions), `build.templ`'s `buildTour`
+   and its four content steps, the Account page's second "Getting
+   started" line/link (`forceBuildTourReplay`'s sessionStorage handoff),
+   and `home.css`'s doc-comment update noting its `.tour-*` rules are now
+   shared by both tours.
 
 ## Verification
 
@@ -520,3 +613,16 @@ any more - everything below is built:
 - Marketing copy: read `/how-it-works` and confirm the four new cards
   render in the right grid, in the right voice, and don't read as padding
   next to the existing ones.
+- Also worth a live check for the Build tour (Phase 5): opens once per
+  browser on a real plan's Build page (fresh profile, or after clearing
+  `localStorage buildTourSeen`) and never reopens on its own after being
+  dismissed once, whether that's from switching Songs/Team tabs within
+  the same plan or navigating to an entirely different plan;
+  `?build-tour=1` appended to a real `/scheduling/build/:service_type_id/
+  :plan_id` URL forces it open regardless of that recorded dismissal; the
+  Account page's "Replay the Build page tour" link actually reaches the
+  tour after picking a plan (confirming the `sessionStorage` handoff
+  survives the intermediate plan-picker navigation); Back/Next/dots/
+  Escape/backdrop-click all behave identically to the home tour's own
+  (same shared `createTourController`, so a regression here would likely
+  also show up there).

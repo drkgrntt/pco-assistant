@@ -382,6 +382,7 @@ templ VocalNoteCategoryFormFragment(serviceTypeID string, categories []NoteCateg
 // replaces it.
 templ BuildPlan(personName, organizationName string, setData SetBuilderData, rosterData RosterBuilderData, activeTab, note string) {
 	@views.Layout("Build a Service", personName, organizationName) {
+		@buildTour()
 		<div class="build-page-title-row">
 			<div>
 				<h1>
@@ -548,6 +549,100 @@ templ BuildPlan(personName, organizationName string, setData SetBuilderData, ros
 			</aside>
 		</div>
 	}
+}
+
+// buildTour is the Build page's own guided first-run tour - the Phase 5
+// counterpart to home.templ's onboardingTour (see that templ's own doc
+// comment for the native-<dialog> reasoning; both dialogs reuse the exact
+// same .tour-* rules in home.css, which already loads on every
+// authenticated page - see that file's own doc comment, updated to note
+// it's now shared by both tours). Built after Phase 4 shipped, overriding
+// this plan doc's own prior "hold off for now" recommendation - see
+// docs/plans/in-progress/onboarding-and-ambient-framing-plan.md's Phase 5
+// section for why (Derek's explicit direction).
+//
+// Scoped to *this page's shape*, not a feature-by-feature walkthrough -
+// two tabs, a glance sidebar, warnings appear inline as you work, nothing
+// is live until Publish. Individual warnings already explain themselves
+// via ConflictBadge/Disclosure the moment they're actually relevant, per
+// the plan doc's "core principle: escalating disclosure" reasoning -
+// re-explaining them here in the abstract would be redundant with, not
+// additive to, what those already do.
+//
+// Distinct dialog id, button ids, and localStorage/query-param keys from
+// the home tour (build-tour* vs tour*/onboarding-tour*) even though the
+// two dialogs never coexist on one page - avoids any future ambiguity if
+// that ever changes. scheduling.js's createTourController drives both
+// tours off the same shared open/close/step-render logic (see its own doc
+// comment); buildTourController is the instance wired to this dialog. It
+// additionally carries a sessionStorage handoff (sessionForceKey
+// "buildTourForce") the home tour doesn't need: unlike the home tour's
+// plain ?tour=1 (linkable straight from / itself), Build has no fixed URL
+// to link a manual-replay query string at - BuildPlanPage requires a real
+// :service_type_id/:plan_id, and the Account page has no specific plan in
+// mind - so its "Replay the Build page tour" link
+// (AccountGettingStartedBody, account.templ) sets that sessionStorage flag
+// instead, right before navigating to the plan-picker page; whichever real
+// plan someone lands on next picks it up and forces this tour open, same
+// as ?build-tour=1 would.
+//
+// Gating is per-browser only (localStorage "buildTourSeen"), not
+// per-plan/per-service-type - once dismissed from any plan's Build page,
+// it never auto-opens again regardless of which plan gets viewed next.
+templ buildTour() {
+	<dialog id="build-tour" class="tour-dialog">
+		<button type="button" class="icon-btn tour-close" aria-label="Skip the tour" title="Skip the tour" onclick="closeBuildTour()">
+			@components.IconX()
+		</button>
+		<div class="tour-step" data-step="0">
+			<p class="muted">Welcome to the Build page</p>
+			<h2>One plan, two tabs, one page.</h2>
+			<p>
+				Songs and Team - each has its own tab, but nothing about setting
+				one up requires touching the other. Everything for this plan lives
+				here, in one page.
+			</p>
+		</div>
+		<div class="tour-step" data-step="1" hidden>
+			<h2>Switch tabs, keep an eye on both</h2>
+			<p>
+				Songs and Team switch instantly - no reload, nothing lost. The
+				sidebar always shows a glance at whichever tab isn't open, so you
+				can check roster fill or song count without leaving what you're
+				doing.
+			</p>
+		</div>
+		<div class="tour-step" data-step="2" hidden>
+			<h2>Warnings show up where they matter</h2>
+			<p>
+				A repeat song, a jarring key change, an avoid-pairing conflict -
+				flagged right on the row it's about, the moment there's actually
+				something to flag. Not a separate report to go check.
+			</p>
+		</div>
+		<div class="tour-step" data-step="3" hidden>
+			<h2>Nothing's live until Publish</h2>
+			<p>
+				Everything here is a draft until you hit Publish, which syncs it to
+				real Planning Center records. Discard reverts back to whatever's
+				currently live there instead.
+			</p>
+		</div>
+		<div class="tour-dots">
+			<span class="tour-dot active"></span>
+			<span class="tour-dot"></span>
+			<span class="tour-dot"></span>
+			<span class="tour-dot"></span>
+		</div>
+		<p class="muted tour-footnote">Need this again later? Find it on your <a href="/account">Account</a> page.</p>
+		<div class="tour-actions">
+			<div class="tour-actions-nav">
+				<button type="button" id="build-tour-back" class="button" onclick="buildTourBack()" hidden>Back</button>
+				<button type="button" id="build-tour-next" class="button" onclick="buildTourNext()">Next</button>
+			</div>
+			<button type="button" id="build-tour-done" class="button primary" onclick="closeBuildTour()" hidden>Got it, thanks!</button>
+		</div>
+	</dialog>
 }
 
 // buildTabLoadingSkeleton is the placeholder shown in a tab panel or

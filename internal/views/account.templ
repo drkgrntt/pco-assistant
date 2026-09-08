@@ -24,6 +24,13 @@ templ Account(personName, organizationName string, data AccountData) {
 		<h2>Getting started</h2>
 		<p class="muted">A short walkthrough of what Resonance does and why - worth another look after joining an existing org, or any time as a refresher. The setup checklist itself always lives on the home page.</p>
 		<a class="button" href="/?tour=1">Replay the intro tour</a>
+		<p class="muted">
+			There's also a shorter tour of the Build page itself - its tabs,
+			sidebar, and inline warnings. You'll need to pick a plan first,
+			since it lives on an actual plan's Build page rather than a fixed
+			URL.
+		</p>
+		<a class="button" href="/scheduling/build" onclick="forceBuildTourReplay()">Replay the Build page tour</a>
 		<h2>Billing</h2>
 		@BillingBody(data.Billing)
 		<h2>Data &amp; Caches</h2>
