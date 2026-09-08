@@ -18,16 +18,23 @@ templ Account(personName, organizationName string, data AccountData) {
 			Identity and Billing are both "who/what is this account" info, so
 			they lay out side by side on a wide viewport (.card-columns,
 			card.css) instead of each getting its own full-width stack -
-			stacks back to one column on mobile automatically.
+			stacks back to one column on mobile automatically. Identity is a
+			plain heading + content div, matching Billing's own shape, rather
+			than a components.Card - BillingBody already renders its own
+			Card(s) internally (the current-plan card, or the Standard/
+			Multi-Campus choice cards), so wrapping it in another outer Card
+			would nest a card inside a card; making Identity match that plain
+			shape instead keeps the pair visually consistent.
 		-->
 		<div class="card-columns">
-			@components.Card("Identity") {
+			<div>
+				<h2>Identity</h2>
 				<p class="muted">Signed in as { personName }.</p>
 				<p class="muted">Organization: { organizationName }.</p>
 				if data.OrganizationID != "" {
 					<p class="muted">Planning Center organization id: { data.OrganizationID }.</p>
 				}
-			}
+			</div>
 			<div>
 				<h2>Billing</h2>
 				@BillingBody(data.Billing)
