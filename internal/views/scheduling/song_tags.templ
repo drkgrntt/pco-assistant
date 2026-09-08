@@ -50,7 +50,9 @@ templ SongTags(personName, organizationName string, songs []pco.SongData, tagsBy
 // songTagsHelp is this page's Help-triggered dialog - see
 // songRelationshipsHelp's own doc comment (relationships.templ) for the
 // full reasoning shared by every setup-page help dialog (single step, no
-// createTourController, .page-help-dialog for openPageHelp's dispatch).
+// createTourController, .page-help-dialog for openPageHelp's dispatch, and
+// the forward-only Next-link chain / setPageHelpForce mechanism). This is
+// page 3 of that chain (... Song Roles -> here -> Song Vocal Range -> ...).
 templ songTagsHelp() {
 	<dialog id="song-tags-help" class="tour-dialog page-help-dialog">
 		<div class="tour-step">
@@ -61,6 +63,7 @@ templ songTagsHelp() {
 			</p>
 		</div>
 		<div class="tour-actions">
+			<a class="button" href="/scheduling/song-vocal-range" onclick="setPageHelpForce()">Next: Song Vocal Range →</a>
 			<button type="button" class="button primary" onclick="closeHelpDialog('song-tags-help')">Got it</button>
 		</div>
 	</dialog>

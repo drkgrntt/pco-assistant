@@ -58,7 +58,10 @@ templ PositionPreferences(personName, organizationName string, serviceTypes []pc
 // positionPreferencesHelp is this page's Help-triggered dialog - see
 // songRelationshipsHelp's own doc comment (relationships.templ) for the
 // full reasoning shared by every setup-page help dialog (single step, no
-// createTourController, .page-help-dialog for openPageHelp's dispatch).
+// createTourController, .page-help-dialog for openPageHelp's dispatch, and
+// the forward-only Next-link chain / setPageHelpForce mechanism). This is
+// page 7 of that chain (... Person Relationships -> here -> Vocal Range,
+// the chain's last page).
 templ positionPreferencesHelp() {
 	<dialog id="position-preferences-help" class="tour-dialog page-help-dialog">
 		<div class="tour-step">
@@ -70,6 +73,7 @@ templ positionPreferencesHelp() {
 			</p>
 		</div>
 		<div class="tour-actions">
+			<a class="button" href="/scheduling/vocal-range" onclick="setPageHelpForce()">Next: Vocal Range →</a>
 			<button type="button" class="button primary" onclick="closeHelpDialog('position-preferences-help')">Got it</button>
 		</div>
 	</dialog>

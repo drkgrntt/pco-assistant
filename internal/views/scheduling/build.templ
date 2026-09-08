@@ -574,21 +574,22 @@ templ BuildPlan(personName, organizationName string, setData SetBuilderData, ros
 // two dialogs never coexist on one page - avoids any future ambiguity if
 // that ever changes. scheduling.js's createTourController drives both
 // tours off the same shared open/close/step-render logic (see its own doc
-// comment); buildTourController is the instance wired to this dialog. It
-// additionally carries a sessionStorage handoff (sessionForceKey
-// "buildTourForce", consumed via forceBuildTourReplay) the home tour
-// doesn't need: unlike the home tour's plain ?tour=1 (linkable straight
-// from / itself), Build has no fixed URL to link a manual-replay query
-// string at - BuildPlanPage requires a real :service_type_id/:plan_id, and
-// there's no one specific plan to link a "replay" flow at ahead of time.
-// That handoff's only caller used to be the Account page's own "Replay
+// comment); buildTourController is the instance wired to this dialog.
+// Manual replay is via its plain ?build-tour=1 query param - Build has no
+// fixed URL to link a manual-replay link at ahead of time the way the home
+// tour's plain ?tour=1 has (BuildPlanPage requires a real
+// :service_type_id/:plan_id), but nothing needs one any more: this used to
+// also carry a sessionStorage handoff (sessionForceKey "buildTourForce",
+// consumed via forceBuildTourReplay) for the Account page's own "Replay
 // the Build page tour" link, since removed (see
 // docs/plans/in-progress/help-system-and-nav-consolidation-plan.md) now
 // that the footer's Help button (openPageHelp, scheduling.js) opens this
 // dialog directly whenever it's actually on screen, on any real plan's
-// Build page - forceBuildTourReplay/?build-tour=1 both still work exactly
-// as before for anyone linking to them by hand, just with no in-app link
-// pointing at them any more.
+// Build page. That Build-specific handoff was later removed outright
+// (rather than left as unused dead code) once the same plan doc's
+// setup-page Next-link chain needed the identical one-shot idea for a
+// different purpose and generalized it into scheduling.js's
+// setPageHelpForce()/pageHelpForce instead of keeping two copies.
 //
 // Gating is per-browser only (localStorage "buildTourSeen"), not
 // per-plan/per-service-type - once dismissed from any plan's Build page,

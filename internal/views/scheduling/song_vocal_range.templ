@@ -105,7 +105,10 @@ templ SongVocalRanges(personName, organizationName string, songs []pco.SongData,
 // songVocalRangeHelp is this page's Help-triggered dialog - see
 // songRelationshipsHelp's own doc comment (relationships.templ) for the
 // full reasoning shared by every setup-page help dialog (single step, no
-// createTourController, .page-help-dialog for openPageHelp's dispatch).
+// createTourController, .page-help-dialog for openPageHelp's dispatch, and
+// the forward-only Next-link chain / setPageHelpForce mechanism). This is
+// page 4 of that chain (... Song Tags -> here -> Song / Person
+// Preferences -> ...).
 templ songVocalRangeHelp() {
 	<dialog id="song-vocal-range-help" class="tour-dialog page-help-dialog">
 		<div class="tour-step">
@@ -116,6 +119,7 @@ templ songVocalRangeHelp() {
 			</p>
 		</div>
 		<div class="tour-actions">
+			<a class="button" href="/scheduling/song-preferences" onclick="setPageHelpForce()">Next: Song / Person Preferences →</a>
 			<button type="button" class="button primary" onclick="closeHelpDialog('song-vocal-range-help')">Got it</button>
 		</div>
 	</dialog>
