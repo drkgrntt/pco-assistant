@@ -1,0 +1,40 @@
+/* Backs internal/views/scheduling/song_vocal_range.templ's per-row
+   "preview in a different key / an octave up or down" control
+   (vocalRangePreviewControls) below the As-measured/Current-key lines in
+   the Range column - see docs/issues.md for the request this answers.
+   Page-specific, same treatment as song-tags.css: only this one page uses
+   it. */
+
+.vocal-range-preview {
+  margin-block-start: var(--space-2);
+  padding-block-start: var(--space-2);
+  border-block-start: 1px dashed var(--border);
+}
+
+.vocal-range-preview-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+/* The preview key input is a small, secondary control next to a table row's
+   other content, not a full-width form field - overriding the design
+   system's default full-width input sizing (forms.css). */
+.vocal-range-preview-key-input {
+  width: auto;
+  min-width: 7rem;
+}
+
+/* Keeps the "+1 8ve"/"-1 8ve" indicator from shifting the octave buttons
+   left/right as its text appears/disappears (empty at the default, no
+   shift, state - see renderVocalRangePreview, scheduling.js). */
+.vocal-range-preview-shift {
+  display: inline-block;
+  min-width: 3.5rem;
+  text-align: center;
+}
+
+.vocal-range-preview-line {
+  margin-block-start: var(--space-1);
+}

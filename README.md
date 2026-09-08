@@ -84,8 +84,11 @@ with at least Viewer access can still sign in.
   page itself shows each stored range as-measured, plus a second line
   transposed into the song's actual current Planning Center key when it's
   known and differs from the key it was measured in - each note has its
-  own tap-to-hear play button, same as the Vocal Range page above. The
-  Build page's song detail card shows the transposed result live too -
+  own tap-to-hear play button, same as the Vocal Range page above. Each
+  row also has a preview-only control - pick a different key to hear the
+  range transposed into it, or shift the preview an octave up/down (handy
+  for a quick male/female comparison) - without changing what's actually
+  stored. The Build page's song detail card shows the transposed result live too -
   "Vocal range: G3-D5 (in this key)" - re-derived from the stored interval
   into whatever key the arrangement is actually in right now, whether or
   not that matches the key it was originally measured in. Pairs with the

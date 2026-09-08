@@ -1861,3 +1861,229 @@ function playVocalNoteFromInput(inputId) {
   }
   playVocalTone(parsed.pitchClass, parsed.octave);
 }
+
+// --- Song vocal range key/octave preview --------------------------------
+//
+// docs/issues.md: "I feel like we're missing the ability to change the
+// relative key of an existing range to hear what the modulated range
+// would be. Could also be helpful to do things like bring it down an
+// octave to differentiate for male/female type of thing." Preview-only -
+// this never changes what's actually stored (song_vocal_range.templ's "As
+// measured"/"Current key" lines, or the underlying DB row); it just
+// recomputes a transposed low/high pair from the row's already-saved
+// reference key + offsets (the data-reference-key/data-low-offset/
+// data-high-offset attributes vocalRangePreviewControls, song_vocal_range
+// .templ, renders per row) and plays it - the same "hear it before it's
+// committed" spirit as playVocalNoteFromInput above, just previewing a
+// transposition of an already-saved row instead of an in-progress form
+// value.
+//
+// The semitone arithmetic below deliberately mirrors
+// internal/scheduling/key_engine.go and EffectiveVocalRange
+// (song_vocal_range.go) function-for-function (vocalKeyPitchClass ~
+// ParseKeyPitchClass, vocalSignedSemitoneDelta ~ SignedSemitoneDelta,
+// vocalPitchClassAndOctave ~ PitchClassAndOctave,
+// vocalRangePreviewTonicOctave ~ referenceTonicOctave) rather than
+// round-tripping through htmx on every key keystroke/octave click - same
+// "duplicate the primitives, keep them numerically identical" call this
+// file already makes for vocalAbsoluteSemitone/vocalNoteFrequency
+// mirroring AbsoluteSemitone above. If key_engine.go's math ever changes,
+// these need updating to match.
+
+// vocalRangePreviewTonicOctave mirrors referenceTonicOctave
+// (song_vocal_range.go) exactly - the fixed octave EffectiveVocalRange
+// anchors a reference key's tonic to when reconstructing a displayable
+// register.
+var vocalRangePreviewTonicOctave = 3;
+
+// vocalNoteDisplayNames mirrors vocalNoteDisplayNames (Go,
+// internal/views/scheduling/vocal_range.templ) - sharp spelling only, a
+// computed preview note has one canonical display form same as a stored
+// one does.
+var vocalNoteDisplayNames = [
+  "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
+];
+
+// vocalNoteDisplayText mirrors formatVocalNoteDisplay (Go, vocal_range
+// .templ).
+function vocalNoteDisplayText(pitchClass, octave) {
+  return vocalNoteDisplayNames[((pitchClass % 12) + 12) % 12] + octave;
+}
+
+// vocalKeyPitchClass parses a bare key string ("G", "Bb", "F#m") into a
+// 0-11 pitch class, mirroring ParseKeyPitchClass (Go,
+// internal/scheduling/key_engine.go) exactly, including that function's
+// two quirks: major/minor quality (a trailing lowercase "m") is stripped
+// and otherwise ignored entirely, and the accidental character ("#"/"♯"/
+// "b"/"♭") is matched case-sensitively, unmodified, against whatever
+// follows the (uppercased) letter. Reuses vocalNotePitchClasses, the same
+// letter -> pitch-class table parseVocalNoteText already uses for note
+// parsing - see that table's own doc comment. Returns null for anything
+// that doesn't parse, the same "still being typed" tolerance
+// parseVocalNoteText already applies.
+function vocalKeyPitchClass(text) {
+  if (typeof text !== "string") {
+    return null;
+  }
+  var key = text.trim();
+  if (key.slice(-1) === "m") {
+    key = key.slice(0, -1);
+  }
+  if (key === "") {
+    return null;
+  }
+
+  var pitchClass = vocalNotePitchClasses[key[0].toUpperCase()];
+  if (pitchClass === undefined) {
+    return null;
+  }
+
+  var accidental = key.slice(1);
+  if (accidental === "#" || accidental === "♯") {
+    pitchClass += 1;
+  } else if (accidental === "b" || accidental === "♭") {
+    pitchClass -= 1;
+  } else if (accidental !== "") {
+    return null;
+  }
+
+  return ((pitchClass % 12) + 12) % 12;
+}
+
+// vocalSignedSemitoneDelta mirrors SignedSemitoneDelta (Go,
+// key_engine.go) exactly - the minimal SIGNED shift (-6..6) from pitch
+// class fromPC to pitch class toPC, a tie at exactly 6 resolving to +6.
+function vocalSignedSemitoneDelta(fromPC, toPC) {
+  var delta = (((toPC - fromPC) % 12) + 12) % 12;
+  if (delta > 6) {
+    delta -= 12;
+  }
+  return delta;
+}
+
+// vocalPitchClassAndOctave mirrors PitchClassAndOctave (Go,
+// key_engine.go) exactly - AbsoluteSemitone's inverse, recovering the
+// 0-11 pitch class and octave (which may be negative) that combine back
+// into a given absolute semitone value.
+function vocalPitchClassAndOctave(absoluteSemitone) {
+  var pitchClass = ((absoluteSemitone % 12) + 12) % 12;
+  var octave = (absoluteSemitone - pitchClass) / 12;
+  return { pitchClass: pitchClass, octave: octave };
+}
+
+// vocalRangePreviewContainer finds the .vocal-range-preview wrapper
+// (vocalRangePreviewControls, song_vocal_range.templ) an event originated
+// inside - both entry points below (the key input and the two octave
+// buttons) are nested inside exactly one of these per row.
+function vocalRangePreviewContainer(el) {
+  return el.closest(".vocal-range-preview");
+}
+
+// shiftVocalRangePreviewOctave bumps a row's preview octave shift (stored
+// on the container's own data-octave-shift attribute, so each row's shift
+// is independent) by delta (-1 or +1, an octave down/up), updates the
+// small shift indicator next to the buttons, and re-renders the preview
+// line with the new shift applied.
+function shiftVocalRangePreviewOctave(button, delta) {
+  var container = vocalRangePreviewContainer(button);
+  if (!container) {
+    return;
+  }
+
+  var shift = parseInt(container.getAttribute("data-octave-shift"), 10);
+  if (isNaN(shift)) {
+    shift = 0;
+  }
+  shift += delta;
+  container.setAttribute("data-octave-shift", String(shift));
+
+  var shiftLabel = container.querySelector(".vocal-range-preview-shift");
+  if (shiftLabel) {
+    shiftLabel.textContent =
+      shift === 0 ? "" : (shift > 0 ? "+" + shift : String(shift)) + " 8ve";
+  }
+
+  renderVocalRangePreview(container.querySelector(".vocal-range-preview-key-input"));
+}
+
+// renderVocalRangePreview recomputes and renders one row's preview line
+// from its container's data-reference-key/data-low-offset/
+// data-high-offset (r's own stored values, see vocalRangePreviewControls)
+// plus whatever key text is currently in the input and the container's
+// current octave shift. An empty key input falls back to the row's own
+// reference key - so the octave buttons alone (no key ever typed) still
+// preview something, the "bring it down an octave... male/female" use
+// case docs/issues.md describes. Hides the preview line entirely (quiet
+// skip, this codebase's established convention - e.g.
+// keyTransitionWarnings' unparseable-key skip) when the key text doesn't
+// parse.
+function renderVocalRangePreview(input) {
+  var container = vocalRangePreviewContainer(input);
+  if (!container) {
+    return;
+  }
+  var line = container.querySelector(".vocal-range-preview-line");
+  if (!line) {
+    return;
+  }
+
+  var referenceKey = container.getAttribute("data-reference-key") || "";
+  var lowOffset = parseInt(container.getAttribute("data-low-offset"), 10);
+  var highOffset = parseInt(container.getAttribute("data-high-offset"), 10);
+  var octaveShift = parseInt(container.getAttribute("data-octave-shift"), 10);
+  if (isNaN(octaveShift)) {
+    octaveShift = 0;
+  }
+
+  var keyText = input.value.trim() || referenceKey;
+  var targetPitchClass = vocalKeyPitchClass(keyText);
+  var referencePitchClass = vocalKeyPitchClass(referenceKey);
+
+  if (
+    targetPitchClass === null ||
+    referencePitchClass === null ||
+    isNaN(lowOffset) ||
+    isNaN(highOffset)
+  ) {
+    line.hidden = true;
+    line.innerHTML = "";
+    return;
+  }
+
+  var tonicAbsoluteSemitone = vocalAbsoluteSemitone(referencePitchClass, vocalRangePreviewTonicOctave);
+  var delta = vocalSignedSemitoneDelta(referencePitchClass, targetPitchClass);
+  var octaveOffsetSemitones = octaveShift * 12;
+
+  var low = vocalPitchClassAndOctave(tonicAbsoluteSemitone + delta + lowOffset + octaveOffsetSemitones);
+  var high = vocalPitchClassAndOctave(tonicAbsoluteSemitone + delta + highOffset + octaveOffsetSemitones);
+
+  line.hidden = false;
+  line.innerHTML =
+    "Preview (" + keyText + "): " +
+    vocalNoteDisplayText(low.pitchClass, low.octave) +
+    " " + vocalRangePreviewPlayButtonHTML("lowest", low.pitchClass, low.octave) +
+    " - " +
+    vocalNoteDisplayText(high.pitchClass, high.octave) +
+    " " + vocalRangePreviewPlayButtonHTML("highest", high.pitchClass, high.octave);
+}
+
+// vocalRangePreviewPlayButtonHTML builds one tap-to-hear button for a
+// preview line's dynamically-computed note. Deliberately matches
+// IconPlay's exact SVG markup (internal/views/components/icons.templ) and
+// .icon-btn's styling by hand, so a client-side-generated button looks
+// identical to every server-rendered play button on this page - see this
+// section's own doc comment for why duplicating rather than sharing a
+// template is the right call here. label is always one of this file's own
+// two literal strings ("lowest"/"highest") and pitchClass/octave are
+// always plain integers - no untrusted input ever reaches this string, so
+// building it via concatenation rather than DOM APIs is safe.
+function vocalRangePreviewPlayButtonHTML(label, pitchClass, octave) {
+  return (
+    '<button type="button" class="icon-btn" aria-label="Play previewed ' +
+    label + ' note" title="Play previewed ' + label + ' note" ' +
+    'onclick="playVocalTone(' + pitchClass + ', ' + octave + ')">' +
+    '<svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">' +
+    '<path d="M6 4l14 8-14 8V4Z"></path></svg>' +
+    '</button>'
+  );
+}

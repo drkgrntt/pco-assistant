@@ -186,6 +186,9 @@ templ SongVocalRangesTable(ranges []scheduling.SongVocalRange, songTitles, curre
 										@vocalRangeLine("Current key", currentKey, transposed)
 									}
 								}
+								if measured.OK {
+									@vocalRangePreviewControls(r)
+								}
 							</td>
 							<td>
 								if measured.OK {
@@ -298,5 +301,64 @@ templ vocalRangeLine(label, key string, pair vocalRangeNotePair) {
 		>
 			@components.IconPlay()
 		</button>
+	</div>
+}
+
+// vocalRangePreviewControls is a per-row, preview-only control (docs/
+// issues.md: "change the relative key of an existing range to hear what
+// the modulated range would be... bring it down an octave... male/
+// female") - deliberately separate from vocalRangeLine's "As measured"/
+// "Current key" lines above it: those reflect what's actually stored,
+// this never does. Picking a key here or clicking the octave buttons
+// never writes anything back to r's row - it only changes what plays and
+// what the preview line below shows.
+//
+// The transposition math runs entirely client-side
+// (renderVocalRangePreview, scheduling.js) rather than round-tripping
+// through htmx on every keystroke/click - the data-* attributes below are
+// exactly r's own stored reference_key/low_offset/high_offset, the same
+// inputs scheduling.EffectiveVocalRange takes server-side, so the JS
+// mirrors that function's arithmetic (see that section's own doc comment
+// in scheduling.js for why duplicating it is safe here) rather than
+// re-deriving new math. The key input reuses musicalKeyOptions' shared
+// "key-options" datalist (rendered once, in SongVocalRanges' entry form)
+// rather than a per-row copy - a <datalist> can back any number of
+// inputs via list="key-options".
+templ vocalRangePreviewControls(r scheduling.SongVocalRange) {
+	<div
+		class="vocal-range-preview"
+		data-reference-key={ r.ReferenceKey }
+		data-low-offset={ fmt.Sprintf("%d", r.LowOffsetSemitones) }
+		data-high-offset={ fmt.Sprintf("%d", r.HighOffsetSemitones) }
+		data-octave-shift="0"
+	>
+		<div class="vocal-range-preview-controls">
+			<input
+				type="text"
+				class="vocal-range-preview-key-input"
+				placeholder={ "Preview in " + r.ReferenceKey }
+				list="key-options"
+				aria-label="Preview in a different key"
+				oninput="renderVocalRangePreview(this)"
+			/>
+			<button
+				type="button"
+				aria-label="Preview an octave lower"
+				title="Preview an octave lower"
+				onclick="shiftVocalRangePreviewOctave(this, -1)"
+			>
+				8ve ↓
+			</button>
+			<span class="vocal-range-preview-shift muted"></span>
+			<button
+				type="button"
+				aria-label="Preview an octave higher"
+				title="Preview an octave higher"
+				onclick="shiftVocalRangePreviewOctave(this, 1)"
+			>
+				8ve ↑
+			</button>
+		</div>
+		<div class="vocal-range-preview-line muted" hidden></div>
 	</div>
 }

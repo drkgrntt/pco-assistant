@@ -90,6 +90,34 @@ just the initial page load. See `docs/pco-api-risks.md`'s entry for the
 fan-out-stays-small reasoning (this page only ever lists songs that
 already have a stored range, a small subset of the active song library).
 
+**Song Vocal Range page gets a key/octave preview control, 2026-09-08** -
+a `docs/ideas.md`-adjacent request ("change the relative key of an
+existing range to hear what the modulated range would be... bring it
+down an octave... male/female") tracked in `docs/issues.md`. Deliberately
+**preview-only**: nothing here changes `r.ReferenceKey`/`LowOffsetSemitones`/
+`HighOffsetSemitones` or the As-measured/Current-key lines above it -
+picking a key or clicking an octave button only changes what plays and
+what a new, third preview line shows. Per-row control
+(`vocalRangePreviewControls`, `song_vocal_range.templ`): a text input
+(reusing the entry form's shared `key-options` datalist, `musicalKeyOptions`)
+plus two octave up/down buttons, all client-side - the transposition
+arithmetic (`renderVocalRangePreview` and its helpers, `web/static/js/
+scheduling.js`) duplicates `ParseKeyPitchClass`/`SignedSemitoneDelta`/
+`PitchClassAndOctave`/`referenceTonicOctave` (`key_engine.go`,
+`song_vocal_range.go`) function-for-function rather than round-tripping
+through htmx on every keystroke/click - the same "duplicate the
+primitives, keep them numerically identical" call already made for
+`vocalAbsoluteSemitone`/`vocalNoteFrequency` mirroring `AbsoluteSemitone`.
+An empty key input falls back to the row's own reference key, so the
+octave buttons alone (no key ever typed) already preview something -
+covers the "just show me an octave down" case without requiring a key
+pick first. New page-specific `web/static/css/song-vocal-range.css`
+(registered in `layout.templ`'s `designSystemCSSFiles`) backs the
+control's layout; the play buttons it generates duplicate `IconPlay`'s
+exact SVG markup by hand (see that JS section's own doc comment) rather
+than sharing a template, so a client-side-generated button still matches
+every server-rendered `.icon-btn` on the page.
+
 Written 2026-09-06, expanding two related `docs/ideas.md` bullets into one
 coherent build plan: **"Vocal range per vocalist"** (People section,
 ~line 462) and **"Song vocal range (relative to key)"** (Songs section,
