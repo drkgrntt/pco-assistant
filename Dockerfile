@@ -23,11 +23,14 @@ RUN apk add --no-cache ca-certificates tzdata postgresql-client \
     && adduser -D -H appuser
 WORKDIR /app
 
-# web/static is served relative to the working directory (Static("/static",
-# "./web/static") plus the root-served /sw.js and /manifest.json - see
+# web/static and assets/piano-sound-samples are both served relative to the
+# working directory (Static("/static", "./web/static") plus the root-served
+# /sw.js and /manifest.json, and Static("/piano-samples",
+# "./assets/piano-sound-samples") for the vocal-range reference tones - see
 # routes.go) - migrations are compiled in via go:embed, so nothing else
 # from the source tree needs to come along.
 COPY --from=build /src/web/static ./web/static
+COPY --from=build /src/assets/piano-sound-samples ./assets/piano-sound-samples
 COPY --from=build /out/app ./app
 USER appuser
 
