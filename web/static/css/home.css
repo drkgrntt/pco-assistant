@@ -1,3 +1,22 @@
+/* The "Needs attention" list's optional second row per service type
+   (HomePlanRow.IsNextUnplanned, home.templ) - shown only when the
+   chronologically-next plan is already fully planned and a later one
+   still needs work (see HomeController.homeLookAheadPlansCap). Indented
+   and border-accented, with its own leading label, so it reads as "this
+   one's next plan is also already done, but the one after that isn't" -
+   a follow-up to the row above it, not a second, unrelated "next plan"
+   that could be mistaken for a duplicate. */
+.plan-list li.plan-list-followup {
+  margin-left: var(--space-4);
+  border-left: 2px solid var(--border);
+  background: transparent;
+}
+
+.plan-list-followup-label {
+  font-size: var(--text-xs);
+  font-style: italic;
+}
+
 /* The signed-in home page's (home.templ) workflow shortcut row - single
    page, not a reusable component. */
 .quick-links {

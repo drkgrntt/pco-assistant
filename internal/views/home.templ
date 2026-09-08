@@ -29,10 +29,13 @@ templ Home(personName, organizationName string, data HomeData) {
 
 		if len(data.UpcomingPlans) > 0 {
 			<h2>Needs attention</h2>
-			<p class="muted">The next upcoming plan for each service type.</p>
+			<p class="muted">The next upcoming plan for each service type - plus the next one still needing work, when the very next plan is already fully planned.</p>
 			<ul class="plan-list">
 				for _, plan := range data.UpcomingPlans {
-					<li>
+					<li class={ templ.KV("plan-list-followup", plan.IsNextUnplanned) }>
+						if plan.IsNextUnplanned {
+							<span class="muted plan-list-followup-label">Then still needs work:</span>
+						}
 						<a href={ templ.URL(plan.TargetURL()) }>
 							if plan.Title != "" {
 								{ plan.Title }
