@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -38,46 +37,16 @@ func (sc *SchedulingController) SongVocalRangePage(c *fiber.Ctx) error {
 
 	rangeMap, err := sc.store.ListSongVocalRanges(ctx, orgID)
 	if err != nil {
-		return render(c, views.SongVocalRanges(personName, orgName, songs, nil, songTitleMap(songs), nil, err.Error()))
+		return render(c, views.SongVocalRanges(personName, orgName, songs, nil, songTitleMap(songs), err.Error()))
 	}
 	ranges := sortedSongVocalRanges(rangeMap)
-	currentKeys := sc.currentKeysBySong(ctx, orgID, ranges)
 
 	errMsg := ""
 	if songsErr != nil {
 		errMsg = "loading songs from Planning Center: " + songsErr.Error()
 	}
 
-	return render(c, views.SongVocalRanges(personName, orgName, songs, ranges, songTitleMap(songs), currentKeys, errMsg))
-}
-
-// currentKeysBySong resolves each listed range's song to its current
-// cached PCO arrangement key (SongArrangementInfo.Key), for
-// SongVocalRangesTable's "current key" transposed line - see that
-// component's own doc comment. One bulk cache-only read
-// (scheduling.SongArrangementInfo) regardless of how many ranges are
-// listed, then a cache lookup per range via resolveArrangementCacheInfo
-// (scheduling.go) - the existing enqueue-on-miss contract, never a live
-// blocking PCO call (CLAUDE.md's PCO API calls section is explicit that a
-// render path must not add one when this pattern already exists). Only
-// looks up the songs actually passed in - this page only ever lists songs
-// with a stored vocal range on file, a small subset of the whole active
-// song library, not a full-library fan-out (see docs/pco-api-risks.md).
-// A song whose cache entry is missing (enqueues a background sync) or has
-// an empty Key (PCO has none set) is simply absent from the returned map -
-// callers treat that the same "quiet skip" way SongVocalRangesTable's own
-// doc comment describes.
-func (sc *SchedulingController) currentKeysBySong(ctx context.Context, organizationID string, ranges []scheduling.SongVocalRange) map[string]string {
-	arrangementCache, _ := sc.store.SongArrangementInfo(ctx, organizationID)
-
-	keys := make(map[string]string, len(ranges))
-	for _, r := range ranges {
-		info := resolveArrangementCacheInfo(ctx, sc.store, organizationID, arrangementCache, r.SongID)
-		if info.Key != "" {
-			keys[r.SongID] = info.Key
-		}
-	}
-	return keys
+	return render(c, views.SongVocalRanges(personName, orgName, songs, ranges, songTitleMap(songs), errMsg))
 }
 
 // sortedSongVocalRanges converts ListSongVocalRanges' bulk map (keyed for
@@ -143,11 +112,10 @@ func (sc *SchedulingController) SetSongVocalRange(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
 	}
 	ranges := sortedSongVocalRanges(rangeMap)
-	currentKeys := sc.currentKeysBySong(ctx, orgID, ranges)
 
 	songs, _ := fetchActiveSongs(ctx, orgID)
 
-	return render(c, views.SongVocalRangesTable(ranges, songTitleMap(songs), currentKeys, errMsg))
+	return render(c, views.SongVocalRangesTable(ranges, songTitleMap(songs), errMsg))
 }
 
 func (sc *SchedulingController) DeleteSongVocalRange(c *fiber.Ctx) error {
@@ -168,9 +136,8 @@ func (sc *SchedulingController) DeleteSongVocalRange(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
 	}
 	ranges := sortedSongVocalRanges(rangeMap)
-	currentKeys := sc.currentKeysBySong(ctx, orgID, ranges)
 
 	songs, _ := fetchActiveSongs(ctx, orgID)
 
-	return render(c, views.SongVocalRangesTable(ranges, songTitleMap(songs), currentKeys, errMsg))
+	return render(c, views.SongVocalRangesTable(ranges, songTitleMap(songs), errMsg))
 }

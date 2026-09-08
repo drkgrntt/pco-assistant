@@ -20,15 +20,15 @@ import (
 // key is entered alongside the low/high notes so the range can be stored
 // as a transposable interval (scheduling.ComputeVocalRangeOffsets) rather
 // than a bare note pair that would be meaningless without knowing what key
-// it was measured against.
-//
-// currentKeysBySong resolves a song id to its current cached PCO
-// arrangement key (see SongVocalRangesTable's own doc comment) - threaded
-// through from the controller (song_vocal_range.go's currentKeysBySong
-// helper) so the table can show each range transposed into whatever key
-// the song is actually in right now, not just the key it was measured
-// against.
-templ SongVocalRanges(personName, organizationName string, songs []pco.SongData, ranges []scheduling.SongVocalRange, songTitles, currentKeysBySong map[string]string, errMsg string) {
+// it was measured against. That transposable-interval storage is also what
+// lets vocalRangePreviewControls below preview *any* key/octave on demand -
+// this page used to auto-show a "current key" line too (transposed into
+// whatever key the song's PCO arrangement happened to be cached as), but
+// that's gone now: a song can have multiple PCO arrangements in different
+// keys, so "the" current key doesn't actually resolve to one true answer,
+// and the preview control already covers "show me this range in some other
+// key" on demand, for any key the reader actually wants.
+templ SongVocalRanges(personName, organizationName string, songs []pco.SongData, ranges []scheduling.SongVocalRange, songTitles map[string]string, errMsg string) {
 	@views.Layout("Song Vocal Range", personName, organizationName) {
 		@songVocalRangeHelp()
 		<h1>Song Vocal Range</h1>
@@ -98,7 +98,7 @@ templ SongVocalRanges(personName, organizationName string, songs []pco.SongData,
 			<button type="submit" class="primary">Save</button>
 			<button type="button" class="cancel-edit" onclick="cancelSetupEdit(this)" hidden>Cancel</button>
 		</form>
-		@SongVocalRangesTable(ranges, songTitles, currentKeysBySong, errMsg)
+		@SongVocalRangesTable(ranges, songTitles, errMsg)
 	}
 }
 
@@ -144,14 +144,13 @@ templ songVocalRangeHelp() {
 // this is just a defensive guard, never expected to actually skip in
 // practice.
 //
-// currentKeysBySong resolves a range's song id to its current cached PCO
-// arrangement key (song_vocal_range.go's currentKeysBySong helper - a
-// cache-only, enqueue-on-miss read, never a live blocking PCO call). A
-// song missing from this map (never cached, or PCO has no key set) shows
-// only the "as measured" line in the Range column below - the established
-// "best-effort, quiet skip" convention this codebase already uses
-// elsewhere (e.g. keyTransitionWarnings' unparseable-key skip).
-templ SongVocalRangesTable(ranges []scheduling.SongVocalRange, songTitles, currentKeysBySong map[string]string, errMsg string) {
+// This used to also show a "current key" line, transposed into the song's
+// cached PCO arrangement key - removed (docs/issues.md feedback): a song
+// can have multiple PCO arrangements in different keys, so "the" current
+// key isn't actually a single well-defined answer, and it duplicated what
+// vocalRangePreviewControls below already offers on demand for any key the
+// reader picks, not just whichever one happened to be cached.
+templ SongVocalRangesTable(ranges []scheduling.SongVocalRange, songTitles map[string]string, errMsg string) {
 	<div id="song-vocal-ranges-table">
 		if errMsg != "" {
 			<p class="error">{ errMsg }</p>
@@ -179,13 +178,6 @@ templ SongVocalRangesTable(ranges []scheduling.SongVocalRange, songTitles, curre
 							<td>{ r.ReferenceKey }</td>
 							<td>
 								@vocalRangeLine("As measured", r.ReferenceKey, measured)
-								{{ currentKey, hasCurrentKey := currentKeysBySong[r.SongID] }}
-								if hasCurrentKey && currentKey != "" && currentKey != r.ReferenceKey {
-									{{ transposed := computeVocalRangeNotePair(r.ReferenceKey, r.LowOffsetSemitones, r.HighOffsetSemitones, currentKey) }}
-									if transposed.OK {
-										@vocalRangeLine("Current key", currentKey, transposed)
-									}
-								}
 								if measured.OK {
 									@vocalRangePreviewControls(r)
 								}
@@ -270,11 +262,17 @@ func computeVocalRangeNotePair(referenceKey string, lowOffset, highOffset int, t
 }
 
 // vocalRangeLine renders one labeled line of a song vocal range's Range
-// column - "As measured (in D): E3 [play] - B4 [play]" or "Current key
-// (G): F3 [play] - C5 [play]" - each note with its own tap-to-hear button
-// (playVocalTone, web/static/js/scheduling.js), so the two lines
-// (as-measured vs. transposed-into-current-key) are never ambiguous about
-// which is which. Callers only render this when pair.OK is true (see
+// column - "As measured (in D): E3 [play] - B4 [play]" - each note with its
+// own tap-to-hear button (playVocalTone, web/static/js/scheduling.js).
+// SongVocalRangesTable only ever calls this once per row now ("As
+// measured") - it used to also render a second "Current key" line
+// transposed into the song's cached PCO arrangement key, removed per
+// docs/issues.md feedback (a song can have multiple PCO arrangements in
+// different keys, so there's no single well-defined "the" current key, and
+// vocalRangePreviewControls below already covers "show me this in some
+// other key" on demand) - kept as a generic labeled-line renderer rather
+// than inlined back into its one remaining call site, in case a future
+// caller needs the same shape. Only rendered when pair.OK is true (see
 // SongVocalRangesTable) - no "?" placeholder here, matching this
 // codebase's quiet-skip convention rather than showing a broken line.
 templ vocalRangeLine(label, key string, pair vocalRangeNotePair) {
@@ -307,9 +305,9 @@ templ vocalRangeLine(label, key string, pair vocalRangeNotePair) {
 // vocalRangePreviewControls is a per-row, preview-only control (docs/
 // issues.md: "change the relative key of an existing range to hear what
 // the modulated range would be... bring it down an octave... male/
-// female") - deliberately separate from vocalRangeLine's "As measured"/
-// "Current key" lines above it: those reflect what's actually stored,
-// this never does. Picking a key here or clicking the octave buttons
+// female") - deliberately separate from vocalRangeLine's "As measured"
+// line above it: that reflects what's actually stored, this never does.
+// Picking a key here or clicking the octave buttons
 // never writes anything back to r's row - it only changes what plays and
 // what the preview line below shows.
 //
