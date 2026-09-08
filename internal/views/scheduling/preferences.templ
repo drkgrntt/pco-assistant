@@ -13,6 +13,7 @@ import (
 
 templ Preferences(personName, organizationName string, songs []pco.SongData, preferences []scheduling.SongPersonPreference, preferenceTypes []scheduling.SongPreferenceType, songTitles map[string]string, personNames map[string]string, preferenceLabels map[string]string, errMsg string) {
 	@views.Layout("Song Preferences", personName, organizationName) {
+		@songPreferencesHelp()
 		<h1>Song / Person Preferences</h1>
 		<p class="muted">Note which people are preferred or discouraged for a given song - pick the song from your Planning Center library and search for the person by name.</p>
 		<form
@@ -136,4 +137,23 @@ templ PreferencesTable(preferences []scheduling.SongPersonPreference, songTitles
 				</tbody>
 		}
 	</div>
+}
+
+// songPreferencesHelp is this page's Help-triggered dialog - see
+// songRelationshipsHelp's own doc comment (relationships.templ) for the
+// full reasoning shared by every setup-page help dialog (single step, no
+// createTourController, .page-help-dialog for openPageHelp's dispatch).
+templ songPreferencesHelp() {
+	<dialog id="song-preferences-help" class="tour-dialog page-help-dialog">
+		<div class="tour-step">
+			<h2>Song / Person Preferences</h2>
+			<p>
+				Note which people are preferred or discouraged for a given song.
+				Build uses these to suggest the right fit instead of a blank slate.
+			</p>
+		</div>
+		<div class="tour-actions">
+			<button type="button" class="button primary" onclick="closeHelpDialog('song-preferences-help')">Got it</button>
+		</div>
+	</dialog>
 }

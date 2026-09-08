@@ -11,6 +11,7 @@ import (
 
 templ PositionPreferences(personName, organizationName string, serviceTypes []pco.ServiceTypeData, positionGroups []PositionGroup, selectedServiceTypeID, errMsg string) {
 	@views.Layout("Position Preferences", personName, organizationName) {
+		@positionPreferencesHelp()
 		<h1>Position Preferences</h1>
 		<p class="muted">Set how often someone wants to serve in a position - Planning Center's own per-position scheduling preference ("every other week," "once a month," etc.), so it's respected everywhere in Planning Center, not just here.</p>
 		<form class="inline" method="get">
@@ -52,6 +53,26 @@ templ PositionPreferences(personName, organizationName string, serviceTypes []pc
 			@PositionAssignmentsFragment(nil, "", "", nil, "")
 		}
 	}
+}
+
+// positionPreferencesHelp is this page's Help-triggered dialog - see
+// songRelationshipsHelp's own doc comment (relationships.templ) for the
+// full reasoning shared by every setup-page help dialog (single step, no
+// createTourController, .page-help-dialog for openPageHelp's dispatch).
+templ positionPreferencesHelp() {
+	<dialog id="position-preferences-help" class="tour-dialog page-help-dialog">
+		<div class="tour-step">
+			<h2>Position Preferences</h2>
+			<p>
+				Set how often someone wants to serve in a position - Planning
+				Center's own scheduling preference - so it's respected everywhere
+				in Planning Center, not just here.
+			</p>
+		</div>
+		<div class="tour-actions">
+			<button type="button" class="button primary" onclick="closeHelpDialog('position-preferences-help')">Got it</button>
+		</div>
+	</dialog>
 }
 
 // PositionAssignmentsFragment is the htmx swap target (id="position-

@@ -27,6 +27,7 @@ import (
 // client-side (filterSongTagCards, scheduling.js) for a large library.
 templ SongTags(personName, organizationName string, songs []pco.SongData, tagsBySong map[string][]scheduling.SongTag, categories []scheduling.SongTagCategory, categoryLabels map[string]string, errMsg string) {
 	@views.Layout("Song Tags", personName, organizationName) {
+		@songTagsHelp()
 		<h1>Song Tags</h1>
 		<p class="muted">Tag songs with themes, scripture references, or ideas, so they're easier to find when planning around a sermon.</p>
 		<div class="song-tags-filter">
@@ -44,6 +45,25 @@ templ SongTags(personName, organizationName string, songs []pco.SongData, tagsBy
 		</div>
 		@SongTagsList(songs, tagsBySong, categories, categoryLabels, errMsg)
 	}
+}
+
+// songTagsHelp is this page's Help-triggered dialog - see
+// songRelationshipsHelp's own doc comment (relationships.templ) for the
+// full reasoning shared by every setup-page help dialog (single step, no
+// createTourController, .page-help-dialog for openPageHelp's dispatch).
+templ songTagsHelp() {
+	<dialog id="song-tags-help" class="tour-dialog page-help-dialog">
+		<div class="tour-step">
+			<h2>Song Tags</h2>
+			<p>
+				Tag songs with themes, scripture references, or ideas, so they're
+				easier to find when planning around a sermon.
+			</p>
+		</div>
+		<div class="tour-actions">
+			<button type="button" class="button primary" onclick="closeHelpDialog('song-tags-help')">Got it</button>
+		</div>
+	</dialog>
 }
 
 // songTagFilterChips renders the distinct tag values already in use as

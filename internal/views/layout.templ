@@ -114,32 +114,28 @@ templ Layout(title string, personName string, organizationName string) {
 					</nav>
 				</div>
 				<div class="site-actions">
-					<button type="button" class="theme-toggle" onclick="toggleTheme()" aria-label="Switch between light and dark theme" title="Switch between light and dark theme">
-						@components.IconSun()
-						@components.IconMoon()
-					</button>
 					if personName != "" {
 						<!--
-							The one persistent path to /account - without it, an
-							actively-paying org (home.templ's trial banner only shows
-							while OrgStatus isn't "active") has no way back to plan/
-							seat info or the Stripe portal short of typing the URL.
-							/account embeds the same billing section /billing itself
-							renders (views.BillingBody) alongside identity info and
-							the Data & Caches tools - /billing's own routes/page still
-							work directly, just aren't linked from here anymore.
+							One dropdown instead of four loose items (theme toggle,
+							Account link, org+person name, logout form) - see
+							docs/plans/in-progress/help-system-and-nav-consolidation-plan.md
+							for why this consolidation happened alongside the new
+							footer Help button. Reuses the exact same "nav-dropdown"
+							mechanism as the "Setup" dropdown above (toggleNavDropdown,
+							positionNavDropdown, closeNavDropdowns, the document-level
+							outside-click/Escape handlers - all in scheduling.js) rather
+							than inventing a second one: every one of those already
+							operates on every ".nav-dropdown*" element on the page, not
+							a single hardcoded instance, so a second dropdown sharing
+							the same classes gets positioning/outside-click-close/mobile
+							behavior for free. The two dropdowns never fight over state -
+							each tracks its own "open" class independently, scoped by
+							.closest(".nav-dropdown") - and clicking one closes the
+							other via the same "anything outside .nav-dropdown closes
+							every open one" handler that already existed for the single
+							Setup dropdown.
 						-->
-						<a href="/account">Account</a>
-						<a href="/feedback">Feedback</a>
-						<div class="account">
-							if organizationName != "" {
-								<span class="account-org">{ organizationName }</span>
-							}
-							<span class="account-person">{ personName }</span>
-						</div>
-						<form method="post" action="/auth/logout">
-							<button type="submit">Log out</button>
-						</form>
+						@components.Disclosure("nav-dropdown", "nav-dropdown-toggle", "toggleNavDropdown(this)", "", "", accountToggleContent(personName), accountMenuContent(organizationName))
 					}
 				</div>
 			</header>
@@ -156,8 +152,52 @@ templ Layout(title string, personName string, organizationName string) {
 				@installPromptBanner()
 				{ children... }
 			</main>
+			if personName != "" {
+				<footer class="site-footer">
+					<a href="/feedback">Feedback</a>
+					<button type="button" class="button" onclick="openPageHelp()">Help</button>
+				</footer>
+			}
+			@genericHelpDialog()
 		</body>
 	</html>
+}
+
+// accountToggleContent/accountMenuContent are the header's account
+// Disclosure's toggle-button content and popup contents (see the
+// site-actions doc comment above for why this reuses the "Setup" nav
+// dropdown's own mechanism rather than a new one). Mirrors
+// navToggleContent/navMenuContent's split below in shape, just for a
+// different Disclosure instance.
+templ accountToggleContent(personName string) {
+	{ personName }
+	@components.IconChevronDown()
+}
+
+// accountMenuContent is the account dropdown's popup: the theme toggle
+// (moved here unchanged from its old spot directly in .site-actions), the
+// org name (when known), the one persistent path to /account - without
+// it, an actively-paying org (home.templ's trial banner only shows while
+// OrgStatus isn't "active") has no way back to plan/seat info or the
+// Stripe portal short of typing the URL; /account embeds the same billing
+// section /billing itself renders (views.BillingBody) alongside identity
+// info and the Data & Caches tools - and finally the logout form.
+// Feedback used to live in this same row and moved to the new site
+// footer instead (see genericHelpDialog's own doc comment and
+// docs/plans/in-progress/help-system-and-nav-consolidation-plan.md) - it's
+// no longer here.
+templ accountMenuContent(organizationName string) {
+	<button type="button" class="theme-toggle" onclick="toggleTheme()" aria-label="Switch between light and dark theme" title="Switch between light and dark theme">
+		@components.IconSun()
+		@components.IconMoon()
+	</button>
+	if organizationName != "" {
+		<span class="account-org">{ organizationName }</span>
+	}
+	<a href="/account">Account</a>
+	<form method="post" action="/auth/logout">
+		<button type="submit">Log out</button>
+	</form>
 }
 
 // navToggleContent/navMenuContent are the nav's "Setup" Disclosure's
@@ -186,6 +226,33 @@ templ navMenuContent() {
 	<a href="/scheduling/position-preferences">Position Preferences</a>
 	<a href="/scheduling/vocal-range">Vocal Range</a>
 	<a href="/scheduling/song-vocal-range">Song Vocal Range</a>
+}
+
+// genericHelpDialog is the Help button's (site-footer, above) last-resort
+// fallback - see scheduling.js's openPageHelp doc comment for the full
+// dispatch order. Rendered unconditionally in Layout itself (not gated on
+// personName, unlike the footer's Help button that's the only thing that
+// can open it) so it always exists regardless of which page's own
+// {children...} rendered - the same "exists on every page, findable by
+// id" reasoning as installPromptBanner below, just never auto-shown.
+// Opens/closes via openHelpDialog/closeHelpDialog (scheduling.js), the
+// same minimal stateless pair backing the 8 new setup-page dialogs -
+// there's exactly one step here too, so createTourController's
+// auto-open/localStorage/query-param machinery (built for the Home/Build
+// tours' very different auto-popping requirements) would be overkill for
+// this, same reasoning as those 8.
+templ genericHelpDialog() {
+	<dialog id="generic-help-dialog" class="tour-dialog">
+		<div class="tour-step">
+			<h2>Need a hand?</h2>
+			<p>
+				This page doesn't have its own guided tour yet. Your <a href="/account">Account</a> page has billing, cached-data tools, and who's signed in - or send us a note from <a href="/feedback">Feedback</a> when something's confusing or broken.
+			</p>
+		</div>
+		<div class="tour-actions">
+			<button type="button" class="button primary" onclick="closeHelpDialog('generic-help-dialog')">Done</button>
+		</div>
+	</dialog>
 }
 
 // installPromptBanner is the dismissible "install this app" nudge (see

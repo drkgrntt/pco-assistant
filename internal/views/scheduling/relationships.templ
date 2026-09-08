@@ -13,6 +13,7 @@ import (
 
 templ Relationships(personName, organizationName string, songs []pco.SongData, relationships []scheduling.SongRelationship, relationshipTypes []scheduling.SongRelationshipType, songTitles map[string]string, typeLabels map[string]string, errMsg string) {
 	@views.Layout("Song Relationships", personName, organizationName) {
+		@songRelationshipsHelp()
 		<h1>Song Relationships</h1>
 		<p class="muted">Relate songs to each other - e.g. "flows well lyrically" or "same theme" - picking from your Planning Center song library.</p>
 		<form
@@ -146,4 +147,36 @@ templ RelationshipsTable(relationships []scheduling.SongRelationship, songTitles
 				</tbody>
 		}
 	</div>
+}
+
+// songRelationshipsHelp is this page's Help-triggered dialog (see
+// scheduling.js's openPageHelp for the dispatch order that finds it, and
+// docs/plans/in-progress/help-system-and-nav-consolidation-plan.md for why
+// setup pages get one at all - a genuinely different mechanism from the
+// Home/Build tours' auto-popping ones, so the "overbearing" objection that
+// ruled out a per-page tour in the original onboarding plan doesn't apply
+// here). One .tour-step, no dots or Back/Next - a single step never needs
+// step navigation - so this is opened/closed via openHelpDialog/
+// closeHelpDialog (scheduling.js) directly rather than
+// createTourController, which exists specifically for the auto-open/
+// dismissal-tracking machinery a Help-triggered, single-step dialog has no
+// use for. .page-help-dialog is the class openPageHelp() looks for on a
+// page with no tour of its own; reuses .tour-dialog for the same visual
+// shell as the Home/Build tours, just with one step and one button. The
+// heading matches this page's own <h1> exactly, so the dialog clearly maps
+// back to the page it opened from.
+templ songRelationshipsHelp() {
+	<dialog id="song-relationships-help" class="tour-dialog page-help-dialog">
+		<div class="tour-step">
+			<h2>Song Relationships</h2>
+			<p>
+				Relate songs that flow well together, or that shouldn't land back
+				to back. Build uses these to suggest what plays well next, and to
+				flag a bad pairing before it lands back to back.
+			</p>
+		</div>
+		<div class="tour-actions">
+			<button type="button" class="button primary" onclick="closeHelpDialog('song-relationships-help')">Got it</button>
+		</div>
+	</dialog>
 }

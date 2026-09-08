@@ -11,6 +11,7 @@ import (
 
 templ PersonRelationships(personName, organizationName string, relationships []scheduling.PersonRelationship, relationshipTypes []scheduling.PersonRelationshipType, personNames map[string]string, typeLabels map[string]string, errMsg string) {
 	@views.Layout("Person Relationships", personName, organizationName) {
+		@personRelationshipsHelp()
 		<h1>Person Relationships</h1>
 		<p class="muted">Relate people to each other - "works well with," "mentorship," or "doesn't work well with" - searching your Planning Center people directory.</p>
 		<form
@@ -125,4 +126,24 @@ templ PersonRelationshipsTable(relationships []scheduling.PersonRelationship, pe
 				</tbody>
 		}
 	</div>
+}
+
+// personRelationshipsHelp is this page's Help-triggered dialog - see
+// songRelationshipsHelp's own doc comment (relationships.templ) for the
+// full reasoning shared by every setup-page help dialog (single step, no
+// createTourController, .page-help-dialog for openPageHelp's dispatch).
+templ personRelationshipsHelp() {
+	<dialog id="person-relationships-help" class="tour-dialog page-help-dialog">
+		<div class="tour-step">
+			<h2>Person Relationships</h2>
+			<p>
+				Relate people to each other - works well with, mentorship, or
+				doesn't work well with. Build uses these to flag two people who
+				shouldn't be scheduled together before the roster goes out.
+			</p>
+		</div>
+		<div class="tour-actions">
+			<button type="button" class="button primary" onclick="closeHelpDialog('person-relationships-help')">Got it</button>
+		</div>
+	</dialog>
 }

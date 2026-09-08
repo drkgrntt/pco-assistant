@@ -4,11 +4,12 @@
    since that's a concrete usage of the shared Disclosure component, and
    site-banner.css for the early-preview strip beneath the header. */
 
-/* Two clusters, not four loose items: .site-primary (brand + nav) and
-   .site-actions (theme toggle + account + logout) each read as one group,
-   so what widens into "brand/nav on the left, account stuff on the right"
-   at desktop width doesn't depend on how much text happens to be in the
-   person's name or the logout button - the two clusters are what
+/* Two clusters: .site-primary (brand + nav) and .site-actions (now just
+   the account dropdown - theme toggle, org name, Account link, and logout
+   all live inside its popup menu, see accountMenuContent/layout.templ)
+   each read as one group, so what widens into "brand/nav on the left,
+   account stuff on the right" at desktop width doesn't depend on how much
+   text happens to be in the person's name - the two clusters are what
    space-between balances, not their contents individually. Mobile-first:
    the two clusters stack (each wrapping internally if it needs to);
    widened into a single row once there's room. */
@@ -161,11 +162,7 @@ header.site.menu-open .site-actions {
   }
 }
 
-/* Also covers .site-actions' "Billing" link (layout.templ) - same plain-
-   link treatment as the primary nav, not styled as its own thing just
-   because it sits in a different cluster. */
-header.site nav a,
-.site-actions a {
+header.site nav a {
   text-decoration: none;
   color: var(--accent);
   padding: 0.3rem 0;
@@ -190,23 +187,70 @@ header.site form {
   gap: var(--space-2);
 }
 
-/* The signed-in person's name, with their PCO organization (church) name
-   above it when known (see Session.OrganizationName - it's not always
-   available) - stacked rather than run together inline so it reads as
-   "which church, which person" at a glance instead of one long string. */
-.account {
-  display: flex;
-  flex-direction: column;
-  line-height: var(--leading-tight);
-}
-
+/* The signed-in person's org name (see Session.OrganizationName - it's
+   not always available), shown inside the account dropdown's popup menu
+   (accountMenuContent, layout.templ) above the Account link - the
+   person's own name is on the dropdown's toggle button itself
+   (accountToggleContent), not repeated in here. */
 .account-org {
   font-size: var(--text-xs);
   color: var(--muted);
 }
 
-.account-person {
-  font-size: var(--text-md);
+/* The account dropdown's popup contents (accountMenuContent, layout.templ)
+   - reuses .nav-dropdown-menu's own column layout and its "a" styling
+   (disclosure.css) for the Account link and logout form already, so only
+   the two items that aren't plain links need anything here: the theme
+   toggle (a small square icon button, not a full-width menu row) gets a
+   little room below it before the org name/Account link/logout form
+   start, and the org name (a plain span, not a link) gets the same
+   left/right padding disclosure.css already gives ".nav-dropdown-menu a"
+   so it lines up with the items above and below it instead of sitting
+   flush against the menu's edge. Scoped to .site-actions specifically
+   (not a bare ".nav-dropdown-menu .theme-toggle") since the "Setup"
+   dropdown in .site-nav shares the same .nav-dropdown-menu class but
+   never contains a .theme-toggle or .account-org of its own. */
+.site-actions .nav-dropdown-menu .theme-toggle {
+  margin-bottom: var(--space-1);
+}
+
+.site-actions .nav-dropdown-menu .account-org {
+  display: block;
+  padding: var(--space-1) calc(var(--space-2) + 0.1rem);
+}
+
+/* The persistent page-bottom strip (layout.templ's <footer class=
+   "site-footer">) - Feedback and Help, on every authenticated page. Help
+   deliberately lives here rather than the header - see
+   docs/plans/in-progress/help-system-and-nav-consolidation-plan.md for
+   why that's worth the scroll-to-reach tradeoff. Kept deliberately quiet
+   (muted link color, small Help button, a top border separating it from
+   whatever page content precedes it) so it reads as a standing utility
+   strip, not another action competing with the page's own. */
+.site-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-4);
+  margin-top: var(--space-6);
+  padding: var(--space-4) var(--space-6);
+  border-top: 1px solid var(--border);
+}
+
+.site-footer a {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  text-decoration: none;
+}
+
+.site-footer a:hover {
+  color: var(--accent);
+}
+
+.site-footer .button {
+  padding: var(--space-1) var(--space-3);
+  min-height: 0;
+  font-size: var(--text-sm);
 }
 
 /* Two-state (not three-way) toggle: it starts wherever the system
