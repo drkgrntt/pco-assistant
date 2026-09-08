@@ -104,3 +104,23 @@
     animation: none;
   }
 }
+
+/* Generic 2-up/1-up layout for a pair of same-topic sections that read
+   better side by side on a wide viewport than stacked full-width - the
+   Account page's Identity+Billing pairing and its two Data & Caches
+   cache cards (account.templ) are the first two callers. Same auto-fit/
+   minmax mechanism as .team-groups-grid above (empty tracks collapse, so
+   two children land as two even columns as soon as the viewport has room
+   for both at 20rem+ each, one column below that - no separate mobile
+   breakpoint to keep in sync), just under a page-neutral name since these
+   callers aren't roster team groups. align-items: start, unlike
+   .team-groups-grid's implicit stretch: paired sections here are rarely
+   the same height (Identity is a few short lines, Billing can be a full
+   plan-picker card), and stretching the shorter one to match would just
+   add empty space inside it. */
+.card-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+  gap: var(--space-4);
+  align-items: start;
+}

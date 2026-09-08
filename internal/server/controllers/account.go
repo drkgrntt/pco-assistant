@@ -34,7 +34,7 @@ func (ac *AccountController) RegisterRoutes(router fiber.Router) {
 	group.Get("/", ac.AccountPage)
 	group.Post("/cache/song-info", ac.ClearSongInfoCache)
 	group.Post("/cache/person-data", ac.ClearPersonDataCache)
-	group.Post("/sessions/:personID/sign-out", ac.SignOutPerson)
+	group.Post("/sessions/:sessionID/sign-out", ac.SignOutSession)
 }
 
 // buildAccountData resolves everything the page needs except the
@@ -56,6 +56,7 @@ func (ac *AccountController) buildAccountData(c *fiber.Ctx) views.AccountData {
 	} else {
 		for _, sess := range sessions {
 			data.Sessions = append(data.Sessions, views.AccountSession{
+				SessionID:  sess.ID,
 				PersonID:   sess.PersonID,
 				PersonName: sess.PersonName,
 				CreatedAt:  sess.CreatedAt,
@@ -117,23 +118,34 @@ func (ac *AccountController) ClearPersonDataCache(c *fiber.Ctx) error {
 	return render(c, views.AccountCacheBody(data))
 }
 
-// SignOutPerson ends every live session the person named by the :personID
-// param has in this org (auth.Store.DeleteSessionsForPerson) - the "sign
-// this person out" action on the Account page's "who's signed in" list.
-// Immediately frees that person's billed seat instead of waiting for their
-// session to age out (see auth.SeatCounts). No separate authorization
-// check here beyond the usual org-scoping: every signed-in person for an
-// org is already, by this product's own definition, a full admin (see
-// README's Pricing section), so any of them can sign any other out.
-// Re-renders just the sessions fragment (id="account-sessions-body"),
-// same htmx-target pattern as the two cache-clear handlers above.
-func (ac *AccountController) SignOutPerson(c *fiber.Ctx) error {
-	orgID := middleware.CurrentOrganizationID(c)
-	personID := c.Params("personID")
+// SignOutSession ends exactly the one live session named by the
+// :sessionID param (auth.Store.DeleteSessionByID) - the "Sign out" action
+// on one row of the Account page's "who's signed in" list. Deliberately
+// keyed off the session's own id rather than PersonID: a person signed in
+// on two devices renders two rows sharing one PersonID, and the previous
+// person-keyed version (auth.Store.DeleteSessionsForPerson, since removed)
+// deleted *every* session that person had no matter which row's button
+// was clicked - see AccountSession's doc comment for the same bug from the
+// view-model side. Immediately frees a seat if this was the only session
+// that person had (see auth.SeatCounts), rather than waiting for it to age
+// out.
+//
+// No org-membership check on the id itself (DeleteSessionByID isn't
+// org-scoped) - it doesn't need one: the id is a SHA-256 hash of a random
+// 32-byte token (see hashToken), so the only realistic way to have one at
+// all is to already be looking at this org's own "who's signed in" table,
+// which RequireActiveOrganization has already gated. Beyond that, no
+// separate authorization check: every signed-in person for an org is
+// already, by this product's own definition, a full admin (see README's
+// Pricing section), so any of them can sign any other session out. Re-
+// renders just the sessions fragment (id="account-sessions-body"), same
+// htmx-target pattern as the two cache-clear handlers above.
+func (ac *AccountController) SignOutSession(c *fiber.Ctx) error {
+	sessionID := c.Params("sessionID")
 
-	if _, err := ac.authStore.DeleteSessionsForPerson(c.Context(), orgID, personID); err != nil {
+	if err := ac.authStore.DeleteSessionByID(c.Context(), sessionID); err != nil {
 		data := ac.buildAccountData(c)
-		data.SignOutErr = "signing that person out: " + err.Error()
+		data.SignOutErr = "signing that session out: " + err.Error()
 		return render(c, views.AccountSessionsBody(data))
 	}
 

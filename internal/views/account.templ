@@ -14,21 +14,30 @@ import (
 templ Account(personName, organizationName string, data AccountData) {
 	@Layout("Account", personName, organizationName) {
 		<h1>Account</h1>
-		@components.Card("Identity") {
-			<p class="muted">Signed in as { personName }.</p>
-			<p class="muted">Organization: { organizationName }.</p>
-			if data.OrganizationID != "" {
-				<p class="muted">Planning Center organization id: { data.OrganizationID }.</p>
+		<!--
+			Identity and Billing are both "who/what is this account" info, so
+			they lay out side by side on a wide viewport (.card-columns,
+			card.css) instead of each getting its own full-width stack -
+			stacks back to one column on mobile automatically.
+		-->
+		<div class="card-columns">
+			@components.Card("Identity") {
+				<p class="muted">Signed in as { personName }.</p>
+				<p class="muted">Organization: { organizationName }.</p>
+				if data.OrganizationID != "" {
+					<p class="muted">Planning Center organization id: { data.OrganizationID }.</p>
+				}
 			}
-		}
+			<div>
+				<h2>Billing</h2>
+				@BillingBody(data.Billing)
+			</div>
+		</div>
 		<h2>Getting started</h2>
 		<p class="muted">A short walkthrough of what Resonance does and why - worth another look after joining an existing org, or any time as a refresher. The setup checklist itself always lives on the home page.</p>
 		<p class="muted">Look for <strong>Help</strong> at the bottom of any page for a quick tour of what's there.</p>
-		<h2>Billing</h2>
-		@BillingBody(data.Billing)
 		<h2>Data &amp; Caches</h2>
 		@AccountCacheBody(data)
-		<h2>Install this app</h2>
 		@AccountInstallBody()
 		<h2>Who's signed in</h2>
 		@AccountSessionsBody(data)
@@ -54,51 +63,57 @@ templ AccountCacheBody(data AccountData) {
 			storage; it's automatically re-collected from Planning Center the
 			next time it's actually needed.
 		</p>
-		@components.Card("Song info cache") {
-			if data.SongInfoCacheErr != "" {
-				<p class="error">{ data.SongInfoCacheErr }</p>
+		<!-- Same reasoning as Account's Identity/Billing pairing above - both
+			 cards are "cached local copy of PCO data," so side by side on a
+			 wide viewport (.card-columns, card.css) reads better than a full
+			 stack. -->
+		<div class="card-columns">
+			@components.Card("Song info cache") {
+				if data.SongInfoCacheErr != "" {
+					<p class="error">{ data.SongInfoCacheErr }</p>
+				}
+				if data.SongInfoCacheMsg != "" {
+					<p class="success">{ data.SongInfoCacheMsg }</p>
+				}
+				<p class="muted">
+					Clears every song's cached key, tempo, meter, and length info.
+					Not destructive - it's just removing some data we have sitting
+					on top so it can be re-collected from PCO automatically, in the
+					background, as sets get built.
+				</p>
+				<form
+					hx-post="/account/cache/song-info"
+					hx-target="#account-cache-body"
+					hx-swap="outerHTML"
+					hx-confirm="This only clears this app's local cache of song key/tempo/meter/length info - it does not touch Planning Center or any real scheduling data. Everything gets automatically re-collected from Planning Center the next time it's needed. Continue?"
+				>
+					<button type="submit">Clear song info cache</button>
+				</form>
 			}
-			if data.SongInfoCacheMsg != "" {
-				<p class="success">{ data.SongInfoCacheMsg }</p>
+			@components.Card("Person data cache") {
+				if data.PersonDataCacheErr != "" {
+					<p class="error">{ data.PersonDataCacheErr }</p>
+				}
+				if data.PersonDataCacheMsg != "" {
+					<p class="success">{ data.PersonDataCacheMsg }</p>
+				}
+				<p class="muted">
+					Clears every person's cached blockout and assignment-history
+					info used for scheduling warnings on the Team roster. Not
+					destructive - it's just removing some data we have sitting on
+					top so it can be re-collected from PCO the next time it's
+					needed.
+				</p>
+				<form
+					hx-post="/account/cache/person-data"
+					hx-target="#account-cache-body"
+					hx-swap="outerHTML"
+					hx-confirm="This only clears this app's local cache of per-person blockout/assignment-history info - it does not touch Planning Center or any real scheduling data. Everything gets automatically re-collected from Planning Center the next time it's needed. Continue?"
+				>
+					<button type="submit">Clear person data cache</button>
+				</form>
 			}
-			<p class="muted">
-				Clears every song's cached key, tempo, meter, and length info.
-				Not destructive - it's just removing some data we have sitting
-				on top so it can be re-collected from PCO automatically, in the
-				background, as sets get built.
-			</p>
-			<form
-				hx-post="/account/cache/song-info"
-				hx-target="#account-cache-body"
-				hx-swap="outerHTML"
-				hx-confirm="This only clears this app's local cache of song key/tempo/meter/length info - it does not touch Planning Center or any real scheduling data. Everything gets automatically re-collected from Planning Center the next time it's needed. Continue?"
-			>
-				<button type="submit">Clear song info cache</button>
-			</form>
-		}
-		@components.Card("Person data cache") {
-			if data.PersonDataCacheErr != "" {
-				<p class="error">{ data.PersonDataCacheErr }</p>
-			}
-			if data.PersonDataCacheMsg != "" {
-				<p class="success">{ data.PersonDataCacheMsg }</p>
-			}
-			<p class="muted">
-				Clears every person's cached blockout and assignment-history
-				info used for scheduling warnings on the Team roster. Not
-				destructive - it's just removing some data we have sitting on
-				top so it can be re-collected from PCO the next time it's
-				needed.
-			</p>
-			<form
-				hx-post="/account/cache/person-data"
-				hx-target="#account-cache-body"
-				hx-swap="outerHTML"
-				hx-confirm="This only clears this app's local cache of per-person blockout/assignment-history info - it does not touch Planning Center or any real scheduling data. Everything gets automatically re-collected from Planning Center the next time it's needed. Continue?"
-			>
-				<button type="submit">Clear person data cache</button>
-			</form>
-		}
+		</div>
 	</div>
 }
 
@@ -117,9 +132,13 @@ templ AccountCacheBody(data AccountData) {
 // reveals exactly one of them, or hides the whole #account-install-section
 // wrapper entirely when neither install path applies (unsupported
 // browser, or already installed - navigator.standalone/display-mode:
-// standalone).
+// standalone). The "Install this app" heading lives *inside* that same
+// wrapper (not above it, in Account) specifically so it hides in lockstep
+// with the rest of the section - it used to sit outside and render
+// orphaned, on its own, once already installed.
 templ AccountInstallBody() {
 	<div id="account-install-section">
+		<h2>Install this app</h2>
 		@components.Card("Add Resonance to your home screen") {
 			<p class="muted">
 				Installing Resonance puts it in its own window on your home
@@ -139,8 +158,11 @@ templ AccountInstallBody() {
 
 // AccountSessionsBody is both the initial-render fragment and the htmx
 // swap target (id="account-sessions-body") for the "who's signed in" list
-// and its per-person sign-out action - same shape as AccountCacheBody
-// above.
+// and its per-row sign-out action - same shape as AccountCacheBody above.
+// Each row posts its own sess.SessionID, not PersonID, so signing out one
+// of a person's two devices doesn't also end the other (see
+// AccountSession's doc comment and AccountController.SignOutSession for
+// the bug this fixes).
 //
 // Not "danger"-styled (see publish_panel.templ for what that class is
 // reserved for - a genuinely irreversible action like Discard): signing
@@ -185,10 +207,10 @@ templ AccountSessionsBody(data AccountData) {
 								<td>{ sess.CreatedAt.Format("Jan 2, 2006 3:04 PM") }</td>
 								<td>
 									<form
-										hx-post={ fmt.Sprintf("/account/sessions/%s/sign-out", sess.PersonID) }
+										hx-post={ fmt.Sprintf("/account/sessions/%s/sign-out", sess.SessionID) }
 										hx-target="#account-sessions-body"
 										hx-swap="outerHTML"
-										hx-confirm={ fmt.Sprintf("This immediately ends %s's session - they'll need to sign in with Planning Center again to come back. Continue?", sess.PersonName) }
+										hx-confirm={ fmt.Sprintf("This immediately ends %s's session on this device - they'll need to sign in with Planning Center again to come back on it. Any other device they're signed in on is unaffected. Continue?", sess.PersonName) }
 									>
 										<button type="submit">Sign out</button>
 									</form>
