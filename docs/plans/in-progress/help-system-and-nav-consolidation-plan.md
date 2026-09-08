@@ -134,6 +134,23 @@ Next to page 2; pages 2-7 each get a Next to the following page; page 8
 (Vocal Range, the person one) is the end of the chain - unchanged, no Next
 link, same single "Got it" button it always had.
 
+**The Home tour leads into the chain too** (added right after the above,
+same day): `onboardingTour`'s last step ("Get started", `home.templ`) got
+its own "Next: Song Relationships →" link, using the exact same
+`setPageHelpForce()`/`pageHelpForce` mechanism - no new plumbing. Makes the
+Home tour this chain's de facto step 0: someone can go straight from "here's
+what this app does" into walking every setup page in sequence, still
+entirely opt-in (`Got it, thanks!` still just dismisses and stays on Home).
+Placed inside the step's own `.tour-step` content rather than threaded
+through `.tour-actions`/`.tour-actions-nav` - those are shared across all 4
+of the Home tour's steps via `renderTourStep`'s generic back/next/done
+toggling, and a step-3-only third action there would mean special-casing
+that generic logic for one link; a link inside the step's own markup gets
+shown/hidden for free by the same `.tour-step`/`hidden` toggle every other
+step's content already relies on. The Build tour was deliberately left
+alone - not asked for, and it's a separate track from the setup-page
+walkthrough.
+
 **Mechanism**: since this is a full page navigation (no SPA here, no htmx
 swap for a whole-page nav like this), "click Next, land on the next page
 with its own Help dialog already open" needs a value that survives the

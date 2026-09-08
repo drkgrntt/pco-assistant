@@ -179,7 +179,10 @@ templ RelationshipsTable(relationships []scheduling.SongRelationship, songTitles
 // following one, none has a Back: page 1 (here) gets a Next to page 2,
 // pages 2-7 each get a Next to the following page, page 8 (Vocal Range, the
 // person one) ends the chain with no Next at all, same as before this
-// addition.
+// addition. The Home tour's own last step ("Get started", onboardingTour,
+// home.templ) got the same "Next: Song Relationships ->" link right after
+// this shipped, making it this chain's de facto step 0 - same mechanism,
+// no changes needed here.
 //
 // The mechanism is a full page navigation, not an htmx swap or in-dialog
 // step, so "click Next, land on the next page with its own Help dialog
