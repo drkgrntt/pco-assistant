@@ -71,7 +71,7 @@ templ SongVocalRanges(personName, organizationName string, songs []pco.SongData,
 				</label>
 				<button
 					type="button"
-					class="icon-btn"
+					class="icon-btn play"
 					aria-label="Play lowest note"
 					title="Play lowest note"
 					onclick="playVocalNoteFromInput('song-vocal-range-lowest-input')"
@@ -86,7 +86,7 @@ templ SongVocalRanges(personName, organizationName string, songs []pco.SongData,
 				</label>
 				<button
 					type="button"
-					class="icon-btn"
+					class="icon-btn play"
 					aria-label="Play highest note"
 					title="Play highest note"
 					onclick="playVocalNoteFromInput('song-vocal-range-highest-input')"
@@ -280,7 +280,7 @@ templ vocalRangeLine(label, key string, pair vocalRangeNotePair) {
 		{ formatVocalNoteDisplay(pair.LowPitchClass, pair.LowOctave) }
 		<button
 			type="button"
-			class="icon-btn"
+			class="icon-btn play"
 			aria-label={ fmt.Sprintf("Play %s lowest note", label) }
 			title={ fmt.Sprintf("Play %s lowest note", label) }
 			onclick={ templ.JSFuncCall("playVocalTone", pair.LowPitchClass, pair.LowOctave) }
@@ -291,7 +291,7 @@ templ vocalRangeLine(label, key string, pair vocalRangeNotePair) {
 		{ formatVocalNoteDisplay(pair.HighPitchClass, pair.HighOctave) }
 		<button
 			type="button"
-			class="icon-btn"
+			class="icon-btn play"
 			aria-label={ fmt.Sprintf("Play %s highest note", label) }
 			title={ fmt.Sprintf("Play %s highest note", label) }
 			onclick={ templ.JSFuncCall("playVocalTone", pair.HighPitchClass, pair.HighOctave) }
