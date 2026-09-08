@@ -1026,23 +1026,22 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 									</form>
 								}
 								@quickActionRow(fmt.Sprintf("%d", row.Song.ID), "vocal-range", fmt.Sprintf("Set vocal range for %q", row.Song.Title), 4) {
+									{{ vrFields := vocalRangeFormFields(row.Song.VocalRange) }}
 									<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/song-vocal-range", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
 										<input type="hidden" name="song_id" value={ row.Song.SongID }/>
 										<label>
 											Measured in key
-											<input type="text" name="reference_key" placeholder="e.g. G, Bb, F#m" list="key-options" required/>
+											<input type="text" name="reference_key" placeholder="e.g. G, Bb, F#m" list="key-options" value={ vrFields["reference_key"] } required/>
 										</label>
 										@musicalKeyOptions()
-										<label>
-											Lowest note
-											<input type="text" name="lowest_note" placeholder="e.g. G3" list="vocal-note-options" required/>
-										</label>
-										<label>
-											Highest note
-											<input type="text" name="highest_note" placeholder="e.g. D5" list="vocal-note-options" required/>
-										</label>
+										@vocalRangeNoteField("Lowest note", "lowest_note", "e.g. G3", "vocal-note-options", fmt.Sprintf("quick-action-vocal-range-lowest-%s", row.Song.SongID), "Play lowest note", vrFields["lowest_note"])
+										@vocalRangeNoteField("Highest note", "highest_note", "e.g. D5", "vocal-note-options", fmt.Sprintf("quick-action-vocal-range-highest-%s", row.Song.SongID), "Play highest note", vrFields["highest_note"])
 										@vocalNoteOptions()
-										<button type="submit" class="primary">Save range</button>
+										if row.Song.VocalRange.ID != 0 {
+											<button type="submit" class="primary">Update range</button>
+										} else {
+											<button type="submit" class="primary">Save range</button>
+										}
 									</form>
 								}
 							}
@@ -1322,13 +1321,23 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 					</form>
 				}
 				@quickAddItem("Set song vocal range") {
+					<!--
+						Unlike the other quick-add forms, this one's song picker also
+						drives fillVocalRangeFromSongSelect (scheduling.js) on change:
+						each <option> below carries its song's existing range (if any)
+						as a data-edit-fields attribute (same JSON shape/helper editRow
+						already reads, editFieldsAttr) so picking an already-ranged song
+						pre-fills the fields below and swaps the submit button to
+						"Update range" - see vocalRangeFormFields' own doc comment
+						(quick_action.templ) for why.
+					-->
 					<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/song-vocal-range", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
 						<label>
 							Song
-							<select name="song_id" required>
+							<select name="song_id" required onchange="fillVocalRangeFromSongSelect(this)">
 								<option value="" selected disabled>Choose a song</option>
 								for _, song := range data.AllSongs {
-									<option value={ song.ID }>{ song.Attributes.Title }</option>
+									<option value={ song.ID } data-edit-fields={ editFieldsAttr(vocalRangeFormFields(data.AllSongVocalRanges[song.ID])) }>{ song.Attributes.Title }</option>
 								}
 							</select>
 						</label>
@@ -1337,14 +1346,8 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 							<input type="text" name="reference_key" placeholder="e.g. G, Bb, F#m" list="key-options" required/>
 						</label>
 						@musicalKeyOptions()
-						<label>
-							Lowest note
-							<input type="text" name="lowest_note" placeholder="e.g. G3" list="vocal-note-options" required/>
-						</label>
-						<label>
-							Highest note
-							<input type="text" name="highest_note" placeholder="e.g. D5" list="vocal-note-options" required/>
-						</label>
+						@vocalRangeNoteField("Lowest note", "lowest_note", "e.g. G3", "vocal-note-options", "quick-add-vocal-range-lowest-input", "Play lowest note", "")
+						@vocalRangeNoteField("Highest note", "highest_note", "e.g. D5", "vocal-note-options", "quick-add-vocal-range-highest-input", "Play highest note", "")
 						@vocalNoteOptions()
 						<button type="submit" class="primary">Save range</button>
 					</form>

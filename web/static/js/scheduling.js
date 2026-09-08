@@ -1149,6 +1149,20 @@ function resetSetupForm(form) {
   }
 }
 
+// applyEditFields writes a data-edit-fields-style JSON object (plain
+// form-field name -> value, see editFieldsAttr) into form's matching named
+// fields - the field-filling core editRow below uses, pulled out so
+// fillVocalRangeFromSongSelect (a <select>-driven prefill, not a button
+// click) can reuse the exact same fill logic instead of duplicating it.
+function applyEditFields(form, fields) {
+  Object.keys(fields).forEach(function (name) {
+    var el = form.elements.namedItem(name);
+    if (el) {
+      el.value = fields[name];
+    }
+  });
+}
+
 // editRow fills a setup page's create/edit form from a table row's Edit
 // button and switches it into "editing" mode, so the next submit updates
 // this row (via its now-populated hidden "id" field) instead of creating a
@@ -1162,13 +1176,7 @@ function editRow(button) {
     return;
   }
 
-  var fields = JSON.parse(button.dataset.editFields || "{}");
-  Object.keys(fields).forEach(function (name) {
-    var el = form.elements.namedItem(name);
-    if (el) {
-      el.value = fields[name];
-    }
-  });
+  applyEditFields(form, JSON.parse(button.dataset.editFields || "{}"));
 
   var people = JSON.parse(button.dataset.editPeople || "{}");
   Object.keys(people).forEach(function (suffix) {
@@ -1215,6 +1223,44 @@ function cancelSetupEdit(button) {
   var details = form.closest("details");
   if (details) {
     details.open = false;
+  }
+}
+
+// fillVocalRangeFromSongSelect pre-fills the Build page's quick-add "Set
+// song vocal range" form from whichever song its own picker just selected
+// - docs/issues.md: "fill in the form with the existing data and make the
+// save an update if applicable" (scheduling.SetSongVocalRange already
+// upserts by song id regardless of what the form shows - this just makes
+// the form honestly reflect that a song already has a range on file,
+// mirroring editRow's fill-and-relabel behavior above but triggered by a
+// <select>'s change instead of an Edit button's click). The selected
+// <option>'s own data-edit-fields (same JSON shape/helper editRow already
+// reads, editFieldsAttr/vocalRangeFormFields) carries reference_key/
+// lowest_note/highest_note when that song has a range on file - an empty
+// object otherwise, in which case every field is cleared back to blank
+// instead of keeping some previously-selected song's stale values.
+function fillVocalRangeFromSongSelect(select) {
+  var form = select.closest("form");
+  if (!form) {
+    return;
+  }
+
+  var opt = select.selectedOptions[0];
+  var fields = opt ? JSON.parse(opt.dataset.editFields || "{}") : {};
+  applyEditFields(form, {
+    reference_key: fields.reference_key || "",
+    lowest_note: fields.lowest_note || "",
+    highest_note: fields.highest_note || "",
+  });
+
+  var submitBtn = form.querySelector("button[type=submit]");
+  if (submitBtn) {
+    if (!submitBtn.dataset.createLabel) {
+      submitBtn.dataset.createLabel = submitBtn.textContent;
+    }
+    submitBtn.textContent = fields.reference_key
+      ? "Update range"
+      : submitBtn.dataset.createLabel;
   }
 }
 

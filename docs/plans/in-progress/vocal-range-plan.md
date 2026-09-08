@@ -205,6 +205,62 @@ feedback rather than this plan's own original scope:**
   G3-D5 (in this key)" line (Phase 2, unchanged) is still the only thing
   permanently visible on the card itself.
 
+**Play buttons added to the Build page's two vocal-range forms, follow-up
+the same day (2026-09-08)** - Part C above shipped without the
+tap-to-hear play buttons the dedicated setup pages have, specifically to
+dodge a real problem: `playVocalNoteFromInput` (`scheduling.js`) reads its
+target input by a fixed DOM id, which the setup pages get away with since
+each renders exactly one such form - the Build page's kebab-menu form
+renders once *per song row*, so a fixed id would collide across rows.
+Fixed by a new shared component, `vocalRangeNoteField`
+(`internal/views/scheduling/quick_action.templ`, alongside
+`quickActionRow`/`quickAddItem`): label + note input + play button
+together, with the input's id supplied by the caller so it can be made
+unique per instance - `"quick-action-vocal-range-<lowest|highest>-" +
+row.Song.SongID` for the per-row kebab form, `"quick-add-vocal-range-
+<lowest|highest>-input"` for the quick-add panel's one singleton form.
+Both of the Build page's vocal-range forms now use it in place of their
+plain `<input>` pair.
+
+**Build page vocal-range forms pre-fill and act as an update, another
+follow-up the same day (2026-09-08)** - docs/issues.md: "I don't feel
+like we need multiple vocal ranges since we can calculate them based on
+the key... fill in the form with the existing data and make the save an
+update if applicable. This might change once we get into different
+arrangements, but for now, we can assume it's the same." The save side
+already was an update - `scheduling.SetSongVocalRange` upserts by
+(organization, song_id) regardless of what the form showed - the gap was
+purely that neither Build-page form reflected a song's existing range at
+all, so resubmitting looked like (and read as) creating a second,
+conflicting one. Fixed with a new `SetSongView.VocalRange` field (the raw
+stored `scheduling.SongVocalRange`, zero-valued when none exists) and a
+matching `SetBuilderData.AllSongVocalRanges` map (the exact same
+`vocalRangesBySong` map `buildSetBuilderData` already fetches, just also
+exposed to the view layer), plus a new `vocalRangeFormFields` helper
+(`quick_action.templ`) that turns a stored range into its as-measured
+`reference_key`/`lowest_note`/`highest_note` form values (reusing
+`scheduling.EffectiveVocalRange`/`PitchClassAndOctave` and the existing
+`formatVocalNoteDisplay`, the same trick `computeVocalRangeNotePair`
+already uses for the setup page's own "As measured" line) - shaped as a
+plain `map[string]string`, the exact same JSON shape `editFieldsAttr`/
+`editRow` already use for every other setup page's edit flow, not a new
+mechanism. The kebab-menu row form (already scoped to one known song)
+renders these values directly and switches its own submit button to
+"Update range" server-side when a range exists; the quick-add panel's
+form (a generic song picker, not scoped to one song) can't know which
+song ahead of render, so each `<option>` instead carries its own song's
+fields as a `data-edit-fields` attribute, and a new
+`fillVocalRangeFromSongSelect` (`scheduling.js`) - wired to the select's
+`onchange` - reads the chosen option's fields back out and applies them
+via a newly-extracted `applyEditFields` helper (the same fill loop
+`editRow` already did inline, pulled out so both call sites share it),
+relabeling the submit button the same "cache the original label, restore
+it if blank" way `editRow` already does. The "different arrangements"
+caveat in the request is deliberately not addressed here - this still
+assumes one range per song, same as Phases 1-2's whole schema; revisiting
+that is its own future decision, not something this fix tries to
+anticipate.
+
 Written 2026-09-06, expanding two related `docs/ideas.md` bullets into one
 coherent build plan: **"Vocal range per vocalist"** (People section,
 ~line 462) and **"Song vocal range (relative to key)"** (Songs section,

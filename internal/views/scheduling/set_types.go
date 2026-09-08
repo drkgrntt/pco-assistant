@@ -174,6 +174,17 @@ type SetBuilderData struct {
 	RelationshipTypes []scheduling.SongRelationshipType
 	RoleTypes         []scheduling.SongRoleType
 
+	// AllSongVocalRanges is the same song id -> stored range map
+	// buildSetBuilderData already fetches for the detail card/mismatch
+	// warning (vocalRangesBySong), also exposed here so the quick-add
+	// panel's "Set song vocal range" form can pre-fill from whichever song
+	// its own picker selects (fillVocalRangeFromSongSelect, scheduling.js,
+	// reading each <option>'s own vocalRangeFormFields-built
+	// data-edit-fields attribute) - see SetSongView.VocalRange's doc
+	// comment for why this matters. A song id missing from this map simply
+	// has no range on file yet.
+	AllSongVocalRanges map[string]scheduling.SongVocalRange
+
 	// TagValuesByCategory backs the "browse by tag" chips (SetBuilderBody,
 	// next to the role-filter row) - category code -> every distinct value
 	// actually tagged on some song in this org, sourced from
@@ -379,6 +390,20 @@ type SetSongView struct {
 	VocalRangeWarningLabel   string
 	VocalRangeWarningMessage string
 	VocalRangeWarningIsTip   bool
+
+	// VocalRange is this song's stored vocal range row, zero-valued
+	// (ID == 0) when none is on file - unlike VocalRangeDisplay above
+	// (already transposed for display), this is the raw stored row, used
+	// to pre-fill the Build page's own "Set vocal range" forms (the
+	// kebab-menu row form, set_builder.templ) with the as-measured values
+	// (vocalRangeFormFields, quick_action.templ) so resubmitting reads and
+	// acts like an edit rather than a second, conflicting entry -
+	// scheduling.SetSongVocalRange already upserts by (organization,
+	// song_id) regardless, this just makes the form honestly reflect that
+	// (docs/issues.md: "I don't feel like we need multiple vocal ranges
+	// since we can calculate them based on the key... fill in the form
+	// with the existing data and make the save an update if applicable").
+	VocalRange scheduling.SongVocalRange
 
 	// TransitionNotePrompts is the resurfacing prompt(s) for this row - the
 	// latest debrief/talking-point note for this song alone (single-song),

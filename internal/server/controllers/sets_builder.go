@@ -203,6 +203,7 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 	data.RelationshipTypes, _ = sc.store.ListSongRelationshipTypes(ctx)
 	data.RoleTypes = roleTypes
 	data.TagValuesByCategory, _ = sc.store.DistinctSongTagValues(ctx, organizationID)
+	data.AllSongVocalRanges = vocalRangesBySong
 
 	inSet := make(map[string]bool, len(setSongs))
 	for _, ss := range setSongs {
@@ -1781,6 +1782,7 @@ func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizati
 			ConflictTitles:    conflictTitlesBySong[ss.SongID],
 			Attachments:       songAttachmentViews(attachmentCache[ss.SongID]),
 			VocalRangeDisplay: songVocalRangeDisplay(vocalRangesBySong, ss.SongID, key),
+			VocalRange:        vocalRangesBySong[ss.SongID],
 			LeaderPersonID:    ss.LeaderPersonID,
 			LeaderPersonName:  titleOrID(leaderNames, ss.LeaderPersonID),
 		}

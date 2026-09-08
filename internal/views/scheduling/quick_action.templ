@@ -3,6 +3,7 @@ package scheduling
 import (
 	"strconv"
 
+	"pco-assistant/internal/scheduling"
 	"pco-assistant/internal/views/components"
 )
 
@@ -37,4 +38,72 @@ templ quickAddItem(label string) {
 		<h4>{ label }</h4>
 		{ children... }
 	</div>
+}
+
+// vocalRangeNoteField renders one labeled note-text-input plus its own
+// tap-to-hear play button (playVocalNoteFromInput, scheduling.js) - the
+// same field+play-button pairing song_vocal_range.templ/vocal_range.templ
+// already use on the dedicated setup pages, factored out here for the
+// Build page's own vocal-range forms (the quick-add panel's singleton form
+// and each row's kebab-menu "Set vocal range" form). Those two Build-page
+// forms originally shipped without play buttons at all (Part C,
+// docs/plans/in-progress/vocal-range-plan.md) specifically to dodge a real
+// problem: playVocalNoteFromInput reads its target by a fixed DOM id
+// (document.getElementById), which the setup pages get away with because
+// each only ever renders one such form - the Build page renders one
+// kebab-menu vocal-range form *per song row*, so a fixed id would collide
+// across rows and every play button would read whichever row happened to
+// render first. inputID is the caller's job to make unique per instance
+// (see the two call sites below) rather than something this component can
+// derive on its own.
+templ vocalRangeNoteField(label, fieldName, placeholder, listID, inputID, playLabel, value string) {
+	<div class="form-field-group">
+		<label>
+			{ label }
+			<input id={ inputID } type="text" name={ fieldName } placeholder={ placeholder } list={ listID } value={ value } required/>
+		</label>
+		<button
+			type="button"
+			class="icon-btn play"
+			aria-label={ playLabel }
+			title={ playLabel }
+			onclick={ templ.JSFuncCall("playVocalNoteFromInput", inputID) }
+		>
+			@components.IconPlay()
+		</button>
+	</div>
+}
+
+// vocalRangeFormFields returns songVocalRange's as-measured
+// reference_key/lowest_note/highest_note as a data-edit-fields-style map
+// (see editFieldsAttr/editRow, edit_fields.go/scheduling.js) - an empty
+// map when songVocalRange is the zero value (ID == 0, "no range on file")
+// or its stored reference key somehow fails to parse (defensive - it
+// already parsed once at write time). Computed with the reference key as
+// its own target (scheduling.EffectiveVocalRange), which reconstructs the
+// range exactly as it was originally measured, the same trick
+// computeVocalRangeNotePair (song_vocal_range.templ) uses for its own "As
+// measured" line. Backs both Build-page vocal-range forms' pre-fill: the
+// kebab-menu row form renders these values directly (it already knows
+// which song), the quick-add panel's form reads them back out of each
+// <option>'s own data-edit-fields attribute via
+// fillVocalRangeFromSongSelect (scheduling.js) once a song is picked -
+// see docs/issues.md: "fill in the form with the existing data and make
+// the save an update if applicable" (scheduling.SetSongVocalRange already
+// upserts by song id regardless of what the form shows).
+func vocalRangeFormFields(vr scheduling.SongVocalRange) map[string]string {
+	if vr.ID == 0 {
+		return map[string]string{}
+	}
+	lowAbs, highAbs, ok := scheduling.EffectiveVocalRange(vr.ReferenceKey, vr.LowOffsetSemitones, vr.HighOffsetSemitones, vr.ReferenceKey)
+	if !ok {
+		return map[string]string{}
+	}
+	lowPC, lowOct := scheduling.PitchClassAndOctave(lowAbs)
+	highPC, highOct := scheduling.PitchClassAndOctave(highAbs)
+	return map[string]string{
+		"reference_key": vr.ReferenceKey,
+		"lowest_note":   formatVocalNoteDisplay(lowPC, lowOct),
+		"highest_note":  formatVocalNoteDisplay(highPC, highOct),
+	}
 }
