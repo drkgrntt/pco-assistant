@@ -62,50 +62,61 @@ templ Home(personName, organizationName string, data HomeData) {
 		</nav>
 
 		<h2>Setup</h2>
-		<p class="muted">Configure once, then the workflows above put it to use - relationships, roles, and scheduling preferences for songs and people.</p>
+		<p class="muted">
+			{ fmt.Sprintf("%d of %d set up so far.", data.Onboarding.Done, data.Onboarding.Trackable) }
+			Configure once, then the workflows above put it to use - each item below feeds a warning or suggestion on the Build page, grouped by which promise it serves (see <a href="/how-it-works">how it works</a>).
+		</p>
 		<!--
-			Reuses .plan-list's card-row treatment (already used for "Needs
-			attention" above) rather than the old quick-links-secondary's
-			plain wrapping link row - that had no room for a description
-			under each link, only the link text itself.
+			Checklist form replaced the old flat Setup link list, then a
+			since-removed dismissible nudge card, per Derek's "weak sauce"
+			feedback - see
+			docs/plans/in-progress/onboarding-and-ambient-framing-plan.md's
+			Phase 3. Reuses .plan-list's card-row treatment (already used
+			for "Needs attention" above); each item's Done state
+			(components.Badge) reflects real local data (HomeController.
+			buildOnboardingChecklist), not a guess - see
+			OnboardingItem.Trackable's doc comment for the one item (Position
+			Preferences) that can't be tracked and renders with no badge.
+			Grouped by the two docs/ideas.md Vision/positioning promises so
+			each item's "why" is legible, not just its "what" - an item that
+			genuinely serves both (vocal range) is split across both groups
+			by its own person-side/song-side halves rather than picked into
+			one arbitrarily, per that plan doc's own reasoning.
 		-->
-		<ul class="plan-list">
-			<li>
-				<a href="/scheduling/song-relationships">Song relationships</a>
-				<span class="muted">Flows well, same theme, or avoid pairing.</span>
-			</li>
-			<li>
-				<a href="/scheduling/song-roles">Song roles</a>
-				<span class="muted">Opener, response, or any role you add.</span>
-			</li>
-			<li>
-				<a href="/scheduling/song-tags">Song tags</a>
-				<span class="muted">Theme, scripture, and idea tags for search and filtering.</span>
-			</li>
-			<!--
-				Hidden once there's nothing pending there - the exact same
-				SuggestionCount fact the nudge line above already computes,
-				not a second lookup. Mirrors the nav dropdown's own version
-				of this (see layout.templ, middleware.PopulateNavState).
-			-->
-			if data.SuggestionCount > 0 {
-				<li>
-					<a href="/scheduling/song-tag-suggestions">Song tag suggestions</a>
-					<span class="muted">Review songs sharing a title word and tag them together.</span>
-				</li>
-			}
-			<li>
-				<a href="/scheduling/song-preferences">Song / person preferences</a>
-				<span class="muted">Note who's preferred or discouraged for a song.</span>
-			</li>
-			<li>
-				<a href="/scheduling/person-relationships">Person relationships</a>
-				<span class="muted">Works well, mentorship, or avoid pairing between people.</span>
-			</li>
-			<li>
-				<a href="/scheduling/position-preferences">Position preferences</a>
-				<span class="muted">How often someone wants to serve a position.</span>
-			</li>
-		</ul>
+		for _, group := range data.Onboarding.Groups {
+			<h3>{ group.Title }</h3>
+			<p class="muted">{ group.Intro }</p>
+			<ul class="plan-list">
+				for _, item := range group.Items {
+					<li>
+						<a href={ templ.URL(item.Href) }>{ item.Label }</a>
+						<span class="muted">{ item.Description }</span>
+						if item.Trackable {
+							if item.Done {
+								@components.Badge("published", "Done")
+							} else {
+								@components.Badge("status-pending", "Not set up")
+							}
+						}
+					</li>
+				}
+				<!--
+					Song Tag Suggestions isn't a one-time setup item (no
+					done/not-done state to track), so it stays outside the
+					checklist loop above - a review queue, appended only to
+					the service group and only while something's actually
+					waiting, same SuggestionCount fact the nudge paragraph
+					above already computes, not a second lookup. Mirrors the
+					nav dropdown's own version of this (see layout.templ,
+					middleware.PopulateNavState).
+				-->
+				if group.Title == "Protect the service" && data.SuggestionCount > 0 {
+					<li>
+						<a href="/scheduling/song-tag-suggestions">Song tag suggestions</a>
+						<span class="muted">Review songs sharing a title word and tag them together.</span>
+					</li>
+				}
+			</ul>
+		}
 	}
 }

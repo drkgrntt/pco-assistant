@@ -89,6 +89,19 @@ func (s *Store) PersonVocalRange(ctx context.Context, organizationID, personID s
 	return r, nil
 }
 
+// HasAnyPersonVocalRanges reports whether the organization has recorded at
+// least one person's vocal range - a cheap existence check for the home
+// page's setup checklist (see HomeController.buildHomeData and
+// docs/plans/in-progress/onboarding-and-ambient-framing-plan.md), same
+// shape as HasAnySongRelationships.
+func (s *Store) HasAnyPersonVocalRanges(ctx context.Context, organizationID string) (bool, error) {
+	var exists bool
+	err := s.db.QueryRowContext(ctx, `
+		SELECT EXISTS(SELECT 1 FROM person_vocal_ranges WHERE organization_id = $1)
+	`, organizationID).Scan(&exists)
+	return exists, err
+}
+
 // ListPersonVocalRanges returns every stored range for organizationID,
 // keyed by person id - a single bulk read for a whole page render rather
 // than one query per person, mirroring SongArrangementInfo's bulk-map

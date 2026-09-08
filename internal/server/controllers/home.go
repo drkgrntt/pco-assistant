@@ -125,6 +125,8 @@ func (hc *HomeController) buildHomeData(ctx context.Context, organizationID stri
 	suggestions := hc.schedulingController.buildSongTagSuggestionsData(ctx, organizationID)
 	data.SuggestionCount = len(suggestions.Suggestions)
 
+	data.Onboarding = hc.buildOnboardingChecklist(ctx, organizationID)
+
 	if org, err := hc.authStore.GetOrganization(ctx, organizationID); err == nil {
 		data.OrgStatus = org.Status
 		data.OrgPlan = org.Plan
@@ -137,4 +139,66 @@ func (hc *HomeController) buildHomeData(ctx context.Context, organizationID stri
 	}
 
 	return data
+}
+
+// buildOnboardingChecklist builds the home page's setup checklist (see
+// HomeData.Onboarding's doc comment) - eight cheap local-DB existence
+// checks (not PCO calls, so no rate-limit concern per
+// docs/pco-api-risks.md), one per setup category, run sequentially since
+// each is a single indexed EXISTS query, not worth fanning out via
+// scheduling.RunConcurrently the way the PCO calls above are. A failing
+// check just leaves that one item "not done" (best-effort, same tolerance
+// as the rest of this file) rather than erroring the whole checklist.
+//
+// Position Preferences is the one item with no store check at all - see
+// OnboardingItem.Trackable's doc comment for why (that data lives in PCO,
+// not this app's own database).
+func (hc *HomeController) buildOnboardingChecklist(ctx context.Context, organizationID string) views.OnboardingChecklist {
+	store := hc.schedulingController.store
+	hasSongRels, _ := store.HasAnySongRelationships(ctx, organizationID)
+	hasSongRoles, _ := store.HasAnySongRoles(ctx, organizationID)
+	hasSongTags, _ := store.HasAnySongTags(ctx, organizationID)
+	hasSongVocalRanges, _ := store.HasAnySongVocalRanges(ctx, organizationID)
+	hasSongPersonPrefs, _ := store.HasAnySongPersonPreferences(ctx, organizationID)
+	hasPersonRels, _ := store.HasAnyPersonRelationships(ctx, organizationID)
+	hasPersonVocalRanges, _ := store.HasAnyPersonVocalRanges(ctx, organizationID)
+
+	checklist := views.OnboardingChecklist{
+		Groups: []views.OnboardingGroup{
+			{
+				Title: "Protect the service",
+				Intro: "Feeds the warnings that catch repetition, a bad pairing, or a set that doesn't flow, before the plan goes out.",
+				Items: []views.OnboardingItem{
+					{Label: "Song relationships", Description: "Flows well, same theme, or avoid pairing.", Href: "/scheduling/song-relationships", Done: hasSongRels, Trackable: true},
+					{Label: "Song roles", Description: "Opener, response, or any role you add.", Href: "/scheduling/song-roles", Done: hasSongRoles, Trackable: true},
+					{Label: "Song tags", Description: "Theme, scripture, and idea tags for search and filtering.", Href: "/scheduling/song-tags", Done: hasSongTags, Trackable: true},
+					{Label: "Song vocal range", Description: "Each song's sung range, so a mismatch gets caught before rehearsal.", Href: "/scheduling/song-vocal-range", Done: hasSongVocalRanges, Trackable: true},
+				},
+			},
+			{
+				Title: "Protect the team",
+				Intro: "Feeds the warnings and suggestions that respect stated preferences and catch relational friction before the roster goes out.",
+				Items: []views.OnboardingItem{
+					{Label: "Song / person preferences", Description: "Note who's preferred or discouraged for a song.", Href: "/scheduling/song-preferences", Done: hasSongPersonPrefs, Trackable: true},
+					{Label: "Person relationships", Description: "Works well, mentorship, or avoid pairing between people.", Href: "/scheduling/person-relationships", Done: hasPersonRels, Trackable: true},
+					{Label: "Position preferences", Description: "How often someone wants to serve a position - synced live with Planning Center, so it isn't tracked here.", Href: "/scheduling/position-preferences", Trackable: false},
+					{Label: "Vocal range", Description: "Each vocalist's comfortable range - a faster, less awkward \"can they hit this note.\"", Href: "/scheduling/vocal-range", Done: hasPersonVocalRanges, Trackable: true},
+				},
+			},
+		},
+	}
+
+	for _, group := range checklist.Groups {
+		for _, item := range group.Items {
+			if !item.Trackable {
+				continue
+			}
+			checklist.Trackable++
+			if item.Done {
+				checklist.Done++
+			}
+		}
+	}
+
+	return checklist
 }

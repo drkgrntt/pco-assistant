@@ -179,6 +179,20 @@ func (s *Store) UpdateSongRelationship(ctx context.Context, organizationID strin
 // ListSongRelationships returns organizationID's relationships involving
 // songID on either side. Pass "" for songID to list every relationship
 // belonging to that organization.
+// HasAnySongRelationships reports whether the organization has set up at
+// least one song relationship of any kind - a cheap existence check (no
+// row data fetched/scanned) for the home page's setup checklist
+// (see HomeController.buildHomeData and
+// docs/plans/in-progress/onboarding-and-ambient-framing-plan.md), not
+// meant as a general-purpose alternative to ListSongRelationships.
+func (s *Store) HasAnySongRelationships(ctx context.Context, organizationID string) (bool, error) {
+	var exists bool
+	err := s.db.QueryRowContext(ctx, `
+		SELECT EXISTS(SELECT 1 FROM song_relationships WHERE organization_id = $1)
+	`, organizationID).Scan(&exists)
+	return exists, err
+}
+
 func (s *Store) ListSongRelationships(ctx context.Context, organizationID, songID string) ([]SongRelationship, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, organization_id, song_id_a, song_id_b, relationship_type, notes, created_at, updated_at
