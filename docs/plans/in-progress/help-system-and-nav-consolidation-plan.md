@@ -151,6 +151,15 @@ step's content already relies on. The Build tour was deliberately left
 alone - not asked for, and it's a separate track from the setup-page
 walkthrough.
 
+**Each of the 8 setup-page dialogs also picked up the same `.tour-footnote`
+line the Home/Build tours already had** ("Need this again later? Look for
+Help at the bottom of any page.") - Derek's ask, so that closing one to go
+do something on the page and reopening it later (via the footer's Help
+button) to pick back up is something the dialog itself tells you is fine to
+do, not just something that happens to work. Placed between the `.tour-step`
+content and `.tour-actions`, matching the Home/Build tours' own ordering
+(step content, then the footnote, then the actions row).
+
 **Mechanism**: since this is a full page navigation (no SPA here, no htmx
 swap for a whole-page nav like this), "click Next, land on the next page
 with its own Help dialog already open" needs a value that survives the
