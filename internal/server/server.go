@@ -8,6 +8,7 @@ import (
 	"pco-assistant/internal/auth"
 	"pco-assistant/internal/billing"
 	"pco-assistant/internal/database"
+	"pco-assistant/internal/feedback"
 	"pco-assistant/internal/notify"
 	"pco-assistant/internal/scheduling"
 )
@@ -20,6 +21,7 @@ type FiberServer struct {
 	authStore       *auth.Store
 	billingClient   *billing.Client
 	notifyClient    *notify.Client
+	feedbackStore   *feedback.Store
 }
 
 func New() *FiberServer {
@@ -47,6 +49,7 @@ func New() *FiberServer {
 			os.Getenv("MG_KEY"),
 			os.Getenv("FEEDBACK_RECIPIENT_EMAIL"),
 		),
+		feedbackStore: feedback.NewStore(db.DB()),
 	}
 
 	return server

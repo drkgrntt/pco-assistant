@@ -71,7 +71,7 @@ func (s *FiberServer) RegisterFiberRoutes() {
 	controllers.NewAuthController(s.authStore).RegisterRoutes(s.App)
 	controllers.NewAccountController(s.authStore, s.schedulingStore).RegisterRoutes(s.App)
 	controllers.NewBillingController(s.authStore, s.billingClient).RegisterRoutes(s.App)
-	controllers.NewFeedbackController(s.notifyClient).RegisterRoutes(s.App)
+	controllers.NewFeedbackController(s.notifyClient, s.feedbackStore).RegisterRoutes(s.App)
 	controllers.NewHomeController(schedulingController, s.authStore).RegisterRoutes(s.App)
 	controllers.NewMarketingController().RegisterRoutes(s.App)
 	controllers.NewPCOController().RegisterRoutes(s.App)

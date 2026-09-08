@@ -216,6 +216,16 @@ actual app, split by concern rather than by feature:
 - `internal/notify` - Mailgun-backed outbound email (currently just
   feedback submissions from `/feedback`) - a `Client` constructed once
   from env vars in `server.go`, same shape as `internal/billing`'s.
+- `internal/feedback` - durable storage for `/feedback` submissions (a
+  `feedback` table, written alongside `internal/notify`'s email so a
+  submission survives even when the email itself fails - see that table's
+  own migration for why). Deliberately not organization-scoped like every
+  other table this app has (see Organization scoping below) - it's the
+  app operator's own cross-org record, not one org's own data - and
+  deliberately write-only for now: no read method or in-app view exists
+  yet, since this app has no "app operator, not just an org admin"
+  access-control concept to safely gate one with. Query the table
+  directly until that's a real decision, not something to guess at.
 - `internal/scheduling` - the domain package: all local-database
   scheduling data (relationships, roles, preferences, sets, rosters,
   song-info cache) plus the algorithms built on top of live PCO data

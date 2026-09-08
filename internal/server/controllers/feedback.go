@@ -3,6 +3,7 @@ package controllers
 import (
 	"strings"
 
+	"pco-assistant/internal/feedback"
 	"pco-assistant/internal/logger"
 	"pco-assistant/internal/notify"
 	"pco-assistant/internal/server/middleware"
@@ -16,11 +17,12 @@ import (
 // site visitors, unlike the fully-public feedback form this was modeled
 // on in a sibling project.
 type FeedbackController struct {
-	client *notify.Client
+	client        *notify.Client
+	feedbackStore *feedback.Store
 }
 
-func NewFeedbackController(client *notify.Client) *FeedbackController {
-	return &FeedbackController{client: client}
+func NewFeedbackController(client *notify.Client, feedbackStore *feedback.Store) *FeedbackController {
+	return &FeedbackController{client: client, feedbackStore: feedbackStore}
 }
 
 func (fc *FeedbackController) RegisterRoutes(router fiber.Router) {
@@ -49,6 +51,18 @@ type feedbackForm struct {
 // user-initiated, one org admin at a time), so paying a bounded wait here
 // to actually tell the submitter when it failed is a better trade than
 // staying non-blocking and silently swallowing the failure.
+//
+// Also persists a durable copy via feedbackStore.Create (internal/
+// feedback) - docs/issues.md: "so I can revisit feedback at some point
+// without having to dig through my email." Best-effort and never surfaced
+// to the submitter: the email is still the real send this handler reports
+// success/failure on, so a DB write failure only gets logged, matching
+// this codebase's usual "best-effort, don't break the page over a
+// secondary write" tolerance (see e.g. any of the cache-write paths in
+// internal/scheduling). Written before the email send rather than after,
+// so a submission is on record even if Mailgun itself is the thing that's
+// broken (as it briefly was) - the exact failure mode this table exists
+// to be resilient to.
 func (fc *FeedbackController) SubmitFeedback(c *fiber.Ctx) error {
 	var body feedbackForm
 	if err := c.BodyParser(&body); err != nil {
@@ -63,6 +77,19 @@ func (fc *FeedbackController) SubmitFeedback(c *fiber.Ctx) error {
 	message := body.Message
 
 	ctx := middleware.RequestContext(c)
+	personID, personName := middleware.CurrentPerson(c)
+
+	if err := fc.feedbackStore.Create(ctx, feedback.CreateParams{
+		OrganizationID:   middleware.CurrentOrganizationID(c),
+		OrganizationName: middleware.CurrentOrganization(c),
+		PersonID:         personID,
+		PersonName:       personName,
+		SubmitterEmail:   email,
+		Message:          message,
+	}); err != nil {
+		logger.ErrorContext(ctx, "recording feedback submission failed", "error", err)
+	}
+
 	if err := fc.client.SendFeedback(ctx, email, message); err != nil {
 		logger.ErrorContext(ctx, "sending feedback email failed", "error", err)
 		return render(c, views.FeedbackResult("Sending failed - try again in a moment, or reach out directly if it keeps happening.", false))

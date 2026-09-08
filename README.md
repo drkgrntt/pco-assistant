@@ -340,7 +340,11 @@ no server-side state involved.
    and API key (`MG_DOMAIN`/`MG_KEY`) plus the address you want feedback
    sent to (`FEEDBACK_RECIPIENT_EMAIL`). Leave `MG_DOMAIN`/`MG_KEY` blank
    to skip this - feedback submissions are just logged instead of
-   emailed, so local dev never needs real Mailgun credentials.
+   emailed, so local dev never needs real Mailgun credentials. Every
+   submission is also written to a `feedback` table regardless of Mailgun
+   config, so it's on record even if the email side is unconfigured or
+   fails - see `internal/feedback`. No in-app view exists yet; query the
+   table directly.
 
 5. **Backups (production only, optional for local dev).** A daily cron
    (`jobs.BackupJobs`) dumps the database with `pg_dump` and uploads it to
