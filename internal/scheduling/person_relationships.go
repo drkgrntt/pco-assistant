@@ -195,6 +195,18 @@ func (s *Store) UpdatePersonRelationship(ctx context.Context, organizationID str
 // ListPersonRelationships returns organizationID's relationships involving
 // personID on either side. Pass "" for personID to list every relationship
 // belonging to that organization.
+// HasAnyPersonRelationships reports whether the organization has set up at
+// least one person relationship of any kind - see
+// HasAnySongRelationships's doc comment (same shape, same purpose: the
+// home page's setup checklist).
+func (s *Store) HasAnyPersonRelationships(ctx context.Context, organizationID string) (bool, error) {
+	var exists bool
+	err := s.db.QueryRowContext(ctx, `
+		SELECT EXISTS(SELECT 1 FROM person_relationships WHERE organization_id = $1)
+	`, organizationID).Scan(&exists)
+	return exists, err
+}
+
 func (s *Store) ListPersonRelationships(ctx context.Context, organizationID, personID string) ([]PersonRelationship, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, organization_id, person_id_a, person_id_b, relationship_type, notes, created_at, updated_at

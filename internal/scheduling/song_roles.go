@@ -132,6 +132,19 @@ func (s *Store) UpdateSongRole(ctx context.Context, organizationID string, id in
 	return role, nil
 }
 
+// HasAnySongRoles reports whether the organization has tagged at least one
+// song with a role - a cheap existence check for the home page's setup
+// checklist (see HomeController.buildHomeData and
+// docs/plans/in-progress/onboarding-and-ambient-framing-plan.md), same
+// shape as HasAnySongRelationships.
+func (s *Store) HasAnySongRoles(ctx context.Context, organizationID string) (bool, error) {
+	var exists bool
+	err := s.db.QueryRowContext(ctx, `
+		SELECT EXISTS(SELECT 1 FROM song_roles WHERE organization_id = $1)
+	`, organizationID).Scan(&exists)
+	return exists, err
+}
+
 // ListSongRoles filters to organizationID, and by songID and/or role; pass
 // "" for either to leave it unfiltered. Used both to show a song's tags and
 // to browse songs tagged with a given role (e.g. every "opener").

@@ -29,3 +29,85 @@
     gap: var(--space-3) var(--space-4);
   }
 }
+
+/* Shared by both this app's guided first-run <dialog> tours - the home
+   page's (home.templ's onboardingTour) and the Build page's
+   (internal/views/scheduling/build.templ's buildTour, Phase 5 of
+   docs/plans/in-progress/onboarding-and-ambient-framing-plan.md). Native
+   <dialog> was the first modal pattern in this codebase (see
+   onboardingTour's own doc comment for why <dialog> specifically); kept
+   here in home.css rather than split into a new file since home.css
+   already loads on every authenticated page (designSystemCSSFiles,
+   layout.templ), so there was nothing to gain from moving it just because
+   a second tour now reuses it. ::backdrop is the browser's own dimming
+   layer, painted behind the dialog automatically once it's opened via
+   .showModal() - nothing here needs to build that by hand. */
+.tour-dialog {
+  max-width: 32rem;
+  width: calc(100% - var(--space-8));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-md);
+}
+
+.tour-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.tour-dialog h2 {
+  margin-top: 0;
+}
+
+.tour-dialog ul {
+  padding-left: var(--space-5);
+}
+
+.tour-dialog li {
+  margin-bottom: var(--space-2);
+}
+
+.tour-close {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+}
+
+.tour-dots {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: center;
+  margin-block: var(--space-4);
+}
+
+.tour-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--border);
+}
+
+.tour-dot.active {
+  background: var(--accent);
+}
+
+.tour-footnote {
+  text-align: center;
+  font-size: var(--text-sm);
+}
+
+.tour-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* Keeps Back and Next adjacent as a pair, separate from Done - see
+   onboardingTour's own doc comment (home.templ) for why. */
+.tour-actions-nav {
+  display: flex;
+  gap: var(--space-2);
+}

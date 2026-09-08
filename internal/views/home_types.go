@@ -20,6 +20,55 @@ type HomeData struct {
 	OrgStatus     string
 	OrgPlan       string
 	TrialDaysLeft int
+	// Onboarding is the promise-grouped setup checklist (Phase 3 of
+	// docs/plans/in-progress/onboarding-and-ambient-framing-plan.md) that
+	// replaced both the old flat Setup link list and the dismissible
+	// nudge card that briefly preceded it - see buildHomeData. Always
+	// populated: it's the permanent home for setup now, not a transient
+	// prompt, so there's nothing to dismiss or replay any more.
+	Onboarding OnboardingChecklist
+}
+
+// OnboardingChecklist is the home page's setup checklist - two
+// promise-grouped sections (see OnboardingGroup) plus the summary counts
+// rendered next to the section heading.
+type OnboardingChecklist struct {
+	Groups []OnboardingGroup
+	// Done/Trackable count only items whose completion state is actually
+	// knowable locally (see OnboardingItem.Trackable's doc comment) -
+	// Position Preferences is the one exception, excluded from both
+	// counts rather than counted as permanently "not done".
+	Done, Trackable int
+}
+
+// OnboardingGroup is one promise-grouped section of the checklist -
+// "Protect the service" or "Protect the team" - mirroring
+// docs/ideas.md's Vision/positioning split, each with a one-line why and
+// its item list.
+type OnboardingGroup struct {
+	Title string
+	Intro string
+	Items []OnboardingItem
+}
+
+// OnboardingItem is one setup link in the checklist.
+type OnboardingItem struct {
+	Label       string
+	Description string
+	Href        string
+	// Done reflects real local data via a cheap existence check
+	// (HasAnySongRelationships and its siblings in internal/scheduling) -
+	// only meaningful when Trackable is true.
+	Done bool
+	// Trackable is false only for Position Preferences: that data lives
+	// entirely in Planning Center (schedule_preference writes straight
+	// through - see CLAUDE.md's Sync model section), and checking it live
+	// across every team/position on every home page load would mean a
+	// real PCO call on a hot render path, which docs/pco-api-risks.md's
+	// caution against that rules out. The template renders a plain link
+	// with no done/not-done badge for this one item rather than a
+	// permanently-false, misleading one.
+	Trackable bool
 }
 
 // HomePlanRow is one upcoming plan on the home page - the same

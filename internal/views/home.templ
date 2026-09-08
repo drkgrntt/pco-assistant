@@ -10,6 +10,8 @@ templ Home(personName, organizationName string, data HomeData) {
 	@Layout("Home", personName, organizationName) {
 		<h1>Welcome, { personName }</h1>
 
+		@onboardingTour()
+
 		if data.OrgStatus != "" && data.OrgStatus != "active" {
 			<p class="warning">
 				if data.OrgStatus == "trialing" {
@@ -62,50 +64,155 @@ templ Home(personName, organizationName string, data HomeData) {
 		</nav>
 
 		<h2>Setup</h2>
-		<p class="muted">Configure once, then the workflows above put it to use - relationships, roles, and scheduling preferences for songs and people.</p>
+		<p class="muted">
+			{ fmt.Sprintf("%d of %d set up so far.", data.Onboarding.Done, data.Onboarding.Trackable) }
+			Configure once, then the workflows above put it to use - each item below feeds a warning or suggestion on the Build page, grouped by which promise it serves (see <a href="/how-it-works">how it works</a>).
+		</p>
 		<!--
-			Reuses .plan-list's card-row treatment (already used for "Needs
-			attention" above) rather than the old quick-links-secondary's
-			plain wrapping link row - that had no room for a description
-			under each link, only the link text itself.
+			Checklist form replaced the old flat Setup link list, then a
+			since-removed dismissible nudge card, per Derek's "weak sauce"
+			feedback - see
+			docs/plans/in-progress/onboarding-and-ambient-framing-plan.md's
+			Phase 3. Reuses .plan-list's card-row treatment (already used
+			for "Needs attention" above); each item's Done state
+			(components.Badge) reflects real local data (HomeController.
+			buildOnboardingChecklist), not a guess - see
+			OnboardingItem.Trackable's doc comment for the one item (Position
+			Preferences) that can't be tracked and renders with no badge.
+			Grouped by the two docs/ideas.md Vision/positioning promises so
+			each item's "why" is legible, not just its "what" - an item that
+			genuinely serves both (vocal range) is split across both groups
+			by its own person-side/song-side halves rather than picked into
+			one arbitrarily, per that plan doc's own reasoning.
 		-->
-		<ul class="plan-list">
-			<li>
-				<a href="/scheduling/song-relationships">Song relationships</a>
-				<span class="muted">Flows well, same theme, or avoid pairing.</span>
-			</li>
-			<li>
-				<a href="/scheduling/song-roles">Song roles</a>
-				<span class="muted">Opener, response, or any role you add.</span>
-			</li>
-			<li>
-				<a href="/scheduling/song-tags">Song tags</a>
-				<span class="muted">Theme, scripture, and idea tags for search and filtering.</span>
-			</li>
-			<!--
-				Hidden once there's nothing pending there - the exact same
-				SuggestionCount fact the nudge line above already computes,
-				not a second lookup. Mirrors the nav dropdown's own version
-				of this (see layout.templ, middleware.PopulateNavState).
-			-->
-			if data.SuggestionCount > 0 {
-				<li>
-					<a href="/scheduling/song-tag-suggestions">Song tag suggestions</a>
-					<span class="muted">Review songs sharing a title word and tag them together.</span>
-				</li>
-			}
-			<li>
-				<a href="/scheduling/song-preferences">Song / person preferences</a>
-				<span class="muted">Note who's preferred or discouraged for a song.</span>
-			</li>
-			<li>
-				<a href="/scheduling/person-relationships">Person relationships</a>
-				<span class="muted">Works well, mentorship, or avoid pairing between people.</span>
-			</li>
-			<li>
-				<a href="/scheduling/position-preferences">Position preferences</a>
-				<span class="muted">How often someone wants to serve a position.</span>
-			</li>
-		</ul>
+		for _, group := range data.Onboarding.Groups {
+			<h3>{ group.Title }</h3>
+			<p class="muted">{ group.Intro }</p>
+			<ul class="plan-list">
+				for _, item := range group.Items {
+					<li>
+						<a href={ templ.URL(item.Href) }>{ item.Label }</a>
+						<span class="muted">{ item.Description }</span>
+						if item.Trackable {
+							if item.Done {
+								@components.Badge("published", "Done")
+							} else {
+								@components.Badge("status-pending", "Not set up")
+							}
+						}
+					</li>
+				}
+				<!--
+					Song Tag Suggestions isn't a one-time setup item (no
+					done/not-done state to track), so it stays outside the
+					checklist loop above - a review queue, appended only to
+					the service group and only while something's actually
+					waiting, same SuggestionCount fact the nudge paragraph
+					above already computes, not a second lookup. Mirrors the
+					nav dropdown's own version of this (see layout.templ,
+					middleware.PopulateNavState).
+				-->
+				if group.Title == "Protect the service" && data.SuggestionCount > 0 {
+					<li>
+						<a href="/scheduling/song-tag-suggestions">Song tag suggestions</a>
+						<span class="muted">Review songs sharing a title word and tag them together.</span>
+					</li>
+				}
+			</ul>
+		}
 	}
+}
+
+// onboardingTour is the guided first-run orientation - the heavier option
+// (alongside Phase 3's checklist) from the "richer" round of feedback in
+// docs/plans/in-progress/onboarding-and-ambient-framing-plan.md, built as
+// a real multi-step dialog rather than folding more content into the
+// checklist itself. Unlike Phase 3 (which reflects an org's real setup
+// data), this is pure orientation - the same for every person regardless
+// of what their org has configured, so a new admin joining an
+// already-set-up org gets it too, not just a brand-new org. Content is a
+// condensed version of how_it_works.templ's own two feature grids, same
+// voice, far fewer scenarios per promise (a full-screen dialog step isn't
+// the place for all 11 how-it-works cards).
+//
+// Native <dialog> rather than a hand-rolled overlay - no modal pattern
+// existed anywhere in this codebase before this, and <dialog> gets
+// focus-trapping, Escape-to-close, and backdrop dimming for free (see
+// tour-dialog rules in home.css). scheduling.js's openOnboardingTour/
+// closeOnboardingTour/tourBack/tourNext drive which .tour-step is visible
+// and the dot indicator; a DOMContentLoaded check there auto-opens this
+// once per browser (localStorage "onboardingTourSeen"), and a manual
+// ?tour=1 (linked from the Account page's "Replay the intro tour") forces
+// it open regardless of that flag - same "auto-trigger plus a manual way
+// back in" shape as Phase 2 used, but entirely client-side this time
+// (nothing server-rendered depends on whether this has been seen, unlike
+// Phase 2's now-removed ShowOnboardingNudge).
+templ onboardingTour() {
+	<dialog id="onboarding-tour" class="tour-dialog">
+		<button type="button" class="icon-btn tour-close" aria-label="Skip the tour" title="Skip the tour" onclick="closeOnboardingTour()">
+			@components.IconX()
+		</button>
+		<div class="tour-step" data-step="0">
+			<p class="muted">Welcome to Resonance</p>
+			<h2>Two promises, checked automatically.</h2>
+			<p>
+				Planning Center is the system of record - it stores what's already
+				decided. Resonance is where the decision actually gets made,
+				checked against everything Planning Center itself has no way to
+				know, before it ever reaches your team.
+			</p>
+		</div>
+		<div class="tour-step" data-step="1" hidden>
+			<h2>Protect the service</h2>
+			<p class="muted">Repetition fatigue, a broken set flow, a conflict nobody caught - surfaced while you're still drafting, well before the plan goes out.</p>
+			<ul>
+				<li>A heads-up before a repeated song quietly becomes three in a row.</li>
+				<li>A jarring key change flagged before the band finds out live.</li>
+				<li>Songs that flow well get suggested next; songs that clash get flagged if they land back to back.</li>
+			</ul>
+		</div>
+		<div class="tour-step" data-step="2" hidden>
+			<h2>Protect the team</h2>
+			<p class="muted">Burnout, stated preferences, relational friction, mentorship pairing - the calls a director already carries in their head, turned into guardrails.</p>
+			<ul>
+				<li>Avoid-pairing relationships flagged before the roster goes out.</li>
+				<li>Mentorship pairing suggested, not just whoever's easiest to slot in.</li>
+				<li>A Planning Center blockout shows up right in the roster picker, no separate calendar to cross-check.</li>
+			</ul>
+		</div>
+		<div class="tour-step" data-step="3" hidden>
+			<h2>Get started</h2>
+			<p>
+				The checklist below on this page tracks what's set up so far - each
+				item feeds a warning or suggestion on the Build page. Set up as
+				much or as little as you want; Build gets smarter as you go.
+			</p>
+		</div>
+		<div class="tour-dots">
+			<span class="tour-dot active"></span>
+			<span class="tour-dot"></span>
+			<span class="tour-dot"></span>
+			<span class="tour-dot"></span>
+		</div>
+		<!--
+			Back+Next grouped in their own wrapper, separate from Done - per
+			Derek's "not sit in the middle... next to the back button"
+			feedback, .tour-actions-nav keeps the two step-navigation
+			buttons adjacent as a pair (home.css), while Done stays plain
+			.button-styled (not .primary) for Back/Next so the accent color
+			is reserved for Done alone - the one actually-different action
+			(exit the tour), not just "go to the next step." Always-visible
+			account-page pointer sits between the dots and the actions
+			(not only on the last step) so it's seen no matter which step
+			someone closes from.
+		-->
+		<p class="muted tour-footnote">Need this again later? Find it on your <a href="/account">Account</a> page.</p>
+		<div class="tour-actions">
+			<div class="tour-actions-nav">
+				<button type="button" id="tour-back" class="button" onclick="tourBack()" hidden>Back</button>
+				<button type="button" id="tour-next" class="button" onclick="tourNext()">Next</button>
+			</div>
+			<button type="button" id="tour-done" class="button primary" onclick="closeOnboardingTour()" hidden>Got it, thanks!</button>
+		</div>
+	</dialog>
 }
