@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"context"
 	"strings"
 
 	"pco-assistant/internal/logger"
@@ -39,13 +38,17 @@ type feedbackForm struct {
 	Message string `form:"message"`
 }
 
-// SubmitFeedback sends the actual email in a goroutine (see
-// notify.Client.SendFeedback) rather than waiting on it inline, so the
-// htmx response - and the "Thanks - sent!" the submitter sees - doesn't
-// block on Mailgun's own network round trip. There's no job queue in
-// this codebase to hand this off to instead (see internal/server/jobs,
-// which is periodic gocron scheduling only), and a plain goroutine is
-// simple enough not to need one just for this.
+// SubmitFeedback sends the actual email inline, bounded by
+// notify.sendTimeout (10s) - it used to fire this from a goroutine instead
+// so the htmx response never waited on Mailgun's own network round trip,
+// but that meant a real send failure (see docs/pco-api-risks.md-style
+// incidents: a stale/rejected Mailgun key silently failed in production
+// for a while, discovered only by checking server logs, not by anyone
+// looking at the page) was invisible to the person submitting - they saw
+// "Thanks - sent!" either way. Feedback submission isn't a hot path (rare,
+// user-initiated, one org admin at a time), so paying a bounded wait here
+// to actually tell the submitter when it failed is a better trade than
+// staying non-blocking and silently swallowing the failure.
 func (fc *FeedbackController) SubmitFeedback(c *fiber.Ctx) error {
 	var body feedbackForm
 	if err := c.BodyParser(&body); err != nil {
@@ -59,18 +62,11 @@ func (fc *FeedbackController) SubmitFeedback(c *fiber.Ctx) error {
 	email := strings.TrimSpace(body.Email)
 	message := body.Message
 
-	// context.Background(), not middleware.RequestContext(c): this
-	// goroutine outlives the request (see triggerPersonDataSync's identical
-	// reasoning in person_data_cache.go), so a fresh
-	// context.Background()-derived one is built instead - carrying just
-	// this request's id (see logger.WithRequestID) so the "failed" log
-	// below, if it fires, can still be traced back to this submission.
-	sendCtx := logger.WithRequestID(context.Background(), middleware.CurrentRequestID(c))
-	go func() {
-		if err := fc.client.SendFeedback(sendCtx, email, message); err != nil {
-			logger.ErrorContext(sendCtx, "sending feedback email failed", "error", err)
-		}
-	}()
+	ctx := middleware.RequestContext(c)
+	if err := fc.client.SendFeedback(ctx, email, message); err != nil {
+		logger.ErrorContext(ctx, "sending feedback email failed", "error", err)
+		return render(c, views.FeedbackResult("Sending failed - try again in a moment, or reach out directly if it keeps happening.", false))
+	}
 
 	return render(c, views.FeedbackResult("", true))
 }
