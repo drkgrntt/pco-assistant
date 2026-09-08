@@ -23,7 +23,19 @@ permanent, not dismissible, real per-item done/not-done state.
 
 Phase 4 (see its own section below) is additive, not a replacement of
 anything: a separate guided first-run `<dialog>` tour, pure per-person
-orientation independent of the checklist's per-org data.
+orientation independent of the checklist's per-org data. Revised same day
+(2026-09-08, "not sit in the middle... next to the back button" feedback):
+Back/Next grouped in their own `.tour-actions-nav`, Next demoted from
+`.button.primary` to plain `.button` so the accent color reads as
+"Done"'s alone, "Let's go" renamed "Got it, thanks!" (more clearly a
+dismissal), and an always-visible line pointing back to the Account page
+added between the dots and the action buttons.
+
+The marketing-copy coverage audit (previously "adjacent, deliberately out
+of scope") is done - see its own section below. A further round -
+per-setup-page guidance and a possible Build-page tour - was asked about
+and is written up as a real recommendation, **not built** - see "Proposed,
+not started" below.
 
 Written 2026-09-08, expanding `docs/ideas.md`'s "Reducing friction vs.
 Planning Center" section - specifically the already-flagged-but-unbuilt
@@ -298,19 +310,139 @@ storage would be a real annoyance, not a minor miss, so a thrown
 show. The manual `?tour=1` path is unaffected either way, since it never
 touches `localStorage`.
 
-## Adjacent, deliberately out of scope: marketing-copy coverage audit
+## Marketing-copy coverage audit (done 2026-09-08)
 
-Noted in passing (2026-09-08) and worth recording rather than losing:
-`how_it_works.templ`/`landing.templ` were last written before several
-shipped features (vocal range, song lead sheet attachments, transition
-notes, song archive/leader work - see `docs/plans/shipped/`) and may be
-missing scenario cards for some of them. **Not part of this plan** - don't
-force a feature into the two-promise grid just because it exists; only
-add a card where it genuinely earns one the way the existing cards do
-(a concrete before/after scenario, not a feature-list bullet). Worth a
-short, separate pass at some point: read `docs/plans/shipped/*.md` against
-`how_it_works.templ`'s two feature grids and note real gaps - low urgency,
-doesn't block either phase above.
+Was noted as adjacent/out-of-scope, then actually done same day (Derek's
+explicit ask). Read every `docs/plans/shipped/*.md` written since
+`how_it_works.templ`'s feature grids were last touched, checked each
+against the "genuinely earns a card" bar (a concrete before/after
+scenario, not a feature-list bullet) rather than adding one for every
+shipped thing:
+
+- **Added** (all real, live, guardrail-shaped): "Gives an old favorite
+  room to come back" (the not-sung-in-a-while nudge,
+  `docs/plans/shipped/song-archive-plan.md`) and "Resurfaces the fix you
+  already found" (transition notes,
+  `docs/plans/shipped/transition-notes-plan.md`) to "Protect the
+  service"; "Makes clear who's actually leading" (song leader,
+  `docs/plans/shipped/song-leader-plan.md`, which its own "Which product
+  promise" section calls primarily service-side) also to "Protect the
+  service"; "Makes 'can they hit this note' a lookup" (person vocal
+  range) to "Protect the team", matching
+  `docs/plans/in-progress/vocal-range-plan.md`'s own promise split.
+- **Deliberately skipped**: song lead sheet attachments and the song
+  archive action itself - real, shipped, useful, but conveniences, not
+  guardrails (no before/after "catches a problem" scenario), so they
+  don't fit this page's format without stretching. Also skipped: a
+  service-side **song vocal range mismatch warning** card - checked
+  against `docs/plans/in-progress/vocal-range-plan.md`'s own status line
+  and confirmed **Phase 3 (the actual mismatch warning) hasn't shipped
+  yet** - only Phase 1/2 (the person/song range setup pages and the
+  transposed-range display on Build) are live. Advertising an automatic
+  mismatch check that doesn't exist yet would be a real overclaim, not
+  just an aggressive one - worth watching for when Phase 3 actually
+  ships, since that's exactly the kind of card this page should get then.
+- `landing.templ` was checked too and left alone - its feature grid is 5
+  broad *categories*, not per-scenario cards like `how_it_works.templ`;
+  none of the newly-added scenarios above cleanly fit an existing
+  category without stretching it, and adding a 6th category for one
+  scenario apiece would unbalance a page that's deliberately kept to a
+  short, categorical overview (see its own doc comment on why
+  `how_it_works.templ` exists as the deeper pass).
+
+## Proposed, not started: page-level and Build-page guidance
+
+Derek's ask (2026-09-08): should setup pages get their own first-visit
+guidance (a modal per page? walking someone through each one in
+sequence?), possibly with images of how a feature surfaces on Build - and
+separately, should the feature-dense Build page get its own tour - all
+while explicitly not wanting to be "overbearing." Recommendation below,
+not built - a real decision, not a default, per this file's own
+"Suggested build order" convention of not building the heavier option
+without it actually being asked for.
+
+**Core principle: escalating disclosure, not exhaustive tours.** This
+codebase already has a genuinely strong contextual-teaching mechanism -
+`ConflictBadge`/`Disclosure` fire *exactly when a real warning exists*
+(see CLAUDE.md's controllers section), which teaches a feature at the one
+moment it's actually relevant, with real data on screen - a better
+teacher than any tour step describing the same feature in the abstract
+before there's anything to point at. Every proposal below is judged
+against whether it fills a genuine gap that mechanism doesn't already
+cover, not against "would this be nice to have."
+
+**Per-setup-page first-visit guidance: recommend skipping, it's already
+covered.** Reasons against the two options Derek raised:
+
+- *A separate modal per setup page* (7 more dialogs) directly contradicts
+  "don't want to be overbearing" - that's tour fatigue by definition, and
+  each of these 7 pages is visited rarely (set up once, maybe revisited
+  occasionally), not a place where repeated friction accumulates the way
+  Build's daily use would justify a bigger investment.
+- *Walking someone through each page in a guided sequence* forces an
+  order and a time commitment most directors won't want - the checklist
+  (Phase 3) already lets someone pick which 1-2 categories matter to them
+  right now rather than sitting through all 7.
+- What's actually needed - "what is this page for and why does it
+  matter" - is already answered by Phase 1's work this same day: every
+  setup page's own intro paragraph got a "why" clause, and every empty
+  state names the payoff (e.g. person_relationships.templ's "add one to
+  get a warning before two people who shouldn't be scheduled together end
+  up on the same roster"). Adding a dismissible tip on top of copy that's
+  already sitting right there, unmissable, on a page with almost nothing
+  else on it, would be answering a question that's already answered.
+
+**Images/screenshots of how a feature surfaces on Build: recommend
+against, for now.** Real, not hypothetical, costs: a screenshot goes
+stale silently the moment the real UI changes - no build failure, no
+diagnostic, just a documentation image quietly showing an old layout
+forever until someone happens to notice. Nothing in this codebase's build
+pipeline re-captures or validates screenshots, so keeping one honest would
+be a fully manual, easy-to-forget maintenance task layered onto every
+future Build page change - the exact kind of drift `docs/pco-api-risks.md`'s
+own restructuring (see CLAUDE.md's "Keeping the docs current") was
+written to stop happening to *documentation*; a screenshot in *product UI*
+carries the same risk with less visibility when it goes wrong. It's also a
+first for this app - `how_it_works.templ`/`landing.templ` are both
+text-only today - worth a deliberate decision before introducing image
+assets as a maintained pattern, not something to default into while
+building something else. Text description (already the house style, and
+already present in Phase 1's "why" clauses) stays the lower-maintenance
+choice; revisit only if actual feedback says a picture is specifically
+what's missing, not as a default enhancement.
+
+**Build-page tour: recommend yes, eventually - but hold off starting it
+now.** Build is a genuinely different case from the 7 setup pages: it's
+the single highest-traffic page in the app (CLAUDE.md calls it "the
+combined Songs/Team build workflow" - the app's actual reason for being),
+with real structural density (Songs/Team tabs, drag reorder, quick-action
+rows, detail cards, publish flow) that a first-time visitor could
+plausibly miss the shape of. If/when this gets built:
+
+- Scope it to *orientation on the page's shape* - two tabs, warnings
+  appear inline as you work, Publish syncs back to real Planning Center -
+  not a feature-by-feature walkthrough. Individual features (a repeat
+  warning, an avoid-pairing conflict) already explain themselves the
+  moment they're relevant, per the core principle above; re-explaining
+  them in the abstract in a tour step would be redundant with, not
+  additive to, what `ConflictBadge`/`Disclosure` already do.
+- Same trigger shape as the Home tour (Phase 4): once per browser via its
+  own `localStorage` key (not `onboardingTourSeen` - a separate flag, e.g.
+  `buildTourSeen`, since seeing one tour shouldn't silently mark the other
+  seen), plus its own manual-replay query param (something like
+  `?build-tour=1`, distinct from Home's `?tour=1` so the two never
+  collide) linked from the same Account page "Getting started" section.
+  Gate on "has this person ever opened Build," not "does this specific
+  plan need it" - a returning director shouldn't get it again on a new
+  plan.
+- **Sequencing call, not a technical one**: don't start this next by
+  default. Three onboarding surfaces will exist once this ships (tour,
+  checklist, Build tour) - worth a beat to see whether the first two are
+  already doing the job before adding a third, exactly the same
+  "don't be overbearing" instinct Derek raised. Revisit once there's
+  actual signal (a demo/onboarding call still needing to manually explain
+  Build's tabs, a support question about something the checklist/tour
+  should have already covered) rather than building ahead of evidence.
 
 ## Open questions
 
@@ -353,6 +485,12 @@ any more - everything below is built:
    step-navigation functions plus the two `DOMContentLoaded` listeners
    (auto-open, close-records-dismissal), `home.css`'s `.tour-*` rules, and
    the Account page's "Getting started" section linking `/?tour=1`.
+6. Phase 4 revision: `.tour-actions-nav` grouping, Next demoted off
+   `.primary`, "Got it, thanks!" copy, the always-visible Account-page
+   pointer line.
+7. Marketing-copy audit: four new `how_it_works.templ` cards (three
+   "Protect the service", one "Protect the team" - see that section above
+   for exactly which and why), `landing.templ` deliberately left alone.
 
 ## Verification
 
@@ -374,4 +512,11 @@ any more - everything below is built:
   close it and record the dismissal (reload `/` afterward and confirm it
   does *not* reopen), `/?tour=1` reopens it regardless of that recorded
   dismissal, and the Account page's "Replay the intro tour" link actually
-  reaches `/?tour=1`.
+  reaches `/?tour=1`. Plus, after the revision: Back and Next visually sit
+  together as a pair, Next isn't accent-colored on any step, "Got it,
+  thanks!" is the only accent-colored button and only shows on the last
+  step, and the "Find it on your Account page" line is visible on every
+  step, not just the last one.
+- Marketing copy: read `/how-it-works` and confirm the four new cards
+  render in the right grid, in the right voice, and don't read as padding
+  next to the existing ones.

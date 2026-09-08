@@ -194,10 +194,25 @@ templ onboardingTour() {
 			<span class="tour-dot"></span>
 			<span class="tour-dot"></span>
 		</div>
+		<!--
+			Back+Next grouped in their own wrapper, separate from Done - per
+			Derek's "not sit in the middle... next to the back button"
+			feedback, .tour-actions-nav keeps the two step-navigation
+			buttons adjacent as a pair (home.css), while Done stays plain
+			.button-styled (not .primary) for Back/Next so the accent color
+			is reserved for Done alone - the one actually-different action
+			(exit the tour), not just "go to the next step." Always-visible
+			account-page pointer sits between the dots and the actions
+			(not only on the last step) so it's seen no matter which step
+			someone closes from.
+		-->
+		<p class="muted tour-footnote">Need this again later? Find it on your <a href="/account">Account</a> page.</p>
 		<div class="tour-actions">
-			<button type="button" id="tour-back" class="button" onclick="tourBack()" hidden>Back</button>
-			<button type="button" id="tour-next" class="button primary" onclick="tourNext()">Next</button>
-			<button type="button" id="tour-done" class="button primary" onclick="closeOnboardingTour()" hidden>Let's go</button>
+			<div class="tour-actions-nav">
+				<button type="button" id="tour-back" class="button" onclick="tourBack()" hidden>Back</button>
+				<button type="button" id="tour-next" class="button" onclick="tourNext()">Next</button>
+			</div>
+			<button type="button" id="tour-done" class="button primary" onclick="closeOnboardingTour()" hidden>Got it, thanks!</button>
 		</div>
 	</dialog>
 }
