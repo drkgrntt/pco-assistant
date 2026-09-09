@@ -1,5 +1,15 @@
 # Plan: "where this song gets sung" (big church / youth / other campus)
 
+**Open question resolved 2026-09-09**: confirmed directly with Derek that
+the three contexts do **not** map 1:1 to this org's actual PCO Service
+Types - so **Option B below is the path**, not Option A. This doc is
+otherwise unchanged from when it was written (Option A's reasoning is
+kept for context, not because it's still live) - still not-started, no
+code written yet. `song_context_types`/`song_contexts` (the org-editable
+lookup + join table) is the next real open question before building:
+see Option B's own note on why it likely needs its own tiny CRUD rather
+than copying `song_role_types`' fixed-lookup precedent verbatim.
+
 Written 2026-09-09, prompted by direct feedback from a meeting with the
 worship pastor (`docs/issues.md`): "He asked if there's a way to mark
 songs as 'we do this here for big church', 'here youth', and 'other
@@ -103,14 +113,12 @@ configured), build the direct parallel to `song_roles`:
   tagged Youth only" - protecting the service the same way those warnings
   already do, rather than silently allowing a mismatch.
 
-**Recommendation:** find out from the worship pastor whether the three
-contexts are actually his org's existing Service Types before picking
-between A and B - that single fact decides most of the design. If they
-map 1:1, Option A is far less to build and reuses vocabulary that's
-already correct and already synced from PCO. If they don't, Option B is
-the shaped-like-`song_roles` build described above, not a `song_tags`
-variant - the whole point of this feedback is that a passive label isn't
-what's needed; a real filter/warning is.
+**Resolved: Option B.** Confirmed directly - the three contexts don't map
+1:1 to this org's Service Types, so this is a real axis PCO doesn't
+model, not just a filter over existing Service Type ids. The Option B
+build below is the path: a `song_roles`-shaped classification, not a
+`song_tags` variant - the whole point of this feedback is that a passive
+label isn't what's needed; a real filter/warning is.
 
 ## Which product promise this serves
 
@@ -120,24 +128,26 @@ stripped-down youth set, or vice versa) is exactly the kind of
 service-flow mistake this app exists to catch before it reaches a plan,
 not a team/relational concern.
 
-## Suggested build order (once A vs. B is settled)
+## Suggested build order (Option B)
 
-1. Migration(s): either nothing new (Option A, no eligibility tracking)
-   or a lookup table + join table (Option A with eligibility, or Option
-   B) - follow `song_role_types`/`song_roles`' exact shape.
-2. `scheduling.Store` methods mirroring `song_roles.go`'s existing
+1. Decide `song_context_types` editability first (Option B's own note
+   above) - a fixed lookup like `song_role_types`, or a small per-org CRUD
+   like a campus list. This changes migration 1 below either way.
+2. Migration(s): `song_context_types` lookup table + `song_contexts` join
+   table, following `song_role_types`/`song_roles`' exact shape (adjusted
+   for editability per step 1).
+3. `scheduling.Store` methods mirroring `song_roles.go`'s existing
    `Add`/`Remove`/`List` shape.
-3. Candidate-list filter chips in `set_builder.templ`, reusing
+4. Candidate-list filter chips in `set_builder.templ`, reusing
    `toggleRoleFilter`'s pattern (JS + hidden input + htmx-driven refetch)
    rather than inventing a second filtering mechanism alongside it -
    ideally the same filter row, not a second row of chips competing for
    attention.
-4. If org-editable (Option B leaning toward that): a small setup
-   surface for naming contexts, following whichever of this app's
-   existing per-org settings surfaces fits best (check `account.go`
-   before inventing a new one, same instruction CLAUDE.md gives for other
-   per-service-type settings).
-5. Optional: the plan-mismatch warning, once the base classification
+5. If org-editable: a small setup surface for naming contexts, following
+   whichever of this app's existing per-org settings surfaces fits best
+   (check `account.go` before inventing a new one, same instruction
+   CLAUDE.md gives for other per-service-type settings).
+6. Optional: the plan-mismatch warning, once the base classification
    exists and has real usage to judge whether it's actually wanted.
 
 ## Verification (once built)
