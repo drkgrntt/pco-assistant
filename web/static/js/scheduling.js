@@ -851,16 +851,14 @@ document.addEventListener("click", function (event) {
   if (!event.target.closest(".badge-overflow")) {
     closeBadgeOverflows();
   }
-  if (!event.target.closest("tr.song-row") && !event.target.closest(".build-detail-card")) {
-    closeSongDetail();
-  }
-  if (
-    !event.target.closest(".assignment-list li") &&
-    !event.target.closest(".candidate-list li") &&
-    !event.target.closest(".build-detail-card")
-  ) {
-    closePersonDetail();
-  }
+  // Deliberately no "click outside closes the song/person detail card"
+  // here (there used to be one) - it made the card on the Build page's
+  // Songs tab, and the person card on its Team tab, close on almost any
+  // stray click nearby, which read as broken rather than helpful. Both
+  // cards already close via their own Close button (buildDetailCardShell
+  // -> closeSongDetail()/closePersonDetail()), clicking the same row again
+  // (selectSongRow/selectPersonRow's toggle), or Escape (the keydown
+  // listener below) - that's enough ways to close one without this.
 });
 
 document.addEventListener("keydown", function (event) {
@@ -1059,13 +1057,55 @@ document.addEventListener("htmx:afterSettle", function () {
     }
   }
 
-  // afterRequest covers both a normal response and an HTTP error status;
-  // sendError/timeout cover the request never getting a response at all
-  // (offline, connection refused, timed out) - either way the button needs
-  // to come back, or a real failure would leave it disabled forever.
+  // htmx:afterRequest alone covers every terminal outcome - a normal
+  // response, an HTTP error status, and (checked directly against the
+  // vendored htmx.min.js source) the no-response cases too: onerror/
+  // onabort/ontimeout each explicitly fire "htmx:afterRequest" themselves
+  // before their own sendError/sendAbort/timeout event. Listening to those
+  // as well used to double-decrement requestsInFlight for the exact same
+  // request - harmless with only one request in flight (the Math.max(0,
+  // ...) clamp ate it), but with two-plus concurrent requests, one
+  // erroring/timing out could zero the counter early and hide the bar (or
+  // re-enable a button) while another request was still genuinely running.
   document.addEventListener("htmx:afterRequest", requestSettled);
-  document.addEventListener("htmx:sendError", requestSettled);
-  document.addEventListener("htmx:timeout", requestSettled);
+  // onload's own response/swap handling runs inside a try/catch that fires
+  // "htmx:onLoadError" and *skips* "htmx:afterRequest" entirely if
+  // anything in there throws (a detached swap target, a bad oob id, etc.) -
+  // without this, that path left requestsInFlight permanently incremented
+  // and the bar stuck on for the rest of the page's life, since nothing
+  // else ever decrements it. Rare (htmx already guards the obvious cases),
+  // but exactly the kind of "no specific circumstances" occasional stuck
+  // spinner this is here to close off.
+  document.addEventListener("htmx:onLoadError", requestSettled);
+
+  // A stuck #htmx-progress-bar has one more source that isn't a request-
+  // lifecycle bug at all: the plain-<a> click handler further down this
+  // file turns the bar on for an ordinary full-page navigation and
+  // deliberately never turns it back off itself, betting the page is about
+  // to be replaced. That bet fails whenever this exact page survives
+  // instead - the user clicks a link, then hits Back/Stop before it
+  // finishes loading, and later browses back to this same page via the
+  // browser's bfcache. bfcache restores the page (DOM, JS state - this
+  // closure's own requestsInFlight included - and all) exactly as it was
+  // at the moment they navigated away, .active class included, so the bar
+  // resumes sweeping on a page where nothing is actually loading. Resets
+  // requestsInFlight too, not just the class: leaving it at whatever
+  // stale, nonzero count it had would mean the *next* real request's own
+  // requestSettled decrements to a still-nonzero number instead of 0,
+  // silently breaking the "clear the bar" case above without the bar ever
+  // going stuck-visible again to notice by. `pageshow` fires on both a
+  // fresh load and a bfcache restore; `event.persisted` is only true for
+  // the latter, so this never touches a normal load's own real state.
+  window.addEventListener("pageshow", function (event) {
+    if (!event.persisted) {
+      return;
+    }
+    requestsInFlight = 0;
+    var bar = progressBar();
+    if (bar) {
+      bar.classList.remove("active");
+    }
+  });
 })();
 
 // Plain <a href> full-page navigation (e.g. the plan links in

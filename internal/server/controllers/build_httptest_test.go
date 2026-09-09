@@ -1,12 +1,14 @@
 package controllers
 
-// Call-volume/timing test for the plan-fetch path (fetchPlansByFilter),
-// mirroring internal/scheduling's song-fetch concurrency test - same
-// pco.SetBaseURLForTesting seam, same reasoning: a local httptest.Server
-// stands in for Planning Center, no real network call or credentials
-// involved. Unlike the song-fetch path, this one has no cache to test (see
-// build.go: the plan picker deliberately re-fetches per search/page
-// request), so only the concurrency bound gets its own test here.
+// Call-volume/timing test for the underlying plan-fetch path
+// (fetchPlansByFilter), mirroring internal/scheduling's song-fetch
+// concurrency test - same pco.SetBaseURLForTesting seam, same reasoning: a
+// local httptest.Server stands in for Planning Center, no real network
+// call or credentials involved. fetchPlansByFilter itself still has no
+// cache (the upcoming tab re-fetches per search/page request, same as
+// before) - only its concurrency bound gets its own test here. The past
+// tab's own cache-aside + windowed-fetch layer built on top of it has its
+// own dedicated tests in build_past_plans_cache_test.go.
 
 import (
 	"context"

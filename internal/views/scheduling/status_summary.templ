@@ -52,13 +52,15 @@ func assignmentStatusBucket(status string) string {
 }
 
 // statusBadge is one assignment's status badge, in whichever of the three
-// assignmentStatusBucket labels applies - shared between
-// positionGroupCard's own row (which skips rendering this entirely for
-// the common Confirmed case - see its own call site) and personBadgeSpans'
-// sidebar detail card (which always renders it, Confirmed included, since
-// that's the full-detail view). Declined/Unconfirmed reuse the existing
-// status-needed/status-pending badge tones (badge.css) already used
-// elsewhere on this page, rather than introducing new colors.
+// assignmentStatusBucket labels applies - shared between positionGroupCard's
+// own row and personBadgeSpans' sidebar detail card, both of which always
+// render it (Confirmed included - it used to be suppressed there as the
+// assumed-common case, but a status badge missing entirely read as "we don't
+// know," not "confirmed," so Confirmed now gets its own visible badge same
+// as the other two). Declined/Unconfirmed reuse the existing status-needed/
+// status-pending badge tones (badge.css) already used elsewhere on this
+// page; Confirmed reuses the plain default badge tone (see the switch
+// below), rather than introducing a new color for it.
 templ statusBadge(status string) {
 	switch bucket := assignmentStatusBucket(status); bucket {
 		case "Declined":
@@ -241,6 +243,26 @@ templ TeamGlanceList(positions []PositionGroupView) {
 								<button type="button" class="glance-link muted" data-position-id={ elementID } data-row-id={ fmt.Sprintf("%d", a.ID) } onclick="jumpToTeamPosition(this)">
 									@components.Avatar(a.AvatarURL)
 									{ a.Name }
+									<!--
+										A declined assignment is still the
+										position's assigned row until someone
+										actually removes/replaces it (see
+										assignmentStatusBucket's own staleness
+										note) - this card used to render that
+										name with nothing to distinguish it
+										from an actually-filled position,
+										which read as "someone declined and
+										we lost track of it." Flagging it
+										inline (same badge positionGroupCard's
+										own row already shows) instead of
+										hiding the name outright: the position
+										still needs a human decision either
+										way, and a "who declined" glance is as
+										useful here as it is on the Team tab.
+									-->
+									if assignmentStatusBucket(a.Status) == "Declined" {
+										@statusBadge(a.Status)
+									}
 								</button>
 							}
 						</div>

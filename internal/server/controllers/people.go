@@ -325,7 +325,7 @@ func (sc *SchedulingController) SetPositionPreference(c *fiber.Ctx) error {
 	} else if body.TeamID == "" || body.TeamPositionID == "" || body.PersonID == "" {
 		errMsg = "team, position, and person are required"
 	} else if err := setPersonTeamPositionPreference(middleware.RequestContext(c), body.TeamID, body.TeamPositionID, body.PersonID, body.SchedulePreference); err != nil {
-		errMsg = err.Error()
+		errMsg = friendlyPCOErr(err)
 	}
 
 	return sc.renderPositionAssignments(c, body.TeamID, body.TeamPositionID, errMsg)
@@ -365,7 +365,15 @@ func (sc *SchedulingController) DeletePositionPreference(c *fiber.Ctx) error {
 
 	errMsg := ""
 	if err := pco.DeletePersonTeamPositionAssignment(middleware.RequestContext(c), teamID, teamPositionID, assignmentID); err != nil {
-		errMsg = err.Error()
+		// friendlyPCOErr, not err.Error() - this delete only ever removes
+		// this one team-position eligibility/preference (see
+		// setPersonTeamPositionPreference's own doc comment; it's a
+		// PersonTeamPositionAssignment, never the actual PCO Person), but a
+		// signed-in user with only PCO Services Viewer access on this team
+		// still gets a real PCO 403 for it, and the raw JSON:API error text
+		// used to surface as-is - easy to misread as "this tried to delete
+		// something much bigger than it did."
+		errMsg = friendlyPCOErr(err)
 	}
 
 	return sc.renderPositionAssignments(c, teamID, teamPositionID, errMsg)

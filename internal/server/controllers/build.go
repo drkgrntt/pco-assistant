@@ -336,7 +336,13 @@ func fetchUpcomingPlans(ctx context.Context, serviceTypeID string) ([]pco.PlanDa
 // fetchPastPlans is fetchPlansByFilter for the "past" tab - most recent
 // first ("-sort_date"), since browsing backward from "what just happened"
 // is the far more common way to look for a specific past service than
-// starting from the oldest plan this org has ever had.
+// starting from the oldest plan this org has ever had. Unbounded (subject
+// only to fetchPlansByFilter's own sanity ceiling) and uncached - no
+// ordinary Past-tab render should call this directly any more (see
+// fetchPastPlansForSearch/fetchPastPlansCached, build_past_plans_cache.go,
+// which every real caller goes through instead); this stays as the deep
+// fallback for a search that comes up empty against the cached, windowed
+// default fetch.
 func fetchPastPlans(ctx context.Context, serviceTypeID string) ([]pco.PlanData, error) {
 	return fetchPlansByFilter(ctx, serviceTypeID, "past", "-sort_date")
 }
@@ -400,9 +406,10 @@ func paginateUpcomingPlans(filtered []pco.PlanData, page int) (pageOfPlans []pco
 }
 
 // combinedPlansForServiceType is the Build page's plan-picker source: fetch
-// once (past's own filter/order when past is true - see fetchPastPlans -
-// otherwise the existing upcoming behavior, unchanged), filter by search,
-// paginate, and only then compute each shown row's song-lineup status
+// once (the past tab's own cached, windowed fetch when past is true - see
+// fetchPastPlansForSearch/build_past_plans_cache.go - otherwise the
+// existing upcoming behavior, unchanged), filter by search, paginate, and
+// only then compute each shown row's song-lineup status
 // (planStatus, in sets.go), team status (rosterStatus, in rosters.go), and
 // local note (see plan_notes/GetPlanNote) - each of those is its own
 // local/PCO lookup, so doing it per-row only for the up-to-
@@ -420,18 +427,24 @@ func paginateUpcomingPlans(filtered []pco.PlanData, page int) (pageOfPlans []pco
 // sequential round trips just to render the picker. Returns the clamped
 // page actually shown alongside the total page count.
 func (sc *SchedulingController) combinedPlansForServiceType(ctx context.Context, organizationID, serviceTypeID, search string, page int, past bool) (rows []views.PlanRow, currentPage int, totalPages int, errMsg string) {
-	fetch := fetchUpcomingPlans
-	if past {
-		fetch = fetchPastPlans
-	}
-	plans, err := fetch(ctx, serviceTypeID)
-	if err != nil {
-		return nil, 1, 1, err.Error()
-	}
-
 	// Best-effort: a failed notes lookup just means search/display fall
 	// back to no notes for this render, not a broken plan picker.
 	notes, _ := sc.store.ListPlanNotesForServiceType(ctx, organizationID, serviceTypeID)
+
+	var plans []pco.PlanData
+	var err error
+	if past {
+		// Cached + windowed - see build_past_plans_cache.go's own header
+		// comment for why the Past tab needs this and fetchUpcomingPlans
+		// below doesn't (a handful of future plans is naturally small and
+		// isn't the reported problem).
+		plans, err = fetchPastPlansForSearch(ctx, organizationID, serviceTypeID, search, notes)
+	} else {
+		plans, err = fetchUpcomingPlans(ctx, serviceTypeID)
+	}
+	if err != nil {
+		return nil, 1, 1, err.Error()
+	}
 
 	filtered := filterUpcomingPlans(plans, search, notes)
 	pageOfPlans, page, totalPages := paginateUpcomingPlans(filtered, page)

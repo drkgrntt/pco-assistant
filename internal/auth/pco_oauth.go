@@ -35,6 +35,20 @@ func oauthRedirectURI() string  { return os.Getenv("PCO_OAUTH_REDIRECT_URI") }
 // AuthorizeURL builds the URL to send the browser to start sign-in. state is
 // an opaque value the caller generates and verifies on callback (CSRF
 // protection for the redirect).
+//
+// prompt=login asks PCO's own OAuth server to force a fresh login instead of
+// silently re-approving off whatever PCO session cookie the browser already
+// carries (PCO's own session lives in its own cookie jar, entirely separate
+// from this app's - clearing this app's session on logout was never able to
+// touch it). Without this, clicking "Sign in" right after logging out of
+// this app - or wanting to switch which PCO account this app is connected
+// to - just silently signed the same person back in with no login screen at
+// all, since PCO had no reason to think anything needed re-approving. This
+// is the standard OIDC prompt value; PCO's own docs don't enumerate
+// /oauth/authorize's supported prompt values, so if PCO's authorize endpoint
+// turns out not to honor it, worst case it's a no-op query param and
+// behavior reverts to today's silent-reuse - confirm live against a real
+// sign-out/sign-in round trip rather than assuming this is the whole fix.
 func AuthorizeURL(state string) string {
 	q := url.Values{
 		"client_id":     {oauthClientID()},
@@ -42,6 +56,7 @@ func AuthorizeURL(state string) string {
 		"response_type": {"code"},
 		"scope":         {oauthScope},
 		"state":         {state},
+		"prompt":        {"login"},
 	}
 
 	return authorizeURL + "?" + q.Encode()

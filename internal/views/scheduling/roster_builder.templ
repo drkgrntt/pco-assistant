@@ -459,9 +459,7 @@ templ positionGroupCard(serviceTypeID, planID string, schedulePreferenceOptions 
 			<ul class="assignment-list">
 				for _, a := range pos.Assigned {
 					@components.PersonListItem("", templ.Attributes{"data-row-id": fmt.Sprintf("%d", a.ID), "onclick": "selectPersonRow(this, event)"}, a.AvatarURL, a.Name) {
-						if assignmentStatusBucket(a.Status) != "Confirmed" {
-							@statusBadge(a.Status)
-						}
+						@statusBadge(a.Status)
 						if a.Published {
 							@components.Badge("published", "Published")
 						}
