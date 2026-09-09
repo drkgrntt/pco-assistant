@@ -40,6 +40,17 @@
   margin-bottom: var(--space-4);
 }
 
+/* The container always renders (so its id stays addressable for
+   songTagFilterChipsOOB's out-of-band refresh even with zero tags yet -
+   see song_tags.templ), toggled via the native hidden attribute rather
+   than an `if`. Without this override the class's own `display: flex`
+   above would out-cascade the browser's default `[hidden] { display:
+   none }` at equal specificity and the empty state would show as a bare
+   gap. */
+.song-tag-filter-chips[hidden] {
+  display: none;
+}
+
 .tag-filter-item {
   position: relative;
   display: inline-flex;
@@ -139,6 +150,33 @@
 
 .tag-chip .badge {
   margin-right: 0;
+}
+
+/* songTagBulkAddForm's own collapsed-by-default wrapper (song_tags.templ)
+   - same .song-tag-add-toggle look as each card's own "+ Add tag" summary
+   below, just scoped to this page-level form instead of one card. */
+.song-tag-bulk-details {
+  margin-bottom: var(--space-4);
+}
+
+.song-tag-bulk-hint {
+  margin-top: var(--space-1);
+}
+
+/* Each SongTagCard's own bulk-select checkbox (song_tags.templ) - a small
+   muted row above that card's tags/add-tag form, not nested inside
+   song-tag-bulk-form itself (it's associated via the checkbox's own
+   form="song-tag-bulk-form" attribute instead), so form.inline's
+   label.checkbox-label rule (forms.css) doesn't reach it - restated here
+   instead. */
+.song-tag-bulk-select {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+  color: var(--muted);
+  font-size: var(--text-sm);
+  cursor: pointer;
 }
 
 /* The add-tag form starts collapsed behind this <summary> toggle (see
