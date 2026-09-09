@@ -7,37 +7,34 @@ import "testing"
 // and text both come from, replacing the old songVocalRangeLowDisplay/
 // songVocalRangeHighDisplay pair (each of which discarded its computed
 // pitch-class/octave ints into a string, computing EffectiveVocalRange/
-// PitchClassAndOctave twice per row for no reason).
+// PitchClassAndOctave twice per row for no reason). Updated for migration
+// 00043's shape (the exact entered pitch class/octave, not an offset from
+// a re-anchored tonic).
 
 func TestComputeVocalRangeNotePairAsMeasuredNoTransposition(t *testing.T) {
-	// Reference key D, low offset 10, high offset 29 (the same stored
-	// offsets as the ComputeVocalRangeOffsets worked example in
-	// scheduling/song_vocal_range_test.go, D/C3/G4). targetKey ==
-	// referenceKey, so no transposition shift is applied - but per
-	// EffectiveVocalRange's own doc comment, the reconstructed notes land
-	// at the fixed referenceTonicOctave anchor (3), not necessarily the
-	// original entry octave: D's tonic at octave 3 is absolute semitone
-	// 38, so low (38+10=48) is pitch class 0 octave 4, high (38+29=67) is
-	// pitch class 7 octave 5.
-	pair := computeVocalRangeNotePair("D", 10, 29, "D")
+	// Reference key D, low note C3 (pitch class 0, octave 3), high note G4
+	// (pitch class 7, octave 4). targetKey == referenceKey, so no
+	// transposition shift is applied - the pair reconstructs exactly what
+	// was entered, byte-for-byte, no anchor-octave guess involved.
+	pair := computeVocalRangeNotePair("D", 0, 3, 7, 4, "D")
 	if !pair.OK {
 		t.Fatal("expected pair.OK, got false")
 	}
-	if pair.LowPitchClass != 0 || pair.LowOctave != 4 {
-		t.Errorf("low = (pc %d, oct %d), want (pc 0, oct 4)", pair.LowPitchClass, pair.LowOctave)
+	if pair.LowPitchClass != 0 || pair.LowOctave != 3 {
+		t.Errorf("low = (pc %d, oct %d), want (pc 0, oct 3) - C3", pair.LowPitchClass, pair.LowOctave)
 	}
-	if pair.HighPitchClass != 7 || pair.HighOctave != 5 {
-		t.Errorf("high = (pc %d, oct %d), want (pc 7, oct 5)", pair.HighPitchClass, pair.HighOctave)
+	if pair.HighPitchClass != 7 || pair.HighOctave != 4 {
+		t.Errorf("high = (pc %d, oct %d), want (pc 7, oct 4) - G4", pair.HighPitchClass, pair.HighOctave)
 	}
 }
 
 func TestComputeVocalRangeNotePairTransposedIntoDifferentKey(t *testing.T) {
-	// Same stored range as above (reference D, offsets 10/29), but this
-	// time transposed a whole step down into C - every note should shift
-	// down 2 semitones from the as-measured case, the interval width
-	// (29-10=19 semitones) preserved exactly.
-	measured := computeVocalRangeNotePair("D", 10, 29, "D")
-	transposed := computeVocalRangeNotePair("D", 10, 29, "C")
+	// Same stored range as above (reference D, C3-G4), but this time
+	// transposed a whole step down into C - every note should shift down 2
+	// semitones from the as-measured case, the interval width preserved
+	// exactly.
+	measured := computeVocalRangeNotePair("D", 0, 3, 7, 4, "D")
+	transposed := computeVocalRangeNotePair("D", 0, 3, 7, 4, "C")
 	if !transposed.OK {
 		t.Fatal("expected transposed.OK, got false")
 	}
@@ -61,10 +58,10 @@ func TestComputeVocalRangeNotePairTransposedIntoDifferentKey(t *testing.T) {
 }
 
 func TestComputeVocalRangeNotePairUnparseableKeyIsNotOK(t *testing.T) {
-	if pair := computeVocalRangeNotePair("not-a-key", 0, 5, "D"); pair.OK {
+	if pair := computeVocalRangeNotePair("not-a-key", 0, 3, 7, 4, "D"); pair.OK {
 		t.Error("expected pair.OK = false for an unparseable reference key")
 	}
-	if pair := computeVocalRangeNotePair("D", 0, 5, "not-a-key"); pair.OK {
+	if pair := computeVocalRangeNotePair("D", 0, 3, 7, 4, "not-a-key"); pair.OK {
 		t.Error("expected pair.OK = false for an unparseable target key")
 	}
 }

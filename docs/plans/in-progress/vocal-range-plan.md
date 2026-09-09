@@ -50,18 +50,18 @@ range: G3-D5 (in this key)" line on the Build page's song detail card
 (`song_detail_card.templ`) showing the transposed result live - see this
 plan's own "Phase 2 prerequisite: the key engine" and "Phase 2: song
 vocal range" sections below for the exact math, unchanged from what's
-written there, with one flagged deviation: `EffectiveVocalRange` anchors
-the reference key's tonic at a **fixed** octave (3) when reconstructing a
-display value at render time, rather than the original entry-time octave
-- the `song_vocal_ranges` schema, as specified, only persists the two
-offsets and the reference key text, not the octave the low/high notes
-were actually typed in, so the exact original register can't be
-recovered byte-for-byte; a fixed anchor preserves the interval's real
-width and the correct transposition shift (the two things that actually
-matter for a display), just not necessarily the exact octave a director
-had in mind. See that function's own doc comment for the full reasoning.
-Phase 3's own mismatch warning has since shipped too - see the status
-paragraph below. The matrix view and the crowdsourced-default question
+written there, **with one flagged deviation that was since fixed** (see
+this doc's own 2026-09-09 entry near the bottom): `EffectiveVocalRange`
+originally anchored the reference key's tonic at a fixed octave (3) when
+reconstructing a display value at render time, rather than the original
+entry-time octave, since the schema as specified here only persisted an
+offset and the reference key text, not the octave the low/high notes were
+actually typed in - that turned into a real reported bug (a note entered
+as E3 came back displayed as E4), fixed by storing the exact entered pitch
+class/octave instead of an offset at all (migration
+`00043_song_vocal_range_exact_register.sql`). Phase 3's own mismatch
+warning has since shipped too - see the status paragraph below. The
+matrix view and the crowdsourced-default question
 remain not started - see those sections below, unchanged from the
 original plan.
 
@@ -260,6 +260,44 @@ caveat in the request is deliberately not addressed here - this still
 assumes one range per song, same as Phases 1-2's whole schema; revisiting
 that is its own future decision, not something this fix tries to
 anticipate.
+
+**Song vocal range storage fixed to keep the exact entered register,
+2026-09-09** - a real production bug, reported directly: a song's range
+entered as E3-E4 against reference key A came back displayed as E4-E5,
+still musically valid (relatively) but not what was typed, and an
+unreasonably wide ask even ignoring that. Root cause was exactly the
+deviation this doc's own Phase 2 status paragraph had already flagged:
+migration 00041 stored a *relative* interval (low/high offset above a
+tonic anchored to the low note's own entry-time octave), but
+`EffectiveVocalRange` reconstructed a displayable register at render time
+by re-anchoring the tonic to a FIXED octave (`referenceTonicOctave = 3`)
+instead of the real entry-time one - those two conventions didn't agree,
+and the stored offsets alone couldn't tell them apart (multiple original
+octaves collapse to the same offset). Fixed by migration
+`00043_song_vocal_range_exact_register.sql`: `song_vocal_ranges` now
+stores the low/high notes as their own exact pitch class + octave
+(`lowest_pitch_class`/`lowest_octave`/`highest_pitch_class`/
+`highest_octave`, the same shape `person_vocal_ranges` already uses)
+instead of an offset from a re-anchored tonic; `EffectiveVocalRange`
+(`internal/scheduling/song_vocal_range.go`) now just shifts those two
+absolute values by `SignedSemitoneDelta` directly - an exact round trip
+whenever the target key equals the reference key, no anchor-octave guess
+involved at all, and `ComputeVocalRangeOffsets`/`referenceTonicOctave` are
+gone entirely (there's nothing left for them to do). The migration
+backfills any existing row to the exact values the old fixed-anchor logic
+already displayed, so an already-stored range's display doesn't change
+until the next time it's re-saved (the original entered octave genuinely
+wasn't recoverable from what was stored - that's the bug). Every caller
+updated to match: `setSongVocalRangeFromForm`
+(`internal/server/controllers/song_vocal_range.go`),
+`songEffectiveVocalRangeAbs` (`sets_builder.go`),
+`computeVocalRangeNotePair`/`vocalRangePreviewControls`
+(`song_vocal_range.templ`, whose preview data attributes are now
+`data-low-abs`/`data-high-abs` rather than `data-low-offset`/
+`data-high-offset`), `vocalRangeFormFields` (`quick_action.templ`), and the
+client-side preview math in `scheduling.js` (`renderVocalRangePreview`),
+which drops its own duplicated `vocalRangePreviewTonicOctave` constant
+entirely now that there's no tonic-anchor concept left to mirror.
 
 Written 2026-09-06, expanding two related `docs/ideas.md` bullets into one
 coherent build plan: **"Vocal range per vocalist"** (People section,

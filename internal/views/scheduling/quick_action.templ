@@ -241,7 +241,7 @@ func vocalRangeFormFields(vr scheduling.SongVocalRange) map[string]string {
 	if vr.ID == 0 {
 		return map[string]string{}
 	}
-	lowAbs, highAbs, ok := scheduling.EffectiveVocalRange(vr.ReferenceKey, vr.LowOffsetSemitones, vr.HighOffsetSemitones, vr.ReferenceKey)
+	lowAbs, highAbs, ok := scheduling.EffectiveVocalRange(vr.ReferenceKey, vr.LowestPitchClass, vr.LowestOctave, vr.HighestPitchClass, vr.HighestOctave, vr.ReferenceKey)
 	if !ok {
 		return map[string]string{}
 	}

@@ -17,11 +17,11 @@ import (
 // the Build page's song detail card, since a song's range is a fact about
 // the song itself, reused across every plan it appears in, not a
 // per-occurrence value (see that plan doc's own reasoning). The reference
-// key is entered alongside the low/high notes so the range can be stored
-// as a transposable interval (scheduling.ComputeVocalRangeOffsets) rather
-// than a bare note pair that would be meaningless without knowing what key
-// it was measured against. That transposable-interval storage is also what
-// lets vocalRangePreviewControls below preview *any* key/octave on demand -
+// key is entered alongside the low/high notes so the range can be
+// transposed (scheduling.EffectiveVocalRange) rather than being a bare note
+// pair that would be meaningless without knowing what key it was measured
+// against. That reference-key pairing is also what lets
+// vocalRangePreviewControls below preview *any* key/octave on demand -
 // this page used to auto-show a "current key" line too (transposed into
 // whatever key the song's PCO arrangement happened to be cached as), but
 // that's gone now: a song can have multiple PCO arrangements in different
@@ -166,7 +166,7 @@ templ SongVocalRangesTable(ranges []scheduling.SongVocalRange, songTitles map[st
 				</thead>
 				<tbody>
 					for _, r := range ranges {
-						{{ measured := computeVocalRangeNotePair(r.ReferenceKey, r.LowOffsetSemitones, r.HighOffsetSemitones, r.ReferenceKey) }}
+						{{ measured := computeVocalRangeNotePair(r.ReferenceKey, r.LowestPitchClass, r.LowestOctave, r.HighestPitchClass, r.HighestOctave, r.ReferenceKey) }}
 						<tr>
 							<td>
 								if title, ok := songTitles[r.SongID]; ok {
@@ -237,18 +237,20 @@ type vocalRangeNotePair struct {
 	OK                         bool
 }
 
-// computeVocalRangeNotePair transposes a stored song vocal range
-// (referenceKey + offsets, see scheduling.ComputeVocalRangeOffsets) into
-// targetKey and splits the result into playable pitch-class/octave pairs.
-// Passing targetKey == referenceKey (as SongVocalRangesTable's "as
-// measured" line does) reconstructs the range as it was actually measured
-// - no transposition, since the delta ends up 0. OK is false if either
-// key string fails to parse (scheduling.EffectiveVocalRange) - the
-// caller's job to skip rendering in that case, matching this codebase's
-// established "best-effort, quiet skip" convention (e.g.
-// keyTransitionWarnings' unparseable-key skip).
-func computeVocalRangeNotePair(referenceKey string, lowOffset, highOffset int, targetKey string) vocalRangeNotePair {
-	lowAbs, highAbs, ok := scheduling.EffectiveVocalRange(referenceKey, lowOffset, highOffset, targetKey)
+// computeVocalRangeNotePair transposes a stored song vocal range (the exact
+// low/high notes as entered against referenceKey) into targetKey and splits
+// the result into playable pitch-class/octave pairs. Passing targetKey ==
+// referenceKey (as SongVocalRangesTable's "as measured" line does)
+// reconstructs the range exactly as it was actually measured - no
+// transposition, since the delta ends up 0, and no anchor-octave guess
+// involved (see scheduling.EffectiveVocalRange's own doc comment - this
+// used to be an approximation before migration 00043 fixed it). OK is
+// false if either key string fails to parse - the caller's job to skip
+// rendering in that case, matching this codebase's established
+// "best-effort, quiet skip" convention (e.g. keyTransitionWarnings'
+// unparseable-key skip).
+func computeVocalRangeNotePair(referenceKey string, lowPitchClass, lowOctave, highPitchClass, highOctave int, targetKey string) vocalRangeNotePair {
+	lowAbs, highAbs, ok := scheduling.EffectiveVocalRange(referenceKey, lowPitchClass, lowOctave, highPitchClass, highOctave, targetKey)
 	if !ok {
 		return vocalRangeNotePair{}
 	}
@@ -314,10 +316,11 @@ templ vocalRangeLine(label, key string, pair vocalRangeNotePair) {
 // The transposition math runs entirely client-side
 // (renderVocalRangePreview, scheduling.js) rather than round-tripping
 // through htmx on every keystroke/click - the data-* attributes below are
-// exactly r's own stored reference_key/low_offset/high_offset, the same
-// inputs scheduling.EffectiveVocalRange takes server-side, so the JS
-// mirrors that function's arithmetic (see that section's own doc comment
-// in scheduling.js for why duplicating it is safe here) rather than
+// r's own stored reference_key plus its exact low/high notes expressed as
+// absolute semitones (scheduling.AbsoluteSemitone), the same inputs
+// scheduling.EffectiveVocalRange takes server-side, so the JS mirrors that
+// function's arithmetic (see that section's own doc comment in
+// scheduling.js for why duplicating it is safe here) rather than
 // re-deriving new math. The key input reuses musicalKeyOptions' shared
 // "key-options" datalist (rendered once, in SongVocalRanges' entry form)
 // rather than a per-row copy - a <datalist> can back any number of
@@ -326,8 +329,8 @@ templ vocalRangePreviewControls(r scheduling.SongVocalRange) {
 	<div
 		class="vocal-range-preview"
 		data-reference-key={ r.ReferenceKey }
-		data-low-offset={ fmt.Sprintf("%d", r.LowOffsetSemitones) }
-		data-high-offset={ fmt.Sprintf("%d", r.HighOffsetSemitones) }
+		data-low-abs={ fmt.Sprintf("%d", scheduling.AbsoluteSemitone(r.LowestPitchClass, r.LowestOctave)) }
+		data-high-abs={ fmt.Sprintf("%d", scheduling.AbsoluteSemitone(r.HighestPitchClass, r.HighestOctave)) }
 		data-octave-shift="0"
 	>
 		<div class="vocal-range-preview-controls">

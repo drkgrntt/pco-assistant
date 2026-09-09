@@ -1846,7 +1846,7 @@ func songEffectiveVocalRangeAbs(vocalRangesBySong map[string]scheduling.SongVoca
 	if !ok {
 		return 0, 0, false
 	}
-	return scheduling.EffectiveVocalRange(vr.ReferenceKey, vr.LowOffsetSemitones, vr.HighOffsetSemitones, effectiveKey)
+	return scheduling.EffectiveVocalRange(vr.ReferenceKey, vr.LowestPitchClass, vr.LowestOctave, vr.HighestPitchClass, vr.HighestOctave, effectiveKey)
 }
 
 // vocalistsWithRangesOnFile intersects personIDs (a plan's roster
