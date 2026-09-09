@@ -86,6 +86,7 @@ that first. Facts worth adding here that aren't in CLAUDE.md:
 | Unattended sync (Song Info + person-data refresh + person-data recent-history discovery) | shipped | hourly `jobs.PCOJobs` cron, one org at a time, borrowing and refreshing that org's own idle session token - reuses the exact same paced/guarded sync entry points (`triggerSongInfoQueueSync`, `triggerPersonDataSyncCtx`) an ordinary render already triggers, low-priority (`pco.WithPriority`, 20) |
 | Live-sync poll-while-open (`SyncCheck`, one `GetItems` per open Build-page Songs tab per 30s) | shipped | poll-while-open only (option C) - bounded by concurrent viewers, not total org/plan count; tagged `pco.WithPriority(ctx, 20)` so a poll tick never contends with interactive traffic on the same token; a failed poll tick is treated as "no change," never surfaced as an error |
 | Team/position lists and team-member names (fetched live, uncached, on every roster render) | fixed | cached `fetchRosterSharedPCOData` (`rosters_shared_cache.go`), 20s TTL - shorter than the 60s norm since team membership can change mid-session; manual "Refresh team data" button is the remedy for the remaining window |
+| Build page "Past plans" tab (`fetchPastPlans`, uncached, no date bound - walked a service type's *entire* PCO plan history on every tab open/search/Prev/Next click) | fixed | cached `fetchPastPlansCached` (`build_past_plans_cache.go`), keyed by (organization, service type), 30min TTL; default fetch itself windowed to the last `buildPastPlansWindowMonths` (18) via `fetchPastPlansWindowed`'s early-exit paging, with a search that misses the window falling back to one uncached full/unbounded fetch (`fetchPastPlansForSearch`) so an older plan stays reachable |
 | Song attachments (lead sheets/chord charts) | shipped | cached at sync time alongside arrangement info (`fetchAndCacheSongAttachments`, one more PCO call per uncached song - Song Info sync is now 2 calls/song, not 1); the attachment's own `url` is never cached, a click-triggered route live-fetches a fresh one instead |
 | Song leader -> vocal notes sync (`syncLeaderNote`, `sets_publish.go`) | shipped | `PublishSet` rides its existing `GetItems` call (adds `Include: []string{"item_notes"}` only when a vocal category is actually configured - zero new calls otherwise); `RefreshSongInfo` previously made no `GetItems` call at all, so it gains one new per-plan `GetItems(Include: item_notes)` call, but only when a service type has configured the vocal notes category setting (opt-in cost, not paid by every org) |
 | "Browse all songs" title-click detail popover (`BuildCandidateDetails`, `sets_builder.go`) | shipped | one song per click, not the whole library - `candidateSongView`'s general-purpose lookup (used by the up-to-50-row search results too) stays cache-only with no fetch, but this single-song handler resolves arrangement info through `resolveArrangementInfo`/`resolveArrangementCacheInfo` instead, the same enqueue-on-miss path the main service order already uses: a cache hit costs nothing new, a miss enqueues into the existing paced Song Info sync queue (`enqueueSongSync` + a `triggerSongInfoQueueSync` deferred in this handler) rather than fetching inline, so an uncached song's info fills in on a later click/reload instead of staying blank forever - never a synchronous per-click PCO call |
@@ -807,3 +808,36 @@ out to 100-200 sequential round trips per load.
   those fields for a header too), and PCO's `UpdateItemParams` has no
   `ItemType` field at all - an item's type is create-time-only, so the
   edit form has no type control and never tries to change it.
+- **Build page "Past plans" tab, cached and windowed (2026-09-09)** - the
+  reported symptom was the Past tab being slow enough that a real user gave
+  up waiting. Root cause: `fetchPastPlans` (`build.go`) had no date bound
+  and no caching at all, so opening the tab, every search-box submit, and
+  every Prev/Next click (plain submit buttons on the same search form) each
+  re-fanned `fetchPlansByFilter` out across a service type's *entire*
+  historical plan list from PCO - every page, on every single interaction.
+  `fetchPlansByFilter`'s own concurrent fan-out was already correct and
+  left untouched; the fix is entirely about not calling it so often or so
+  broadly. New `build_past_plans_cache.go`: `fetchPastPlansCached` caches
+  the result per (organization, service type) - past plans are
+  per-service-type data, unlike the roster shared cache above which needs
+  no org id since it's keyed on already-globally-unique PCO ids - for
+  `buildPastPlansCacheTTL` (30 minutes, much longer than the 60s/20s norm,
+  since a plan's title/dates are fixed once it's actually in the past,
+  unlike a song library or team membership). The default (cold-cache) fetch
+  is itself windowed via `fetchPastPlansWindowed`: pages sequentially
+  (deliberately not `RunConcurrently`'d - the fan-out would need to know
+  the total page count before fetching any of them, which defeats "stop
+  early") through the `-sort_date`-ordered "past" filter, stopping as soon
+  as a page's oldest plan crosses `buildPastPlansWindowMonths` (18 months)
+  back, rather than walking a multi-year history to the sanity ceiling.
+  `combinedPlansForServiceType`'s past-tab branch now calls
+  `fetchPastPlansForSearch`, which checks the cached/windowed result first
+  and only pays for one further uncached, unbounded `fetchPastPlans` call
+  (unchanged - the pre-existing full fetch) when a search term doesn't
+  match anything *and* the windowed result was truncated (meaning older,
+  unfetched plans might still contain a match) - so bounding the default
+  load never makes an older plan permanently unreachable. No PCO-side date
+  filter was added (`PlansParams` has no such param today, and adding one
+  would need its own live-verification pass per this doc's own standing
+  rule - out of scope here); the window is enforced purely by this app
+  stopping its own paging early against the ordering PCO already provides.
