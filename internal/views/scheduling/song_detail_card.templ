@@ -283,9 +283,21 @@ templ songVocalRangeLine(song SetSongView, oob bool) {
 // in the order of service (set_builder.templ). Its content mirrors what
 // the row itself already carries (title, arrangement info, badges) plus
 // what there wasn't room for at a table row's height (the arrangement's
-// own Notes) and every one of the row's own actions, spelled out as
-// labeled buttons instead of icons-only - the sidebar has the room a
-// table cell doesn't.
+// own Notes) and every one of the row's own actions.
+//
+// The actions themselves collapse the same way the row's own already do
+// (see .build-detail-actions, build-detail-card.css): Duplicate and Remove
+// stay as two always-visible buttons, side by side rather than the old
+// full-width-stacked column, with everything else - Replace, "Update from
+// Planning Center" (plus its confirmation span), and the
+// tag/relate/role/vocal-range quick actions - tucked behind one "More
+// actions" Disclosure (songDetailMenuToggle/songDetailMenuItems below).
+// That's a single combined menu rather than the row's own two separate
+// Disclosures (rowMenuToggle/rowMenuItems for tag/relate/role/vocal-range,
+// replaceMenuToggle/replaceMenuItems for Replace, both above): the row
+// splits them across two icon slots to keep each popover short at the
+// table's cramped row height, but the sidebar has room for one toggle to
+// cover all six - same busy-buttons problem, one menu instead of two.
 //
 // The action forms here (duplicate/remove/replace) are the exact same
 // hx-post/hx-delete targets and hx-confirm text as the row's own -
@@ -372,52 +384,7 @@ templ songDetailCard(data SetBuilderData, song SetSongView) {
 					@components.IconRemove()
 					Remove
 				</button>
-				if len(data.ReplaceCandidates) > 0 {
-					<form
-						class="replace-form"
-						hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/replace", data.ServiceTypeID, data.PlanID, song.ID) }
-						hx-target="#set-builder-body"
-						hx-swap="outerHTML"
-						hx-confirm={ fmt.Sprintf("Replace %q with the selected song?", song.Title) }
-					>
-						<select name="song_id" required>
-							<option value="" selected disabled>Replace with...</option>
-							for _, cand := range data.ReplaceCandidates {
-								<option value={ cand.SongID }>{ cand.Title }</option>
-							}
-						</select>
-						<button type="submit">
-							@components.IconReplace()
-							Replace
-						</button>
-					</form>
-				}
-				<button
-					type="button"
-					title="Pull this song's key, tempo, meter, and length from Planning Center right now, overwriting whatever's cached here - use this if one of those was just changed directly in Planning Center. This is the opposite direction from Re-sync key, length &amp; arrangement on the Publish panel, which pushes this app's own values out to Planning Center."
-					hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/refresh-arrangement-info", data.ServiceTypeID, data.PlanID, song.ID) }
-					hx-target={ fmt.Sprintf("#song-arrangement-info-%d", song.ID) }
-					hx-swap="outerHTML"
-				>
-					Update from Planning Center
-				</button>
-				<span id={ songRefreshStatusElementID(song.ID) } class="muted"></span>
-				<button type="button" data-row-id={ fmt.Sprintf("%d", song.ID) } onclick="openQuickAction(this, 'tag')">
-					@components.IconTag()
-					Tag this song
-				</button>
-				<button type="button" data-row-id={ fmt.Sprintf("%d", song.ID) } onclick="openQuickAction(this, 'relate')">
-					@components.IconRelate()
-					Relate to another song
-				</button>
-				<button type="button" data-row-id={ fmt.Sprintf("%d", song.ID) } onclick="openQuickAction(this, 'role')">
-					@components.IconRole()
-					Mark a role
-				</button>
-				<button type="button" data-row-id={ fmt.Sprintf("%d", song.ID) } onclick="openQuickAction(this, 'vocal-range')">
-					@components.IconMusicNote()
-					Set vocal range
-				</button>
+				@components.Disclosure("row-menu", "icon-btn row-menu-toggle", "toggleRowMenu(this)", "More actions for this song", "More actions", songDetailMenuToggle(), songDetailMenuItems(data, song))
 			</div>
 		}
 		<!--
@@ -461,6 +428,70 @@ templ songDetailCard(data SetBuilderData, song SetSongView) {
 			}
 		}
 	}
+}
+
+// songDetailMenuToggle/songDetailMenuItems are the song detail card's own
+// "More actions" Disclosure - the same row-menu/toggleRowMenu machinery and
+// IconMore toggle content as the table row's own rowMenuToggle/rowMenuItems
+// (set_builder.templ), just carrying six items instead of four: Replace and
+// "Update from Planning Center" additionally live here (see songDetailCard's
+// own doc comment above for why this card uses one combined menu where the
+// row uses two separate ones) alongside the same
+// tag/relate/role/vocal-range actions rowMenuItems already carries. Needs
+// data/song (unlike rowMenuToggle/rowMenuItems) since the replace candidate
+// list and every hx-post/hx-delete/hx-target URL below are per-song - same
+// reason replaceMenuItems needs data/row.
+templ songDetailMenuToggle() {
+	@components.IconMore()
+}
+
+templ songDetailMenuItems(data SetBuilderData, song SetSongView) {
+	if len(data.ReplaceCandidates) > 0 {
+		<form
+			class="replace-form"
+			hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/replace", data.ServiceTypeID, data.PlanID, song.ID) }
+			hx-target="#set-builder-body"
+			hx-swap="outerHTML"
+			hx-confirm={ fmt.Sprintf("Replace %q with the selected song?", song.Title) }
+		>
+			<select name="song_id" required>
+				<option value="" selected disabled>Replace with...</option>
+				for _, cand := range data.ReplaceCandidates {
+					<option value={ cand.SongID }>{ cand.Title }</option>
+				}
+			</select>
+			<button type="submit">
+				@components.IconReplace()
+				Replace
+			</button>
+		</form>
+	}
+	<button
+		type="button"
+		title="Pull this song's key, tempo, meter, and length from Planning Center right now, overwriting whatever's cached here - use this if one of those was just changed directly in Planning Center. This is the opposite direction from Re-sync key, length &amp; arrangement on the Publish panel, which pushes this app's own values out to Planning Center."
+		hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/refresh-arrangement-info", data.ServiceTypeID, data.PlanID, song.ID) }
+		hx-target={ fmt.Sprintf("#song-arrangement-info-%d", song.ID) }
+		hx-swap="outerHTML"
+	>
+		Update from Planning Center
+	</button>
+	<span id={ songRefreshStatusElementID(song.ID) } class="muted"></span>
+	<button type="button" data-row-id={ fmt.Sprintf("%d", song.ID) } onclick="openQuickAction(this, 'tag')">
+		@components.IconTag()
+		Tag this song
+	</button>
+	<button type="button" data-row-id={ fmt.Sprintf("%d", song.ID) } onclick="openQuickAction(this, 'relate')">
+		@components.IconRelate()
+		Relate to another song
+	</button>
+	<button type="button" data-row-id={ fmt.Sprintf("%d", song.ID) } onclick="openQuickAction(this, 'role')">
+		@components.IconRole()
+		Mark a role
+	</button>
+	<button type="button" data-row-id={ fmt.Sprintf("%d", song.ID) } onclick="openQuickAction(this, 'vocal-range')">
+		@components.IconMusicNote()
+		Set vocal range
+	</button>
 }
 
 // songAttachmentsList is this song's cached Planning Center Attachments
