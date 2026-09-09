@@ -1,6 +1,21 @@
 # Plan: song leader (per-occurrence), synced into the existing vocal notes
 
-**Status: shipped 2026-09-07.** Migrations `00037` (`set_songs.
+**Status: shipped 2026-09-07, vocal-notes sync removed 2026-09-09.** The
+"Publish-time sync into the existing vocal notes category" section below
+(and the "Song leader sync setting" it describes) no longer exists -
+`docs/plans/shipped/worship-leader-pco-sync-plan.md` found PCO's real
+"Song leader" field (`ItemAssignment`) shortly after this shipped, and
+once that was wired in (`syncLeaderAssignment`), the note-line sync was
+removed outright rather than kept alongside it - the real assignment is
+strictly better (it's what actually drives PCO's own notifications), so
+keeping both meant a setting (which note category to sync into) that
+added setup friction for no remaining benefit. Migration `00044` drops
+`service_type_vocal_note_categories` (`00038`, below). The rest of this
+doc (the local `set_songs.leader_person_id` field, its
+`PersonPickerField` on the song detail card, `UpdateSetSongLeader`) is
+still exactly as shipped - only the publish-time sync target changed.
+
+Migrations `00037` (`set_songs.
 leader_person_id`) and `00038` (`service_type_vocal_note_categories`);
 `scheduling.Store.UpdateSetSongLeader`/`VocalNoteCategoryID`/
 `SetVocalNoteCategory` (`internal/scheduling/sets.go`,

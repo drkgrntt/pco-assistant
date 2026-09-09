@@ -8,6 +8,21 @@
 (`internal/server/controllers/sets_publish.go`), alongside (not
 replacing) the pre-existing `syncLeaderNote` vocal-notes sync.
 
+**Follow-up, 2026-09-09 (same day): the vocal-notes sync was removed
+after all.** "Alongside, not replacing" above was the initial call, but
+once the real assignment existed there was no remaining reason to also
+maintain the note-line sync and its "Song leader sync setting" (which
+note category to write into) - the assignment is strictly better (it's
+what actually drives PCO's own notifications) and the setting was pure
+setup friction once it stopped being the only mechanism. `syncLeaderNote`/
+`composeLeaderNoteContent`/`noteInCategory` (`leader_note.go`/
+`sets_publish.go`), the `SetVocalNoteCategory` handler/route/store
+methods, and `service_type_vocal_note_categories` (migration `00038`,
+dropped by `00044`) were all removed - see
+`docs/plans/shipped/song-leader-plan.md`'s updated Status note. This
+plan's own live-verification findings below (the `ItemAssignment`
+resource shape, sideload mechanics) are unaffected.
+
 **The "next step" this doc originally called for actually happened**
 mid-conversation: rather than the two guessed candidates below, Derek
 pulled up PCO's own "Edit song" panel and confirmed live that "Song

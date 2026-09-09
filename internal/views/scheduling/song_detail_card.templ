@@ -725,11 +725,13 @@ templ musicalKeyOptions() {
 // LeaderPersonID/LeaderPersonName) - a local draft edit, same
 // "reaches Planning Center on the next Publish or Refresh, not
 // immediately" timing as keyForm/descriptionForm (see UpdateSetSongLeader,
-// syncLeaderNote in sets_publish.go). A PersonPickerFieldWithValue, not a
-// plain text field, so "leader" is a real PCO person id rather than a
-// name typed here that could drift out of sync with the name typed into
-// the vocal notes category by hand - see docs/plans/shipped/
-// song-leader-plan.md. The suffix ("leader-<row id>") keeps this picker's
+// syncLeaderAssignment in sets_publish.go/leader_note.go). A
+// PersonPickerFieldWithValue, not a plain text field, so "leader" is a
+// real PCO person id rather than a name typed here that could drift out
+// of sync with what Planning Center itself knows about that person - see
+// docs/plans/shipped/song-leader-plan.md and
+// docs/plans/shipped/worship-leader-pco-sync-plan.md. The suffix
+// ("leader-<row id>") keeps this picker's
 // search box/hidden input/results container distinct from every other
 // song's own leader picker on the same page (see PersonPickerField's own
 // doc comment on suffix).

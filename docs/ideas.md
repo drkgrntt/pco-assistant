@@ -458,10 +458,16 @@ pattern as `song_tags`/`song_relationships`:**
   the matrix as a presentation layer over both once they both exist.
 - ~~Song leader (per-occurrence)~~ - **shipped**, grown out of this same
   vocal-range conversation rather than a pre-existing bullet here: a real
-  per-occurrence `set_songs.leader_person_id`, synced as a "Leading:
-  [name]" line into the org's designated vocal notes category on
-  Publish/Refresh - see `docs/plans/shipped/song-leader-plan.md` (also for
-  the not-yet-built follow-up once song vocal range above exists).
+  per-occurrence `set_songs.leader_person_id`, synced on Publish/Refresh
+  straight into PCO's own real "Song leader" field (`ItemAssignment`) - a
+  genuine assignment PCO can notify on, not just text in a note. Originally
+  synced as a "Leading: [name]" line into the org's designated vocal notes
+  category instead (no real PCO field was known to exist yet); once the
+  real field was found and tethered, that note-line sync was removed
+  outright rather than kept alongside it. See
+  `docs/plans/shipped/song-leader-plan.md` and
+  `docs/plans/shipped/worship-leader-pco-sync-plan.md` (also for the
+  not-yet-built follow-up once song vocal range above exists).
 - **Occasion reservation** (Christmas Eve only, baptism/communion-specific) -
   largely already possible today: `song_roles` already has `communion`/
   `baptism` roles (migration 00020), and `song_tag_categories` already

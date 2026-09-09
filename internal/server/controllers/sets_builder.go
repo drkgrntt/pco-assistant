@@ -1694,19 +1694,6 @@ func buildSongNoteViews(itemID string, noteCategories []pco.ItemNoteCategoryData
 	return noteViews
 }
 
-// vocalNoteCategoryOptions converts a service type's Planning Center note
-// categories into the lightweight id+name options the "Song leader syncs
-// into" setting's <select> needs (see vocalNoteCategoryData below) - same
-// "just enough for a plain native <select>" shape as
-// buildBrowsableSongs/SongOptionView.
-func vocalNoteCategoryOptions(categories []pco.ItemNoteCategoryData) []views.NoteCategoryOptionView {
-	opts := make([]views.NoteCategoryOptionView, 0, len(categories))
-	for _, cat := range categories {
-		opts = append(opts, views.NoteCategoryOptionView{ID: cat.ID, Name: cat.Attributes.Name})
-	}
-	return opts
-}
-
 // renderServiceOrder turns a merge into display rows plus the anchor
 // picker's option list (every foreign item, in order, prefixed by "Top of
 // service"). noteCategories is this service type's Planning Center note
