@@ -329,7 +329,7 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 					// syncLeaderAssignment's own doc comment.
 					if err := syncLeaderAssignment(ctx, serviceTypeID, planID, item.Data.ID, nil, ss.LeaderPersonID); err != nil {
 						failuresMu.Lock()
-						failures = append(failures, fmt.Sprintf("%s: created, but couldn't set the Planning Center song leader: %s", title, friendlyPCOErr(err)))
+						failures = append(failures, fmt.Sprintf("%s: created, but couldn't set the Planning Center song leader: %s", title, leaderAssignmentErr(err)))
 						failuresMu.Unlock()
 					}
 					atomic.AddInt32(&createdCount, 1)
@@ -391,7 +391,7 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 							currentAssignment := personAssignmentFor(assignmentsByItem, ss.PCOItemID)
 							if err := syncLeaderAssignment(ctx, serviceTypeID, planID, ss.PCOItemID, currentAssignment, ss.LeaderPersonID); err != nil {
 								failuresMu.Lock()
-								failures = append(failures, fmt.Sprintf("%s: note/key updated, but couldn't set the Planning Center song leader: %s", title, friendlyPCOErr(err)))
+								failures = append(failures, fmt.Sprintf("%s: note/key updated, but couldn't set the Planning Center song leader: %s", title, leaderAssignmentErr(err)))
 								failuresMu.Unlock()
 							}
 						}
@@ -586,7 +586,7 @@ func (sc *SchedulingController) RefreshSongInfo(c *fiber.Ctx) error {
 		currentAssignment := personAssignmentFor(assignmentsByItem, ss.PCOItemID)
 		if err := syncLeaderAssignment(ctx, serviceTypeID, planID, ss.PCOItemID, currentAssignment, ss.LeaderPersonID); err != nil {
 			failuresMu.Lock()
-			failures = append(failures, fmt.Sprintf("%s: refreshed, but couldn't set the Planning Center song leader: %s", title, friendlyPCOErr(err)))
+			failures = append(failures, fmt.Sprintf("%s: refreshed, but couldn't set the Planning Center song leader: %s", title, leaderAssignmentErr(err)))
 			failuresMu.Unlock()
 		}
 		atomic.AddInt32(&refreshedCount, 1)

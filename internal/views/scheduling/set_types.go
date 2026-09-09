@@ -174,6 +174,20 @@ type SetBuilderData struct {
 	RelationshipTypes []scheduling.SongRelationshipType
 	RoleTypes         []scheduling.SongRoleType
 
+	// RosterPersonOptions is who can be picked as a song leader
+	// (SetSongView.LeaderPersonID) - this plan's own local roster
+	// assignments (scheduling.Store.ListRosterAssignments), the same
+	// source buildSetBuilderData already reads for the vocal-range
+	// mismatch warning. Deliberately not a general org-wide person search
+	// the way every other PersonPickerField on this app is: PCO's real
+	// "Song leader" resource (ItemAssignment) rejects assigning anyone who
+	// isn't already scheduled on this plan (confirmed live - see
+	// leaderForm's own doc comment, song_detail_card.templ), so offering
+	// a wider pool here would just be letting someone pick a choice PCO
+	// is guaranteed to reject on the next Publish/Refresh. Empty when
+	// nothing's been added to this plan's Team tab yet.
+	RosterPersonOptions []RosterPersonOptionView
+
 	// AllSongVocalRanges is the same song id -> stored range map
 	// buildSetBuilderData already fetches for the detail card/mismatch
 	// warning (vocalRangesBySong), also exposed here so the quick-add
@@ -571,6 +585,17 @@ type PlanRow struct {
 type SongOptionView struct {
 	SongID string
 	Title  string
+}
+
+// RosterPersonOptionView is a lightweight roster person option - just an id
+// and a name, the same "enough to populate a plain native <select>" shape
+// as SongOptionView above. Backs the song leader picker's <select>
+// (SetBuilderData.RosterPersonOptions) - see that field's own doc comment
+// for why it's scoped to this plan's roster rather than a general person
+// search.
+type RosterPersonOptionView struct {
+	PersonID string
+	Name     string
 }
 
 // CandidateSongView is a song not yet in the set, offered for adding via

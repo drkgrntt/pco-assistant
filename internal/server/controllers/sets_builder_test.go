@@ -784,6 +784,31 @@ func TestNotSungInLabel(t *testing.T) {
 	}
 }
 
+// TestRosterPersonOptions covers the song leader picker's candidate list -
+// deduplicated (a person assigned to more than one position on the same
+// roster) and sorted by name, falling back to the raw id for a name lookup
+// miss (same "titleOrID" convention every other display lookup in this
+// package uses).
+func TestRosterPersonOptions(t *testing.T) {
+	names := map[string]string{"p1": "Zed Zephyr", "p2": "Amy Adams"}
+
+	got := rosterPersonOptions([]string{"p1", "p2", "p1", "", "p3"}, names)
+
+	want := []views.RosterPersonOptionView{
+		{PersonID: "p2", Name: "Amy Adams"},
+		{PersonID: "p1", Name: "Zed Zephyr"},
+		{PersonID: "p3", Name: "p3"},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("rosterPersonOptions() = %+v, want %+v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("option %d = %+v, want %+v", i, got[i], want[i])
+		}
+	}
+}
+
 func assertRowOrder(t *testing.T, got []mergedRow, want []string) {
 	t.Helper()
 

@@ -2,12 +2,54 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	pco "github.com/drkgrntt/go-pco"
 )
+
+// TestLeaderAssignmentErr covers leaderAssignmentErr's one special case (a
+// 422 from CreateItemAssignment - PCO rejecting a leader who isn't yet
+// scheduled on the plan, see this file's own doc comment) against
+// friendlyPCOErr's plain fallback for everything else.
+func TestLeaderAssignmentErr(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{
+			name: "422 becomes the not-scheduled-yet message",
+			err:  &pco.RequestError{StatusCode: 422},
+			want: "they're not published to this plan's team yet (see the Team tab) - publish the team, then Publish/Refresh song info again",
+		},
+		{
+			name: "401 still becomes friendlyPCOErr's permission message",
+			err:  &pco.RequestError{StatusCode: 401},
+			want: wantFriendlyMsg,
+		},
+		{
+			name: "500 passes through unchanged",
+			err:  &pco.RequestError{StatusCode: 500},
+			want: (&pco.RequestError{StatusCode: 500}).Error(),
+		},
+		{
+			name: "plain error passes through unchanged",
+			err:  errors.New("boom"),
+			want: "boom",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := leaderAssignmentErr(tt.err); got != tt.want {
+				t.Errorf("leaderAssignmentErr(%v) = %q, want %q", tt.err, got, tt.want)
+			}
+		})
+	}
+}
 
 // assignmentData builds a minimal pco.ItemAssignmentData for
 // personAssignmentFor/syncLeaderAssignment tests - assignableType/personID

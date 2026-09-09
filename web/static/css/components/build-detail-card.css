@@ -114,7 +114,8 @@
 }
 
 .build-detail-note-form textarea,
-.build-detail-note-form input[type="text"] {
+.build-detail-note-form input[type="text"],
+.build-detail-note-form select {
   width: 100%;
 }
 
