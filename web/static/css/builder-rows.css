@@ -150,35 +150,51 @@ tr.song-row.selected {
   border-color: var(--accent);
 }
 
-/* The set builder's per-row action cluster (duplicate/remove/replace),
-   plus the dot menu. This outer row never wraps - flex-wrap's line-break
-   decision is computed from each item's *hypothetical* (pre-shrink) width,
-   not its shrunk width, so a wide .set-song-actions-wrap could still push
-   the dot menu onto a second line even with order/flex-shrink on the dot
-   menu alone (confirmed live - that was the previous, insufficient fix).
-   Isolating the dot menu as a sibling of the sub-container that actually
-   wraps is what makes it structurally impossible for the dot menu to
-   participate in that wrap decision at all. */
+/* The set builder's per-row action cluster - duplicate/remove/replace-
+   toggle plus the dot menu on a song row, just edit/remove on a header or
+   plain foreign item row. justify-content: flex-end pins the whole
+   cluster flush against the cell's right edge, matching how
+   .section-row-content's own justify-content: space-between already
+   right-aligns a header row's actions - before this, the buttons here sat
+   left-aligned inside their own (often wider) last table column instead
+   of flush with the table's true right edge.
+
+   Used to be split into this row plus a separate .set-song-actions-wrap
+   sub-container, with the dot menu kept as an isolated sibling outside
+   it: the row-menu popover's .replace-form used to render inline here,
+   and a wide inline form could push the dot menu onto its own line
+   regardless of order/flex-shrink (flex-wrap's line-break decision is
+   computed from each item's *hypothetical*, pre-shrink width). Replace's
+   form now lives inside its own row-menu popover (replaceMenuItems)
+   instead of sitting inline, so every item here is just a same-size
+   compact icon button - nothing wide left to trigger that bug - so the
+   split is gone and every action is a flat, equally-shrinkable flex
+   item. flex-wrap: wrap is a narrow-viewport safety net rather than the
+   expected case: with everything the same small size and no long strings
+   in play, all of them fit on one line at any realistic column width, and
+   if they ever don't, staying in one wrapping flex row (rather than
+   splitting the dot menu out again) keeps a wrapped line right-aligned
+   too, instead of reproducing the old dot-menu-orphaned-on-its-own-line
+   look. */
 .set-song-actions {
   display: flex;
-  flex-wrap: nowrap;
-  align-items: center;
-  gap: 0.3rem;
-}
-
-/* Everything except the dot menu - free to wrap/shrink on a narrow row. */
-.set-song-actions-wrap {
-  display: flex;
   flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: center;
   gap: 0.3rem;
-  min-width: 0;
-  flex: 1 1 auto;
 }
 
 .set-song-actions button {
   min-height: var(--control-height);
   padding: 0.3rem var(--space-2);
+}
+
+/* Every direct child - the plain icon buttons and the row-menu/replace
+   Disclosure wrapper divs alike - is a fixed-size unit that never
+   squishes under flex-shrink, so justify-content: flex-end above has
+   real leftover space to push the whole cluster flush right with. */
+.set-song-actions > * {
+  flex-shrink: 0;
 }
 
 .replace-form {
@@ -223,16 +239,6 @@ tr.song-row.selected {
 
 .row-menu-menu .replace-form select {
   max-width: none;
-}
-
-/* The dot menu is already a DOM sibling of .set-song-actions-wrap (not
-   nested inside it), so it's structurally excluded from that
-   sub-container's own wrap/shrink behavior. flex-shrink:0 here is just a
-   safety net against its own box (and the icon inside it) squishing when
-   the outer, non-wrapping .set-song-actions row runs genuinely out of
-   room. */
-.set-song-actions > .row-menu {
-  flex-shrink: 0;
 }
 
 .foreign-row {

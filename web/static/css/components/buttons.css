@@ -106,8 +106,15 @@ button.danger:hover {
   border-color: transparent;
 }
 
+/* Was a flat 14% danger-on-transparent mix - noticeably more saturated
+   than the plain .icon-btn:hover surface next to it in the same row,
+   reading as its own separate hover treatment rather than a variant of
+   it. Mixing a much smaller danger share onto --surface-hover itself
+   (rather than transparent) keeps the same neutral hover as its base and
+   just tints it, so it reads as "the same hover, danger-flavored" instead
+   of a conspicuously different surface. */
 .icon-btn.danger:hover {
-  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  background: color-mix(in srgb, var(--danger) 8%, var(--surface-hover));
   border-color: transparent;
 }
 
