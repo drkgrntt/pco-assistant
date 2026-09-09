@@ -97,15 +97,13 @@ func (sc *SchedulingController) setSongVocalRangeFromForm(ctx context.Context, o
 		return "lowest note must be at or below the highest note"
 	}
 
-	// ok already confirmed above via ParseKeyPitchClass on the same
-	// string - ComputeVocalRangeOffsets re-derives it, it doesn't
-	// re-validate.
-	lowOffset, highOffset, _ := scheduling.ComputeVocalRangeOffsets(referenceKey, lowPC, lowOct, highPC, highOct)
 	if _, err := sc.store.SetSongVocalRange(ctx, organizationID, scheduling.SetSongVocalRangeParams{
-		SongID:              songID,
-		ReferenceKey:        referenceKey,
-		LowOffsetSemitones:  lowOffset,
-		HighOffsetSemitones: highOffset,
+		SongID:            songID,
+		ReferenceKey:      referenceKey,
+		LowestPitchClass:  lowPC,
+		LowestOctave:      lowOct,
+		HighestPitchClass: highPC,
+		HighestOctave:     highOct,
 	}); err != nil {
 		return err.Error()
 	}

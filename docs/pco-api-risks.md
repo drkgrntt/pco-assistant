@@ -89,6 +89,9 @@ that first. Facts worth adding here that aren't in CLAUDE.md:
 | Song attachments (lead sheets/chord charts) | shipped | cached at sync time alongside arrangement info (`fetchAndCacheSongAttachments`, one more PCO call per uncached song - Song Info sync is now 2 calls/song, not 1); the attachment's own `url` is never cached, a click-triggered route live-fetches a fresh one instead |
 | Song leader -> vocal notes sync (`syncLeaderNote`, `sets_publish.go`) | shipped | `PublishSet` rides its existing `GetItems` call (adds `Include: []string{"item_notes"}` only when a vocal category is actually configured - zero new calls otherwise); `RefreshSongInfo` previously made no `GetItems` call at all, so it gains one new per-plan `GetItems(Include: item_notes)` call, but only when a service type has configured the vocal notes category setting (opt-in cost, not paid by every org) |
 | "Browse all songs" title-click detail popover (`BuildCandidateDetails`, `sets_builder.go`) | shipped | one song per click, not the whole library - `candidateSongView`'s general-purpose lookup (used by the up-to-50-row search results too) stays cache-only with no fetch, but this single-song handler resolves arrangement info through `resolveArrangementInfo`/`resolveArrangementCacheInfo` instead, the same enqueue-on-miss path the main service order already uses: a cache hit costs nothing new, a miss enqueues into the existing paced Song Info sync queue (`enqueueSongSync` + a `triggerSongInfoQueueSync` deferred in this handler) rather than fetching inline, so an uncached song's info fills in on a later click/reload instead of staying blank forever - never a synchronous per-click PCO call |
+| "Add item to plan" (`AddPlanItem`, `plan_items.go`) | shipped | one `CreateItem` call, no pre-fetch - see the sequence-auto-append fact below. Rides the same full-page rebuild every other Build-page mutation already pays (`buildSetBuilderDataWithErr`); no caching added or needed, since it's a rare, user-triggered click, not a render-path/hot-path call |
+| Edit/remove a plan item (`UpdatePlanItem`/`RemovePlanItem`, `plan_items.go`) | shipped | one `UpdateItem`/`DeleteItem` call each, same "rare user click, not a render path" reasoning as the row above - no caching |
+| Drag-and-drop reposition of a header/foreign item (`RepositionPlanItem`, `plan_items.go`) | shipped | one uncached `GetItems` fetch (must be live, not cached - the whole point is computing a correct new order against the plan's *current* real sequence; a cached/stale list would silently reorder against the wrong baseline) plus one `ReorderItems` call, skipped entirely when the computed order matches the current one (`itemOrderEqual`) - see the `item_reorder` full-list-contract fact below |
 
 ## Live-verified PCO API facts (worth not re-checking)
 
@@ -110,6 +113,51 @@ that first. Facts worth adding here that aren't in CLAUDE.md:
   `sets_builder.go`) hashes every item's `(ID, Sequence, UpdatedAt)`
   together, not `UpdatedAt` alone, specifically because a reorder is
   invisible to `UpdatedAt` by itself.
+- **`Item#create` auto-appends when `sequence` is left at 0** - confirmed
+  live (2026-09-09): creating an item with `sequence: 0` sent explicitly
+  (go-pco's `CreateItem` always sends the field, never omits it) still
+  lands it after the plan's real, current last item, not at position 0 -
+  PCO treats 0 as "no sequence given," not "put it first." **Used**:
+  `AddPlanItem` (`plan_items.go`) skips the pre-create `GetItems` fetch a
+  naive "compute next sequence myself" approach would otherwise need,
+  cutting that call site to one `CreateItem`, not two calls.
+- **`Item#create`'s `length` is silently dropped for `item_type: "header"`**
+  - confirmed live (2026-09-09): a header item created with a non-zero
+  `length` comes back `0` regardless, even though the create itself
+  succeeds - Planning Center just doesn't track a duration for a section
+  divider. **Used**: `AddPlanItem`'s own item-type picker hides/disables
+  its length fields for "Section header" (`toggleAddPlanItemLengthFields`,
+  `scheduling.js`) rather than showing fields that quietly do nothing.
+- **`Item#create`'s `item_type: "media"` doesn't stick** - confirmed live
+  (2026-09-09): comes back silently downgraded to a plain `"item"` (no
+  attached media resource, so there's nothing for PCO to actually treat as
+  media). **Used**: `AddPlanItem`'s item-type picker only offers Item/
+  Section header, not Media.
+- **`Item#update` (`PATCH`) drops a header's `length` too, same as create**
+  - confirmed live (2026-09-09): PATCHing a header item's `length` to a
+  non-zero value comes back `0` regardless, same silent no-op as
+  `Item#create`'s own version of this fact above. Title/Description PATCH
+  normally. **Used**: `UpdatePlanItem`'s edit form (`planItemEditForm`,
+  quick_action.templ) simply omits the length fields for a header, rather
+  than showing fields that quietly do nothing.
+- **`Item#create`'s `sequence` auto-appends even when explicitly `0`, and
+  `item_reorder` wants literally every item, in order** - confirmed live
+  (2026-09-09): go-pco's `CreateItem` always sends `"sequence": 0`
+  explicitly (never omitted), and PCO still appends to the end rather than
+  treating that as "position 0" - see `AddPlanItem`'s own doc comment.
+  Separately, `pco.ReorderItems`'s `item_reorder` action was confirmed to
+  take the plan's *complete* ordered item-id list, not a partial move - the
+  same contract `PublishSet`'s own `finalOrder` build already relied on
+  (`sets_publish.go`). **Used**: `RepositionPlanItem`'s
+  `buildReorderedItemIDs` starts from the plan's real, current item list
+  (a fresh `GetItems`) and moves exactly one id within it, rather than
+  trying to construct a request PCO would accept as a smaller diff (no
+  such smaller-diff option exists).
+- **`UpdateItemParams` has no `ItemType` field at all** (go-pco) - an
+  item's type can't be changed after creation via `Item#update`, only set
+  at `Item#create` time. **Used**: `UpdatePlanItem`'s edit form has no
+  type control - editing a header can't turn it into a plain item, or
+  back; deleting and recreating it is the only way, same as it always was.
 - People#index (`GetPeople`) supports batched `where[id]=1,2,3` -
   `PeopleParams.IDs` in go-pco `v0.15.0`+.
 - **`PersonAttributes.Avatar`** (a real uploaded photo, or PCO's own
@@ -718,3 +766,44 @@ out to 100-200 sequential round trips per load.
   nobody assigned has a range recorded (the common case today, since
   Phase 1 person ranges are still new), and never more than one batched
   call bounded by a single plan's own roster size otherwise.
+- **"Add item to plan" (2026-09-09) - not a hot path, no caching added,
+  and one call cheaper than the first draft.** `AddPlanItem`
+  (`plan_items.go`) is a rare, user-triggered click (add a sermon slot/
+  header/video from the Build page instead of switching to Planning
+  Center), not something that runs on every render - the "does this need
+  a cache?" question this file exists to raise doesn't apply the way it
+  does to a render-path call. The first draft did add a real second call
+  per add though: a `GetItems` fetch just to compute the next `Sequence`
+  before `CreateItem`. Live-checking that assumption (see the
+  `Item#create` auto-append fact above) found PCO does that itself -
+  dropped the pre-fetch, so this is now one `CreateItem` call, plus
+  whatever the existing full-page rebuild
+  (`buildSetBuilderDataWithErr`) already costs after any Build-page
+  mutation - not a new cost category. Same live check also caught two
+  smaller footguns before they shipped: a header item's `length` is
+  silently dropped by PCO regardless of what's sent (the length fields
+  now hide/disable themselves for that item type), and `item_type:
+  "media"` doesn't actually stick (dropped from the type picker
+  entirely, not offered as a real option).
+- **Move/edit/delete a plan item (2026-09-09) - same "rare click, not a
+  render path" shape as Add, three more thin call sites.**
+  `RepositionPlanItem`/`UpdatePlanItem`/`RemovePlanItem` (`plan_items.go`)
+  round out drag-and-drop reordering, editing, and removing a header/plain
+  item once `AddPlanItem` could create one - none of the three are called
+  on render, so none needed caching. Reposition is the one with a real
+  fetch: it needs the plan's current, real item order to compute a correct
+  move, and that fetch can never be cached (a stale list would silently
+  reorder against the wrong baseline) - confirmed live that `item_reorder`
+  wants the complete ordered id list, not a partial diff, same contract
+  `PublishSet`'s own reorder already relied on, so `buildReorderedItemIDs`
+  just moves one id within that fetched list rather than trying to send a
+  smaller request. A not-yet-published set song complicates "what's the
+  right anchor" for a drag (it isn't part of Planning Center's own order
+  at all yet) - `anchorRealItemID` walks backward through the same merged
+  view the page already renders until it finds a row that actually is a
+  real item, rather than assuming every row in the drop zone is one.
+  Editing hit two more live-checked footguns before shipping: PATCHing a
+  header's `length` is silently dropped, same as create (edit form omits
+  those fields for a header too), and PCO's `UpdateItemParams` has no
+  `ItemType` field at all - an item's type is create-time-only, so the
+  edit form has no type control and never tries to change it.

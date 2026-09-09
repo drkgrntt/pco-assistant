@@ -162,7 +162,10 @@ with at least Viewer access can still sign in.
   runs noticeably longer/shorter than that service type's recent average,
   a key-change warning when two back-to-back songs (nothing else between
   them) are a jarring half step apart, and each song's key/tempo/meter/length
-  shown right on the row (see Song Info above). The opposite nudge also runs
+  shown right on the row (see Song Info above) - a non-song item already in
+  the plan (a sermon slot, a header, a video) shows its own Planning
+  Center length and description the same way, right under its title. The
+  opposite nudge also runs
   automatically: a song genuinely new to the church (Planning Center has no
   prior scheduling date for it the first time it's seen) gets a "Sung
   once"/"Sung twice" badge and a spot in a "Could use one more sing" section
@@ -182,7 +185,21 @@ with at least Viewer access can still sign in.
   the build page, not just the dedicated setup pages, or from each song
   row's own "more actions" menu (tag it, relate it - defaulting to whichever
   song comes next in the order - or mark a role, all already scoped to that
-  song, no picking it out of a list again). The "Browse all songs" search
+  song, no picking it out of a list again). A "+ Add item to plan" row at
+  the bottom of the order of service - matching Planning Center's own
+  add-item placement, rather than a separate form elsewhere on the page -
+  expands in place into a form for adding a plain, non-song item (title,
+  item or section header, length, description) straight into the live
+  plan; unlike a song, it has no local draft to hold it, so it pushes to
+  Planning Center immediately rather than waiting on Publish, and always
+  lands at the end of the order. Every header/plain item already in the
+  plan - not just ones added this way - can be dragged by the same handle
+  a song row uses to move it anywhere in the order (including past a set
+  song), edited (title/length/description - its type is fixed once
+  created, same as in Planning Center itself), or removed, each pushing
+  straight to Planning Center immediately for the same no-local-draft
+  reason. The
+  "Browse all songs" search
   box already matches typed text against tag values as well as song
   titles; before typing anything, that same box shows a plain, scrollable
   list of every song's title to skim - clicking one adds that song

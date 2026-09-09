@@ -652,6 +652,53 @@ function openQuickAction(button, action) {
   }
 }
 
+// Toggles the Order of service table's trailing "+ Add item to plan" row
+// (addPlanItemRows, quick_action.templ) between its plain button state and
+// its inline form state - same expand-in-place idiom as openQuickAction
+// just above, just for this one add-a-foreign-item action rather than a
+// per-row menu, so there's only ever one row pair to toggle, not a
+// data-row-id/data-action lookup.
+function toggleAddPlanItemRow(open) {
+  var triggerRow = document.getElementById("add-plan-item-trigger-row");
+  var formRow = document.getElementById("add-plan-item-form-row");
+  if (!triggerRow || !formRow) {
+    return;
+  }
+  triggerRow.hidden = open;
+  formRow.hidden = !open;
+  if (open) {
+    var titleInput = formRow.querySelector('[name="title"]');
+    if (titleInput) {
+      titleInput.focus();
+    }
+  }
+}
+
+// addPlanItemRows' item-type select - Planning Center silently drops
+// whatever Length a header item is created with (confirmed live, see
+// AddPlanItem's own doc comment), so hides and disables the length inputs
+// for "Section header" rather than leaving up fields that quietly do
+// nothing for that choice. Clears any typed value on the way in, so
+// switching to Section header and submitting can't silently carry a
+// length along that Planning Center is just going to drop anyway.
+function toggleAddPlanItemLengthFields(select) {
+  var isHeader = select.value === "header";
+  ["add-plan-item-length-min-label", "add-plan-item-length-sec-label"].forEach(function (id) {
+    var label = document.getElementById(id);
+    if (!label) {
+      return;
+    }
+    label.hidden = isHeader;
+    var input = label.querySelector("input");
+    if (input) {
+      input.disabled = isHeader;
+      if (isHeader) {
+        input.value = "";
+      }
+    }
+  });
+}
+
 // Clicking a song's row in the order of service (set_builder.templ) opens
 // that song's detail card in the sidebar (song_detail_card.templ) - its
 // metadata, notes, and every one of the row's own actions spelled out with
@@ -1981,30 +2028,26 @@ function playVocalNoteFromInput(inputId) {
 // this never changes what's actually stored (song_vocal_range.templ's "As
 // measured"/"Current key" lines, or the underlying DB row); it just
 // recomputes a transposed low/high pair from the row's already-saved
-// reference key + offsets (the data-reference-key/data-low-offset/
-// data-high-offset attributes vocalRangePreviewControls, song_vocal_range
-// .templ, renders per row) and plays it - the same "hear it before it's
-// committed" spirit as playVocalNoteFromInput above, just previewing a
-// transposition of an already-saved row instead of an in-progress form
-// value.
+// reference key + exact low/high notes, expressed as absolute semitones
+// (the data-reference-key/data-low-abs/data-high-abs attributes
+// vocalRangePreviewControls, song_vocal_range.templ, renders per row) and
+// plays it - the same "hear it before it's committed" spirit as
+// playVocalNoteFromInput above, just previewing a transposition of an
+// already-saved row instead of an in-progress form value.
 //
 // The semitone arithmetic below deliberately mirrors
 // internal/scheduling/key_engine.go and EffectiveVocalRange
 // (song_vocal_range.go) function-for-function (vocalKeyPitchClass ~
 // ParseKeyPitchClass, vocalSignedSemitoneDelta ~ SignedSemitoneDelta,
-// vocalPitchClassAndOctave ~ PitchClassAndOctave,
-// vocalRangePreviewTonicOctave ~ referenceTonicOctave) rather than
+// vocalPitchClassAndOctave ~ PitchClassAndOctave) rather than
 // round-tripping through htmx on every key keystroke/octave click - same
 // "duplicate the primitives, keep them numerically identical" call this
 // file already makes for vocalAbsoluteSemitone/vocalNoteFrequency
 // mirroring AbsoluteSemitone above. If key_engine.go's math ever changes,
-// these need updating to match.
-
-// vocalRangePreviewTonicOctave mirrors referenceTonicOctave
-// (song_vocal_range.go) exactly - the fixed octave EffectiveVocalRange
-// anchors a reference key's tonic to when reconstructing a displayable
-// register.
-var vocalRangePreviewTonicOctave = 3;
+// these need updating to match. No tonic-anchor octave to duplicate here
+// any more (migration 00043 removed that whole concept from
+// EffectiveVocalRange server-side) - just the saved low/high absolute
+// semitones, shifted by the same signed delta the server applies.
 
 // vocalNoteDisplayNames mirrors vocalNoteDisplayNames (Go,
 // internal/views/scheduling/vocal_range.templ) - sharp spelling only, a
@@ -2117,10 +2160,10 @@ function shiftVocalRangePreviewOctave(button, delta) {
 }
 
 // renderVocalRangePreview recomputes and renders one row's preview line
-// from its container's data-reference-key/data-low-offset/
-// data-high-offset (r's own stored values, see vocalRangePreviewControls)
-// plus whatever key text is currently in the input and the container's
-// current octave shift. An empty key input falls back to the row's own
+// from its container's data-reference-key/data-low-abs/data-high-abs (r's
+// own stored values, see vocalRangePreviewControls) plus whatever key text
+// is currently in the input and the container's current octave shift. An
+// empty key input falls back to the row's own
 // reference key - so the octave buttons alone (no key ever typed) still
 // preview something, the "bring it down an octave... male/female" use
 // case docs/issues.md describes. Hides the preview line entirely (quiet
@@ -2138,8 +2181,8 @@ function renderVocalRangePreview(input) {
   }
 
   var referenceKey = container.getAttribute("data-reference-key") || "";
-  var lowOffset = parseInt(container.getAttribute("data-low-offset"), 10);
-  var highOffset = parseInt(container.getAttribute("data-high-offset"), 10);
+  var lowAbs = parseInt(container.getAttribute("data-low-abs"), 10);
+  var highAbs = parseInt(container.getAttribute("data-high-abs"), 10);
   var octaveShift = parseInt(container.getAttribute("data-octave-shift"), 10);
   if (isNaN(octaveShift)) {
     octaveShift = 0;
@@ -2152,20 +2195,19 @@ function renderVocalRangePreview(input) {
   if (
     targetPitchClass === null ||
     referencePitchClass === null ||
-    isNaN(lowOffset) ||
-    isNaN(highOffset)
+    isNaN(lowAbs) ||
+    isNaN(highAbs)
   ) {
     line.hidden = true;
     line.innerHTML = "";
     return;
   }
 
-  var tonicAbsoluteSemitone = vocalAbsoluteSemitone(referencePitchClass, vocalRangePreviewTonicOctave);
   var delta = vocalSignedSemitoneDelta(referencePitchClass, targetPitchClass);
   var octaveOffsetSemitones = octaveShift * 12;
 
-  var low = vocalPitchClassAndOctave(tonicAbsoluteSemitone + delta + lowOffset + octaveOffsetSemitones);
-  var high = vocalPitchClassAndOctave(tonicAbsoluteSemitone + delta + highOffset + octaveOffsetSemitones);
+  var low = vocalPitchClassAndOctave(lowAbs + delta + octaveOffsetSemitones);
+  var high = vocalPitchClassAndOctave(highAbs + delta + octaveOffsetSemitones);
 
   line.hidden = false;
   line.innerHTML =

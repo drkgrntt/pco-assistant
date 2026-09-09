@@ -150,35 +150,51 @@ tr.song-row.selected {
   border-color: var(--accent);
 }
 
-/* The set builder's per-row action cluster (duplicate/remove/replace),
-   plus the dot menu. This outer row never wraps - flex-wrap's line-break
-   decision is computed from each item's *hypothetical* (pre-shrink) width,
-   not its shrunk width, so a wide .set-song-actions-wrap could still push
-   the dot menu onto a second line even with order/flex-shrink on the dot
-   menu alone (confirmed live - that was the previous, insufficient fix).
-   Isolating the dot menu as a sibling of the sub-container that actually
-   wraps is what makes it structurally impossible for the dot menu to
-   participate in that wrap decision at all. */
+/* The set builder's per-row action cluster - duplicate/remove/replace-
+   toggle plus the dot menu on a song row, just edit/remove on a header or
+   plain foreign item row. justify-content: flex-end pins the whole
+   cluster flush against the cell's right edge, matching how
+   .section-row-content's own justify-content: space-between already
+   right-aligns a header row's actions - before this, the buttons here sat
+   left-aligned inside their own (often wider) last table column instead
+   of flush with the table's true right edge.
+
+   Used to be split into this row plus a separate .set-song-actions-wrap
+   sub-container, with the dot menu kept as an isolated sibling outside
+   it: the row-menu popover's .replace-form used to render inline here,
+   and a wide inline form could push the dot menu onto its own line
+   regardless of order/flex-shrink (flex-wrap's line-break decision is
+   computed from each item's *hypothetical*, pre-shrink width). Replace's
+   form now lives inside its own row-menu popover (replaceMenuItems)
+   instead of sitting inline, so every item here is just a same-size
+   compact icon button - nothing wide left to trigger that bug - so the
+   split is gone and every action is a flat, equally-shrinkable flex
+   item. flex-wrap: wrap is a narrow-viewport safety net rather than the
+   expected case: with everything the same small size and no long strings
+   in play, all of them fit on one line at any realistic column width, and
+   if they ever don't, staying in one wrapping flex row (rather than
+   splitting the dot menu out again) keeps a wrapped line right-aligned
+   too, instead of reproducing the old dot-menu-orphaned-on-its-own-line
+   look. */
 .set-song-actions {
   display: flex;
-  flex-wrap: nowrap;
-  align-items: center;
-  gap: 0.3rem;
-}
-
-/* Everything except the dot menu - free to wrap/shrink on a narrow row. */
-.set-song-actions-wrap {
-  display: flex;
   flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: center;
   gap: 0.3rem;
-  min-width: 0;
-  flex: 1 1 auto;
 }
 
 .set-song-actions button {
   min-height: var(--control-height);
   padding: 0.3rem var(--space-2);
+}
+
+/* Every direct child - the plain icon buttons and the row-menu/replace
+   Disclosure wrapper divs alike - is a fixed-size unit that never
+   squishes under flex-shrink, so justify-content: flex-end above has
+   real leftover space to push the whole cluster flush right with. */
+.set-song-actions > * {
+  flex-shrink: 0;
 }
 
 .replace-form {
@@ -225,16 +241,6 @@ tr.song-row.selected {
   max-width: none;
 }
 
-/* The dot menu is already a DOM sibling of .set-song-actions-wrap (not
-   nested inside it), so it's structurally excluded from that
-   sub-container's own wrap/shrink behavior. flex-shrink:0 here is just a
-   safety net against its own box (and the icon inside it) squishing when
-   the outer, non-wrapping .set-song-actions row runs genuinely out of
-   room. */
-.set-song-actions > .row-menu {
-  flex-shrink: 0;
-}
-
 .foreign-row {
   color: var(--muted);
 }
@@ -248,6 +254,37 @@ tr.song-row.selected {
   min-height: calc(var(--text-md) * var(--leading-normal));
 }
 
+/* A foreign item's own PCO Description, shown under its title/length
+   (set_builder.templ) - unlike .song-meta above, only rendered at all
+   when there's a description to show, so it doesn't need a reserved
+   min-height of its own. */
+.item-description {
+  font-size: var(--text-sm);
+}
+
+/* The Order of service table's trailing "+ Add item to plan" row
+   (addPlanItemRows, quick_action.templ) - a plain, full-width, left-
+   aligned button rather than a normal styled button, so it reads as a
+   row-add affordance (matching Planning Center's own "+ Add Item" row)
+   instead of a form control competing with the real actions elsewhere on
+   the page. */
+.add-plan-item-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  background: none;
+  border: none;
+  padding: var(--space-2) 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.add-plan-item-btn:hover {
+  color: var(--text);
+}
+
 /* Header items are section dividers in the real order of service (e.g.
    "Welcome," "Sermon") - rendered as their own full-width row rather than
    a normal 4-column one, so they read as landmarks rather than content. */
@@ -259,6 +296,18 @@ tr.song-row.selected {
   letter-spacing: 0.03em;
   color: var(--muted);
   border-bottom-color: var(--text);
+}
+
+/* Lays a header row's title and its Edit/Remove actions
+   (planItemRowActions, quick_action.templ) side by side within the one
+   colspan="4" cell .section-row td already is - a foreign/song row has a
+   separate actions column to put these in, but a header's single cell
+   doesn't, so this splits it in two instead. */
+.section-row-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
 }
 
 /* touch-action: none stops a touch-drag on the handle from also scrolling

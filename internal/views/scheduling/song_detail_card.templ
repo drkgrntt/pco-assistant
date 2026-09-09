@@ -96,16 +96,14 @@ templ songDetailCardsLazyOOB(data SetBuilderData) {
 // Also re-pushes the card's own "Vocal range" line (song-vocal-range-<id>)
 // when one is on record - a key edit changes this song's effective key,
 // which the transposed range shown there depends on (see the controller's
-// songVocalRangeDisplay, sets_builder.go) - same "did that actually
+// songEffectiveVocalRangeAbs, sets_builder.go) - same "did that actually
 // change anything visible" reasoning as #song-meta-<id> above. No-op
 // (nothing rendered) for a song with no vocal range on file, same as the
 // card's own initial render.
 templ KeyFormFragment(data SetBuilderData, song SetSongView, errMsg string) {
 	@keyForm(data, song, errMsg)
 	<div class="muted song-meta" id={ fmt.Sprintf("song-meta-%d", song.ID) } hx-swap-oob="true">{ song.ArrangementInfo }</div>
-	if song.VocalRangeDisplay != "" {
-		<p class="muted" id={ fmt.Sprintf("song-vocal-range-%d", song.ID) } hx-swap-oob="true"><strong>Vocal range:</strong> { song.VocalRangeDisplay } (in this key)</p>
-	}
+	@songVocalRangeLine(song, true)
 	@songBadgesOOB(song)
 	if next, ok := nextSongRowAfter(data.ServiceOrder, song.ID); ok {
 		@songBadgesOOB(next)
@@ -191,9 +189,7 @@ templ SongArrangementInfoRefreshFragment(data SetBuilderData, song SetSongView, 
 	if song.Structure != "" {
 		<p class="muted" id={ fmt.Sprintf("song-structure-%d", song.ID) } hx-swap-oob="true"><strong>Structure:</strong> { song.Structure }</p>
 	}
-	if song.VocalRangeDisplay != "" {
-		<p class="muted" id={ fmt.Sprintf("song-vocal-range-%d", song.ID) } hx-swap-oob="true"><strong>Vocal range:</strong> { song.VocalRangeDisplay } (in this key)</p>
-	}
+	@songVocalRangeLine(song, true)
 	@songAttachmentsList(data, song, true)
 	if song.HasChordChart {
 		<span id={ fmt.Sprintf("song-chord-chart-badge-%d", song.ID) } hx-swap-oob="true">
@@ -231,6 +227,57 @@ templ songRefreshStatusOOB(songID int64, errMsg string) {
 	</span>
 }
 
+// songVocalRangeLine renders the detail card's "Vocal range: G3-D5 (in this
+// key)" line, each note with its own tap-to-hear button (playVocalTone,
+// web/static/js/scheduling.js) when the row has playable ints on file
+// (SetSongView.VocalRangeHasPlayableNotes) - mirrors vocalRangeLine's own
+// play-button markup (song_vocal_range.templ) so a button here looks and
+// behaves identically to the setup page's, just inline in the label rather
+// than its own line. Renders nothing at all when this song has no range on
+// record (VocalRangeDisplay == ""), same "just omit it" convention as
+// ArrangementInfo/Structure's own blank-field handling on this card.
+//
+// oob mirrors songAttachmentsList's own param (see its doc comment) - the
+// same templ tagged onto the card's primary (non-OOB) render and both of
+// KeyFormFragment/SongArrangementInfoRefreshFragment's OOB pushes, so a key
+// edit or a live refresh (either can change this row's effective key, and
+// so the transposed range shown here) can never drift the three call sites
+// out of sync with each other.
+templ songVocalRangeLine(song SetSongView, oob bool) {
+	if song.VocalRangeDisplay != "" {
+		<p
+			class="muted"
+			id={ fmt.Sprintf("song-vocal-range-%d", song.ID) }
+			if oob {
+				hx-swap-oob="true"
+			}
+		>
+			<strong>Vocal range:</strong>
+			{ song.VocalRangeDisplay } (in this key)
+			if song.VocalRangeHasPlayableNotes {
+				<button
+					type="button"
+					class="icon-btn play"
+					aria-label="Play lowest note"
+					title="Play lowest note"
+					onclick={ templ.JSFuncCall("playVocalTone", song.VocalRangeLowPitchClass, song.VocalRangeLowOctave) }
+				>
+					@components.IconPlay()
+				</button>
+				<button
+					type="button"
+					class="icon-btn play"
+					aria-label="Play highest note"
+					title="Play highest note"
+					onclick={ templ.JSFuncCall("playVocalTone", song.VocalRangeHighPitchClass, song.VocalRangeHighOctave) }
+				>
+					@components.IconPlay()
+				</button>
+			}
+		</p>
+	}
+}
+
 // songDetailCard is one song's detail card - hidden until selectSongRow
 // (scheduling.js) reveals it, in response to clicking that song's own row
 // in the order of service (set_builder.templ). Its content mirrors what
@@ -261,9 +308,7 @@ templ songDetailCard(data SetBuilderData, song SetSongView) {
 		if song.Structure != "" {
 			<p class="muted" id={ fmt.Sprintf("song-structure-%d", song.ID) }><strong>Structure:</strong> { song.Structure }</p>
 		}
-		if song.VocalRangeDisplay != "" {
-			<p class="muted" id={ fmt.Sprintf("song-vocal-range-%d", song.ID) }><strong>Vocal range:</strong> { song.VocalRangeDisplay } (in this key)</p>
-		}
+		@songVocalRangeLine(song, false)
 		@songAttachmentsList(data, song, false)
 		<div class="build-detail-badges">
 			for _, role := range song.Roles {

@@ -475,11 +475,11 @@ templ rowMenuItems() {
 // toggle-button content and popup contents - collapses what used to be an
 // always-visible <select> + submit button (wide enough to occasionally
 // push the row-menu toggle onto its own line at narrow widths - see the
-// .set-song-actions-wrap comment above) into the same reveal-on-click
-// idiom as the row-menu itself, reusing its row-menu/toggleRowMenu
-// machinery rather than a bespoke toggle. Needs data/row (unlike
-// rowMenuToggle/rowMenuItems above) since the candidate list and the
-// confirm/post targets are per-song.
+// .set-song-actions comment in builder-rows.css) into the same
+// reveal-on-click idiom as the row-menu itself, reusing its
+// row-menu/toggleRowMenu machinery rather than a bespoke toggle. Needs
+// data/row (unlike rowMenuToggle/rowMenuItems above) since the candidate
+// list and the confirm/post targets are per-song.
 templ replaceMenuToggle() {
 	@components.IconReplace()
 }
@@ -904,52 +904,44 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 								<td>
 									if !data.ReadOnly {
 										<!--
-											The dot menu must never wrap onto its own line, even
-											when duplicate/remove/replace-form together are too
-											wide for the row - and flex-wrap can't be trusted to
-											honor that via order/flex-shrink alone, because wrap
-											placement is computed from each item's *hypothetical*
-											(pre-shrink) width, not its shrunk width, so a wide
-											.replace-form can still push the dot menu to a second
-											line regardless of order (confirmed live: the previous
-											order:1/flex-shrink:0-only fix looked right on paper
-											but didn't hold up at narrow widths). Structural fix
-											instead: only the duplicate/remove/replace-form cluster
-											lives in its own wrapping sub-container
-											(.set-song-actions-wrap); the dot menu is a sibling
-											outside it, so it's never a participant in that
-											sub-container's wrap calculation at all. The outer
-											.set-song-actions row itself never wraps.
+											All 4 actions (duplicate/remove/replace-toggle/dot
+											menu) are flat siblings in one flex row, right-aligned
+											via justify-content: flex-end on .set-song-actions -
+											see that class's own comment (builder-rows.css) for why
+											this used to need a two-level split (a wide inline
+											.replace-form) and no longer does now that Replace's
+											form lives in its own row-menu popover
+											(replaceMenuItems) rather than sitting inline: every
+											item here is now a same-size compact icon button, so
+											a plain flex-wrap row stays cohesive on its own.
 										-->
 										<div class="set-song-actions">
-											<div class="set-song-actions-wrap">
-												<button
-													type="button"
-													class="icon-btn"
-													aria-label="Duplicate song (e.g. reprise as the response)"
-													title="Duplicate song (e.g. reprise as the response)"
-													hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/duplicate", data.ServiceTypeID, data.PlanID, row.Song.ID) }
-													hx-target="#set-builder-body"
-													hx-swap="outerHTML"
-												>
-													@components.IconCopy()
-												</button>
-												<button
-													type="button"
-													class="danger icon-btn"
-													aria-label="Remove from set"
-													title="Remove from set"
-													hx-delete={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d", data.ServiceTypeID, data.PlanID, row.Song.ID) }
-													hx-target="#set-builder-body"
-													hx-swap="outerHTML"
-													hx-confirm="Remove this song from the set?"
-												>
-													@components.IconRemove()
-												</button>
-												if len(data.ReplaceCandidates) > 0 {
-													@components.Disclosure("row-menu", "icon-btn row-menu-toggle", "toggleRowMenu(this)", "Replace this song", "Replace", replaceMenuToggle(), replaceMenuItems(data, row))
-												}
-											</div>
+											<button
+												type="button"
+												class="icon-btn"
+												aria-label="Duplicate song (e.g. reprise as the response)"
+												title="Duplicate song (e.g. reprise as the response)"
+												hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/duplicate", data.ServiceTypeID, data.PlanID, row.Song.ID) }
+												hx-target="#set-builder-body"
+												hx-swap="outerHTML"
+											>
+												@components.IconCopy()
+											</button>
+											<button
+												type="button"
+												class="danger icon-btn"
+												aria-label="Remove from set"
+												title="Remove from set"
+												hx-delete={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d", data.ServiceTypeID, data.PlanID, row.Song.ID) }
+												hx-target="#set-builder-body"
+												hx-swap="outerHTML"
+												hx-confirm="Remove this song from the set?"
+											>
+												@components.IconRemove()
+											</button>
+											if len(data.ReplaceCandidates) > 0 {
+												@components.Disclosure("row-menu", "icon-btn row-menu-toggle", "toggleRowMenu(this)", "Replace this song", "Replace", replaceMenuToggle(), replaceMenuItems(data, row))
+											}
 											<!--
 												Row-scoped access to the same 3 actions the Quick add
 												panel below offers generically - see quick-action-row
@@ -1046,22 +1038,79 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 								}
 							}
 						} else if row.ItemType == pco.ItemTypeHeader {
-							<tr class="section-row" data-token={ "item:" + row.ItemID }>
-								<td colspan="4">{ row.ItemTitle }</td>
+							<tr
+								class="section-row"
+								data-token={ "item:" + row.ItemID }
+								data-row-id={ row.ItemID }
+								data-reposition-url={ fmt.Sprintf("/scheduling/build/%s/%s/items/%s/reposition", data.ServiceTypeID, data.PlanID, row.ItemID) }
+							>
+								<td colspan="4">
+									<div class="section-row-content">
+										<span>
+											if !data.ReadOnly {
+												<span class="drag-handle" title="Drag to reorder">
+													@components.IconDrag()
+												</span>
+											}
+											{ row.ItemTitle }
+										</span>
+										if !data.ReadOnly {
+											@planItemRowActions(data.ServiceTypeID, data.PlanID, row)
+										}
+									</div>
+									if row.ItemDescription != "" {
+										<div class="muted item-description">{ row.ItemDescription }</div>
+									}
+								</td>
 							</tr>
+							if !data.ReadOnly {
+								@quickActionRow(row.ItemID, "edit-item", fmt.Sprintf("Edit %q", row.ItemTitle), 4) {
+									@planItemEditForm(data.ServiceTypeID, data.PlanID, row)
+								}
+							}
 						} else {
-							<tr class="foreign-row" data-token={ "item:" + row.ItemID }>
+							<tr
+								class="foreign-row"
+								data-token={ "item:" + row.ItemID }
+								data-row-id={ row.ItemID }
+								data-reposition-url={ fmt.Sprintf("/scheduling/build/%s/%s/items/%s/reposition", data.ServiceTypeID, data.PlanID, row.ItemID) }
+							>
+								<td>
+									if !data.ReadOnly {
+										<span class="drag-handle" title="Drag to reorder">
+											@components.IconDrag()
+										</span>
+									}
+								</td>
+								<td>
+									{ row.ItemTitle }
+									<!-- Always rendered, same row-height reasoning as .song-meta above. -->
+									<div class="muted song-meta">{ row.ItemLength }</div>
+									if row.ItemDescription != "" {
+										<div class="muted item-description">{ row.ItemDescription }</div>
+									}
+								</td>
 								<td></td>
-								<td>{ row.ItemTitle }</td>
-								<td></td>
-								<td></td>
+								<td>
+									if !data.ReadOnly {
+										@planItemRowActions(data.ServiceTypeID, data.PlanID, row)
+									}
+								</td>
 							</tr>
+							if !data.ReadOnly {
+								@quickActionRow(row.ItemID, "edit-item", fmt.Sprintf("Edit %q", row.ItemTitle), 4) {
+									@planItemEditForm(data.ServiceTypeID, data.PlanID, row)
+								}
+							}
 						}
 					}
 					if len(data.ServiceOrder) == 0 {
 						<tr>
 							<td colspan="4" class="muted">Nothing in this plan yet - add a song below to get started.</td>
 						</tr>
+					}
+					if !data.ReadOnly {
+						@addPlanItemRows(data.ServiceTypeID, data.PlanID)
 					}
 				</tbody>
 		}

@@ -159,6 +159,26 @@ type AssignmentView struct {
 	FrequencyWarning string
 	BlockoutWarning  string
 	CrossTeamWarning string
+
+	// VocalRangeDisplay is this person's own stored comfortable range (the
+	// /scheduling/vocal-range setup page's scheduling.PersonVocalRange row),
+	// formatted as "G3-D5" - "" when none is on file, in which case the
+	// detail card shows nothing rather than a placeholder. Unlike
+	// SetSongView.VocalRangeDisplay, there's no key to transpose against
+	// here - a person's own natural range doesn't move with whatever key a
+	// song happens to be in, so this is always the as-recorded pair.
+	// VocalRangeHasPlayableNotes/VocalRangeLowPitchClass/VocalRangeLowOctave/
+	// VocalRangeHighPitchClass/VocalRangeHighOctave mirror
+	// SetSongView's own tap-to-hear ints (see that field's doc comment) so
+	// personDetailCard can offer the same play buttons the song card does -
+	// "can this person actually hit this song's range" without leaving the
+	// Build page.
+	VocalRangeDisplay          string
+	VocalRangeHasPlayableNotes bool
+	VocalRangeLowPitchClass    int
+	VocalRangeLowOctave        int
+	VocalRangeHighPitchClass   int
+	VocalRangeHighOctave       int
 }
 
 // CandidatePersonView is a person eligible for a position but not currently

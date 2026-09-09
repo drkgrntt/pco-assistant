@@ -364,13 +364,33 @@ type SetSongView struct {
 
 	// VocalRangeDisplay is this song's practical sung range, already
 	// transposed into this row's own effective key (see the controller's
-	// songVocalRangeDisplay) and formatted as "G3-D5" - "" when no range is
+	// songEffectiveVocalRangeAbs, populated in renderServiceOrder) and
+	// formatted as "G3-D5" - "" when no range is
 	// on record for this song (see internal/scheduling/song_vocal_range.go
 	// and the /scheduling/song-vocal-range setup page), in which case the
 	// detail card shows nothing rather than a placeholder. Detail-card
 	// only, same scope as Structure/HasChordChart above - Phase 2 of
 	// docs/plans/in-progress/vocal-range-plan.md.
 	VocalRangeDisplay string
+
+	// VocalRangeHasPlayableNotes/VocalRangeLowPitchClass/VocalRangeLowOctave/
+	// VocalRangeHighPitchClass/VocalRangeHighOctave are VocalRangeDisplay's
+	// same low/high notes, already split into playable pitch-class/octave
+	// ints (see the controller's songEffectiveVocalRangeAbs +
+	// scheduling.PitchClassAndOctave) so the detail card's "Vocal range"
+	// line can offer tap-to-hear buttons (playVocalTone,
+	// web/static/js/scheduling.js) the same way song_vocal_range.templ's
+	// setup-page rows already do (vocalRangeLine) - "can I hear what this
+	// note sounds like" without leaving the Build page or reaching for an
+	// instrument. HasPlayableNotes mirrors VocalRangeDisplay != "" (true
+	// exactly when VocalRangeDisplay is set) - kept as its own bool rather
+	// than re-checking the string, so a templ caller never has to reason
+	// about which representation is authoritative.
+	VocalRangeHasPlayableNotes bool
+	VocalRangeLowPitchClass    int
+	VocalRangeLowOctave        int
+	VocalRangeHighPitchClass   int
+	VocalRangeHighOctave       int
 
 	// VocalRangeWarningLabel/VocalRangeWarningMessage/VocalRangeWarningIsTip
 	// are Phase 3 of docs/plans/in-progress/vocal-range-plan.md: a
@@ -490,6 +510,31 @@ type ServiceOrderRow struct {
 	ItemID    string
 	ItemTitle string
 	ItemType  string
+	// ItemLength is this item's own PCO Length attribute formatted as
+	// "3:45" (see formatLengthSeconds) - "" when PCO has no length set for
+	// it, same convention as SetSongView.ArrangementInfo omitting the
+	// figure entirely rather than showing "0:00". PCO tracks Length for
+	// any item type, not just songs (a sermon or video counts too - see
+	// serviceOrderLengthSeconds, which already sums this into the whole
+	// plan's total), so a header/media/non-song item can have a real
+	// figure here worth showing on its own row. Confirmed live: Planning
+	// Center silently drops whatever Length a header item is created with
+	// (comes back 0 regardless) - see AddPlanItem's own doc comment - so
+	// this is only ever non-"" for a plain item.
+	ItemLength string
+	// ItemLengthSeconds is the same figure as ItemLength, unformatted -
+	// addPlanItemRows' edit form (quick_action.templ) splits this back
+	// into its own minutes/seconds fields to pre-fill an edit, so a save
+	// that isn't actually about the length doesn't blank it back to 0
+	// (pco.UpdateItem's Length is a plain int, always sent, not an
+	// optional "leave alone" - see UpdatePlanItem's own doc comment).
+	ItemLengthSeconds int
+	// ItemDescription is this item's own PCO Description attribute, shown
+	// as a second muted line under the title (same spot a set song's own
+	// Description would show, if this table rendered one) - already
+	// fetched as part of the same GetItems call ServiceOrder is built
+	// from, so this costs nothing extra to show.
+	ItemDescription string
 
 	// Set when IsSong is true.
 	Song SetSongView

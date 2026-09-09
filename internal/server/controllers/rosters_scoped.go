@@ -148,6 +148,11 @@ func (sc *SchedulingController) buildRosterPositionGroupData(ctx context.Context
 		return views.PositionGroupView{TeamID: teamID, TeamPositionName: teamPositionName}, errMsg
 	}
 
+	// Best-effort, same as buildRosterBuilderData's identical fetch - feeds
+	// each assigned person's own AssignmentView.VocalRangeDisplay/VocalRange*
+	// tap-to-hear fields below (personVocalRangeView).
+	personVocalRanges, _ := sc.store.ListPersonVocalRanges(ctx, organizationID)
+
 	var planDate time.Time
 	if plan, err := pco.GetPlan(ctx, serviceTypeID, planID); err == nil {
 		planDate = plan.Data.Attributes.SortDate
@@ -297,7 +302,7 @@ func (sc *SchedulingController) buildRosterPositionGroupData(ctx context.Context
 			crossWarn = crossTeamWarning(crossTeamCache[ra.PersonID])
 		}
 
-		pg.Assigned = append(pg.Assigned, views.AssignmentView{
+		av := views.AssignmentView{
 			ID:               ra.ID,
 			PersonID:         ra.PersonID,
 			Name:             titleOrID(names, ra.PersonID),
@@ -311,7 +316,16 @@ func (sc *SchedulingController) buildRosterPositionGroupData(ctx context.Context
 			FrequencyWarning: freqWarn,
 			BlockoutWarning:  blockoutWarningIfKnown(planDate, blockoutsByPerson[ra.PersonID]),
 			CrossTeamWarning: crossWarn,
-		})
+		}
+		if display, lowPC, lowOct, highPC, highOct, ok := personVocalRangeView(personVocalRanges, ra.PersonID); ok {
+			av.VocalRangeDisplay = display
+			av.VocalRangeHasPlayableNotes = true
+			av.VocalRangeLowPitchClass = lowPC
+			av.VocalRangeLowOctave = lowOct
+			av.VocalRangeHighPitchClass = highPC
+			av.VocalRangeHighOctave = highOct
+		}
+		pg.Assigned = append(pg.Assigned, av)
 	}
 
 	// Candidates deliberately don't get FrequencyWarning/BlockoutWarning/
