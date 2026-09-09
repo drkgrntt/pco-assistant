@@ -82,11 +82,11 @@ type SetSong struct {
 	// rather than a name typed in two places that can drift apart. Empty
 	// means "no leader set," same convention as Description/KeyOverride.
 	// Editing this only updates the local draft (UpdateSetSongLeader); it
-	// reaches Planning Center as a reserved first line inside the org's
-	// configured "vocal notes" Item Note category on the next Publish or
-	// Refresh song info (see syncLeaderNote, sets_publish.go, and
-	// scheduling.Store.VocalNoteCategoryID) - never a category of its
-	// own. See docs/plans/shipped/song-leader-plan.md.
+	// reaches Planning Center as a real ItemAssignment on the next
+	// Publish or Refresh song info (see syncLeaderAssignment,
+	// sets_publish.go/leader_note.go). See
+	// docs/plans/shipped/song-leader-plan.md and
+	// docs/plans/shipped/worship-leader-pco-sync-plan.md.
 	LeaderPersonID string `json:"leader_person_id"`
 }
 

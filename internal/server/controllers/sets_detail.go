@@ -247,10 +247,9 @@ func (sc *SchedulingController) UpdateSetSongKey(c *fiber.Ctx) error {
 // UpdateSetSongLeader sets one set song's local per-occurrence song leader
 // (see scheduling.SetSong.LeaderPersonID) - same local-draft-only
 // semantics as UpdateSetSongDescription/UpdateSetSongKey above (it reaches
-// Planning Center as a reserved line inside the org's configured vocal
-// notes category on the next Publish or Refresh song info, see
-// syncLeaderNote in sets_publish.go, not immediately), and the same
-// single-form fragment response.
+// Planning Center as a real ItemAssignment on the next Publish or Refresh
+// song info, see syncLeaderAssignment in sets_publish.go/leader_note.go,
+// not immediately), and the same single-form fragment response.
 func (sc *SchedulingController) UpdateSetSongLeader(c *fiber.Ctx) error {
 	ctx := middleware.RequestContext(c)
 	orgID := middleware.CurrentOrganizationID(c)

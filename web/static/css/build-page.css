@@ -278,12 +278,6 @@ main:has(.build-layout) {
    collapsible.css for its own styling; only the form inside it is styled
    here.
 
-   Also reused, unchanged, by VocalNoteCategoryFormFragment (build.templ) -
-   the "Song leader syncs into" setting inside SetBuilderBodyContent's own
-   collapsibleSection (set_builder.templ) - same compact label+control+
-   status shape, so it just borrows this class rather than growing an
-   almost-identical one of its own.
-
    collapsibleSection's own .collapsible-body is a plain block box (no
    flex parent, no padding of its own - see collapsible.css), unlike this
    form's old home (.plan-note-section, a flex row that used to cap it at

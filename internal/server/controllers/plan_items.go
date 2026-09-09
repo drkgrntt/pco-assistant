@@ -145,7 +145,7 @@ func (sc *SchedulingController) RepositionPlanItem(c *fiber.Ctx) error {
 		newOrder := buildReorderedItemIDs(pcoItems.Data, draggedItemID, anchorItemID)
 
 		// Skip the call entirely when nothing would actually move - same
-		// "avoid a pointless write" convention syncLeaderNote/InfoPending
+		// "avoid a pointless write" convention InfoPending's own writes
 		// follow elsewhere in this package, and the common case for a
 		// drag that resolves back to its own current position (the
 		// client already no-ops that case itself, but a second guard here
