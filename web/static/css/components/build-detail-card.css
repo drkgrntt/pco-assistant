@@ -131,34 +131,43 @@
   font-size: var(--text-xs);
 }
 
+/* Duplicate/Remove plus the "More actions" row-menu toggle
+   (songDetailMenuToggle/songDetailMenuItems, song_detail_card.templ), all
+   three as flat siblings in one row - the same collapse the table row's
+   own actions column already uses (.set-song-actions, builder-rows.css),
+   just two labeled buttons instead of all-icon since the sidebar has the
+   room for labels. Replace, "Update from Planning Center", and the
+   tag/relate/role/vocal-range actions all moved into the row-menu's own
+   popover (see songDetailCard's doc comment) - nothing but Duplicate,
+   Remove, and the toggle itself renders here directly. */
 .build-detail-actions {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: var(--space-2);
   margin-top: var(--space-2);
 }
 
-.build-detail-actions > button,
-.build-detail-actions .replace-form {
-  width: 100%;
-}
-
-/* .replace-form select's own max-width:8rem (builder-rows.css) exists for
-   the cramped table-row context, where the row-menu next to it needs the
-   room. In here the form is already the full sidebar width (see
-   .build-detail-actions .replace-form above) and the replace button
-   (.replace-form button, builder-rows.css) is flex-shrink:0/shrink-to-
-   content, so without this override the select stayed pinned at 8rem and
-   left a dead gap between it and the button instead of filling the
-   space its own flex:1 1 auto already asks for. Table row's own 8rem cap
-   is untouched - this only overrides it inside .build-detail-actions. */
-.build-detail-actions .replace-form select {
-  max-width: none;
-}
-
-.build-detail-actions button {
+/* Duplicate/Remove split the row evenly; the row-menu toggle
+   (.build-detail-actions > .row-menu, the Disclosure's own wrapper div) is
+   a fixed icon-sized unit next to them and must not be squeezed by the
+   other two's flex-basis - mirrors .set-song-actions > * in
+   builder-rows.css treating its own icon-sized children the same way. */
+.build-detail-actions > button {
+  flex: 1 1 0;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
 }
+
+.build-detail-actions > .row-menu {
+  flex-shrink: 0;
+}
+
+/* Replace's <select>+button form (songDetailMenuItems above) now renders
+   inside this card's own row-menu popover instead of sitting inline at
+   full sidebar width, so it's just another .row-menu-menu entry - the
+   generic ".row-menu-menu .replace-form" rule (builder-rows.css), already
+   written to size that form correctly inside any row-menu popover
+   regardless of which page it's on, covers it with no card-specific
+   override needed here. */
