@@ -1,5 +1,39 @@
 # Plan: tether "worship leader"/song leader to something real in PCO
 
+**Status: shipped 2026-09-09.** go-pco `v0.24.0` adds `ItemAssignment`
+(`itemAssignments.go`: `GetItemAssignments`/`CreateItemAssignment`/
+`DeleteItemAssignment`); `syncLeaderAssignment`/`personAssignmentFor`
+(`internal/server/controllers/leader_note.go`) wired into `PublishSet`/
+`RefreshSongInfo`'s existing per-song write loop
+(`internal/server/controllers/sets_publish.go`), alongside (not
+replacing) the pre-existing `syncLeaderNote` vocal-notes sync.
+
+**The "next step" this doc originally called for actually happened**
+mid-conversation: rather than the two guessed candidates below, Derek
+pulled up PCO's own "Edit song" panel and confirmed live that "Song
+leader" is a real, first-class section right there (an "Add leader"
+button under "Linked song," above the Notes/Detail/Song/Media/Files
+tabs) - not a Team/Position assignment as candidate 1 below guessed, and
+not on the Plan resource as candidate 2 guessed. Live verification (both
+against PCO's machine-readable vertex docs and by reading back a real
+assignment created through PCO's own UI) found the actual mechanism: a
+separate resource, `ItemAssignment`
+(`services/v2/.../items/{item_id}/item_assignments`), one row per
+assignable (`Person`, or per PCO's docs an open `TeamPosition`
+placeholder not yet exercised here) linked to one plan `Item`. **This
+means the original "leading theory" below (a per-plan Team assignment,
+a materially different shape than today's per-song field) was wrong** -
+the real mechanism is per-*item*, matching this app's existing
+per-occurrence `SetSong.LeaderPersonID` model exactly. No redesign of
+the local data model was needed at all; only a new write target.
+
+The rest of this doc (below the original "Written 2026-09-09" line) is
+kept as-is for the reasoning trail - the wrong theory and the false start
+it would have led to are worth keeping visible, not quietly erased, per
+this project's own docs conventions.
+
+---
+
 Written 2026-09-09, prompted by direct feedback from a meeting with the
 worship pastor (`docs/issues.md`): "worship leader is a first class
 citizen in our application but it doesn't write to anything (that we
@@ -68,11 +102,22 @@ he's actually pointing at in PCO's UI.** The most likely real candidates:
    PCO's own scheduling notifications (accept/decline emails/texts) are
    already wired to exactly this resource - it's what actually "sends
    the proper notifications," which an Item Note never could.
+
+   **This guess turned out wrong - see the Status note at the top.**
 2. Something on the **Plan** resource itself (not checked yet - if (1)
    doesn't match what he's describing, pull a plan's own attributes/
    relationships live the same way, before guessing further).
 
+   **Also wrong - see the Status note at the top.** The real answer was
+   a third option neither candidate anticipated: a dedicated per-item
+   resource (`ItemAssignment`) visible directly in PCO's "Edit song"
+   panel, not folded into an existing resource's own fields at all.
+
 ## The design fork this implies
+
+**This section describes a fork that turned out not to exist - kept
+verbatim for the reasoning trail; see the Status note at the top for
+what actually shipped instead of either branch below.**
 
 If it turns out to be (1) - **worship leader is really "assign this
 person to the Worship Leader position on this plan's Team," not a
@@ -131,25 +176,55 @@ PCO's own reminder system).
 1. **Confirm with the worship pastor** exactly what UI element in PCO he
    was pointing at when he said "song leader field" - screenshot or a
    direct walkthrough, not a guess.
+
+   **Done** - Derek supplied a screenshot mid-conversation; see the
+   Status note at the top.
 2. Once identified, live-verify its actual API shape the same way this
    doc verified Item/Song/Arrangement (don't trust PCO's docs alone, per
    CLAUDE.md's standing instruction).
+
+   **Done** - both against PCO's machine-readable vertex docs
+   (`.../documentation/2018-11-01/vertices/item_assignment`) and by
+   reading back a real assignment Derek created through PCO's own UI
+   (with his explicit go-ahead: "if it's readonly, it's fine either
+   way").
 3. Only then decide: extend the existing per-song `syncLeaderNote` path
    to also/instead write a real structured field (if one exists after
    all and was just missed here), or build the per-plan Team-position
    assignment path described above (most likely outcome), or something
    else the live check reveals.
+
+   **Resolved**: extended alongside, not instead of - see the Status
+   note at the top and go-pco's `docs/services.md` "Item Assignments"
+   section for the shipped shape.
 4. If the Team-position path is confirmed as the right shape, the
    existing `rosters_publish.go` `CreateTeamMember`/`DeleteTeamMember`
    pattern is the implementation template - this would likely be a
    moderate build (surfacing/dedicating a "Worship Leader" position
    prominently), not a from-scratch integration.
 
+   **Did not apply** - the Team-position path wasn't the real mechanism;
+   `CreateTeamMember`/`DeleteTeamMember`'s shape was still a useful
+   reference for `ItemAssignment`'s own create/delete-and-recreate
+   convention, just not the resource itself.
+
 ## Verification (once a direction is picked)
 
-- `go build ./...` / `make test` clean.
+- `go build ./...` / `make test` clean - **done**, plus new tests
+  (`TestPersonAssignmentFor`/`TestSyncLeaderAssignment`,
+  `leader_note_test.go`; `TestGetItemAssignments`/
+  `TestCreateItemAssignment`/`TestDeleteItemAssignment` and variants,
+  go-pco's `itemAssignments_test.go`).
 - Live: assign a worship leader through whatever mechanism gets built,
   confirm in the real PCO org that the assignment shows up as a genuine
   Team Member/PlanPerson (or whatever the confirmed real field turns out
   to be), and that PCO's own notification (if the mechanism carries one)
   actually fires.
+
+  **Partially done**: the live-verification round trip (create via PCO's
+  UI, read back via this app's new code) confirmed the write shape is
+  correct. Confirming PCO's own notification actually fires end-to-end
+  from *this app's* Publish/Refresh (as opposed to PCO's own UI, which
+  Derek used for the verification round trip) is worth a real end-to-end
+  smoke test the next time a plan gets published with a leader set,
+  rather than assumed from the resource shape alone.

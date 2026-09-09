@@ -197,16 +197,19 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 	// until the next manual sync.
 	arrangementCache, _ := sc.store.SongArrangementInfo(ctx, orgID)
 
-	// vocalCategoryID/leaderNames back syncLeaderNote's per-song write
-	// below - resolved once here, not per song. vocalCategoryID's own
-	// lookup is a local Postgres read (scheduling.Store.
-	// VocalNoteCategoryID), not a PCO call; leaderNames batches every
-	// distinct LeaderPersonID in this set into one where[id]=... call
-	// (personNameMapForIDs), same batching precedent as titles/roles
-	// above - empty when no song in this set has a leader set, in which
-	// case the call is skipped entirely (see personLookupMapForIDs).
+	// vocalCategoryID/leaderNames/leaderPersonIDs back syncLeaderNote/
+	// syncLeaderAssignment's per-song writes below - resolved once here,
+	// not per song. vocalCategoryID's own lookup is a local Postgres read
+	// (scheduling.Store.VocalNoteCategoryID), not a PCO call; leaderNames
+	// batches every distinct LeaderPersonID in this set into one
+	// where[id]=... call (personNameMapForIDs), same batching precedent as
+	// titles/roles above - empty when no song in this set has a leader
+	// set, in which case the call is skipped entirely (see
+	// personLookupMapForIDs). leaderPersonIDs itself feeds the
+	// Include: item_assignments decision just below.
 	vocalCategoryID, _ := sc.store.VocalNoteCategoryID(ctx, orgID, serviceTypeID)
-	leaderNames := personNameMapForIDs(ctx, distinctLeaderPersonIDs(setSongs))
+	leaderPersonIDs := distinctLeaderPersonIDs(setSongs)
+	leaderNames := personNameMapForIDs(ctx, leaderPersonIDs)
 
 	// 1. Deletions - clear out what was removed/replaced locally before
 	// creating or reordering anything else.
@@ -240,14 +243,28 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 	// quietly claiming to be in sync.
 	reorderSucceeded := true
 	if len(setSongs) > 0 {
-		// Include: item_notes only when the leader sync is actually
+		// Include: item_notes only when the leader-note sync is actually
 		// configured (vocalCategoryID != "") - sideloading onto this
 		// already-happening call (see itemNotesFromIncluded) is free
 		// PCO-call-wise either way, but there's no reason to ask Planning
 		// Center to bundle note data nobody here is about to look at.
+		// item_assignments (the real "Song leader" resource -
+		// itemAssignmentsFromIncluded) is requested whenever any song in
+		// this set currently has a leader set - same reasoning, same free
+		// sideload onto the one call this section makes regardless. Known
+		// gap, same shape as vocalCategoryID's own: if every song's
+		// LeaderPersonID is "" (nobody currently has a leader set locally -
+		// including a leader that was just cleared), this stays
+		// unrequested and a stray PCO assignment set outside this app
+		// won't be found/cleaned up this publish. Acceptable for the same
+		// reason the note-sync gate already accepts it - narrow, and not a
+		// regression from today's behavior.
 		itemsParams := &pco.ItemsParams{}
 		if vocalCategoryID != "" {
-			itemsParams.Include = []string{"item_notes"}
+			itemsParams.Include = append(itemsParams.Include, "item_notes")
+		}
+		if len(leaderPersonIDs) > 0 {
+			itemsParams.Include = append(itemsParams.Include, "item_assignments")
 		}
 		existingItems, err := pco.GetItems(ctx, serviceTypeID, planID, itemsParams)
 		if err != nil {
@@ -258,6 +275,7 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 				return existingItems.Data[i].Attributes.Sequence < existingItems.Data[j].Attributes.Sequence
 			})
 			notesByItem := itemNotesFromIncluded(existingItems.Included)
+			assignmentsByItem := itemAssignmentsFromIncluded(existingItems.Included)
 
 			nextSequence := 0
 			for _, item := range existingItems.Data {
@@ -376,6 +394,14 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 						failures = append(failures, fmt.Sprintf("%s: created, but couldn't sync the song leader note: %s", title, friendlyPCOErr(err)))
 						failuresMu.Unlock()
 					}
+					// Likewise, a freshly-created item has no existing
+					// ItemAssignment yet (current: nil) - see
+					// syncLeaderAssignment's own doc comment.
+					if err := syncLeaderAssignment(ctx, serviceTypeID, planID, item.Data.ID, nil, ss.LeaderPersonID); err != nil {
+						failuresMu.Lock()
+						failures = append(failures, fmt.Sprintf("%s: created, but couldn't set the Planning Center song leader: %s", title, friendlyPCOErr(err)))
+						failuresMu.Unlock()
+					}
 					atomic.AddInt32(&createdCount, 1)
 				} else {
 					// Already published - nothing to create, but a pending
@@ -435,6 +461,17 @@ func (sc *SchedulingController) PublishSet(c *fiber.Ctx) error {
 							if err := syncLeaderNote(ctx, serviceTypeID, planID, ss.PCOItemID, vocalCategoryID, currentNoteID, currentContent, titleOrID(leaderNames, ss.LeaderPersonID)); err != nil {
 								failuresMu.Lock()
 								failures = append(failures, fmt.Sprintf("%s: note/key updated, but couldn't sync the song leader note: %s", title, friendlyPCOErr(err)))
+								failuresMu.Unlock()
+							}
+							// currentAssignment comes from assignmentsByItem -
+							// sideloaded on the same existingItems fetch above
+							// (Include: item_assignments), never a fresh
+							// per-song call - see syncLeaderAssignment's own
+							// doc comment.
+							currentAssignment := personAssignmentFor(assignmentsByItem, ss.PCOItemID)
+							if err := syncLeaderAssignment(ctx, serviceTypeID, planID, ss.PCOItemID, currentAssignment, ss.LeaderPersonID); err != nil {
+								failuresMu.Lock()
+								failures = append(failures, fmt.Sprintf("%s: note/key updated, but couldn't set the Planning Center song leader: %s", title, friendlyPCOErr(err)))
 								failuresMu.Unlock()
 							}
 						}
@@ -555,21 +592,36 @@ func (sc *SchedulingController) RefreshSongInfo(c *fiber.Ctx) error {
 	resolveMissingTitles(ctx, titles, setSongIDs)
 	arrangementCache, _ := sc.store.SongArrangementInfo(ctx, orgID)
 
-	// vocalCategoryID/leaderNames/notesByItem back syncLeaderNote's
-	// per-song write below - see PublishSet's identical setup for the
-	// full reasoning. Unlike PublishSet (which already fetches plan items
-	// for the reorder step regardless), RefreshSongInfo otherwise never
-	// calls GetItems at all - so the one extra GetItems(Include:
-	// item_notes) call here only happens when this service type has
-	// actually configured the vocal notes category setting
-	// (vocalCategoryID != ""), never as a cost every org pays by default.
-	// See docs/pco-api-risks.md's Item Notes entry.
+	// vocalCategoryID/leaderNames/notesByItem/assignmentsByItem back
+	// syncLeaderNote/syncLeaderAssignment's per-song writes below - see
+	// PublishSet's identical setup for the full reasoning. Unlike
+	// PublishSet (which already fetches plan items for the reorder step
+	// regardless), RefreshSongInfo otherwise never calls GetItems at all -
+	// so the one extra GetItems call here only happens when there's
+	// actually something for it to sideload: this service type has
+	// configured the vocal notes category setting (vocalCategoryID != "")
+	// and/or at least one song in this set currently has a leader set
+	// (leaderPersonIDs non-empty) - never as a cost every org pays by
+	// default. Same known gap as PublishSet's identical gate: a leader
+	// cleared to "" on every song in the set, with vocalCategoryID also
+	// unset, skips this fetch entirely. See docs/pco-api-risks.md's Item
+	// Notes entry.
 	vocalCategoryID, _ := sc.store.VocalNoteCategoryID(ctx, orgID, serviceTypeID)
-	leaderNames := personNameMapForIDs(ctx, distinctLeaderPersonIDs(setSongs))
+	leaderPersonIDs := distinctLeaderPersonIDs(setSongs)
+	leaderNames := personNameMapForIDs(ctx, leaderPersonIDs)
 	var notesByItem map[string][]pco.ItemNoteData
-	if vocalCategoryID != "" {
-		if items, err := pco.GetItems(ctx, serviceTypeID, planID, &pco.ItemsParams{Include: []string{"item_notes"}}); err == nil {
+	var assignmentsByItem map[string][]pco.ItemAssignmentData
+	if vocalCategoryID != "" || len(leaderPersonIDs) > 0 {
+		itemsParams := &pco.ItemsParams{}
+		if vocalCategoryID != "" {
+			itemsParams.Include = append(itemsParams.Include, "item_notes")
+		}
+		if len(leaderPersonIDs) > 0 {
+			itemsParams.Include = append(itemsParams.Include, "item_assignments")
+		}
+		if items, err := pco.GetItems(ctx, serviceTypeID, planID, itemsParams); err == nil {
 			notesByItem = itemNotesFromIncluded(items.Included)
+			assignmentsByItem = itemAssignmentsFromIncluded(items.Included)
 		}
 	}
 
@@ -631,6 +683,12 @@ func (sc *SchedulingController) RefreshSongInfo(c *fiber.Ctx) error {
 		if err := syncLeaderNote(ctx, serviceTypeID, planID, ss.PCOItemID, vocalCategoryID, currentNoteID, currentContent, titleOrID(leaderNames, ss.LeaderPersonID)); err != nil {
 			failuresMu.Lock()
 			failures = append(failures, fmt.Sprintf("%s: refreshed, but couldn't sync the song leader note: %s", title, friendlyPCOErr(err)))
+			failuresMu.Unlock()
+		}
+		currentAssignment := personAssignmentFor(assignmentsByItem, ss.PCOItemID)
+		if err := syncLeaderAssignment(ctx, serviceTypeID, planID, ss.PCOItemID, currentAssignment, ss.LeaderPersonID); err != nil {
+			failuresMu.Lock()
+			failures = append(failures, fmt.Sprintf("%s: refreshed, but couldn't set the Planning Center song leader: %s", title, friendlyPCOErr(err)))
 			failuresMu.Unlock()
 		}
 		atomic.AddInt32(&refreshedCount, 1)
