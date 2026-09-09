@@ -43,8 +43,52 @@ templ SongTags(personName, organizationName string, songs []pco.SongData, tagsBy
 			</label>
 			@songTagFilterChips(distinctTagValues(tagsBySong))
 		</div>
-		@SongTagsList(songs, tagsBySong, categories, categoryLabels, errMsg)
+		@songTagBulkAddForm(categories)
+		@SongTagsList(songs, tagsBySong, categories, categoryLabels, "", errMsg)
 	}
+}
+
+// songTagBulkAddForm is this page's "already know the tag, just need it on
+// several songs" shortcut - the counterpart to each SongTagCard's own
+// per-song inline form, for adding one category/value pair to songs a/b/c/d
+// without opening each of their cards individually. Lives outside
+// #song-tags-list (like #song-tag-filter above) so an unrelated single-tag
+// add/edit/delete elsewhere on the page doesn't wipe a category/value the
+// user was mid-typing here - only the per-card checkboxes it collects via
+// their own form="song-tag-bulk-form" attribute (SongTagCard) live inside
+// that swapped div, and losing an in-progress *selection* to some other
+// card's own edit is an acceptable rare edge case, not worth guarding
+// against. #song-tag-bulk-count (updateSongTagBulkCount, scheduling.js) is
+// kept in sync from each checkbox's own onchange and from #song-tags-list's
+// own htmx:afterSwap handler (every checkbox lives inside that div, so a
+// swap - including this form's own submit - always resets it to 0).
+templ songTagBulkAddForm(categories []scheduling.SongTagCategory) {
+	<details class="song-tag-bulk-details">
+		<summary class="song-tag-add-toggle">+ Add a tag to multiple songs at once</summary>
+		<form
+			id="song-tag-bulk-form"
+			class="inline song-tag-bulk-form"
+			hx-post="/scheduling/song-tags/bulk"
+			hx-target="#song-tags-list"
+			hx-swap="outerHTML"
+		>
+			<label>
+				Category
+				<select name="category">
+					for _, cat := range categories {
+						<option value={ cat.Code }>{ cat.Label }</option>
+					}
+				</select>
+			</label>
+			<label>
+				Value
+				<input type="text" name="value" list="song-tag-value-options" placeholder="e.g. Grace, Romans 8:1, New beginnings" required/>
+			</label>
+			<button type="submit" class="primary">Add tag to selected songs</button>
+			<span id="song-tag-bulk-count" class="muted">0 songs selected</span>
+		</form>
+		<p class="muted song-tag-bulk-hint">Check the songs below, then submit.</p>
+	</details>
 }
 
 // songTagsHelp is this page's Help-triggered dialog - see
@@ -74,29 +118,47 @@ templ songTagsHelp() {
 // checkbox-backed toggle chips (native checkbox visually hidden, its
 // <label> styled as the pill - see .tag-filter-chip, song-tags.css) so
 // filtering reads as "select which tags to show" rather than free typing.
-// Computed once from the page's initial load, not re-derived on every
-// #song-tags-list swap (like #song-tag-filter's own text input above,
-// deliberately outside that swap target) so checking a few boxes doesn't
-// get silently wiped the next time any card's tags change. The tradeoff:
-// a tag value added after page load won't get its own chip until reload -
-// acceptable since the plain text filter still matches it in the
-// meantime.
+// Rendered here (page load) and refreshed via songTagFilterChipsOOB below
+// on every create/edit (song_tags.go) so a newly-used tag value's chip
+// shows up immediately - id="song-tag-filter-chips" is what
+// songTagFilterChipsOOB's hx-swap-oob="true" targets, kept in sync with
+// the same id on both. hidden?, not an `if`, so the id stays addressable
+// even with zero tags yet (an OOB swap needs an existing element with a
+// matching id to replace); .song-tag-filter-chips[hidden] (song-tags.css)
+// makes that actually collapse despite the class's own `display: flex`.
 templ songTagFilterChips(tagValues []string) {
-	if len(tagValues) > 0 {
-		<div class="song-tag-filter-chips" role="group" aria-label="Filter by tag">
-			for i, v := range tagValues {
-				<span class="tag-filter-item">
-					<input
-						type="checkbox"
-						id={ fmt.Sprintf("tag-filter-%d", i) }
-						class="song-tag-filter-checkbox"
-						value={ strings.ToLower(v) }
-						onchange="filterSongTagCards()"
-					/>
-					<label for={ fmt.Sprintf("tag-filter-%d", i) } class="tag-filter-chip">{ v }</label>
-				</span>
-			}
-		</div>
+	<div class="song-tag-filter-chips" id="song-tag-filter-chips" role="group" aria-label="Filter by tag" hidden?={ len(tagValues) == 0 }>
+		@songTagFilterChipItems(tagValues)
+	</div>
+}
+
+// songTagFilterChipsOOB is songTagFilterChips' out-of-band refresh -
+// included in SongTagsMutationResponse below (not in SongTagsList itself,
+// which the page's own initial render also calls, to avoid rendering the
+// chips twice on page load). Checking existing chips isn't touched by this
+// swap losing its checked state, since it's a full outerHTML replace by
+// id: the JS side (song-tag-filter-chips oobBeforeSwap/oobAfterSwap
+// handlers, scheduling.js) captures which values were checked beforehand
+// and re-checks the matching new checkboxes after, so a filter someone
+// already applied survives a tag add/edit elsewhere on the page.
+templ songTagFilterChipsOOB(tagValues []string) {
+	<div class="song-tag-filter-chips" id="song-tag-filter-chips" role="group" aria-label="Filter by tag" hidden?={ len(tagValues) == 0 } hx-swap-oob="true">
+		@songTagFilterChipItems(tagValues)
+	</div>
+}
+
+templ songTagFilterChipItems(tagValues []string) {
+	for i, v := range tagValues {
+		<span class="tag-filter-item">
+			<input
+				type="checkbox"
+				id={ fmt.Sprintf("tag-filter-%d", i) }
+				class="song-tag-filter-checkbox"
+				value={ strings.ToLower(v) }
+				onchange="filterSongTagCards()"
+			/>
+			<label for={ fmt.Sprintf("tag-filter-%d", i) } class="tag-filter-chip">{ v }</label>
+		</span>
 	}
 }
 
@@ -127,17 +189,24 @@ func distinctTagValues(tagsBySong map[string][]scheduling.SongTag) []string {
 // SongTagsTable's old doc comment (song_tags.go history) for why errMsg
 // lives inside the swapped fragment rather than the page around it: an
 // htmx response only replaces this div, so an error from a create/delete
-// has nowhere else to render. Also carries the #song-tag-value-options
+// has nowhere else to render. successMsg is the same idea for
+// BulkCreateSongTag (song_tags.go) - a bulk add can touch songs scattered
+// well below the fold, so unlike a single-song add (that song's own card
+// is already right there in view) there's otherwise no confirmation the
+// action actually did anything. Also carries the #song-tag-value-options
 // <datalist> every card's own "Value" input points its list= attribute at
 // (autocomplete for re-using an existing tag value, see SongTagCard) -
 // deliberately inside the swapped fragment, unlike songTagFilterChips'
 // checkboxes above, since a datalist has no user-set state that a re-swap
 // could lose, so it may as well pick up a brand-new tag value on the very
 // next add instead of waiting for a page reload.
-templ SongTagsList(songs []pco.SongData, tagsBySong map[string][]scheduling.SongTag, categories []scheduling.SongTagCategory, categoryLabels map[string]string, errMsg string) {
+templ SongTagsList(songs []pco.SongData, tagsBySong map[string][]scheduling.SongTag, categories []scheduling.SongTagCategory, categoryLabels map[string]string, successMsg, errMsg string) {
 	<div id="song-tags-list" class="song-tags-list">
 		if errMsg != "" {
 			<p class="error">{ errMsg }</p>
+		}
+		if successMsg != "" {
+			<p class="success">{ successMsg }</p>
 		}
 		if len(songs) == 0 {
 			<p class="muted">No active songs found.</p>
@@ -153,6 +222,18 @@ templ SongTagsList(songs []pco.SongData, tagsBySong map[string][]scheduling.Song
 	</div>
 }
 
+// SongTagsMutationResponse is CreateSongTag/BulkCreateSongTag/DeleteSongTag's
+// htmx response (song_tags.go): SongTagsList as the primary swap target,
+// plus songTagFilterChipsOOB's own out-of-band refresh so a newly-used tag
+// value's filter chip appears without a reload - see that function's doc
+// comment. Kept separate from SongTagsList itself so SongTags' initial
+// full-page render (which calls SongTagsList directly) doesn't render the
+// chips twice.
+templ SongTagsMutationResponse(songs []pco.SongData, tagsBySong map[string][]scheduling.SongTag, categories []scheduling.SongTagCategory, categoryLabels map[string]string, successMsg, errMsg string) {
+	@SongTagsList(songs, tagsBySong, categories, categoryLabels, successMsg, errMsg)
+	@songTagFilterChipsOOB(distinctTagValues(tagsBySong))
+}
+
 // SongTagCard is one song's persistent card: its existing tags as chips
 // (grouped in whatever order ListSongTags/tagsBySong already returns them -
 // see songTagsBySong's own doc comment), each with inline edit/remove
@@ -166,6 +247,17 @@ templ SongTagsList(songs []pco.SongData, tagsBySong map[string][]scheduling.Song
 templ SongTagCard(song pco.SongData, tags []scheduling.SongTag, categories []scheduling.SongTagCategory, categoryLabels map[string]string) {
 	<div class="song-tag-card" data-search={ songTagCardSearchText(song, tags) } data-tags={ songTagCardTagsAttr(tags) }>
 		@components.Card(song.Attributes.Title) {
+			<label class="song-tag-bulk-select">
+				<input
+					type="checkbox"
+					class="song-tag-bulk-checkbox"
+					name="song_ids"
+					form="song-tag-bulk-form"
+					value={ song.ID }
+					onchange="updateSongTagBulkCount()"
+				/>
+				Select for bulk add
+			</label>
 			if len(tags) == 0 {
 				<p class="muted song-tag-empty">No tags yet.</p>
 			} else {

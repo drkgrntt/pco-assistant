@@ -1401,6 +1401,64 @@ document.addEventListener("htmx:afterSwap", function (event) {
     return;
   }
   filterSongTagCards();
+  updateSongTagBulkCount();
+});
+
+// updateSongTagBulkCount keeps #song-tag-bulk-count (song_tags.templ) in
+// sync with how many of the page's .song-tag-bulk-checkbox boxes are
+// currently checked - called from each checkbox's own onchange, and from
+// the #song-tags-list afterSwap handler above since every one of those
+// checkboxes lives inside that div (an add/edit/delete/bulk-add anywhere
+// on the page always resets them all to unchecked).
+function updateSongTagBulkCount() {
+  var countEl = document.getElementById("song-tag-bulk-count");
+  if (!countEl) {
+    return;
+  }
+  var count = document.querySelectorAll(".song-tag-bulk-checkbox:checked").length;
+  countEl.textContent = count === 1 ? "1 song selected" : count + " songs selected";
+}
+
+// The Song Tags page's #song-tag-filter-chips container gets a full
+// out-of-band outerHTML replace on every create/edit
+// (songTagFilterChipsOOB, song_tags.templ) so a newly-used tag value's
+// chip shows up without a reload - but that replace is built fresh from
+// the server's own tag data, with no idea which checkboxes this browser
+// had checked. Capture them right before the swap and re-check the
+// matching ones right after, so an in-progress filter survives a tag
+// mutation elsewhere on the page instead of silently resetting to "show
+// everything".
+var songTagFilterChipsCheckedBeforeSwap = null;
+
+document.addEventListener("htmx:oobBeforeSwap", function (event) {
+  var target = event.detail && event.detail.target;
+  if (!target || target.id !== "song-tag-filter-chips") {
+    return;
+  }
+  songTagFilterChipsCheckedBeforeSwap = Array.prototype.slice
+    .call(target.querySelectorAll(".song-tag-filter-checkbox:checked"))
+    .map(function (checkbox) {
+      return checkbox.value;
+    });
+});
+
+document.addEventListener("htmx:oobAfterSwap", function (event) {
+  var target = event.detail && event.detail.target;
+  if (
+    !target ||
+    target.id !== "song-tag-filter-chips" ||
+    !songTagFilterChipsCheckedBeforeSwap
+  ) {
+    return;
+  }
+  var checkedValues = songTagFilterChipsCheckedBeforeSwap;
+  songTagFilterChipsCheckedBeforeSwap = null;
+  target.querySelectorAll(".song-tag-filter-checkbox").forEach(function (checkbox) {
+    if (checkedValues.indexOf(checkbox.value) !== -1) {
+      checkbox.checked = true;
+    }
+  });
+  filterSongTagCards();
 });
 
 // Generic collapsible sections used across the build page (see

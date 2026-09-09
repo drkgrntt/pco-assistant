@@ -497,6 +497,7 @@ func (sc *SchedulingController) RegisterRoutes(router fiber.Router) {
 
 	group.Get("/song-tags", sc.SongTagsPage)
 	group.Post("/song-tags", sc.CreateSongTag)
+	group.Post("/song-tags/bulk", sc.BulkCreateSongTag)
 	group.Delete("/song-tags/:id", sc.DeleteSongTag)
 
 	group.Get("/song-tag-suggestions", sc.SongTagSuggestionsPage)

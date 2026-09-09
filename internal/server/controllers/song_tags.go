@@ -3,6 +3,7 @@ package controllers
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 
 	"pco-assistant/internal/scheduling"
 	"pco-assistant/internal/server/middleware"
@@ -74,7 +75,59 @@ func (sc *SchedulingController) CreateSongTag(c *fiber.Ctx) error {
 	songs, _ := fetchActiveSongs(middleware.RequestContext(c), orgID)
 	categories, _ := sc.store.ListSongTagCategories(c.Context())
 
-	return render(c, views.SongTagsList(songs, songTagsBySong(tags), categories, songTagCategoryLabelMap(categories), errMsg))
+	return render(c, views.SongTagsMutationResponse(songs, songTagsBySong(tags), categories, songTagCategoryLabelMap(categories), "", errMsg))
+}
+
+// BulkCreateSongTag applies one category/value pair to every selected song
+// at once - the counterpart to CreateSongTag's per-song inline form, for
+// "I already know this tag, I just need it on songs a/b/c/d" without
+// opening each song's own card. Mirrors ApplySongTagSuggestion's own
+// per-song loop (song_tag_suggestions.go), reusing the same
+// store.CreateSongTag (its ON CONFLICT upsert makes a repeat selection of
+// an already-tagged song a harmless no-op rather than an error) rather
+// than a new bulk-insert store method.
+func (sc *SchedulingController) BulkCreateSongTag(c *fiber.Ctx) error {
+	orgID := middleware.CurrentOrganizationID(c)
+	ctx := middleware.RequestContext(c)
+
+	var body struct {
+		Category string   `form:"category"`
+		Value    string   `form:"value"`
+		SongIDs  []string `form:"song_ids"`
+	}
+
+	errMsg := ""
+	applied := 0
+	if err := c.BodyParser(&body); err != nil {
+		errMsg = err.Error()
+	} else if len(body.SongIDs) == 0 {
+		errMsg = "select at least one song to add this tag to"
+	} else {
+		for _, songID := range body.SongIDs {
+			if _, err := sc.store.CreateSongTag(ctx, orgID, scheduling.CreateSongTagParams{
+				SongID: songID, Category: body.Category, Value: body.Value,
+			}); err != nil {
+				errMsg = appendErr(errMsg, err.Error())
+				continue
+			}
+			applied++
+		}
+	}
+
+	tags, err := sc.store.ListSongTags(ctx, orgID, "", "")
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
+	}
+
+	songs, _ := fetchActiveSongs(ctx, orgID)
+	categories, _ := sc.store.ListSongTagCategories(ctx)
+
+	successMsg := ""
+	if applied > 0 {
+		successMsg = fmt.Sprintf("Added %q to %d song(s).", body.Value, applied)
+	}
+
+	return render(c, views.SongTagsMutationResponse(songs, songTagsBySong(tags), categories, songTagCategoryLabelMap(categories), successMsg, errMsg))
 }
 
 func (sc *SchedulingController) DeleteSongTag(c *fiber.Ctx) error {
@@ -96,5 +149,5 @@ func (sc *SchedulingController) DeleteSongTag(c *fiber.Ctx) error {
 	songs, _ := fetchActiveSongs(middleware.RequestContext(c), orgID)
 	categories, _ := sc.store.ListSongTagCategories(c.Context())
 
-	return render(c, views.SongTagsList(songs, songTagsBySong(tags), categories, songTagCategoryLabelMap(categories), errMsg))
+	return render(c, views.SongTagsMutationResponse(songs, songTagsBySong(tags), categories, songTagCategoryLabelMap(categories), "", errMsg))
 }
