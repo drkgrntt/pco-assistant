@@ -128,12 +128,14 @@ with at least Viewer access can still sign in.
   Center only models those on the arrangement itself, with no
   per-occurrence override at all
 - **Song leader (per-occurrence)** - also on the song detail card: who's
-  actually leading this song this week, picked from your Planning Center
-  people (not typed as free text, so it can't drift from what Planning
-  Center itself knows about that person). Syncs on the next Publish/Refresh
-  straight into Planning Center's own "Song leader" field on that plan
-  item - a real assignment Planning Center itself can notify on, not just
-  text in a note - added, replaced, or removed as the leader changes
+  actually leading this song this week, picked from whoever's already on
+  this plan's team (not typed as free text, so it can't drift from what
+  Planning Center itself knows about that person) - Planning Center's own
+  "Song leader" field only accepts someone already scheduled on the plan,
+  so that's the same pool offered here. Syncs on the next Publish/Refresh
+  straight into that field - a real assignment Planning Center itself can
+  notify on, not just text in a note - added, replaced, or removed as the
+  leader changes
 - **Debrief log / talking points (per-song, persistent)** - also on the
   song detail card, but unlike "This week's note" above, these aren't tied
   to one occurrence and never touch Planning Center: a running log of

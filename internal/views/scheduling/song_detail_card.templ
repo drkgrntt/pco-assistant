@@ -725,16 +725,32 @@ templ musicalKeyOptions() {
 // LeaderPersonID/LeaderPersonName) - a local draft edit, same
 // "reaches Planning Center on the next Publish or Refresh, not
 // immediately" timing as keyForm/descriptionForm (see UpdateSetSongLeader,
-// syncLeaderAssignment in sets_publish.go/leader_note.go). A
-// PersonPickerFieldWithValue, not a plain text field, so "leader" is a
-// real PCO person id rather than a name typed here that could drift out
-// of sync with what Planning Center itself knows about that person - see
+// syncLeaderAssignment in sets_publish.go/leader_note.go). See
 // docs/plans/shipped/song-leader-plan.md and
-// docs/plans/shipped/worship-leader-pco-sync-plan.md. The suffix
-// ("leader-<row id>") keeps this picker's
-// search box/hidden input/results container distinct from every other
-// song's own leader picker on the same page (see PersonPickerField's own
-// doc comment on suffix).
+// docs/plans/shipped/worship-leader-pco-sync-plan.md.
+//
+// A plain <select> over data.RosterPersonOptions, not a PersonPickerField
+// (every other person picker on this app searches the whole org) -
+// deliberate, and not just a UI preference: PCO's real "Song leader"
+// resource (ItemAssignment) rejects assigning anyone who isn't already a
+// scheduled team member on this plan, confirmed live (2026-09-09) as a
+// 422 "Invalid assignable id". Offering the whole org here would let
+// someone pick a choice that's guaranteed to fail on the next
+// Publish/Refresh (see leaderAssignmentErr, leader_note.go, for the
+// friendlier message that still-possible failure gets - the roster
+// itself can be a local draft not yet Published as real PCO team
+// members). RosterPersonOptions is this plan's own local roster
+// (buildSetBuilderData), so the pool offered here always matches "who
+// this app currently considers on the team for this plan" - a handful of
+// names at most, small enough that a plain select beats a search box.
+//
+// A song's already-saved leader who's since fallen off the roster (set
+// before this restriction existed, or removed from the team afterward)
+// is appended as its own selected option rather than silently dropped -
+// a native <select> defaults to whichever option renders first when the
+// stored value matches none of them, which would otherwise silently
+// reassign the leader to some other roster member the moment this form
+// re-renders, not merely fail to show the right one.
 templ leaderForm(data SetBuilderData, song SetSongView, errMsg string) {
 	<form
 		class="build-detail-note-form"
@@ -745,9 +761,28 @@ templ leaderForm(data SetBuilderData, song SetSongView, errMsg string) {
 		if errMsg != "" {
 			<p class="error">{ errMsg }</p>
 		}
-		@PersonPickerFieldWithValue("Leading this week", "leader_person_id", fmt.Sprintf("leader-%d", song.ID), song.LeaderPersonID, song.LeaderPersonName)
+		<label>
+			Leading this week
+			<select name="leader_person_id">
+				<option value="" selected?={ song.LeaderPersonID == "" }>No leader set</option>
+				{{ onRoster := false }}
+				for _, opt := range data.RosterPersonOptions {
+					if opt.PersonID == song.LeaderPersonID {
+						{{ onRoster = true }}
+					}
+					<option value={ opt.PersonID } selected?={ opt.PersonID == song.LeaderPersonID }>{ opt.Name }</option>
+				}
+				if song.LeaderPersonID != "" && !onRoster {
+					<option value={ song.LeaderPersonID } selected>{ song.LeaderPersonName } (not on this plan's team)</option>
+				}
+			</select>
+		</label>
 		<button type="submit">Save leader</button>
-		<p class="muted">Saved here - Publish or Refresh song info to send it to Planning Center.</p>
+		if len(data.RosterPersonOptions) == 0 {
+			<p class="muted">Add people to this plan's Team tab first - Planning Center only allows a song leader who's already scheduled on the plan.</p>
+		} else {
+			<p class="muted">Saved here - Publish or Refresh song info to send it to Planning Center.</p>
+		}
 	</form>
 }
 

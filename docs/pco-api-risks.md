@@ -122,6 +122,24 @@ that first. Facts worth adding here that aren't in CLAUDE.md:
   vertex docs) - reassigning is delete-and-recreate, the same convention
   `CreateTeamMember`/`UpdateTeamMember` already use for a position
   assignment.
+- **`ItemAssignment#create` rejects a person who isn't already scheduled
+  on the plan** - confirmed live (2026-09-09): `CreateItemAssignment`
+  with a `PersonID` that has no `PlanPerson`/team-member row on that plan
+  fails with a 422, `Errors[0].Detail` (and `Error()`'s rendered text)
+  reading exactly `Invalid assignable id` - no other detail, no field
+  name. This app's local `SetSong.LeaderPersonID` had no equivalent limit
+  before this was caught, so the song leader picker could (and did) offer
+  any org person, not just this plan's own team - a real gap, not a
+  hypothetical one, reported directly by live use. Fixed by scoping the
+  picker to `SetBuilderData.RosterPersonOptions` (this plan's own local
+  roster - `buildSetBuilderData`/`rosterPersonOptions`, `sets_builder.go`)
+  instead of the general org-wide person search every other
+  `PersonPickerField` on this app uses; `leaderAssignmentErr`
+  (`leader_note.go`) still special-cases this exact 422 into a readable
+  message for the one case scoping the picker can't fully prevent - a
+  roster assignment that's only a local draft, never yet pushed to real
+  PCO via the Team tab's own Publish, isn't a real team member yet
+  either.
 - **`Plan.updated_at` does NOT reflect item-level changes** - confirmed
   live (2026-09-05, live-sync-reflection plan) via a PATCH-and-check round
   trip: editing an item's title/description/key does not bump the plan's
@@ -903,3 +921,27 @@ out to 100-200 sequential round trips per load.
   `item_assignments`, gated purely on whether any song in the set has a
   leader set, same as before. See
   `docs/plans/shipped/song-leader-plan.md`'s updated Status note.
+- **Song leader picker scoped to the plan's own roster (2026-09-09)** -
+  reported directly ("PCO only allows leaders that are already scheduled
+  in the plan. We don't have that limit."), and confirmed live per the
+  new "Live-verified PCO API facts" entry above:
+  `CreateItemAssignment` 422s with `Invalid assignable id` for anyone who
+  isn't already a scheduled team member on the plan. `buildSetBuilderData`
+  (`sets_builder.go`) now also resolves `SetBuilderData.RosterPersonOptions`
+  from the exact same local roster-assignments read it already made for
+  the vocal-range mismatch warning (`vocalistPersonIDs` -
+  `scheduling.Store.FindRoster`/`ListRosterAssignments`, a local-DB read,
+  no PCO call) - the one new PCO cost is resolving *all* of those person
+  ids to display names (`personNameMapForIDs`, one batched
+  `where[id]=...` call), where before only the subset with a vocal range
+  on file got resolved. Bounded by the plan's own roster size (a handful
+  of names, not the whole org), and zero calls when nobody's on the
+  roster yet - same "opt-in, bounded by what's actually on screen" shape
+  as every other batched name lookup on this page. The song detail
+  card's leader field (`leaderForm`, `song_detail_card.templ`) changed
+  from a `PersonPickerField` (searches the whole org, like every other
+  person picker on this app) to a plain `<select>` over that list -
+  correct by construction rather than correct by luck, and a smaller
+  amount of UI than adding a second, roster-scoped search endpoint would
+  have been, for a candidate pool that's realistically a handful of names
+  per plan anyway.

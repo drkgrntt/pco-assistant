@@ -19,9 +19,23 @@ package controllers
 //
 // syncLeaderAssignment is wired into the actual Publish/Refresh write loop
 // in sets_publish.go.
+//
+// PCO's ItemAssignment#create only accepts a person who's already
+// scheduled on this plan (a real PlanPerson/team member) - confirmed live
+// (2026-09-09): assigning someone who isn't rejects with a 422 "Invalid
+// assignable id", not a validation error this app can predict from the
+// request shape alone. This app's own leader picker (SetBuilderData.
+// RosterPersonOptions, populated from this plan's local roster - see
+// buildSetBuilderData) is scoped to avoid offering anyone else in the
+// first place, but a roster assignment that's only a local draft (never
+// pushed to real PCO via the Team tab's own Publish) still isn't a real
+// team member yet either, so the write can still 422 in that ordering -
+// see leaderAssignmentErr below for the friendlier message that case
+// gets instead of the raw PCO error text.
 
 import (
 	"context"
+	"errors"
 
 	pco "github.com/drkgrntt/go-pco"
 )
@@ -86,4 +100,22 @@ func syncLeaderAssignment(ctx context.Context, serviceTypeID, planID, itemID str
 
 	_, err := pco.CreateItemAssignment(ctx, serviceTypeID, planID, itemID, &pco.CreateItemAssignmentParams{PersonID: leaderPersonID})
 	return err
+}
+
+// leaderAssignmentErr turns a failed syncLeaderAssignment call into a
+// message that actually explains what to do, for the one failure mode
+// this app can name specifically: PCO rejecting the leader because
+// they're not yet a real scheduled team member on this plan (see this
+// file's own doc comment above) - a 422 whose raw text ("Invalid
+// assignable id") would otherwise mean nothing to whoever's reading the
+// publish failure list. Falls back to friendlyPCOErr for anything else
+// (a permissions error, a transient failure, ...). Same "just the reason
+// clause, slotted in after a colon by the caller" shape as friendlyPCOErr
+// itself - not a whole sentence of its own.
+func leaderAssignmentErr(err error) string {
+	var reqErr *pco.RequestError
+	if errors.As(err, &reqErr) && reqErr.StatusCode == 422 {
+		return "they're not published to this plan's team yet (see the Team tab) - publish the team, then Publish/Refresh song info again"
+	}
+	return friendlyPCOErr(err)
 }

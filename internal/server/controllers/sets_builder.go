@@ -194,6 +194,16 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 	personVocalRanges, _ := sc.store.ListPersonVocalRanges(ctx, organizationID)
 	vocalRangeCheckNames := personNameMapForIDs(ctx, vocalistsWithRangesOnFile(vocalistPersonIDs, personVocalRanges))
 
+	// data.RosterPersonOptions is who's eligible to be picked as a song
+	// leader - see its own doc comment (set_types.go) for why this is
+	// deliberately the exact same roster-assignments list as
+	// vocalistPersonIDs above, not a fresh query. Resolving names costs one
+	// more batched where[id]=... call (personNameMapForIDs), bounded by
+	// this plan's own roster size - 0 calls when nobody's on the roster
+	// yet, same "opt-in cost" shape as vocalRangeCheckNames above.
+	rosterPersonNames := personNameMapForIDs(ctx, vocalistPersonIDs)
+	data.RosterPersonOptions = rosterPersonOptions(vocalistPersonIDs, rosterPersonNames)
+
 	// AllSongs/TagCategories/RelationshipTypes/RoleTypes back the "Quick
 	// add" panel's <select> pickers (see views.SetBuilderData) - best-effort
 	// like the lookups above, since a failure here only costs that one
@@ -629,6 +639,26 @@ func buildBrowsableSongs(songs []pco.SongData, inSet map[string]bool) []views.So
 		browsable = append(browsable, views.SongOptionView{SongID: song.ID, Title: song.Attributes.Title})
 	}
 	return browsable
+}
+
+// rosterPersonOptions turns this plan's roster person ids into the
+// lightweight id+name options the song leader picker's <select> needs
+// (see SetBuilderData.RosterPersonOptions) - deduplicated (the same
+// person can be assigned to more than one position on a roster) and
+// sorted by name so the list reads naturally rather than in whatever
+// order the roster assignments happen to be stored in.
+func rosterPersonOptions(personIDs []string, names map[string]string) []views.RosterPersonOptionView {
+	seen := make(map[string]bool, len(personIDs))
+	opts := make([]views.RosterPersonOptionView, 0, len(personIDs))
+	for _, id := range personIDs {
+		if id == "" || seen[id] {
+			continue
+		}
+		seen[id] = true
+		opts = append(opts, views.RosterPersonOptionView{PersonID: id, Name: titleOrID(names, id)})
+	}
+	sort.Slice(opts, func(i, j int) bool { return opts[i].Name < opts[j].Name })
+	return opts
 }
 
 // buildCandidateLookups gathers everything candidateLookups needs to
