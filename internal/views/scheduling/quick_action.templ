@@ -1,10 +1,13 @@
 package scheduling
 
 import (
+	"fmt"
 	"strconv"
 
 	"pco-assistant/internal/scheduling"
 	"pco-assistant/internal/views/components"
+
+	pco "github.com/drkgrntt/go-pco"
 )
 
 // quickActionRow renders one hidden quick-action-row/quick-action-panel -
@@ -38,6 +41,149 @@ templ quickAddItem(label string) {
 		<h4>{ label }</h4>
 		{ children... }
 	</div>
+}
+
+// addPlanItemRows renders the Order of service table's trailing "+ Add
+// item to plan" row (AddPlanItem, plan_items.go) - a plain button that
+// expands, in place, into the add-item form, the same table-row "expand
+// in place" idiom quickActionRow uses per song, just for this one
+// add-a-foreign-item action rather than a per-row menu. Lives as its own
+// trailing row rather than a "Quick add" panel entry (its first home) -
+// matches Planning Center's own "+ Add Item" placement at the very end of
+// the order of service, rather than tucked into a sidebar-style form.
+//
+// Two sibling <tr>s, toggled by toggleAddPlanItemRow (scheduling.js): the
+// trigger row starts visible, the form row starts hidden. A successful
+// submit swaps the whole #set-builder-body the same as every other
+// mutation on this page, which naturally resets both rows back to this
+// default state - only the form's own Close button needs to reverse the
+// toggle by hand, for backing out without submitting.
+templ addPlanItemRows(serviceTypeID, planID string) {
+	<tr id="add-plan-item-trigger-row">
+		<td colspan="4">
+			<button type="button" class="add-plan-item-btn" onclick="toggleAddPlanItemRow(true)">
+				<span class="icon-inline">
+					@components.IconAdd()
+				</span>
+				Add item to plan
+			</button>
+		</td>
+	</tr>
+	<tr class="quick-action-row" id="add-plan-item-form-row" hidden>
+		<td colspan="4">
+			<div class="quick-action-panel">
+				<p class="quick-action-heading">
+					Add item to plan
+					<button type="button" class="icon-btn" aria-label="Close" title="Close" onclick="toggleAddPlanItemRow(false)">
+						@components.IconX()
+					</button>
+				</p>
+				<!--
+					item_type only ever offers Item/Section header -
+					AddPlanItem's own doc comment covers why Media isn't a real
+					option here. The length fields hide/disable themselves for
+					Section header (toggleAddPlanItemLengthFields) since
+					Planning Center silently drops a header's Length either way -
+					showing editable fields that quietly do nothing would be
+					worse than not showing them.
+				-->
+				<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/items", serviceTypeID, planID) } hx-target="#set-builder-body" hx-swap="outerHTML">
+					<label>
+						Title
+						<input type="text" name="title" placeholder="e.g. Announcements, Sermon, Offering video" required/>
+					</label>
+					<label>
+						Type
+						<select name="item_type" onchange="toggleAddPlanItemLengthFields(this)">
+							<option value={ pco.ItemTypeItem } selected>Item</option>
+							<option value={ pco.ItemTypeHeader }>Section header</option>
+						</select>
+					</label>
+					<label id="add-plan-item-length-min-label">
+						Length (min)
+						<input type="number" name="length_minutes" min="0" placeholder="0"/>
+					</label>
+					<label id="add-plan-item-length-sec-label">
+						Length (sec)
+						<input type="number" name="length_seconds" min="0" max="59" placeholder="0"/>
+					</label>
+					<label>
+						Description
+						<input type="text" name="description" placeholder="Optional notes for this item"/>
+					</label>
+					<button type="submit" class="primary">Add to plan</button>
+				</form>
+			</div>
+		</td>
+	</tr>
+}
+
+// planItemRowActions renders the Edit/Remove icon-button pair shared by a
+// header row and a plain foreign item row alike (set_builder.templ) -
+// AddPlanItem/UpdatePlanItem/RemovePlanItem (plan_items.go) all push
+// straight to Planning Center, immediately, since a foreign item has no
+// local draft to defer either action to (unlike a set song's own Remove,
+// RemoveSetSong, which only ever touches this app's local draft row).
+// Edit's own data-row-id is set directly on the button rather than relying
+// on openQuickAction's tr.song-row fallback lookup (scheduling.js), which
+// doesn't match this row's class.
+templ planItemRowActions(serviceTypeID, planID string, row ServiceOrderRow) {
+	<div class="set-song-actions">
+		<button
+			type="button"
+			class="icon-btn"
+			aria-label={ fmt.Sprintf("Edit %q", row.ItemTitle) }
+			title="Edit item"
+			data-row-id={ row.ItemID }
+			onclick="openQuickAction(this, 'edit-item')"
+		>
+			@components.IconEdit()
+		</button>
+		<button
+			type="button"
+			class="danger icon-btn"
+			aria-label={ fmt.Sprintf("Remove %q", row.ItemTitle) }
+			title="Remove item"
+			hx-delete={ fmt.Sprintf("/scheduling/build/%s/%s/items/%s", serviceTypeID, planID, row.ItemID) }
+			hx-target="#set-builder-body"
+			hx-swap="outerHTML"
+			hx-confirm={ fmt.Sprintf("Remove %q from the plan in Planning Center? This can't be undone here.", row.ItemTitle) }
+		>
+			@components.IconRemove()
+		</button>
+	</div>
+}
+
+// planItemEditForm is the form inside planItemRowActions' Edit action's
+// quickActionRow (set_builder.templ) - pre-filled from this row's current
+// Title/Description/ItemLengthSeconds so a save that isn't actually about
+// the length can't accidentally blank it back to 0 (see UpdatePlanItem's
+// own doc comment). No item-type field at all: go-pco's UpdateItemParams
+// has no ItemType, so it can't be changed here after creation - length
+// fields are simply omitted for a header, same as addPlanItemRows' create
+// form, since Planning Center silently drops a header's length either way.
+templ planItemEditForm(serviceTypeID, planID string, row ServiceOrderRow) {
+	<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/items/%s", serviceTypeID, planID, row.ItemID) } hx-target="#set-builder-body" hx-swap="outerHTML">
+		<label>
+			Title
+			<input type="text" name="title" value={ row.ItemTitle } required/>
+		</label>
+		if row.ItemType != pco.ItemTypeHeader {
+			<label>
+				Length (min)
+				<input type="number" name="length_minutes" min="0" value={ strconv.Itoa(row.ItemLengthSeconds / 60) }/>
+			</label>
+			<label>
+				Length (sec)
+				<input type="number" name="length_seconds" min="0" max="59" value={ strconv.Itoa(row.ItemLengthSeconds % 60) }/>
+			</label>
+		}
+		<label>
+			Description
+			<input type="text" name="description" value={ row.ItemDescription }/>
+		</label>
+		<button type="submit" class="primary">Save</button>
+	</form>
 }
 
 // vocalRangeNoteField renders one labeled note-text-input plus its own

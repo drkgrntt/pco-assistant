@@ -248,6 +248,37 @@ tr.song-row.selected {
   min-height: calc(var(--text-md) * var(--leading-normal));
 }
 
+/* A foreign item's own PCO Description, shown under its title/length
+   (set_builder.templ) - unlike .song-meta above, only rendered at all
+   when there's a description to show, so it doesn't need a reserved
+   min-height of its own. */
+.item-description {
+  font-size: var(--text-sm);
+}
+
+/* The Order of service table's trailing "+ Add item to plan" row
+   (addPlanItemRows, quick_action.templ) - a plain, full-width, left-
+   aligned button rather than a normal styled button, so it reads as a
+   row-add affordance (matching Planning Center's own "+ Add Item" row)
+   instead of a form control competing with the real actions elsewhere on
+   the page. */
+.add-plan-item-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  background: none;
+  border: none;
+  padding: var(--space-2) 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.add-plan-item-btn:hover {
+  color: var(--text);
+}
+
 /* Header items are section dividers in the real order of service (e.g.
    "Welcome," "Sermon") - rendered as their own full-width row rather than
    a normal 4-column one, so they read as landmarks rather than content. */
@@ -259,6 +290,18 @@ tr.song-row.selected {
   letter-spacing: 0.03em;
   color: var(--muted);
   border-bottom-color: var(--text);
+}
+
+/* Lays a header row's title and its Edit/Remove actions
+   (planItemRowActions, quick_action.templ) side by side within the one
+   colspan="4" cell .section-row td already is - a foreign/song row has a
+   separate actions column to put these in, but a header's single cell
+   doesn't, so this splits it in two instead. */
+.section-row-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
 }
 
 /* touch-action: none stops a touch-drag on the handle from also scrolling

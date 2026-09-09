@@ -1046,22 +1046,79 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 								}
 							}
 						} else if row.ItemType == pco.ItemTypeHeader {
-							<tr class="section-row" data-token={ "item:" + row.ItemID }>
-								<td colspan="4">{ row.ItemTitle }</td>
+							<tr
+								class="section-row"
+								data-token={ "item:" + row.ItemID }
+								data-row-id={ row.ItemID }
+								data-reposition-url={ fmt.Sprintf("/scheduling/build/%s/%s/items/%s/reposition", data.ServiceTypeID, data.PlanID, row.ItemID) }
+							>
+								<td colspan="4">
+									<div class="section-row-content">
+										<span>
+											if !data.ReadOnly {
+												<span class="drag-handle" title="Drag to reorder">
+													@components.IconDrag()
+												</span>
+											}
+											{ row.ItemTitle }
+										</span>
+										if !data.ReadOnly {
+											@planItemRowActions(data.ServiceTypeID, data.PlanID, row)
+										}
+									</div>
+									if row.ItemDescription != "" {
+										<div class="muted item-description">{ row.ItemDescription }</div>
+									}
+								</td>
 							</tr>
+							if !data.ReadOnly {
+								@quickActionRow(row.ItemID, "edit-item", fmt.Sprintf("Edit %q", row.ItemTitle), 4) {
+									@planItemEditForm(data.ServiceTypeID, data.PlanID, row)
+								}
+							}
 						} else {
-							<tr class="foreign-row" data-token={ "item:" + row.ItemID }>
+							<tr
+								class="foreign-row"
+								data-token={ "item:" + row.ItemID }
+								data-row-id={ row.ItemID }
+								data-reposition-url={ fmt.Sprintf("/scheduling/build/%s/%s/items/%s/reposition", data.ServiceTypeID, data.PlanID, row.ItemID) }
+							>
+								<td>
+									if !data.ReadOnly {
+										<span class="drag-handle" title="Drag to reorder">
+											@components.IconDrag()
+										</span>
+									}
+								</td>
+								<td>
+									{ row.ItemTitle }
+									<!-- Always rendered, same row-height reasoning as .song-meta above. -->
+									<div class="muted song-meta">{ row.ItemLength }</div>
+									if row.ItemDescription != "" {
+										<div class="muted item-description">{ row.ItemDescription }</div>
+									}
+								</td>
 								<td></td>
-								<td>{ row.ItemTitle }</td>
-								<td></td>
-								<td></td>
+								<td>
+									if !data.ReadOnly {
+										@planItemRowActions(data.ServiceTypeID, data.PlanID, row)
+									}
+								</td>
 							</tr>
+							if !data.ReadOnly {
+								@quickActionRow(row.ItemID, "edit-item", fmt.Sprintf("Edit %q", row.ItemTitle), 4) {
+									@planItemEditForm(data.ServiceTypeID, data.PlanID, row)
+								}
+							}
 						}
 					}
 					if len(data.ServiceOrder) == 0 {
 						<tr>
 							<td colspan="4" class="muted">Nothing in this plan yet - add a song below to get started.</td>
 						</tr>
+					}
+					if !data.ReadOnly {
+						@addPlanItemRows(data.ServiceTypeID, data.PlanID)
 					}
 				</tbody>
 		}

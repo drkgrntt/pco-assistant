@@ -51,11 +51,23 @@ func formatArrangementInfo(info scheduling.SongArrangementInfo) string {
 	if info.Meter != "" {
 		parts = append(parts, info.Meter)
 	}
-	if info.LengthSeconds != 0 {
-		parts = append(parts, fmt.Sprintf("%d:%02d", info.LengthSeconds/60, info.LengthSeconds%60))
+	if length := formatLengthSeconds(info.LengthSeconds); length != "" {
+		parts = append(parts, length)
 	}
 
 	return strings.Join(parts, " · ")
+}
+
+// formatLengthSeconds renders a PCO Length attribute (seconds - the same
+// unit for a set song's cached arrangement length and a foreign item's own
+// Length, see serviceOrderLengthSeconds) as "3:45" - "" for zero, PCO's way
+// of saying no length is set, so callers omit the figure entirely rather
+// than showing "0:00".
+func formatLengthSeconds(seconds int) string {
+	if seconds == 0 {
+		return ""
+	}
+	return fmt.Sprintf("%d:%02d", seconds/60, seconds%60)
 }
 
 // formatSongStructure renders an arrangement's section-by-section
@@ -520,6 +532,10 @@ func (sc *SchedulingController) RegisterRoutes(router fiber.Router) {
 	group.Get("/build/:service_type_id/:plan_id/candidates/search", sc.BuildCandidatesSearch)
 	group.Get("/build/:service_type_id/:plan_id/candidates/:song_id/details", sc.BuildCandidateDetails)
 	group.Post("/build/:service_type_id/:plan_id/candidates/:song_id/archive", sc.ArchiveSong)
+	group.Post("/build/:service_type_id/:plan_id/items", sc.AddPlanItem)
+	group.Post("/build/:service_type_id/:plan_id/items/:item_id", sc.UpdatePlanItem)
+	group.Delete("/build/:service_type_id/:plan_id/items/:item_id", sc.RemovePlanItem)
+	group.Post("/build/:service_type_id/:plan_id/items/:item_id/reposition", sc.RepositionPlanItem)
 
 	// Quick-add: the same setup-level entities as the dedicated setup pages
 	// above (song tags/relationships/roles, person relationships, position

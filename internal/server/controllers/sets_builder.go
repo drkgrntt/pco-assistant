@@ -1733,10 +1733,13 @@ func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizati
 				label = row.Item.Attributes.ItemType
 			}
 			out[i] = views.ServiceOrderRow{
-				IsSong:    false,
-				ItemID:    row.Item.ID,
-				ItemTitle: label,
-				ItemType:  row.Item.Attributes.ItemType,
+				IsSong:            false,
+				ItemID:            row.Item.ID,
+				ItemTitle:         label,
+				ItemType:          row.Item.Attributes.ItemType,
+				ItemLength:        formatLengthSeconds(row.Item.Attributes.Length),
+				ItemLengthSeconds: row.Item.Attributes.Length,
+				ItemDescription:   row.Item.Attributes.Description,
 			}
 			continue
 		}

@@ -490,6 +490,31 @@ type ServiceOrderRow struct {
 	ItemID    string
 	ItemTitle string
 	ItemType  string
+	// ItemLength is this item's own PCO Length attribute formatted as
+	// "3:45" (see formatLengthSeconds) - "" when PCO has no length set for
+	// it, same convention as SetSongView.ArrangementInfo omitting the
+	// figure entirely rather than showing "0:00". PCO tracks Length for
+	// any item type, not just songs (a sermon or video counts too - see
+	// serviceOrderLengthSeconds, which already sums this into the whole
+	// plan's total), so a header/media/non-song item can have a real
+	// figure here worth showing on its own row. Confirmed live: Planning
+	// Center silently drops whatever Length a header item is created with
+	// (comes back 0 regardless) - see AddPlanItem's own doc comment - so
+	// this is only ever non-"" for a plain item.
+	ItemLength string
+	// ItemLengthSeconds is the same figure as ItemLength, unformatted -
+	// addPlanItemRows' edit form (quick_action.templ) splits this back
+	// into its own minutes/seconds fields to pre-fill an edit, so a save
+	// that isn't actually about the length doesn't blank it back to 0
+	// (pco.UpdateItem's Length is a plain int, always sent, not an
+	// optional "leave alone" - see UpdatePlanItem's own doc comment).
+	ItemLengthSeconds int
+	// ItemDescription is this item's own PCO Description attribute, shown
+	// as a second muted line under the title (same spot a set song's own
+	// Description would show, if this table rendered one) - already
+	// fetched as part of the same GetItems call ServiceOrder is built
+	// from, so this costs nothing extra to show.
+	ItemDescription string
 
 	// Set when IsSong is true.
 	Song SetSongView

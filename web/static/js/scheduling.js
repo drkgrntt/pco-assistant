@@ -652,6 +652,53 @@ function openQuickAction(button, action) {
   }
 }
 
+// Toggles the Order of service table's trailing "+ Add item to plan" row
+// (addPlanItemRows, quick_action.templ) between its plain button state and
+// its inline form state - same expand-in-place idiom as openQuickAction
+// just above, just for this one add-a-foreign-item action rather than a
+// per-row menu, so there's only ever one row pair to toggle, not a
+// data-row-id/data-action lookup.
+function toggleAddPlanItemRow(open) {
+  var triggerRow = document.getElementById("add-plan-item-trigger-row");
+  var formRow = document.getElementById("add-plan-item-form-row");
+  if (!triggerRow || !formRow) {
+    return;
+  }
+  triggerRow.hidden = open;
+  formRow.hidden = !open;
+  if (open) {
+    var titleInput = formRow.querySelector('[name="title"]');
+    if (titleInput) {
+      titleInput.focus();
+    }
+  }
+}
+
+// addPlanItemRows' item-type select - Planning Center silently drops
+// whatever Length a header item is created with (confirmed live, see
+// AddPlanItem's own doc comment), so hides and disables the length inputs
+// for "Section header" rather than leaving up fields that quietly do
+// nothing for that choice. Clears any typed value on the way in, so
+// switching to Section header and submitting can't silently carry a
+// length along that Planning Center is just going to drop anyway.
+function toggleAddPlanItemLengthFields(select) {
+  var isHeader = select.value === "header";
+  ["add-plan-item-length-min-label", "add-plan-item-length-sec-label"].forEach(function (id) {
+    var label = document.getElementById(id);
+    if (!label) {
+      return;
+    }
+    label.hidden = isHeader;
+    var input = label.querySelector("input");
+    if (input) {
+      input.disabled = isHeader;
+      if (isHeader) {
+        input.value = "";
+      }
+    }
+  });
+}
+
 // Clicking a song's row in the order of service (set_builder.templ) opens
 // that song's detail card in the sidebar (song_detail_card.templ) - its
 // metadata, notes, and every one of the row's own actions spelled out with
