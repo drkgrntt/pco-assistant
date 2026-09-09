@@ -1631,6 +1631,38 @@ func itemNotesFromIncluded(included []any) map[string][]pco.ItemNoteData {
 	return notesByItem
 }
 
+// itemAssignmentsFromIncluded is itemNotesFromIncluded's counterpart for
+// ItemAssignment (PCO's real "Song leader" resource - see
+// docs/plans/shipped/song-leader-plan.md's follow-up note and
+// syncLeaderAssignment, sets_publish.go/leader_note.go) - extracts item id
+// -> that item's ItemAssignment list from a GetItems response's Included
+// array (fetched with Include: []string{"item_assignments"}). Same
+// best-effort spirit: any entry that isn't a well-formed ItemAssignment, or
+// has no Item relationship to key by, is silently skipped rather than
+// failing the whole page/publish over one malformed sideload.
+func itemAssignmentsFromIncluded(included []any) map[string][]pco.ItemAssignmentData {
+	assignmentsByItem := map[string][]pco.ItemAssignmentData{}
+	for _, raw := range included {
+		b, err := json.Marshal(raw)
+		if err != nil {
+			continue
+		}
+		var assignment pco.ItemAssignmentData
+		if err := json.Unmarshal(b, &assignment); err != nil {
+			continue
+		}
+		if assignment.Type != "ItemAssignment" || assignment.ID == "" {
+			continue
+		}
+		itemRef := assignment.Relationships.Item.Data
+		if itemRef == nil || itemRef.ID == "" {
+			continue
+		}
+		assignmentsByItem[itemRef.ID] = append(assignmentsByItem[itemRef.ID], assignment)
+	}
+	return assignmentsByItem
+}
+
 // buildSongNoteViews resolves one views.SongNoteView per available note
 // category for a published song's plan item (itemID) - "" means
 // unpublished, and there's no item to attach a note to yet, so this
@@ -1765,28 +1797,28 @@ func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizati
 		displayInfo.Key = key
 
 		songView := views.SetSongView{
-			ID:                ss.ID,
-			SongID:            ss.SongID,
-			Title:             titleOrID(titles, ss.SongID),
-			Position:          ss.Position,
-			Roles:             roleViews,
-			Published:         ss.PCOItemID != "",
-			AnchorItemID:      ss.AnchorItemID,
-			Moved:             ss.Moved,
-			InfoPending:       ss.InfoPending,
-			ArrangementInfo:   formatArrangementInfo(displayInfo),
-			Structure:         displayInfo.Structure,
-			HasChordChart:     displayInfo.HasChordChart,
-			Description:       ss.Description,
-			Key:               key,
-			PCOItemID:         ss.PCOItemID,
-			Notes:             buildSongNoteViews(ss.PCOItemID, noteCategories, itemNotes),
-			RecentlyRepeated:  repeated[ss.SongID],
-			ConflictTitles:    conflictTitlesBySong[ss.SongID],
-			Attachments:       songAttachmentViews(attachmentCache[ss.SongID]),
-			VocalRange:        vocalRangesBySong[ss.SongID],
-			LeaderPersonID:    ss.LeaderPersonID,
-			LeaderPersonName:  titleOrID(leaderNames, ss.LeaderPersonID),
+			ID:               ss.ID,
+			SongID:           ss.SongID,
+			Title:            titleOrID(titles, ss.SongID),
+			Position:         ss.Position,
+			Roles:            roleViews,
+			Published:        ss.PCOItemID != "",
+			AnchorItemID:     ss.AnchorItemID,
+			Moved:            ss.Moved,
+			InfoPending:      ss.InfoPending,
+			ArrangementInfo:  formatArrangementInfo(displayInfo),
+			Structure:        displayInfo.Structure,
+			HasChordChart:    displayInfo.HasChordChart,
+			Description:      ss.Description,
+			Key:              key,
+			PCOItemID:        ss.PCOItemID,
+			Notes:            buildSongNoteViews(ss.PCOItemID, noteCategories, itemNotes),
+			RecentlyRepeated: repeated[ss.SongID],
+			ConflictTitles:   conflictTitlesBySong[ss.SongID],
+			Attachments:      songAttachmentViews(attachmentCache[ss.SongID]),
+			VocalRange:       vocalRangesBySong[ss.SongID],
+			LeaderPersonID:   ss.LeaderPersonID,
+			LeaderPersonName: titleOrID(leaderNames, ss.LeaderPersonID),
 		}
 		if transition, ok := transitionsByRow[ss.ID]; ok {
 			songView.KeyTransitionLabel = transition.Label

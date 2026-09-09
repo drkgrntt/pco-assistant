@@ -88,6 +88,7 @@ that first. Facts worth adding here that aren't in CLAUDE.md:
 | Team/position lists and team-member names (fetched live, uncached, on every roster render) | fixed | cached `fetchRosterSharedPCOData` (`rosters_shared_cache.go`), 20s TTL - shorter than the 60s norm since team membership can change mid-session; manual "Refresh team data" button is the remedy for the remaining window |
 | Song attachments (lead sheets/chord charts) | shipped | cached at sync time alongside arrangement info (`fetchAndCacheSongAttachments`, one more PCO call per uncached song - Song Info sync is now 2 calls/song, not 1); the attachment's own `url` is never cached, a click-triggered route live-fetches a fresh one instead |
 | Song leader -> vocal notes sync (`syncLeaderNote`, `sets_publish.go`) | shipped | `PublishSet` rides its existing `GetItems` call (adds `Include: []string{"item_notes"}` only when a vocal category is actually configured - zero new calls otherwise); `RefreshSongInfo` previously made no `GetItems` call at all, so it gains one new per-plan `GetItems(Include: item_notes)` call, but only when a service type has configured the vocal notes category setting (opt-in cost, not paid by every org) |
+| Song leader -> real PCO "Song leader" sync (`syncLeaderAssignment`, `sets_publish.go`, go-pco `ItemAssignment`) | shipped | rides the same `GetItems` call as the note sync above (adds `Include: []string{"item_assignments"}` only when at least one song in the set currently has a leader set - zero new calls otherwise); a leader change itself costs one `CreateItemAssignment`/`DeleteItemAssignment` per affected song, same "only the songs that actually changed" gating `InfoPending` already provides for every other per-song write |
 | "Browse all songs" title-click detail popover (`BuildCandidateDetails`, `sets_builder.go`) | shipped | one song per click, not the whole library - `candidateSongView`'s general-purpose lookup (used by the up-to-50-row search results too) stays cache-only with no fetch, but this single-song handler resolves arrangement info through `resolveArrangementInfo`/`resolveArrangementCacheInfo` instead, the same enqueue-on-miss path the main service order already uses: a cache hit costs nothing new, a miss enqueues into the existing paced Song Info sync queue (`enqueueSongSync` + a `triggerSongInfoQueueSync` deferred in this handler) rather than fetching inline, so an uncached song's info fills in on a later click/reload instead of staying blank forever - never a synchronous per-click PCO call |
 | "Add item to plan" (`AddPlanItem`, `plan_items.go`) | shipped | one `CreateItem` call, no pre-fetch - see the sequence-auto-append fact below. Rides the same full-page rebuild every other Build-page mutation already pays (`buildSetBuilderDataWithErr`); no caching added or needed, since it's a rare, user-triggered click, not a render-path/hot-path call |
 | Edit/remove a plan item (`UpdatePlanItem`/`RemovePlanItem`, `plan_items.go`) | shipped | one `UpdateItem`/`DeleteItem` call each, same "rare user click, not a render path" reasoning as the row above - no caching |
@@ -95,6 +96,30 @@ that first. Facts worth adding here that aren't in CLAUDE.md:
 
 ## Live-verified PCO API facts (worth not re-checking)
 
+- **PCO's Services UI "Song leader" field is NOT an Item/Song/Arrangement
+  attribute or relationship at all** - confirmed live (2026-09-09,
+  `docs/plans/shipped/worship-leader-pco-sync-plan.md`): `Item`, `Song`,
+  and `Arrangement` were each fetched and dumped in full against a real
+  account with no "leader" field anywhere. It's a separate resource,
+  `ItemAssignment` (`services/v2/.../items/{item_id}/item_assignments`,
+  now wrapped in go-pco `v0.24.0+`, `itemAssignments.go`) - one row per
+  assignable (a `Person`, or per PCO's docs an open `TeamPosition`
+  placeholder not yet exercised by this app), linked to one plan `Item`.
+  Confirmed both against PCO's machine-readable vertex docs (`GET
+  .../documentation/2018-11-01/vertices/item_assignment`) and live by
+  reading back a real assignment created through PCO's own UI. **Used**:
+  `syncLeaderAssignment` (`sets_publish.go`/`leader_note.go`) writes this
+  app's local `SetSong.LeaderPersonID` here on Publish/Refresh, alongside
+  (not instead of) the pre-existing vocal-notes-line sync - see that row
+  in Current state above. It sideloads via `Include: []string{
+  "item_assignments"}` on `GetItems`, the same sideload mechanism already
+  used for `item_notes` - confirmed live that `item_assignments` is a
+  valid `Include` value on the `Item` resource itself (`meta.can_include`
+  lists it), so this needs no separate per-item `GetItemAssignments` call.
+  `ItemAssignment` has **no update endpoint** (`can_update: false` in the
+  vertex docs) - reassigning is delete-and-recreate, the same convention
+  `CreateTeamMember`/`UpdateTeamMember` already use for a position
+  assignment.
 - **`Plan.updated_at` does NOT reflect item-level changes** - confirmed
   live (2026-09-05, live-sync-reflection plan) via a PATCH-and-check round
   trip: editing an item's title/description/key does not bump the plan's
@@ -807,3 +832,24 @@ out to 100-200 sequential round trips per load.
   those fields for a header too), and PCO's `UpdateItemParams` has no
   `ItemType` field at all - an item's type is create-time-only, so the
   edit form has no type control and never tries to change it.
+- **Song leader now also syncs to PCO's real "Song leader" field, not just
+  a vocal-notes text line (2026-09-09).** Live feedback (`docs/issues.md`)
+  reported the local leader field "doesn't write to anything in PCO" and
+  asked to tether it to PCO's own "Song leader" UI. Checking that claim
+  live (rather than guessing at the design, per `docs/plans/shipped/
+  worship-leader-pco-sync-plan.md`) found the field is a whole separate
+  resource, `ItemAssignment` - not an Item/Song/Arrangement attribute, so
+  the original plan doc's leading theory (a per-plan Team assignment) was
+  wrong; it's per-item, matching this app's existing per-occurrence
+  `SetSong.LeaderPersonID` model exactly. Added `ItemAssignment` to go-pco
+  (`v0.24.0`, `itemAssignments.go`: `GetItemAssignments`/
+  `CreateItemAssignment`/`DeleteItemAssignment`, no update per PCO's own
+  vertex docs), then wired `syncLeaderAssignment` (`leader_note.go`) into
+  `PublishSet`/`RefreshSongInfo` alongside (not replacing) the existing
+  `syncLeaderNote` vocal-notes sync - both are cheap, idempotent writes of
+  the same local field, so there's no drift risk in keeping both. Sideloads
+  via the same `Include` mechanism as `item_notes` (confirmed live that
+  `item_assignments` is a valid `Include` on the `Item` resource), so this
+  added zero new PCO calls to the already-happening `GetItems` fetch in
+  `PublishSet`, and only a conditionally-new one in `RefreshSongInfo` (same
+  "opt-in cost" shape the vocal-notes sync already has there).

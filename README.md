@@ -130,14 +130,16 @@ with at least Viewer access can still sign in.
 - **Song leader (per-occurrence)** - also on the song detail card: who's
   actually leading this song this week, picked from your Planning Center
   people (not typed as free text, so it can't drift from what Planning
-  Center itself knows about that person). Once you designate which of a
-  service type's Item Note categories is "the vocal one" (a one-time
-  per-service-type setting, since categories are named freely per org -
-  set on the plan picker page once a service type is chosen, not on any
-  one plan's own builder), the leader syncs in as a "Leading: [name]"
-  line at the top of that category's note on the next Publish/Refresh -
-  added, replaced, or removed as the leader changes, without touching
-  anything else a team member typed in that same box by hand
+  Center itself knows about that person). Syncs on the next Publish/Refresh
+  straight into Planning Center's own "Song leader" field on that plan
+  item - a real assignment Planning Center itself can notify on, not just
+  text in a note - added, replaced, or removed as the leader changes. If
+  you've also designated one of the service type's Item Note categories as
+  "the vocal one" (a one-time per-service-type setting, set on the plan
+  picker page once a service type is chosen), the leader additionally syncs
+  in as a "Leading: [name]" line at the top of that category's note, so it
+  still shows up in the same box a team member might already be reading by
+  hand, without touching anything else typed there
 - **Debrief log / talking points (per-song, persistent)** - also on the
   song detail card, but unlike "This week's note" above, these aren't tied
   to one occurrence and never touch Planning Center: a running log of
