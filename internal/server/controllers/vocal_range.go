@@ -62,6 +62,25 @@ func formatVocalNote(pitchClass, octave int) string {
 	return fmt.Sprintf("%s%d", vocalNoteNames[((pitchClass%12)+12)%12], octave)
 }
 
+// personVocalRangeView formats personID's stored comfortable range (ranges,
+// scheduling.ListPersonVocalRanges) for AssignmentView.VocalRangeDisplay and
+// splits it into playable pitch-class/octave ints for the sidebar person
+// detail card's tap-to-hear buttons (personDetailCard, mirroring
+// songVocalRangeLine's own play buttons - see AssignmentView's doc comment
+// for why this is always the as-recorded pair, no key transposition).
+// hasRange is false when personID has no PersonVocalRange on file at all,
+// in which case the caller leaves AssignmentView's vocal-range fields at
+// their zero value and the card shows nothing, same "just omit it"
+// convention as every other optional detail-card field.
+func personVocalRangeView(ranges map[string]scheduling.PersonVocalRange, personID string) (display string, lowPC, lowOct, highPC, highOct int, hasRange bool) {
+	vr, ok := ranges[personID]
+	if !ok {
+		return "", 0, 0, 0, 0, false
+	}
+	display = fmt.Sprintf("%s-%s", formatVocalNote(vr.LowestPitchClass, vr.LowestOctave), formatVocalNote(vr.HighestPitchClass, vr.HighestOctave))
+	return display, vr.LowestPitchClass, vr.LowestOctave, vr.HighestPitchClass, vr.HighestOctave, true
+}
+
 func (sc *SchedulingController) PersonVocalRangePage(c *fiber.Ctx) error {
 	_, personName := middleware.CurrentPerson(c)
 	orgName := middleware.CurrentOrganization(c)

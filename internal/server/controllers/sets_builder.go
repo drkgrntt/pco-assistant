@@ -1784,7 +1784,6 @@ func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizati
 			RecentlyRepeated:  repeated[ss.SongID],
 			ConflictTitles:    conflictTitlesBySong[ss.SongID],
 			Attachments:       songAttachmentViews(attachmentCache[ss.SongID]),
-			VocalRangeDisplay: songVocalRangeDisplay(vocalRangesBySong, ss.SongID, key),
 			VocalRange:        vocalRangesBySong[ss.SongID],
 			LeaderPersonID:    ss.LeaderPersonID,
 			LeaderPersonName:  titleOrID(leaderNames, ss.LeaderPersonID),
@@ -1794,7 +1793,21 @@ func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizati
 			songView.KeyTransitionMessage = transition.Message
 			songView.KeyTransitionSuggestion = transition.Suggestion
 		}
+		// One songEffectiveVocalRangeAbs call covers VocalRangeDisplay, the
+		// tap-to-hear ints it now carries alongside (VocalRangeLowPitchClass
+		// etc - see that field's own doc comment, set_types.go), and the
+		// mismatch-warning check right below, rather than each re-deriving
+		// the same transposed range independently.
 		if songLowAbs, songHighAbs, ok := songEffectiveVocalRangeAbs(vocalRangesBySong, ss.SongID, key); ok {
+			lowPC, lowOct := scheduling.PitchClassAndOctave(songLowAbs)
+			highPC, highOct := scheduling.PitchClassAndOctave(songHighAbs)
+			songView.VocalRangeDisplay = fmt.Sprintf("%s-%s", formatVocalNote(lowPC, lowOct), formatVocalNote(highPC, highOct))
+			songView.VocalRangeHasPlayableNotes = true
+			songView.VocalRangeLowPitchClass = lowPC
+			songView.VocalRangeLowOctave = lowOct
+			songView.VocalRangeHighPitchClass = highPC
+			songView.VocalRangeHighOctave = highOct
+
 			warning := vocalRangeWarningForSong(songLowAbs, songHighAbs, vocalistPersonIDs, personVocalRanges, vocalRangeCheckNames)
 			songView.VocalRangeWarningLabel = warning.Label
 			songView.VocalRangeWarningMessage = warning.Message
@@ -1815,32 +1828,14 @@ func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizati
 	return out
 }
 
-// songVocalRangeDisplay formats a song's practical sung range, transposed
-// into effectiveKey (this row's own effective key - the local override
-// when set, falling back to the arrangement's default, same as
-// effectiveKey/displayInfo.Key above), for the detail card's "Vocal range"
-// line - see docs/plans/in-progress/vocal-range-plan.md's Phase 2 section.
-// "" (no line shown) when this song has no range on record
-// (vocalRangesBySong misses), or when either the stored reference key or
-// effectiveKey fails to parse (scheduling.EffectiveVocalRange) - same
-// best-effort convention as keyTransitionWarnings' own unparseable-key
-// skip.
-func songVocalRangeDisplay(vocalRangesBySong map[string]scheduling.SongVocalRange, songID, effectiveKey string) string {
-	lowAbs, highAbs, ok := songEffectiveVocalRangeAbs(vocalRangesBySong, songID, effectiveKey)
-	if !ok {
-		return ""
-	}
-
-	lowPC, lowOct := scheduling.PitchClassAndOctave(lowAbs)
-	highPC, highOct := scheduling.PitchClassAndOctave(highAbs)
-	return fmt.Sprintf("%s-%s", formatVocalNote(lowPC, lowOct), formatVocalNote(highPC, highOct))
-}
-
-// songEffectiveVocalRangeAbs is the absolute-semitone core shared by
-// songVocalRangeDisplay above and vocalRangeWarningForSong below - both
-// need songID's stored range (vocalRangesBySong) transposed into
-// effectiveKey, just formatted differently afterward (a display string vs.
-// a comparison against a vocalist's own stored range), so this runs
+// songEffectiveVocalRangeAbs is the absolute-semitone core renderServiceOrder
+// (above) and vocalRangeWarningForSong (below) both need - songID's stored
+// range (vocalRangesBySong) transposed into effectiveKey (this row's own
+// effective key - the local override when set, falling back to the
+// arrangement's default). renderServiceOrder formats the result into
+// SetSongView.VocalRangeDisplay ("G3-D5") and its play-button pitch-class/
+// octave ints in one pass, then reuses the same lowAbs/highAbs for the
+// mismatch-warning check right after, so this runs
 // scheduling.EffectiveVocalRange exactly once per row rather than each
 // caller re-deriving it. ok is false when songID has no stored range on
 // file, or when either the stored reference key or effectiveKey fails to

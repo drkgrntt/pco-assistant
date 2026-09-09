@@ -364,13 +364,33 @@ type SetSongView struct {
 
 	// VocalRangeDisplay is this song's practical sung range, already
 	// transposed into this row's own effective key (see the controller's
-	// songVocalRangeDisplay) and formatted as "G3-D5" - "" when no range is
+	// songEffectiveVocalRangeAbs, populated in renderServiceOrder) and
+	// formatted as "G3-D5" - "" when no range is
 	// on record for this song (see internal/scheduling/song_vocal_range.go
 	// and the /scheduling/song-vocal-range setup page), in which case the
 	// detail card shows nothing rather than a placeholder. Detail-card
 	// only, same scope as Structure/HasChordChart above - Phase 2 of
 	// docs/plans/in-progress/vocal-range-plan.md.
 	VocalRangeDisplay string
+
+	// VocalRangeHasPlayableNotes/VocalRangeLowPitchClass/VocalRangeLowOctave/
+	// VocalRangeHighPitchClass/VocalRangeHighOctave are VocalRangeDisplay's
+	// same low/high notes, already split into playable pitch-class/octave
+	// ints (see the controller's songEffectiveVocalRangeAbs +
+	// scheduling.PitchClassAndOctave) so the detail card's "Vocal range"
+	// line can offer tap-to-hear buttons (playVocalTone,
+	// web/static/js/scheduling.js) the same way song_vocal_range.templ's
+	// setup-page rows already do (vocalRangeLine) - "can I hear what this
+	// note sounds like" without leaving the Build page or reaching for an
+	// instrument. HasPlayableNotes mirrors VocalRangeDisplay != "" (true
+	// exactly when VocalRangeDisplay is set) - kept as its own bool rather
+	// than re-checking the string, so a templ caller never has to reason
+	// about which representation is authoritative.
+	VocalRangeHasPlayableNotes bool
+	VocalRangeLowPitchClass    int
+	VocalRangeLowOctave        int
+	VocalRangeHighPitchClass   int
+	VocalRangeHighOctave       int
 
 	// VocalRangeWarningLabel/VocalRangeWarningMessage/VocalRangeWarningIsTip
 	// are Phase 3 of docs/plans/in-progress/vocal-range-plan.md: a

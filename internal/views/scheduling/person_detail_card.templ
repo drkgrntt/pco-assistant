@@ -78,6 +78,47 @@ templ personDetailCardRemoveOOB(assignmentID int64) {
 	<div hx-swap-oob={ fmt.Sprintf("delete:[data-row-id='%d']", assignmentID) }></div>
 }
 
+// personVocalRangeLine renders an assigned person's own stored comfortable
+// range - "Vocal range: G3-D5" - with a tap-to-hear button per note
+// (playVocalTone, web/static/js/scheduling.js), same play-button markup as
+// songVocalRangeLine (song_detail_card.templ) so a director unsure whether
+// a vocalist can actually hit a song's range can check both from the same
+// page. No OOB refresh path exists for this line (unlike songVocalRangeLine)
+// - a person's own range only ever changes via the standalone
+// /scheduling/vocal-range setup page, never from an action this card
+// itself offers, so there's nothing on the Build page that could leave it
+// stale mid-session. Renders nothing when this person has no range on file
+// (AssignmentView.VocalRangeDisplay == ""), same "just omit it" convention
+// as Notes above.
+templ personVocalRangeLine(a AssignmentView) {
+	if a.VocalRangeDisplay != "" {
+		<p class="muted">
+			<strong>Vocal range:</strong>
+			{ a.VocalRangeDisplay }
+			if a.VocalRangeHasPlayableNotes {
+				<button
+					type="button"
+					class="icon-btn play"
+					aria-label="Play lowest note"
+					title="Play lowest note"
+					onclick={ templ.JSFuncCall("playVocalTone", a.VocalRangeLowPitchClass, a.VocalRangeLowOctave) }
+				>
+					@components.IconPlay()
+				</button>
+				<button
+					type="button"
+					class="icon-btn play"
+					aria-label="Play highest note"
+					title="Play highest note"
+					onclick={ templ.JSFuncCall("playVocalTone", a.VocalRangeHighPitchClass, a.VocalRangeHighOctave) }
+				>
+					@components.IconPlay()
+				</button>
+			}
+		</p>
+	}
+}
+
 // personDetailCard is one assigned person's detail card - hidden until
 // selectPersonRow (scheduling.js) reveals it, in response to clicking that
 // person's own row in a position's assignment list (roster_builder.templ).
@@ -90,6 +131,7 @@ templ personDetailCard(data RosterBuilderData, a AssignmentView) {
 		<div class="build-detail-badges" id={ personBadgesElementID(a.ID) }>
 			@personBadgeSpans(a)
 		</div>
+		@personVocalRangeLine(a)
 		if a.Notes != "" {
 			<p class="build-detail-notes">{ a.Notes }</p>
 		}

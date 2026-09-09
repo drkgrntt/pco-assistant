@@ -310,6 +310,14 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 	}
 	data.PendingDeleteCount = len(pending)
 
+	// Every PersonVocalRange on file for the org, best-effort (a local DB
+	// read, not a PCO call - see sets_builder.go's identical fetch for the
+	// Songs tab's own mismatch-warning check) - feeds each assigned person's
+	// own AssignmentView.VocalRangeDisplay/VocalRange* tap-to-hear fields
+	// below (personVocalRangeView), so the sidebar person detail card can
+	// offer the same play buttons the song card's own vocal range line does.
+	personVocalRanges, _ := sc.store.ListPersonVocalRanges(ctx, organizationID)
+
 	// One bulk read of every PlanPerson Planning Center already has for
 	// this plan, reused for two independent things below rather than two
 	// separate calls: ImportableAssignmentCount (only meaningful the first
@@ -586,7 +594,7 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 				crossWarn = crossTeamWarning(crossTeamWarningsFor(ra.PersonID))
 			}
 
-			pg.Assigned = append(pg.Assigned, views.AssignmentView{
+			av := views.AssignmentView{
 				ID:               ra.ID,
 				PersonID:         ra.PersonID,
 				Name:             titleOrID(names, ra.PersonID),
@@ -600,7 +608,16 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 				FrequencyWarning: freqWarn,
 				BlockoutWarning:  blockoutWarningIfKnown(planDate, blockoutsByPerson[ra.PersonID]),
 				CrossTeamWarning: crossWarn,
-			})
+			}
+			if display, lowPC, lowOct, highPC, highOct, ok := personVocalRangeView(personVocalRanges, ra.PersonID); ok {
+				av.VocalRangeDisplay = display
+				av.VocalRangeHasPlayableNotes = true
+				av.VocalRangeLowPitchClass = lowPC
+				av.VocalRangeLowOctave = lowOct
+				av.VocalRangeHighPitchClass = highPC
+				av.VocalRangeHighOctave = highOct
+			}
+			pg.Assigned = append(pg.Assigned, av)
 		}
 
 		// Candidates deliberately don't get FrequencyWarning/BlockoutWarning/
