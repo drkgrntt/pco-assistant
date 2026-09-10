@@ -52,8 +52,57 @@
   padding: var(--space-4) var(--space-5);
 }
 
+/* .team-group is now itself a .collapsible (teamGroupCard, roster_builder.templ)
+   whose heading holds two buttons - the collapse toggle and a "hide this
+   team" icon button - side by side, unlike collapsibleCard's own <h3>
+   (positionHeading), which only ever has the one toggle button filling
+   the whole row. .collapsible-toggle's own width:100% (collapsible.css)
+   would otherwise push the hide button off the edge, so it's overridden
+   to flex-1 here instead, scoped to this heading only. */
 .team-group-heading {
   margin: 0 0 var(--space-1);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.team-group-heading > .collapsible-toggle {
+  width: auto;
+  flex: 1;
+}
+
+/* The "Hidden teams" strip above .team-groups-grid (RosterBuilderBodyContent)
+   - one chip per team hidden via teamGroupCard's own hide button, each a
+   "bring it back" toggle (hideTeamGroup/showTeamGroup, scheduling.js).
+   Purely a client-side, per-browser preference (localStorage) - see
+   teamGroupCard's own doc comment for why this has no server-side
+   counterpart. Empty/hidden by default (the "hidden" attribute on
+   #hidden-teams-bar itself, roster_builder.templ) until a team's actually
+   been hidden. */
+.hidden-teams-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-block-end: var(--space-4);
+}
+
+.hidden-team-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.hidden-team-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 /* Positions nested inside a team-group are compact rows, not their own
