@@ -52,6 +52,10 @@ with at least Viewer access can still sign in.
   prayer, reflection, baptism, or any other role you add to the lookup
   table - no code change needed) - shown as badges on the song and
   filterable while building a set
+- **Song Contexts** - mark where a song gets sung (big church, youth,
+  another campus, or whatever fits your church - a per-org list you name
+  yourself, not a fixed lookup) - shown as badges and filterable while
+  building a set, the same way Song Roles is
 - **Song Tag Suggestions** - a non-AI suggestion tool that groups songs
   sharing a significant word in their titles (e.g. "King of Kings,"
   "Christ the King," and "All Hail King Jesus" all sharing "king"), so you

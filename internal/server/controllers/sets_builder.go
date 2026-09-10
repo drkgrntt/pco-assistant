@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -132,6 +133,15 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 	allRoles, _ := sc.store.ListSongRoles(ctx, organizationID, "", "")
 	rolesBySong := songRolesBySong(allRoles)
 
+	// Best-effort, same as roles above: contexts are a search/display
+	// nicety on the candidate list (see docs/plans/shipped/
+	// song-context-tags-plan.md), so a lookup failure just means no
+	// context badges/filter chips rather than failing the whole page.
+	contextTypes, _ := sc.store.ListSongContextTypes(ctx, organizationID)
+	contextTypeLabels := contextTypeLabelMap(contextTypes)
+	allContexts, _ := sc.store.ListSongContext(ctx, organizationID, "")
+	contextsBySong := songContextsBySong(allContexts)
+
 	// Best-effort, same as titles/roles above: tags are a search/display
 	// nicety on the candidate list, so a lookup failure just means no tag
 	// badges/search text rather than failing the whole page.
@@ -212,6 +222,7 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 	data.TagCategories = tagCategories
 	data.RelationshipTypes, _ = sc.store.ListSongRelationshipTypes(ctx)
 	data.RoleTypes = roleTypes
+	data.ContextTypes = contextTypes
 	data.TagValuesByCategory, _ = sc.store.DistinctSongTagValues(ctx, organizationID)
 	data.AllSongVocalRanges = vocalRangesBySong
 
@@ -503,6 +514,8 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 		titles:             titles,
 		rolesBySong:        rolesBySong,
 		roleTypeLabels:     roleTypeLabels,
+		contextsBySong:     contextsBySong,
+		contextTypeLabels:  contextTypeLabels,
 		tagsBySong:         tagsBySong,
 		tagCategoryLabels:  tagCategoryLabels,
 		candidateConflicts: candidateConflicts,
@@ -571,6 +584,8 @@ type candidateLookups struct {
 	titles             map[string]string
 	rolesBySong        map[string][]scheduling.SongRole
 	roleTypeLabels     map[string]string
+	contextsBySong     map[string][]scheduling.SongContext
+	contextTypeLabels  map[int64]string
 	tagsBySong         map[string][]scheduling.SongTag
 	tagCategoryLabels  map[string]string
 	candidateConflicts map[string][]string
@@ -588,6 +603,7 @@ type candidateLookups struct {
 // handler's doc comment).
 func (l candidateLookups) candidateSongView(song pco.SongData) views.CandidateSongView {
 	roleViews, rolesAttr := songRoleViews(l.rolesBySong, l.roleTypeLabels, song.ID)
+	contextViews, contextsAttr := songContextViews(l.contextsBySong, l.contextTypeLabels, song.ID)
 	tagViews, tagsAttr := songTagViews(l.tagsBySong, l.tagCategoryLabels, song.ID)
 
 	var conflictTitles []string
@@ -616,6 +632,8 @@ func (l candidateLookups) candidateSongView(song pco.SongData) views.CandidateSo
 		ArrangementInfo:  arrangementInfo,
 		Roles:            roleViews,
 		RolesAttr:        rolesAttr,
+		Contexts:         contextViews,
+		ContextsAttr:     contextsAttr,
 		Tags:             tagViews,
 		TagsAttr:         tagsAttr,
 	}
@@ -679,6 +697,11 @@ func (sc *SchedulingController) buildCandidateLookups(ctx context.Context, organ
 	allRoles, _ := sc.store.ListSongRoles(ctx, organizationID, "", "")
 	rolesBySong := songRolesBySong(allRoles)
 
+	contextTypes, _ := sc.store.ListSongContextTypes(ctx, organizationID)
+	contextTypeLabels := contextTypeLabelMap(contextTypes)
+	allContexts, _ := sc.store.ListSongContext(ctx, organizationID, "")
+	contextsBySong := songContextsBySong(allContexts)
+
 	allTags, _ := sc.store.ListSongTags(ctx, organizationID, "", "")
 	tagCategories, _ := sc.store.ListSongTagCategories(ctx)
 	tagsBySong := songTagsBySong(allTags)
@@ -695,6 +718,8 @@ func (sc *SchedulingController) buildCandidateLookups(ctx context.Context, organ
 		titles:             titles,
 		rolesBySong:        rolesBySong,
 		roleTypeLabels:     roleTypeLabels,
+		contextsBySong:     contextsBySong,
+		contextTypeLabels:  contextTypeLabels,
 		tagsBySong:         tagsBySong,
 		tagCategoryLabels:  tagCategoryLabels,
 		candidateConflicts: candidateConflicts,
@@ -777,13 +802,14 @@ const candidateSearchLimit = 50
 // content, never the whole page or even the whole builder body - so typing
 // here never touches (or loses focus in) anything else on the page.
 //
-// q/role come straight from the query string (search text and the
-// currently-active role-filter button's code - see toggleRoleFilter,
-// scheduling.js); "" for either means "no filter on that axis." With
-// neither set, searchCandidates returns early with just the lightweight
-// browsable title list (see its own doc comment) rather than the rich
-// candidateSongView treatment - not computing anything expensive until
-// someone actually searches is the entire point of this being
+// q/role/context come straight from the query string (search text, the
+// currently-active role-filter button's code, and the currently-active
+// context-filter button's id - see toggleRoleFilter/toggleContextFilter,
+// scheduling.js); "" for any of them means "no filter on that axis." With
+// all three unset, searchCandidates returns early with just the
+// lightweight browsable title list (see its own doc comment) rather than
+// the rich candidateSongView treatment - not computing anything expensive
+// until someone actually searches is the entire point of this being
 // server-driven instead of eagerly rendering everything (see
 // CandidateSearchResults' own doc comment for the states it can render).
 // Matches are capped at candidateSearchLimit; the results view shows a
@@ -795,9 +821,10 @@ func (sc *SchedulingController) BuildCandidatesSearch(c *fiber.Ctx) error {
 	planID := c.Params("plan_id")
 	query := c.Query("q")
 	role := c.Query("role")
+	context := c.Query("context")
 
-	candidates, totalMatches, capped, browsable := sc.searchCandidates(ctx, organizationID, serviceTypeID, planID, query, role)
-	return render(c, views.CandidateSearchResults(serviceTypeID, planID, candidates, query, role, totalMatches, capped, browsable, ""))
+	candidates, totalMatches, capped, browsable := sc.searchCandidates(ctx, organizationID, serviceTypeID, planID, query, role, context)
+	return render(c, views.CandidateSearchResults(serviceTypeID, planID, candidates, query, role, context, totalMatches, capped, browsable, ""))
 }
 
 // ArchiveSong flips a song's PCO `hidden` attribute to true from the
@@ -823,6 +850,7 @@ func (sc *SchedulingController) ArchiveSong(c *fiber.Ctx) error {
 	songID := c.Params("song_id")
 	query := c.FormValue("q")
 	role := c.FormValue("role")
+	context := c.FormValue("context")
 
 	errMsg := ""
 	hidden := true
@@ -833,36 +861,38 @@ func (sc *SchedulingController) ArchiveSong(c *fiber.Ctx) error {
 		scheduling.InvalidateActiveSongsCache(organizationID)
 	}
 
-	candidates, totalMatches, capped, browsable := sc.searchCandidates(ctx, organizationID, serviceTypeID, planID, query, role)
-	return render(c, views.CandidateSearchResults(serviceTypeID, planID, candidates, query, role, totalMatches, capped, browsable, errMsg))
+	candidates, totalMatches, capped, browsable := sc.searchCandidates(ctx, organizationID, serviceTypeID, planID, query, role, context)
+	return render(c, views.CandidateSearchResults(serviceTypeID, planID, candidates, query, role, context, totalMatches, capped, browsable, errMsg))
 }
 
 // searchCandidates is BuildCandidatesSearch's actual work, split out so the
 // pure matching/capping logic below (candidateMatchesSearch/
-// candidateMatchesRole/capCandidates) can be unit tested without a live
-// PCO/DB round trip. With query and role both empty, this returns early
-// with just browsable (buildBrowsableSongs' title-only list, for the
-// "browse titles" empty state - see views.SetBuilderData.BrowsableSongs)
-// and zero results, rather than falling through to the rest of this
-// function: every lookup below this point (roles, tags, conflicts,
-// arrangement cache, repeat history, reinforcement tracking) exists only to
-// build the rich CandidateSongView results/candidateSongView is meant to
-// compute solely for matches, and with nothing to match against, every song
-// in the library would "match" and get that full treatment for nothing -
-// exactly the whole-library-on-every-render cost this endpoint exists to
-// avoid. Past that early return, fetches its own copy of the same lookups
+// candidateMatchesRole/candidateMatchesContext/capCandidates) can be unit
+// tested without a live PCO/DB round trip. With query, role, and context
+// all empty, this returns early with just browsable (buildBrowsableSongs'
+// title-only list, for the "browse titles" empty state - see
+// views.SetBuilderData.BrowsableSongs) and zero results, rather than
+// falling through to the rest of this function: every lookup below this
+// point (roles, contexts, tags, conflicts, arrangement cache, repeat
+// history, reinforcement tracking) exists only to build the rich
+// CandidateSongView results/candidateSongView is meant to compute solely
+// for matches, and with nothing to match against, every song in the
+// library would "match" and get that full treatment for nothing - exactly
+// the whole-library-on-every-render cost this endpoint exists to avoid.
+// Past that early return, fetches its own copy of the same lookups
 // buildSetBuilderData gathers for its SongsToReinforce pass - cheaper than
 // it sounds despite the duplication: none of buildSetBuilderData's
 // plan-item/order-of-service fetches (GetPlan, GetItems, note categories)
 // are needed here, fetchActiveSongs itself is the same 60s-cached call
 // every other Build page hit already reuses (see docs/pco-api-risks.md),
 // and - the actual point of this endpoint existing - only the songs that
-// actually match query/role ever get the full candidateSongView treatment,
-// capped at candidateSearchLimit, rather than the whole library.
+// actually match query/role/context ever get the full candidateSongView
+// treatment, capped at candidateSearchLimit, rather than the whole
+// library.
 // Best-effort throughout, same convention as buildSetBuilderData: a failed
 // lookup just degrades whatever it backs (e.g. no conflict badges) instead
 // of failing the search outright.
-func (sc *SchedulingController) searchCandidates(ctx context.Context, organizationID, serviceTypeID, planID, query, role string) (results []views.CandidateSongView, totalMatches int, capped bool, browsable []views.SongOptionView) {
+func (sc *SchedulingController) searchCandidates(ctx context.Context, organizationID, serviceTypeID, planID, query, role, context string) (results []views.CandidateSongView, totalMatches int, capped bool, browsable []views.SongOptionView) {
 	set, err := sc.store.GetOrCreateSet(ctx, organizationID, serviceTypeID, planID)
 	if err != nil {
 		return nil, 0, false, nil
@@ -878,7 +908,7 @@ func (sc *SchedulingController) searchCandidates(ctx context.Context, organizati
 
 	songs, _ := fetchActiveSongs(ctx, organizationID)
 
-	if query == "" && role == "" {
+	if query == "" && role == "" && context == "" {
 		return nil, 0, false, buildBrowsableSongs(songs, inSet)
 	}
 
@@ -890,14 +920,18 @@ func (sc *SchedulingController) searchCandidates(ctx context.Context, organizati
 			continue
 		}
 		// Matching happens against the same cheap attrs (rolesAttr/
-		// tagsAttr) the old client-side filterCandidates used - computed
-		// here just to test the filter, and again inside
+		// contextsAttr/tagsAttr) the old client-side filterCandidates used -
+		// computed here just to test the filter, and again inside
 		// candidateSongView for the songs that actually pass it (a second,
 		// identical map lookup - simpler than threading them through, and
 		// negligible next to everything else this loop already does per
 		// song).
 		_, rolesAttr := songRoleViews(lookups.rolesBySong, lookups.roleTypeLabels, song.ID)
 		if !candidateMatchesRole(rolesAttr, role) {
+			continue
+		}
+		_, contextsAttr := songContextViews(lookups.contextsBySong, lookups.contextTypeLabels, song.ID)
+		if !candidateMatchesContext(contextsAttr, context) {
 			continue
 		}
 		_, tagsAttr := songTagViews(lookups.tagsBySong, lookups.tagCategoryLabels, song.ID)
@@ -935,6 +969,17 @@ func candidateMatchesRole(rolesAttr, role string) bool {
 		return true
 	}
 	return strings.Contains(" "+rolesAttr+" ", " "+role+" ")
+}
+
+// candidateMatchesContext reports whether context (the active
+// context-filter button's string-formatted context_type_id, "" when none
+// is active) is one of contextsAttr's space-separated ids - "" matches
+// everything, same as candidateMatchesRole, which this mirrors exactly.
+func candidateMatchesContext(contextsAttr, context string) bool {
+	if context == "" {
+		return true
+	}
+	return strings.Contains(" "+contextsAttr+" ", " "+context+" ")
 }
 
 // capCandidates trims matches down to at most limit rows, reporting
@@ -2071,6 +2116,51 @@ func songRoleViews(rolesBySong map[string][]scheduling.SongRole, roleTypeLabels 
 		codes = append(codes, r.Role)
 	}
 	return roleViews, strings.Join(codes, " ")
+}
+
+// songContextsBySong buckets every one of an org's song contexts by song id
+// - the context equivalent of songRolesBySong above.
+func songContextsBySong(contexts []scheduling.SongContext) map[string][]scheduling.SongContext {
+	bySong := make(map[string][]scheduling.SongContext, len(contexts))
+	for _, c := range contexts {
+		bySong[c.SongID] = append(bySong[c.SongID], c)
+	}
+	return bySong
+}
+
+// songContextViews resolves songID's contexts (via contextsBySong, see
+// songContextsBySong) to display view models (see views.SongContextView)
+// plus their space-joined, string-formatted context_type_id list
+// (ContextsAttr - matched server-side against a context-filter query param
+// by candidateMatchesContext below, for the search endpoint) - the context
+// equivalent of songRoleViews above, keyed by an int64 id (song_context_types'
+// surrogate PK) rather than a string role code.
+func songContextViews(contextsBySong map[string][]scheduling.SongContext, contextTypeLabels map[int64]string, songID string) ([]views.SongContextView, string) {
+	contexts := contextsBySong[songID]
+	if len(contexts) == 0 {
+		return nil, ""
+	}
+
+	contextViews := make([]views.SongContextView, 0, len(contexts))
+	ids := make([]string, 0, len(contexts))
+	for _, sc := range contexts {
+		contextViews = append(contextViews, views.SongContextView{ID: sc.ContextTypeID, Label: labelOrID(contextTypeLabels, sc.ContextTypeID)})
+		ids = append(ids, strconv.FormatInt(sc.ContextTypeID, 10))
+	}
+	return contextViews, strings.Join(ids, " ")
+}
+
+// labelOrID is titleOrID's int64-keyed counterpart - song_context_types
+// uses a surrogate BIGSERIAL id as its join key (unlike every other
+// string-coded lookup in this file), so resolving a context assignment's
+// stored id back to its label needs an int64 lookup instead of a string
+// one. Falls back to the id's decimal string form, same "raw code if it
+// doesn't resolve" convention as titleOrID.
+func labelOrID(labels map[int64]string, id int64) string {
+	if label, ok := labels[id]; ok {
+		return label
+	}
+	return strconv.FormatInt(id, 10)
 }
 
 // songTagViews resolves songID's tags (via tagsBySong, see songTagsBySong)

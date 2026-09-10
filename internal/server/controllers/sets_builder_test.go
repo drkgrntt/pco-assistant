@@ -809,6 +809,36 @@ func TestRosterPersonOptions(t *testing.T) {
 	}
 }
 
+// TestCandidateMatchesContext covers candidateMatchesContext's filtering
+// logic - the context-filter equivalent of candidateMatchesRole, which this
+// mirrors exactly (space-separated substring membership, "" matches
+// everything). contextsAttr is the space-joined, string-formatted
+// context_type_id list songContextViews builds (sets_builder.go).
+func TestCandidateMatchesContext(t *testing.T) {
+	tests := []struct {
+		name         string
+		contextsAttr string
+		context      string
+		want         bool
+	}{
+		{name: "no filter active, no contexts on song", contextsAttr: "", context: "", want: true},
+		{name: "no filter active, song has contexts", contextsAttr: "1 2", context: "", want: true},
+		{name: "filter matches song's only context", contextsAttr: "1", context: "1", want: true},
+		{name: "filter matches one of several contexts", contextsAttr: "1 2 3", context: "2", want: true},
+		{name: "filter doesn't match", contextsAttr: "1 2", context: "3", want: false},
+		{name: "filter active, song has no contexts at all", contextsAttr: "", context: "1", want: false},
+		{name: "filter doesn't false-positive on a numeric substring", contextsAttr: "12 3", context: "1", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := candidateMatchesContext(tt.contextsAttr, tt.context); got != tt.want {
+				t.Errorf("candidateMatchesContext(%q, %q) = %v, want %v", tt.contextsAttr, tt.context, got, tt.want)
+			}
+		})
+	}
+}
+
 func assertRowOrder(t *testing.T, got []mergedRow, want []string) {
 	t.Helper()
 

@@ -17,6 +17,7 @@ func TestCandidateSongViewHasMetaEachFieldTrue(t *testing.T) {
 		{"new song label", CandidateSongView{NewSongLabel: "Sung once"}},
 		{"arrangement info", CandidateSongView{ArrangementInfo: "Key of G, 4:32"}},
 		{"roles", CandidateSongView{Roles: []SongRoleView{{Code: "opener", Label: "Opener"}}}},
+		{"contexts", CandidateSongView{Contexts: []SongContextView{{ID: 1, Label: "Big church"}}}},
 		{"tags", CandidateSongView{Tags: []SongTagView{{Category: "Theme", Value: "Hope"}}}},
 		{"conflict titles", CandidateSongView{ConflictTitles: []string{"Other Song"}}},
 		{"recently repeated", CandidateSongView{RecentlyRepeated: true}},

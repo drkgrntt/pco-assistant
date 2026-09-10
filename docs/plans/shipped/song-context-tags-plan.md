@@ -1,14 +1,25 @@
 # Plan: "where this song gets sung" (big church / youth / other campus)
 
+**Status: shipped.** Built as Song Contexts - `song_context_types`/
+`song_contexts` (migration `00045`), `internal/scheduling/song_contexts.go`,
+`internal/server/controllers/sets_contexts.go`, candidate-list context-filter
+chips in the set builder (mirroring the role-filter wiring exactly), and the
+`/scheduling/song-contexts` setup page. The remaining open question below
+(fixed lookup vs. per-org editable list) was resolved as **per-org
+editable, no seeded defaults** - an org starts with zero context types and
+names its own, per this doc's own "which contexts exist... varies wildly
+per church" reasoning. The optional plan-mismatch warning (see "Suggested
+build order," step 6) was not built in this pass.
+
 **Open question resolved 2026-09-09**: confirmed directly with Derek that
 the three contexts do **not** map 1:1 to this org's actual PCO Service
 Types - so **Option B below is the path**, not Option A. This doc is
 otherwise unchanged from when it was written (Option A's reasoning is
-kept for context, not because it's still live) - still not-started, no
-code written yet. `song_context_types`/`song_contexts` (the org-editable
-lookup + join table) is the next real open question before building:
-see Option B's own note on why it likely needs its own tiny CRUD rather
-than copying `song_role_types`' fixed-lookup precedent verbatim.
+kept for context, not because it's still live). `song_context_types`/
+`song_contexts` (the org-editable lookup + join table) was the next real
+open question before building: see Option B's own note on why it likely
+needs its own tiny CRUD rather than copying `song_role_types`' fixed-lookup
+precedent verbatim - resolved above.
 
 Written 2026-09-09, prompted by direct feedback from a meeting with the
 worship pastor (`docs/issues.md`): "He asked if there's a way to mark
