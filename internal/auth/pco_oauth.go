@@ -36,19 +36,29 @@ func oauthRedirectURI() string  { return os.Getenv("PCO_OAUTH_REDIRECT_URI") }
 // an opaque value the caller generates and verifies on callback (CSRF
 // protection for the redirect).
 //
-// prompt=login asks PCO's own OAuth server to force a fresh login instead of
-// silently re-approving off whatever PCO session cookie the browser already
-// carries (PCO's own session lives in its own cookie jar, entirely separate
-// from this app's - clearing this app's session on logout was never able to
-// touch it). Without this, clicking "Sign in" right after logging out of
-// this app - or wanting to switch which PCO account this app is connected
-// to - just silently signed the same person back in with no login screen at
-// all, since PCO had no reason to think anything needed re-approving. This
-// is the standard OIDC prompt value; PCO's own docs don't enumerate
-// /oauth/authorize's supported prompt values, so if PCO's authorize endpoint
-// turns out not to honor it, worst case it's a no-op query param and
-// behavior reverts to today's silent-reuse - confirm live against a real
-// sign-out/sign-in round trip rather than assuming this is the whole fix.
+// prompt=select_account asks PCO's own OAuth server to show its account
+// picker instead of silently re-approving off whatever PCO session cookie
+// the browser already carries (PCO's own session lives in its own cookie
+// jar, entirely separate from this app's - clearing this app's session on
+// logout was never able to touch it). Without this, clicking "Sign in"
+// right after logging out of this app - or wanting to switch which PCO
+// account this app is connected to - just silently signed the same person
+// back in with no login screen at all, since PCO had no reason to think
+// anything needed re-approving.
+//
+// PCO's docs (api.planningcenteronline.com/docs/overview/authentication)
+// document exactly two supported values here: select_account ("allow users
+// to verify which account they will be signing in as and allow them to
+// switch accounts" - PCO's own recommendation for this exact use case, and
+// what powers PCO's native "Select Your Account" picker across linked
+// accounts) and login (forces a full PCO logout - kills any other PCO
+// product tab/session the person has open too, not just this app's
+// connection - so more disruptive than switching actually calls for). This
+// app sends select_account rather than login for that reason - see
+// docs/plans/in-progress/pco-account-switching-plan.md for the fuller
+// writeup. Confirm live against a real sign-out/switch round trip rather
+// than assuming docs are the whole story, per CLAUDE.md's own instruction
+// for PCO-behavior claims.
 func AuthorizeURL(state string) string {
 	q := url.Values{
 		"client_id":     {oauthClientID()},
@@ -56,7 +66,7 @@ func AuthorizeURL(state string) string {
 		"response_type": {"code"},
 		"scope":         {oauthScope},
 		"state":         {state},
-		"prompt":        {"login"},
+		"prompt":        {"select_account"},
 	}
 
 	return authorizeURL + "?" + q.Encode()
