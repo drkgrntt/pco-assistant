@@ -1,0 +1,152 @@
+/* Backs internal/views/scheduling/song_contexts.templ's "Tag a song"
+   section - one persistent card per active song (components.Card's
+   .position-group, see card.css) showing that song's contexts as chips
+   with inline edit/remove, plus its own small "add a context" form scoped
+   to that song. A structural mirror of song-tags.css's own card layout -
+   see that file's own doc comment for the shared reasoning (every active
+   song renders up front, no search gate, #song-context-filter just hides
+   non-matching cards client-side via filterSongContextCards,
+   scheduling.js). Deliberately has no filter-chips-by-value styling
+   (compare song-tags.css's .song-tag-filter-chips/.tag-filter-chip rules)
+   - a song's contexts come from a small, org-named list (typically a
+   handful), not free-text values worth browsing by chip, so this page's
+   own filter is a plain title-search box only. "Your contexts" (the
+   context-type CRUD above "Tag a song" on the same page) uses only the
+   shared components/table.css + forms.css - no page-specific styling of
+   its own, same as before this redesign. */
+
+.song-context-filter {
+  max-width: 24rem;
+  margin-bottom: var(--space-3);
+}
+
+/* Bare <label> here isn't inside a form.inline (forms.css's own
+   "label text above its field, with a gap" rule doesn't reach it), so
+   without this "Filter songs" and the text box below it ran together
+   with no breathing room. */
+.song-context-filter label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* Tighter than the shared gap other card-list pages might assume - at a
+   library's real song count (dozens+), var(--space-4) between every card
+   added up to a lot of scrolling for what's meant to be a quick
+   scan-and-tag list. Two columns from tablet up (each card is short and
+   single-line, so one long full-width column read as unnecessarily
+   sprawling); a single column below that breakpoint, where there's no
+   width to spare for a second. */
+.song-contexts-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+@media (min-width: 768px) {
+  .song-contexts-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+
+/* Overrides components.Card's shared .position-group padding/margin
+   (card.css) tighter for this page only - that base sizing is tuned for
+   a handful of billing/account sections, not one card per song across a
+   whole library. Left as a scoped override rather than changing the
+   shared rule itself, so every other components.Card() caller keeps its
+   own sizing. */
+.song-context-card .position-group {
+  padding: var(--space-2) var(--space-3);
+  margin-block: 0;
+}
+
+.song-context-card .position-group h3 {
+  font-size: var(--text-base);
+  margin-bottom: var(--space-1);
+}
+
+.song-context-empty {
+  margin: 0;
+}
+
+.song-context-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0;
+}
+
+/* One context's badge plus its own edit/remove icon buttons, inline - the
+   badge's own default right margin (badge.css) is redundant now that
+   .song-context-chips supplies spacing via gap, so it's zeroed here. */
+.context-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.context-chip .badge {
+  margin-right: 0;
+}
+
+/* songContextBulkAddForm's own collapsed-by-default wrapper
+   (song_contexts.templ) - same .song-context-add-toggle look as each
+   card's own "+ Add context" summary below, just scoped to this
+   page-level form instead of one card. */
+.song-context-bulk-details {
+  margin-bottom: var(--space-4);
+}
+
+.song-context-bulk-hint {
+  margin-top: var(--space-1);
+}
+
+/* Each SongContextCard's own bulk-select checkbox (song_contexts.templ) -
+   a small muted row above that card's contexts/add-context form, not
+   nested inside song-context-bulk-form itself (it's associated via the
+   checkbox's own form="song-context-bulk-form" attribute instead), so
+   form.inline's label.checkbox-label rule (forms.css) doesn't reach it -
+   restated here instead. */
+.song-context-bulk-select {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+  color: var(--muted);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+/* The add-context form starts collapsed behind this <summary> toggle (see
+   SongContextCard, song_contexts.templ) - shown open only while actively
+   editing an existing context (editRow opens it, cancelSetupEdit closes
+   it again, scheduling.js). Keeping the form itself always in the DOM
+   (just hidden by <details>, not htmx-loaded on demand) is what lets
+   editRow keep working unchanged - it just also has to flip .open now. */
+.song-context-add-details {
+  margin-top: var(--space-1);
+}
+
+.song-context-add-details[open] {
+  margin-top: var(--space-2);
+}
+
+.song-context-add-toggle {
+  cursor: pointer;
+  color: var(--accent);
+  font-size: var(--text-sm);
+  list-style: none;
+  user-select: none;
+}
+
+.song-context-add-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.song-context-add-form {
+  margin-top: var(--space-2);
+  margin-bottom: 0;
+}

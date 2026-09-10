@@ -1444,6 +1444,57 @@ document.addEventListener("htmx:afterSwap", function (event) {
   updateSongTagBulkCount();
 });
 
+// filterSongContextCards backs the Song Contexts setup page's own
+// "Tag a song" filter box (song_contexts.templ): the free-text
+// #song-context-filter box, applied against each already-rendered
+// .song-context-card's data-search (song title + its context labels,
+// substring match, see songContextCardSearchText). Purely client-side,
+// like filterSongTagCards above - but with no tag-value-chip half to
+// combine it with: a song's contexts come from a small, org-named list
+// (typically a handful), not free-text values worth browsing by chip the
+// way dozens of scripture-reference tag values are, so there's nothing
+// equivalent to filterSongTagCards' checked-chips intersection here.
+function filterSongContextCards() {
+  var input = document.getElementById("song-context-filter");
+  var query = input ? input.value.trim().toLowerCase() : "";
+
+  document.querySelectorAll(".song-context-card").forEach(function (card) {
+    card.hidden = query !== "" && (card.dataset.search || "").indexOf(query) === -1;
+  });
+}
+
+// Re-applies the filter above after any htmx swap of the card list itself
+// (adding/editing/removing a context, or a bulk add, all swap the whole
+// #song-contexts-list) - without this, a filtered view would flash back
+// to showing every song again after each mutation, even though
+// #song-context-filter (outside the swapped div, so untouched by the
+// swap) still shows its previous state. Also resets
+// #song-context-bulk-count, mirroring the song-tags-list handler above -
+// every .song-context-bulk-checkbox lives inside this same swapped div,
+// so any mutation here always resets them all to unchecked.
+document.addEventListener("htmx:afterSwap", function (event) {
+  var target = event.detail && event.detail.target;
+  if (!target || target.id !== "song-contexts-list") {
+    return;
+  }
+  filterSongContextCards();
+  updateSongContextBulkCount();
+});
+
+// updateSongContextBulkCount keeps #song-context-bulk-count
+// (song_contexts.templ) in sync with how many of the page's
+// .song-context-bulk-checkbox boxes are currently checked - called from
+// each checkbox's own onchange, and from the #song-contexts-list
+// afterSwap handler above, mirroring updateSongTagBulkCount exactly.
+function updateSongContextBulkCount() {
+  var countEl = document.getElementById("song-context-bulk-count");
+  if (!countEl) {
+    return;
+  }
+  var count = document.querySelectorAll(".song-context-bulk-checkbox:checked").length;
+  countEl.textContent = count === 1 ? "1 song selected" : count + " songs selected";
+}
+
 // updateSongTagBulkCount keeps #song-tag-bulk-count (song_tags.templ) in
 // sync with how many of the page's .song-tag-bulk-checkbox boxes are
 // currently checked - called from each checkbox's own onchange, and from

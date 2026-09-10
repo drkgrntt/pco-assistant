@@ -3,6 +3,7 @@ package scheduling
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	pco "github.com/drkgrntt/go-pco"
 
@@ -17,10 +18,21 @@ import (
 // every other setup page in this package, this one stacks two CRUD
 // surfaces on a single page: "Your contexts" (song_context_types - this
 // app's first per-org *editable* lookup, so there's no dedicated setup
-// page precedent to mirror for it) and "Tag a song" (song_contexts,
-// identical shape to SongRolesTable/song_roles.templ, just keyed by an
-// int64 context_type_id instead of a string role code).
-templ SongContexts(personName, organizationName string, songs []pco.SongData, contextTypes []scheduling.SongContextType, contexts []scheduling.SongContext, songTitles map[string]string, contextLabels map[int64]string, errMsg string) {
+// page precedent to mirror for it) and "Tag a song" (song_contexts).
+//
+// "Tag a song" mirrors SongTags' own card-per-song shape (see
+// docs/plans/shipped/song-tags-setup-redesign-plan.md) rather than
+// SongRolesTable's flat table: one persistent card per active song,
+// tagged or not, with its own contexts as chips and its own small inline
+// "add a context" form, plus songContextBulkAddForm for tagging several
+// songs with one context at once. Deliberately NOT mirroring
+// songTagFilterChips' filter-by-value chips - a song's contexts come from
+// a small, org-named list (typically a handful, e.g. "Big church" /
+// "Youth" / "Other campus"), not free-text values worth browsing by
+// chip the way dozens of scripture-reference tag values are; a plain
+// title-search box (#song-context-filter, filterSongContextCards) is
+// enough.
+templ SongContexts(personName, organizationName string, songs []pco.SongData, contextTypes []scheduling.SongContextType, contextsBySong map[string][]scheduling.SongContext, contextLabels map[int64]string, errMsg string) {
 	@views.Layout("Song Contexts", personName, organizationName) {
 		@songContextsHelp()
 		<h1>Song Contexts</h1>
@@ -45,24 +57,52 @@ templ SongContexts(personName, organizationName string, songs []pco.SongData, co
 		</form>
 		@SongContextTypesList(contextTypes, "")
 		<h2>Tag a song</h2>
-		<form
-			id="song-context-form"
-			class="inline"
-			hx-post="/scheduling/song-contexts"
-			hx-target="#song-contexts-table"
-			hx-swap="outerHTML"
-			hx-on::after-request="if(event.detail.successful && event.detail.elt === this) resetSetupForm(this)"
-		>
-			<input type="hidden" name="id"/>
+		<p class="muted">Mark which of your contexts each song belongs in.</p>
+		<div class="song-context-filter">
 			<label>
-				Song
-				<select name="song_id" required>
-					<option value="" selected disabled>Choose a song</option>
-					for _, song := range songs {
-						<option value={ song.ID }>{ song.Attributes.Title }</option>
-					}
-				</select>
+				Filter songs
+				<input
+					type="text"
+					id="song-context-filter"
+					placeholder="Filter by song title..."
+					autocomplete="off"
+					oninput="filterSongContextCards()"
+				/>
 			</label>
+		</div>
+		@songContextBulkAddForm(contextTypes)
+		@SongContextsList(songs, contextsBySong, contextTypes, contextLabels, "", errMsg)
+	}
+}
+
+// songContextBulkAddForm is this page's "already know the context, just
+// need it on several songs" shortcut - the counterpart to each
+// SongContextCard's own per-song inline form, mirroring
+// songTagBulkAddForm's shape exactly (collapsed <details>, per-card
+// checkboxes carrying form="song-context-bulk-form" so they submit
+// without being inside this form's own DOM subtree,
+// #song-context-bulk-count kept live from each checkbox's own onchange
+// and from #song-contexts-list's own htmx:afterSwap handler). Its own
+// <select> deliberately keeps id="song-context-select" - the same id the
+// old flat "Tag a song" form used - so songContextSelectOOB (still
+// emitted, unchanged, by CreateSongContextType/DeleteSongContextType)
+// keeps a real target to refresh: this bulk form is the closest
+// remaining analog to that old single shared picker. Each per-song
+// card's own "add a context" <select> (SongContextCard) does NOT carry
+// that id (only one element on the page can), so a context type created
+// or renamed here won't appear in an individual card's own add-context
+// form until a reload - an accepted, minor staleness window, not a
+// regression worth a broadcast-OOB mechanism for every card's own select.
+templ songContextBulkAddForm(contextTypes []scheduling.SongContextType) {
+	<details class="song-context-bulk-details">
+		<summary class="song-context-add-toggle">+ Tag multiple songs with one context at once</summary>
+		<form
+			id="song-context-bulk-form"
+			class="inline song-context-bulk-form"
+			hx-post="/scheduling/song-contexts/bulk"
+			hx-target="#song-contexts-list"
+			hx-swap="outerHTML"
+		>
 			<label>
 				Context
 				<select name="context_type_id" id="song-context-select" required>
@@ -70,32 +110,33 @@ templ SongContexts(personName, organizationName string, songs []pco.SongData, co
 					@contextTypeOptions(contextTypes)
 				</select>
 			</label>
-			<button type="submit" class="primary">Add</button>
-			<button type="button" class="cancel-edit" onclick="cancelSetupEdit(this)" hidden>Cancel</button>
+			<button type="submit" class="primary">Tag selected songs</button>
+			<span id="song-context-bulk-count" class="muted">0 songs selected</span>
 		</form>
-		@SongContextsTable(contexts, songTitles, contextLabels, errMsg)
-	}
+		<p class="muted song-context-bulk-hint">Check the songs below, then submit.</p>
+	</details>
 }
 
-// contextTypeOptions is the <option> list shared by the "Tag a song" form's
-// initial render and its out-of-band refresh (songContextSelectOOB) - kept
-// as its own component so the two can never drift out of sync with each
-// other, the same "one component, two render sites" shape as
-// songBadgeExtras (set_builder.templ).
+// contextTypeOptions is the <option> list shared by every context <select>
+// on this page (songContextBulkAddForm, songContextSelectOOB, and each
+// SongContextCard's own inline add-context form) - kept as its own
+// component so none of them can drift out of sync with each other, the
+// same "one component, two render sites" shape as songBadgeExtras
+// (set_builder.templ).
 templ contextTypeOptions(contextTypes []scheduling.SongContextType) {
 	for _, t := range contextTypes {
 		<option value={ strconv.FormatInt(t.ID, 10) }>{ t.Label }</option>
 	}
 }
 
-// songContextSelectOOB refreshes the "Tag a song" form's own context
-// <select> out-of-band - included in SongContextTypesMutationResponse
-// (sets_contexts.go) so a context type just created (or renamed) is
-// immediately reflected there, even though the primary swap target for
-// that same response is #song-context-types-list, not this form. Without
-// this, a newly-added context would be invisible to "Tag a song" until a
-// full page reload - the entire point of stacking these two sections on
-// one page is picking a context you just named, right below it.
+// songContextSelectOOB refreshes the bulk-add form's own context <select>
+// (id="song-context-select") out-of-band - included in
+// SongContextTypesMutationResponse (sets_contexts.go) so a context type
+// just created (or renamed) is immediately reflected there, even though
+// the primary swap target for that same response is
+// #song-context-types-list, not this form. See songContextBulkAddForm's
+// own doc comment for why this targets only the bulk form's select, not
+// every per-song card's own select too.
 templ songContextSelectOOB(contextTypes []scheduling.SongContextType) {
 	<select name="context_type_id" id="song-context-select" hx-swap-oob="true">
 		<option value="" selected disabled>Choose a context</option>
@@ -166,56 +207,91 @@ templ SongContextTypesList(contextTypes []scheduling.SongContextType, errMsg str
 // SongContextTypesMutationResponse is CreateSongContextType/
 // DeleteSongContextType's htmx response: SongContextTypesList as the
 // primary swap target, plus songContextSelectOOB's own out-of-band refresh
-// so the "Tag a song" form's picker stays in sync - see that function's
-// doc comment. Kept separate from SongContextTypesList itself so SongContexts'
+// so the bulk-add form's picker stays in sync - see that function's doc
+// comment. Kept separate from SongContextTypesList itself so SongContexts'
 // initial full-page render (which calls SongContextTypesList directly, and
-// already renders the "Tag a song" select from the same up-to-date data)
+// already renders the bulk form's select from the same up-to-date data)
 // doesn't render the select twice.
 templ SongContextTypesMutationResponse(contextTypes []scheduling.SongContextType, errMsg string) {
 	@SongContextTypesList(contextTypes, errMsg)
 	@songContextSelectOOB(contextTypes)
 }
 
-// SongContextsTable is both the initial-render fragment and the htmx swap
-// target (id="song-contexts-table") for CreateSongContext/DeleteSongContext
-// - a straight structural mirror of SongRolesTable, just resolving a
-// context_type_id through contextLabels (displayLabelOrID, the int64-keyed
-// counterpart of displayNameOrID) instead of a role code through
-// roleLabels.
-templ SongContextsTable(contexts []scheduling.SongContext, songTitles map[string]string, contextLabels map[int64]string, errMsg string) {
-	<div id="song-contexts-table">
+// SongContextsList is both the initial-render fragment and the htmx swap
+// target (id="song-contexts-list") for every create/edit/delete/bulk-add
+// on this page - see SongTagsList's doc comment (song_tags.templ) for why
+// errMsg/successMsg live inside the swapped fragment rather than the page
+// around it. Only active songs render (contextsBySong[song.ID] for a song
+// no longer active is simply never looked up) - the same behavior Song
+// Tags already accepted when it moved to this card shape, see
+// docs/plans/shipped/song-tags-setup-redesign-plan.md.
+templ SongContextsList(songs []pco.SongData, contextsBySong map[string][]scheduling.SongContext, contextTypes []scheduling.SongContextType, contextLabels map[int64]string, successMsg, errMsg string) {
+	<div id="song-contexts-list" class="song-contexts-list">
 		if errMsg != "" {
 			<p class="error">{ errMsg }</p>
 		}
-		@components.SortableTableWrap() {
-			<thead>
-				<tr>
-					<th>Song</th>
-					<th>Context</th>
-					<th></th>
-				</tr>
-			</thead>
-			<tbody>
-				for _, sc := range contexts {
-					<tr>
-						<td>
-							if title, ok := songTitles[sc.SongID]; ok {
-								{ title }
-							} else {
-								{ sc.SongID }
-							}
-						</td>
-						<td>{ displayLabelOrID(contextLabels, sc.ContextTypeID) }</td>
-						<td>
+		if successMsg != "" {
+			<p class="success">{ successMsg }</p>
+		}
+		if len(songs) == 0 {
+			<p class="muted">No active songs found.</p>
+		}
+		for _, song := range songs {
+			@SongContextCard(song, contextsBySong[song.ID], contextTypes, contextLabels)
+		}
+	</div>
+}
+
+// SongContextsMutationResponse is CreateSongContext/BulkCreateSongContext/
+// DeleteSongContext's htmx response (sets_contexts.go): SongContextsList as
+// the swap target - unlike SongTagsMutationResponse, there's no
+// filter-chips OOB refresh to include here (see SongContexts' own doc
+// comment for why "Tag a song" has no value-filter chips to keep in sync).
+templ SongContextsMutationResponse(songs []pco.SongData, contextsBySong map[string][]scheduling.SongContext, contextTypes []scheduling.SongContextType, contextLabels map[int64]string, successMsg, errMsg string) {
+	@SongContextsList(songs, contextsBySong, contextTypes, contextLabels, successMsg, errMsg)
+}
+
+// SongContextCard is one song's persistent card: its existing contexts as
+// chips (grouped in whatever order ListSongContext/songContextsBySong
+// already returns them), each with inline edit/remove actions, plus this
+// song's own small "add a context" form - a structural mirror of
+// SongTagCard, just picking a context_type_id from a fixed <select>
+// instead of typing a free-text category/value pair. song_id is fixed (a
+// hidden input, not a picker) since the card itself already identifies
+// the song. data-search backs the page's client-side filter
+// (filterSongContextCards, scheduling.js): the song's title plus every one
+// of its context labels, so filtering also surfaces "which songs are
+// tagged 'Youth'" without a server round trip.
+templ SongContextCard(song pco.SongData, contexts []scheduling.SongContext, contextTypes []scheduling.SongContextType, contextLabels map[int64]string) {
+	<div class="song-context-card" data-search={ songContextCardSearchText(song, contexts, contextLabels) }>
+		@components.Card(song.Attributes.Title) {
+			<label class="song-context-bulk-select">
+				<input
+					type="checkbox"
+					class="song-context-bulk-checkbox"
+					name="song_ids"
+					form="song-context-bulk-form"
+					value={ song.ID }
+					onchange="updateSongContextBulkCount()"
+				/>
+				Select for bulk tag
+			</label>
+			if len(contexts) == 0 {
+				<p class="muted song-context-empty">No contexts yet.</p>
+			} else {
+				<div class="song-context-chips">
+					for _, songCtx := range contexts {
+						<span class="context-chip">
+							@components.Badge("context-badge", displayLabelOrID(contextLabels, songCtx.ContextTypeID))
 							<button
 								class="icon-btn"
-								aria-label="Edit tag"
-								title="Edit tag"
-								data-edit-form="song-context-form"
+								aria-label={ fmt.Sprintf("Edit %q context", displayLabelOrID(contextLabels, songCtx.ContextTypeID)) }
+								title="Edit context"
+								data-edit-form={ songContextFormID(song.ID) }
 								data-edit-fields={ editFieldsAttr(map[string]string{
-									"id":              strconv.FormatInt(sc.ID, 10),
-									"song_id":         sc.SongID,
-									"context_type_id": strconv.FormatInt(sc.ContextTypeID, 10),
+									"id":              strconv.FormatInt(songCtx.ID, 10),
+									"song_id":         songCtx.SongID,
+									"context_type_id": strconv.FormatInt(songCtx.ContextTypeID, 10),
 								}) }
 								onclick="editRow(this)"
 							>
@@ -223,37 +299,76 @@ templ SongContextsTable(contexts []scheduling.SongContext, songTitles map[string
 							</button>
 							<button
 								class="danger icon-btn"
-								aria-label="Remove tag"
-								title="Remove tag"
-								hx-delete={ fmt.Sprintf("/scheduling/song-contexts/%d", sc.ID) }
-								hx-target="#song-contexts-table"
+								aria-label={ fmt.Sprintf("Remove %q context", displayLabelOrID(contextLabels, songCtx.ContextTypeID)) }
+								title="Remove context"
+								hx-delete={ fmt.Sprintf("/scheduling/song-contexts/%d", songCtx.ID) }
+								hx-target="#song-contexts-list"
 								hx-swap="outerHTML"
-								hx-confirm="Remove this tag?"
+								hx-confirm="Remove this context?"
 							>
 								@components.IconRemove()
 							</button>
-						</td>
-					</tr>
-				}
-				if len(contexts) == 0 {
-					<tr>
-						<td colspan="3" class="muted">No songs tagged yet - tag a song with a context so it's filterable while building a set for that context.</td>
-					</tr>
-				}
-			</tbody>
+						</span>
+					}
+				</div>
+			}
+			<details class="song-context-add-details">
+				<summary class="song-context-add-toggle">+ Add context</summary>
+				<form
+					id={ songContextFormID(song.ID) }
+					class="inline song-context-add-form"
+					hx-post="/scheduling/song-contexts"
+					hx-target="#song-contexts-list"
+					hx-swap="outerHTML"
+					hx-on::after-request="if(event.detail.successful && event.detail.elt === this) resetSetupForm(this)"
+				>
+					<input type="hidden" name="id"/>
+					<input type="hidden" name="song_id" value={ song.ID }/>
+					<label>
+						Context
+						<select name="context_type_id" required>
+							<option value="" selected disabled>Choose a context</option>
+							@contextTypeOptions(contextTypes)
+						</select>
+					</label>
+					<button type="submit" class="primary">Add context</button>
+					<button type="button" class="cancel-edit" onclick="cancelSetupEdit(this)" hidden>Cancel</button>
+				</form>
+			</details>
 		}
 	</div>
 }
 
+// songContextFormID is the per-card add/edit form's id, shared between the
+// form itself and its own chips' Edit buttons (data-edit-form) - each song
+// needs its own uniquely-id'd form since every card renders one, unlike
+// the old page's single shared "song-context-form".
+func songContextFormID(songID string) string {
+	return "song-context-form-" + songID
+}
+
+// songContextCardSearchText builds one song card's data-search attribute
+// value: its title plus every context label already showing on the card,
+// lowercased so filterSongContextCards' own lowercased query matches
+// case-insensitively - the counterpart of songTagCardSearchText
+// (song_tags.templ), minus that function's data-tags half, since this page
+// has no filter-by-value chips to match against (see SongContexts' own doc
+// comment for why).
+func songContextCardSearchText(song pco.SongData, contexts []scheduling.SongContext, contextLabels map[int64]string) string {
+	parts := make([]string, 0, len(contexts)+1)
+	parts = append(parts, song.Attributes.Title)
+	for _, songCtx := range contexts {
+		parts = append(parts, displayLabelOrID(contextLabels, songCtx.ContextTypeID))
+	}
+	return strings.ToLower(strings.Join(parts, " "))
+}
+
 // songContextsHelp is this page's Help-triggered dialog - see
 // songRelationshipsHelp's own doc comment (relationships.templ) for the
-// full reasoning shared by every setup-page help dialog, and songRolesHelp's
-// own doc comment (song_roles.templ) for this specific chain. This is page
-// 3 of that chain (Song Relationships -> Song Roles -> here -> Song Tags ->
-// ...) - slotted in between Song Roles and Song Tags since they're the
-// closest sibling concept to both (small classifications that drive
-// set-builder filtering): Song Roles' own "Next" link now points here, and
-// this page's own "Next" link points at Song Tags, today's target.
+// full reasoning shared by every setup-page help dialog (single step, no
+// createTourController, .page-help-dialog for openPageHelp's dispatch, and
+// the forward-only Next-link chain / setPageHelpForce mechanism). This is
+// page 3 of that chain (... Song Roles -> here -> Song Tags -> ...).
 templ songContextsHelp() {
 	<dialog id="song-contexts-help" class="tour-dialog page-help-dialog">
 		<div class="tour-step">

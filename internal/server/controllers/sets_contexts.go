@@ -2,15 +2,23 @@ package controllers
 
 // Song contexts ("where this song gets sung" - big church, youth, other
 // campus, or whatever an org actually calls its own contexts) - setup page
-// CRUD. Two halves, mirroring sets_roles.go's shape but doubled: managing
-// the org's own list of context types (song_context_types - this app's
-// first per-org *editable* lookup, unlike song_role_types), and tagging
-// songs with them (song_contexts - a straight structural mirror of
-// sets_roles.go's own CRUD).
+// CRUD. Two halves: managing the org's own list of context types
+// (song_context_types - this app's first per-org *editable* lookup, unlike
+// song_role_types) and tagging songs with them (song_contexts). The type
+// handlers (CreateSongContextType/DeleteSongContextType) stay a flat-table
+// CRUD, same shape as sets_roles.go's own. The song-tagging handlers
+// (CreateSongContext/BulkCreateSongContext/DeleteSongContext) instead
+// mirror song_tags.go's card-per-song shape (see
+// docs/plans/shipped/song-tags-setup-redesign-plan.md and
+// song_contexts.templ's own doc comment) - one persistent card per active
+// song plus a bulk "tag several songs with one context" form, not a flat
+// table.
 
 import (
 	"database/sql"
 	"errors"
+	"fmt"
+	"strconv"
 	"strings"
 
 	"pco-assistant/internal/scheduling"
@@ -22,7 +30,7 @@ import (
 
 // contextTypeLabelMap builds a context_type_id -> label lookup from
 // ListSongContextTypes, for resolving a tagged song's stored context id
-// back to its display label (see SongContextsTable) - the int64-keyed
+// back to its display label (see SongContextCard) - the int64-keyed
 // counterpart of songRoleTypeLabelMap.
 func contextTypeLabelMap(types []scheduling.SongContextType) map[int64]string {
 	labels := make(map[int64]string, len(types))
@@ -41,12 +49,12 @@ func (sc *SchedulingController) SongContextsPage(c *fiber.Ctx) error {
 
 	contextTypes, err := sc.store.ListSongContextTypes(c.Context(), orgID)
 	if err != nil {
-		return render(c, views.SongContexts(personName, orgName, songs, contextTypes, nil, songTitleMap(songs), nil, err.Error()))
+		return render(c, views.SongContexts(personName, orgName, songs, contextTypes, nil, nil, err.Error()))
 	}
 
 	contexts, err := sc.store.ListSongContext(c.Context(), orgID, "")
 	if err != nil {
-		return render(c, views.SongContexts(personName, orgName, songs, contextTypes, nil, songTitleMap(songs), contextTypeLabelMap(contextTypes), err.Error()))
+		return render(c, views.SongContexts(personName, orgName, songs, contextTypes, nil, contextTypeLabelMap(contextTypes), err.Error()))
 	}
 
 	errMsg := ""
@@ -54,15 +62,17 @@ func (sc *SchedulingController) SongContextsPage(c *fiber.Ctx) error {
 		errMsg = "loading songs from Planning Center: " + songsErr.Error()
 	}
 
-	return render(c, views.SongContexts(personName, orgName, songs, contextTypes, contexts, songTitleMap(songs), contextTypeLabelMap(contextTypes), errMsg))
+	return render(c, views.SongContexts(personName, orgName, songs, contextTypes, songContextsBySong(contexts), contextTypeLabelMap(contextTypes), errMsg))
 }
 
 // CreateSongContextType creates (or, via the shared parseFormID edit
 // convention, renames) one of this org's own context types - re-renders
-// just the types list fragment plus an out-of-band refresh of the "Tag a
-// song" form's own context <select> (songContextSelectOOB), so a
+// just the types list fragment plus an out-of-band refresh of the
+// bulk-add form's own context <select> (songContextSelectOOB), so a
 // newly-created context is immediately pickable there without a page
-// reload - see SongContextTypesMutationResponse's own doc comment.
+// reload - see SongContextTypesMutationResponse's own doc comment (and
+// songContextBulkAddForm's, for why only that one select stays in sync
+// this way, not every per-song card's own select too).
 func (sc *SchedulingController) CreateSongContextType(c *fiber.Ctx) error {
 	orgID := middleware.CurrentOrganizationID(c)
 
@@ -134,7 +144,63 @@ func (sc *SchedulingController) CreateSongContext(c *fiber.Ctx) error {
 	songs, _ := fetchActiveSongs(middleware.RequestContext(c), orgID)
 	contextTypes, _ := sc.store.ListSongContextTypes(c.Context(), orgID)
 
-	return render(c, views.SongContextsTable(contexts, songTitleMap(songs), contextTypeLabelMap(contextTypes), errMsg))
+	return render(c, views.SongContextsMutationResponse(songs, songContextsBySong(contexts), contextTypes, contextTypeLabelMap(contextTypes), "", errMsg))
+}
+
+// BulkCreateSongContext applies one context type to every selected song at
+// once - the counterpart to CreateSongContext's per-song inline form,
+// mirroring BulkCreateSongTag's shape exactly (song_tags.go): loops
+// body.SongIDs, calls store.CreateSongContext per song (its ON CONFLICT
+// upsert makes a repeat selection of an already-tagged song a harmless
+// no-op rather than an error), tolerates partial failure via appendErr,
+// and builds a successMsg so a bulk add that touched songs scattered well
+// below the fold still confirms it did something.
+func (sc *SchedulingController) BulkCreateSongContext(c *fiber.Ctx) error {
+	orgID := middleware.CurrentOrganizationID(c)
+	ctx := middleware.RequestContext(c)
+
+	var body struct {
+		ContextTypeID int64    `form:"context_type_id"`
+		SongIDs       []string `form:"song_ids"`
+	}
+
+	errMsg := ""
+	applied := 0
+	if err := c.BodyParser(&body); err != nil {
+		errMsg = err.Error()
+	} else if len(body.SongIDs) == 0 {
+		errMsg = "select at least one song to tag with this context"
+	} else {
+		for _, songID := range body.SongIDs {
+			if _, err := sc.store.CreateSongContext(ctx, orgID, scheduling.CreateSongContextParams{
+				SongID: songID, ContextTypeID: body.ContextTypeID,
+			}); err != nil {
+				errMsg = appendErr(errMsg, err.Error())
+				continue
+			}
+			applied++
+		}
+	}
+
+	contexts, err := sc.store.ListSongContext(ctx, orgID, "")
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
+	}
+
+	songs, _ := fetchActiveSongs(ctx, orgID)
+	contextTypes, _ := sc.store.ListSongContextTypes(ctx, orgID)
+	contextLabels := contextTypeLabelMap(contextTypes)
+
+	successMsg := ""
+	if applied > 0 {
+		label, ok := contextLabels[body.ContextTypeID]
+		if !ok {
+			label = strconv.FormatInt(body.ContextTypeID, 10)
+		}
+		successMsg = fmt.Sprintf("Tagged %d song(s) with %q.", applied, label)
+	}
+
+	return render(c, views.SongContextsMutationResponse(songs, songContextsBySong(contexts), contextTypes, contextLabels, successMsg, errMsg))
 }
 
 func (sc *SchedulingController) DeleteSongContext(c *fiber.Ctx) error {
@@ -156,5 +222,5 @@ func (sc *SchedulingController) DeleteSongContext(c *fiber.Ctx) error {
 	songs, _ := fetchActiveSongs(middleware.RequestContext(c), orgID)
 	contextTypes, _ := sc.store.ListSongContextTypes(c.Context(), orgID)
 
-	return render(c, views.SongContextsTable(contexts, songTitleMap(songs), contextTypeLabelMap(contextTypes), errMsg))
+	return render(c, views.SongContextsMutationResponse(songs, songContextsBySong(contexts), contextTypes, contextTypeLabelMap(contextTypes), "", errMsg))
 }
