@@ -495,6 +495,12 @@ func (sc *SchedulingController) RegisterRoutes(router fiber.Router) {
 	group.Post("/song-roles", sc.CreateSongRole)
 	group.Delete("/song-roles/:id", sc.DeleteSongRole)
 
+	group.Get("/song-contexts", sc.SongContextsPage)
+	group.Post("/song-context-types", sc.CreateSongContextType)
+	group.Delete("/song-context-types/:id", sc.DeleteSongContextType)
+	group.Post("/song-contexts", sc.CreateSongContext)
+	group.Delete("/song-contexts/:id", sc.DeleteSongContext)
+
 	group.Get("/song-tags", sc.SongTagsPage)
 	group.Post("/song-tags", sc.CreateSongTag)
 	group.Post("/song-tags/bulk", sc.BulkCreateSongTag)
@@ -545,6 +551,7 @@ func (sc *SchedulingController) RegisterRoutes(router fiber.Router) {
 	group.Post("/build/:service_type_id/:plan_id/song-tags", sc.QuickAddSongTag)
 	group.Post("/build/:service_type_id/:plan_id/song-relationships", sc.QuickAddSongRelationship)
 	group.Post("/build/:service_type_id/:plan_id/song-roles", sc.QuickAddSongRole)
+	group.Post("/build/:service_type_id/:plan_id/song-contexts", sc.QuickAddSongContext)
 	group.Post("/build/:service_type_id/:plan_id/song-vocal-range", sc.QuickAddSongVocalRange)
 	group.Post("/build/:service_type_id/:plan_id/person-relationships", sc.QuickAddPersonRelationship)
 	group.Post("/build/:service_type_id/:plan_id/position-preferences", sc.QuickAddPositionPreference)

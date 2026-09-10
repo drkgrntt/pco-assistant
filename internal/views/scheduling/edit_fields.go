@@ -1,6 +1,9 @@
 package scheduling
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"strconv"
+)
 
 // editFieldsAttr JSON-encodes a setup-page row's current values for its
 // Edit button's data-edit-fields attribute (see editRow in
@@ -48,4 +51,17 @@ func displayNameOrID(names map[string]string, id string) string {
 		return name
 	}
 	return id
+}
+
+// displayLabelOrID is displayNameOrID's int64-keyed counterpart -
+// song_context_types uses a surrogate BIGSERIAL id as its join key (unlike
+// song_role_types' human-legible string code), so resolving a context
+// assignment's stored id back to its label needs an int64 lookup instead of
+// a string one. Falls back to the id's decimal string form, same "raw code
+// if it doesn't resolve" convention as displayNameOrID.
+func displayLabelOrID(labels map[int64]string, id int64) string {
+	if label, ok := labels[id]; ok {
+		return label
+	}
+	return strconv.FormatInt(id, 10)
 }

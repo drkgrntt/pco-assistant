@@ -1644,6 +1644,34 @@ function toggleRoleFilter(el) {
   }
 }
 
+// toggleContextFilter is toggleRoleFilter's literal copy for context
+// filter chips (set_builder.templ) - targets .context-filter/
+// #candidate-context-filter instead of .role-filter/#candidate-role-filter
+// so the two stay independent toggle groups (a song can be filtered by
+// role and context at once), not one shared "clear everything" group.
+function toggleContextFilter(el) {
+  var wasActive = el.classList.contains("active");
+  document.querySelectorAll(".context-filter").forEach(function (btn) {
+    btn.classList.remove("active");
+  });
+  var contextInput = document.getElementById("candidate-context-filter");
+  if (!wasActive) {
+    el.classList.add("active");
+    if (contextInput) {
+      contextInput.value = el.dataset.context;
+    }
+  } else if (contextInput) {
+    contextInput.value = "";
+  }
+
+  openCandidatesSection();
+
+  var searchInput = document.getElementById("candidate-search");
+  if (searchInput && window.htmx) {
+    htmx.trigger(searchInput, "search");
+  }
+}
+
 // applyTagFilter is the "browse by tag" chips' click handler
 // (set_builder.templ). Unlike toggleRoleFilter above, a tag chip isn't a
 // persistent exclusive toggle with a hidden filter input of its own - it's
@@ -1666,14 +1694,15 @@ function applyTagFilter(el) {
 }
 
 // clearCandidateSearch is the "Browse all songs" search box's clear button
-// (set_builder.templ) - resets both the typed search text and any active
-// role filter (mirroring toggleRoleFilter's own "turn it back off" branch)
-// back to "", then re-triggers the same search request, landing back on
-// CandidateSearchResults' empty-query-and-role "browse titles" state.
-// Without this, clicking a role filter or tag chip (which both just type
-// into #candidate-search / set the hidden role input) left no way back to
-// that list short of manually erasing the search box - not obvious, and
-// didn't clear a role filter's own "active" button styling either.
+// (set_builder.templ) - resets the typed search text and any active
+// role/context filter (mirroring toggleRoleFilter/toggleContextFilter's own
+// "turn it back off" branch) back to "", then re-triggers the same search
+// request, landing back on CandidateSearchResults' empty-query/role/context
+// "browse titles" state. Without this, clicking a role filter, context
+// filter, or tag chip (which just type into #candidate-search / set a
+// hidden filter input) left no way back to that list short of manually
+// erasing the search box - not obvious, and didn't clear either filter's
+// own "active" button styling either.
 function clearCandidateSearch() {
   var searchInput = document.getElementById("candidate-search");
   if (!searchInput) {
@@ -1686,6 +1715,14 @@ function clearCandidateSearch() {
     roleInput.value = "";
   }
   document.querySelectorAll(".role-filter").forEach(function (btn) {
+    btn.classList.remove("active");
+  });
+
+  var contextInput = document.getElementById("candidate-context-filter");
+  if (contextInput) {
+    contextInput.value = "";
+  }
+  document.querySelectorAll(".context-filter").forEach(function (btn) {
     btn.classList.remove("active");
   });
 

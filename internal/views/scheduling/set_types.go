@@ -173,6 +173,14 @@ type SetBuilderData struct {
 	TagCategories     []scheduling.SongTagCategory
 	RelationshipTypes []scheduling.SongRelationshipType
 	RoleTypes         []scheduling.SongRoleType
+	// ContextTypes is this org's own list of song contexts ("Big church,"
+	// "Youth," ...) - see song_contexts.go and RoleTypes' own doc comment
+	// above, which this mirrors exactly: backs both the candidate list's
+	// context-filter chips (set_builder.templ) and the quick-add panel's
+	// "Tag with context" picker. Empty until the org has named at least one
+	// context on the Song Contexts setup page - unlike RoleTypes, there are
+	// no seeded defaults (see docs/plans/shipped/song-context-tags-plan.md).
+	ContextTypes []scheduling.SongContextType
 
 	// RosterPersonOptions is who can be picked as a song leader
 	// (SetSongView.LeaderPersonID) - this plan's own local roster
@@ -647,6 +655,14 @@ type CandidateSongView struct {
 	// display as badges.
 	Tags     []SongTagView
 	TagsAttr string
+	// Contexts is this song's assigned contexts ("Big church," "Youth,"
+	// ...), for display as badges - see song_contexts.go and
+	// SetBuilderData.ContextTypes. ContextsAttr is the space-joined,
+	// string-formatted context_type_id list (SongContextView.ID), matched
+	// server-side against a context-filter query param by
+	// candidateMatchesContext - the context equivalent of RolesAttr.
+	Contexts     []SongContextView
+	ContextsAttr string
 }
 
 // HasMeta reports whether c has anything at all to show in
@@ -660,6 +676,7 @@ func (c CandidateSongView) HasMeta() bool {
 		c.ArrangementInfo != "" ||
 		len(c.Roles) > 0 ||
 		len(c.Tags) > 0 ||
+		len(c.Contexts) > 0 ||
 		len(c.ConflictTitles) > 0 ||
 		c.RecentlyRepeated
 }
@@ -681,6 +698,18 @@ type SongTagView struct {
 // change needed) is filterable and visible immediately, not just storable.
 type SongRoleView struct {
 	Code  string
+	Label string
+}
+
+// SongContextView is one context assigned to a song ("Big church," "Youth,"
+// ...) - already resolved to its display label (see contextTypeLabelMap in
+// the controller) rather than the raw int64 id - the context equivalent of
+// SongRoleView. ID is kept (unlike SongRoleView's Code, which is the role
+// itself) since song_context_types uses a surrogate integer id, not a
+// human-legible code, so it's what the context-filter buttons/edit forms
+// need to reference this context by.
+type SongContextView struct {
+	ID    int64
 	Label string
 }
 

@@ -389,15 +389,15 @@ func (sc *SchedulingController) ReplaceSetSong(c *fiber.Ctx) error {
 }
 
 // QuickAddSongTag/QuickAddSongRelationship/QuickAddSongRole/
-// QuickAddSongVocalRange back the set builder's "Quick add" panel
-// (set_builder.templ) - the same setup-level entities as
-// SongTagsPage/RelationshipsPage/SongRolesPage/SongVocalRangePage's own
-// create forms (same Store methods, same params/parsing), just posted
-// from the build page and re-rendering SetBuilderBody instead of a
-// setup-page table, so e.g. a newly-tagged song's badge shows up
-// immediately on its candidate row without leaving this page.
-// Deliberately create-only - see the build-page redesign plan for why
-// editing these stays the dedicated setup pages' job.
+// QuickAddSongContext/QuickAddSongVocalRange back the set builder's "Quick
+// add" panel (set_builder.templ) - the same setup-level entities as
+// SongTagsPage/RelationshipsPage/SongRolesPage/SongContextsPage/
+// SongVocalRangePage's own create forms (same Store methods, same
+// params/parsing), just posted from the build page and re-rendering
+// SetBuilderBody instead of a setup-page table, so e.g. a newly-tagged
+// song's badge shows up immediately on its candidate row without leaving
+// this page. Deliberately create-only - see the build-page redesign plan
+// for why editing these stays the dedicated setup pages' job.
 
 func (sc *SchedulingController) QuickAddSongTag(c *fiber.Ctx) error {
 	orgID := middleware.CurrentOrganizationID(c)
@@ -441,6 +441,26 @@ func (sc *SchedulingController) QuickAddSongRole(c *fiber.Ctx) error {
 	if err := c.BodyParser(&body); err != nil {
 		errMsg = err.Error()
 	} else if _, err := sc.store.CreateSongRole(c.Context(), orgID, body); err != nil {
+		errMsg = err.Error()
+	}
+
+	return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(middleware.RequestContext(c), orgID, serviceTypeID, planID, errMsg)))
+}
+
+// QuickAddSongContext is QuickAddSongRole's exact counterpart for song
+// contexts (see song_contexts.go) - same shape, same
+// setup-level-entity-posted-from-the-build-page reasoning as
+// QuickAddSongTag/QuickAddSongRelationship/QuickAddSongRole above.
+func (sc *SchedulingController) QuickAddSongContext(c *fiber.Ctx) error {
+	orgID := middleware.CurrentOrganizationID(c)
+	serviceTypeID := c.Params("service_type_id")
+	planID := c.Params("plan_id")
+
+	var body scheduling.CreateSongContextParams
+	errMsg := ""
+	if err := c.BodyParser(&body); err != nil {
+		errMsg = err.Error()
+	} else if _, err := sc.store.CreateSongContext(c.Context(), orgID, body); err != nil {
 		errMsg = err.Error()
 	}
 

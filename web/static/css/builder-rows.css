@@ -14,11 +14,21 @@
   margin-block: var(--space-2);
 }
 
-.role-filter.active {
+.role-filter.active,
+.context-filter.active {
   background: var(--accent-solid);
   color: white;
   border-color: var(--accent-solid);
 }
+
+/* .context-filters reuses .role-filters' own flex/gap layout (see the
+   markup in set_builder.templ, which applies both classes to the same
+   wrapper) - no layout rule needed here beyond the shared ".context-filter:
+   active" look above, kept as its own selector (rather than folding
+   context buttons into .role-filter) so toggleRoleFilter's own
+   querySelectorAll(".role-filter") in scheduling.js can't clear a context
+   chip's active state (or vice versa) - two independent toggle groups, not
+   one shared one. */
 
 #candidate-search {
   width: 100%;

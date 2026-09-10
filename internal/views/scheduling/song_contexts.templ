@@ -1,0 +1,273 @@
+package scheduling
+
+import (
+	"fmt"
+	"strconv"
+
+	pco "github.com/drkgrntt/go-pco"
+
+	"pco-assistant/internal/scheduling"
+	"pco-assistant/internal/views"
+	"pco-assistant/internal/views/components"
+)
+
+// SongContexts is the setup page for "where this song gets sung" (big
+// church, youth, other campus, or whatever an org actually calls its own
+// contexts) - see docs/plans/shipped/song-context-tags-plan.md. Unlike
+// every other setup page in this package, this one stacks two CRUD
+// surfaces on a single page: "Your contexts" (song_context_types - this
+// app's first per-org *editable* lookup, so there's no dedicated setup
+// page precedent to mirror for it) and "Tag a song" (song_contexts,
+// identical shape to SongRolesTable/song_roles.templ, just keyed by an
+// int64 context_type_id instead of a string role code).
+templ SongContexts(personName, organizationName string, songs []pco.SongData, contextTypes []scheduling.SongContextType, contexts []scheduling.SongContext, songTitles map[string]string, contextLabels map[int64]string, errMsg string) {
+	@views.Layout("Song Contexts", personName, organizationName) {
+		@songContextsHelp()
+		<h1>Song Contexts</h1>
+		<p class="muted">Mark where a song gets sung - big church, youth, another campus, whatever fits your church - so it's filterable while building a set.</p>
+		<h2>Your contexts</h2>
+		<p class="muted">Name the contexts your church actually uses. Start here - you'll pick from this list below.</p>
+		<form
+			id="song-context-type-form"
+			class="inline"
+			hx-post="/scheduling/song-context-types"
+			hx-target="#song-context-types-list"
+			hx-swap="outerHTML"
+			hx-on::after-request="if(event.detail.successful && event.detail.elt === this) resetSetupForm(this)"
+		>
+			<input type="hidden" name="id"/>
+			<label>
+				Context
+				<input type="text" name="label" placeholder="e.g. Big church, Youth, Downtown campus" required/>
+			</label>
+			<button type="submit" class="primary">Add</button>
+			<button type="button" class="cancel-edit" onclick="cancelSetupEdit(this)" hidden>Cancel</button>
+		</form>
+		@SongContextTypesList(contextTypes, "")
+		<h2>Tag a song</h2>
+		<form
+			id="song-context-form"
+			class="inline"
+			hx-post="/scheduling/song-contexts"
+			hx-target="#song-contexts-table"
+			hx-swap="outerHTML"
+			hx-on::after-request="if(event.detail.successful && event.detail.elt === this) resetSetupForm(this)"
+		>
+			<input type="hidden" name="id"/>
+			<label>
+				Song
+				<select name="song_id" required>
+					<option value="" selected disabled>Choose a song</option>
+					for _, song := range songs {
+						<option value={ song.ID }>{ song.Attributes.Title }</option>
+					}
+				</select>
+			</label>
+			<label>
+				Context
+				<select name="context_type_id" id="song-context-select" required>
+					<option value="" selected disabled>Choose a context</option>
+					@contextTypeOptions(contextTypes)
+				</select>
+			</label>
+			<button type="submit" class="primary">Add</button>
+			<button type="button" class="cancel-edit" onclick="cancelSetupEdit(this)" hidden>Cancel</button>
+		</form>
+		@SongContextsTable(contexts, songTitles, contextLabels, errMsg)
+	}
+}
+
+// contextTypeOptions is the <option> list shared by the "Tag a song" form's
+// initial render and its out-of-band refresh (songContextSelectOOB) - kept
+// as its own component so the two can never drift out of sync with each
+// other, the same "one component, two render sites" shape as
+// songBadgeExtras (set_builder.templ).
+templ contextTypeOptions(contextTypes []scheduling.SongContextType) {
+	for _, t := range contextTypes {
+		<option value={ strconv.FormatInt(t.ID, 10) }>{ t.Label }</option>
+	}
+}
+
+// songContextSelectOOB refreshes the "Tag a song" form's own context
+// <select> out-of-band - included in SongContextTypesMutationResponse
+// (sets_contexts.go) so a context type just created (or renamed) is
+// immediately reflected there, even though the primary swap target for
+// that same response is #song-context-types-list, not this form. Without
+// this, a newly-added context would be invisible to "Tag a song" until a
+// full page reload - the entire point of stacking these two sections on
+// one page is picking a context you just named, right below it.
+templ songContextSelectOOB(contextTypes []scheduling.SongContextType) {
+	<select name="context_type_id" id="song-context-select" hx-swap-oob="true">
+		<option value="" selected disabled>Choose a context</option>
+		@contextTypeOptions(contextTypes)
+	</select>
+}
+
+// SongContextTypesList is both the initial-render fragment and the htmx
+// swap target (id="song-context-types-list") for CreateSongContextType/
+// DeleteSongContextType - see SongRolesTable's doc comment for why errMsg
+// lives inside the swapped fragment rather than the page around it. A
+// plain components.TableWrap (not SortableTableWrap): there's nothing to
+// sort by yet, same reasoning as the source plan doc's own note on this.
+templ SongContextTypesList(contextTypes []scheduling.SongContextType, errMsg string) {
+	<div id="song-context-types-list">
+		if errMsg != "" {
+			<p class="error">{ errMsg }</p>
+		}
+		@components.TableWrap() {
+			<thead>
+				<tr>
+					<th>Context</th>
+					<th></th>
+				</tr>
+			</thead>
+			<tbody>
+				for _, t := range contextTypes {
+					<tr>
+						<td>{ t.Label }</td>
+						<td>
+							<button
+								class="icon-btn"
+								aria-label="Edit context"
+								title="Edit context"
+								data-edit-form="song-context-type-form"
+								data-edit-fields={ editFieldsAttr(map[string]string{
+									"id":    strconv.FormatInt(t.ID, 10),
+									"label": t.Label,
+								}) }
+								onclick="editRow(this)"
+							>
+								@components.IconEdit()
+							</button>
+							<button
+								class="danger icon-btn"
+								aria-label="Delete context"
+								title="Delete context"
+								hx-delete={ fmt.Sprintf("/scheduling/song-context-types/%d", t.ID) }
+								hx-target="#song-context-types-list"
+								hx-swap="outerHTML"
+								hx-confirm={ fmt.Sprintf("Delete %q? This removes it from every song currently tagged with it - that can't be undone.", t.Label) }
+							>
+								@components.IconRemove()
+							</button>
+						</td>
+					</tr>
+				}
+				if len(contextTypes) == 0 {
+					<tr>
+						<td colspan="2" class="muted">No contexts yet - add one above (e.g. "Big church," "Youth") before you can tag a song with it.</td>
+					</tr>
+				}
+			</tbody>
+		}
+	</div>
+}
+
+// SongContextTypesMutationResponse is CreateSongContextType/
+// DeleteSongContextType's htmx response: SongContextTypesList as the
+// primary swap target, plus songContextSelectOOB's own out-of-band refresh
+// so the "Tag a song" form's picker stays in sync - see that function's
+// doc comment. Kept separate from SongContextTypesList itself so SongContexts'
+// initial full-page render (which calls SongContextTypesList directly, and
+// already renders the "Tag a song" select from the same up-to-date data)
+// doesn't render the select twice.
+templ SongContextTypesMutationResponse(contextTypes []scheduling.SongContextType, errMsg string) {
+	@SongContextTypesList(contextTypes, errMsg)
+	@songContextSelectOOB(contextTypes)
+}
+
+// SongContextsTable is both the initial-render fragment and the htmx swap
+// target (id="song-contexts-table") for CreateSongContext/DeleteSongContext
+// - a straight structural mirror of SongRolesTable, just resolving a
+// context_type_id through contextLabels (displayLabelOrID, the int64-keyed
+// counterpart of displayNameOrID) instead of a role code through
+// roleLabels.
+templ SongContextsTable(contexts []scheduling.SongContext, songTitles map[string]string, contextLabels map[int64]string, errMsg string) {
+	<div id="song-contexts-table">
+		if errMsg != "" {
+			<p class="error">{ errMsg }</p>
+		}
+		@components.SortableTableWrap() {
+			<thead>
+				<tr>
+					<th>Song</th>
+					<th>Context</th>
+					<th></th>
+				</tr>
+			</thead>
+			<tbody>
+				for _, sc := range contexts {
+					<tr>
+						<td>
+							if title, ok := songTitles[sc.SongID]; ok {
+								{ title }
+							} else {
+								{ sc.SongID }
+							}
+						</td>
+						<td>{ displayLabelOrID(contextLabels, sc.ContextTypeID) }</td>
+						<td>
+							<button
+								class="icon-btn"
+								aria-label="Edit tag"
+								title="Edit tag"
+								data-edit-form="song-context-form"
+								data-edit-fields={ editFieldsAttr(map[string]string{
+									"id":              strconv.FormatInt(sc.ID, 10),
+									"song_id":         sc.SongID,
+									"context_type_id": strconv.FormatInt(sc.ContextTypeID, 10),
+								}) }
+								onclick="editRow(this)"
+							>
+								@components.IconEdit()
+							</button>
+							<button
+								class="danger icon-btn"
+								aria-label="Remove tag"
+								title="Remove tag"
+								hx-delete={ fmt.Sprintf("/scheduling/song-contexts/%d", sc.ID) }
+								hx-target="#song-contexts-table"
+								hx-swap="outerHTML"
+								hx-confirm="Remove this tag?"
+							>
+								@components.IconRemove()
+							</button>
+						</td>
+					</tr>
+				}
+				if len(contexts) == 0 {
+					<tr>
+						<td colspan="3" class="muted">No songs tagged yet - tag a song with a context so it's filterable while building a set for that context.</td>
+					</tr>
+				}
+			</tbody>
+		}
+	</div>
+}
+
+// songContextsHelp is this page's Help-triggered dialog - see
+// songRelationshipsHelp's own doc comment (relationships.templ) for the
+// full reasoning shared by every setup-page help dialog, and songRolesHelp's
+// own doc comment (song_roles.templ) for this specific chain. This is page
+// 3 of that chain (Song Relationships -> Song Roles -> here -> Song Tags ->
+// ...) - slotted in between Song Roles and Song Tags since they're the
+// closest sibling concept to both (small classifications that drive
+// set-builder filtering): Song Roles' own "Next" link now points here, and
+// this page's own "Next" link points at Song Tags, today's target.
+templ songContextsHelp() {
+	<dialog id="song-contexts-help" class="tour-dialog page-help-dialog">
+		<div class="tour-step">
+			<h2>Song Contexts</h2>
+			<p>
+				Mark where a song gets sung - big church, youth, another campus,
+				whatever fits your church. Build uses these to filter the song list
+				down to what actually belongs in a given context.
+			</p>
+		</div>
+		<p class="muted tour-footnote">Need this again later? Look for Help at the bottom of any page.</p>
+		<div class="tour-actions">
+			<a class="button" href="/scheduling/song-tags" onclick="setPageHelpForce()">Next: Song Tags →</a>
+			<button type="button" class="button primary" onclick="closeHelpDialog('song-contexts-help')">Got it</button>
+		</div>
+	</dialog>
+}

@@ -213,7 +213,7 @@ func (hc *HomeController) buildHomeData(ctx context.Context, organizationID stri
 }
 
 // buildOnboardingChecklist builds the home page's setup checklist (see
-// HomeData.Onboarding's doc comment) - eight cheap local-DB existence
+// HomeData.Onboarding's doc comment) - nine cheap local-DB existence
 // checks (not PCO calls, so no rate-limit concern per
 // docs/pco-api-risks.md), one per setup category, run sequentially since
 // each is a single indexed EXISTS query, not worth fanning out via
@@ -228,6 +228,7 @@ func (hc *HomeController) buildOnboardingChecklist(ctx context.Context, organiza
 	store := hc.schedulingController.store
 	hasSongRels, _ := store.HasAnySongRelationships(ctx, organizationID)
 	hasSongRoles, _ := store.HasAnySongRoles(ctx, organizationID)
+	hasSongContexts, _ := store.HasAnySongContexts(ctx, organizationID)
 	hasSongTags, _ := store.HasAnySongTags(ctx, organizationID)
 	hasSongVocalRanges, _ := store.HasAnySongVocalRanges(ctx, organizationID)
 	hasSongPersonPrefs, _ := store.HasAnySongPersonPreferences(ctx, organizationID)
@@ -242,6 +243,7 @@ func (hc *HomeController) buildOnboardingChecklist(ctx context.Context, organiza
 				Items: []views.OnboardingItem{
 					{Label: "Song relationships", Description: "Flows well, same theme, or avoid pairing.", Href: "/scheduling/song-relationships", Done: hasSongRels, Trackable: true},
 					{Label: "Song roles", Description: "Opener, response, or any role you add.", Href: "/scheduling/song-roles", Done: hasSongRoles, Trackable: true},
+					{Label: "Song contexts", Description: "Big church, youth, another campus - wherever a song actually belongs.", Href: "/scheduling/song-contexts", Done: hasSongContexts, Trackable: true},
 					{Label: "Song tags", Description: "Theme, scripture, and idea tags for search and filtering.", Href: "/scheduling/song-tags", Done: hasSongTags, Trackable: true},
 					{Label: "Song vocal range", Description: "Each song's sung range, so a mismatch gets caught before rehearsal.", Href: "/scheduling/song-vocal-range", Done: hasSongVocalRanges, Trackable: true},
 				},

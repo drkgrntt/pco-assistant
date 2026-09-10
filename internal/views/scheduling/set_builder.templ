@@ -543,7 +543,7 @@ templ songCandidateMeta(cand CandidateSongView) {
 	if cand.RecentlyRepeated {
 		@components.ConflictBadge("sung in each of the last two plans")
 	}
-	{{ extrasCount := len(cand.Roles) + len(cand.Tags) }}
+	{{ extrasCount := len(cand.Roles) + len(cand.Contexts) + len(cand.Tags) }}
 	if extrasCount > 0 && candidateAlwaysVisibleBadgeCount(cand)+extrasCount > badgeCollapseThreshold {
 		@components.Disclosure(
 			"badge-overflow",
@@ -579,13 +579,16 @@ func candidateAlwaysVisibleBadgeCount(cand CandidateSongView) int {
 }
 
 // candidateBadgeExtras is songCandidateMeta's own collapsible-extras group
-// - role and tag badges, the two kinds a not-yet-added song can carry
+// - role, context, and tag badges, the kinds a not-yet-added song can carry
 // several of. See songBadgeExtras' own doc comment (set_builder.templ) for
 // why this is one component rendered either inline or inside the "+N
 // more" Disclosure's popup, never two separate copies.
 templ candidateBadgeExtras(cand CandidateSongView) {
 	for _, role := range cand.Roles {
 		@components.Badge("", role.Label)
+	}
+	for _, context := range cand.Contexts {
+		@components.Badge("", context.Label)
 	}
 	for _, tag := range cand.Tags {
 		@components.BadgeTitled("tag-badge", tag.Value, tag.Category)
@@ -682,11 +685,11 @@ templ CandidateDetails(cand CandidateSongView, errMsg string) {
 //   - Normal results.
 //   - Capped results: the same rows, plus a trailing hint that more exist -
 //     see BuildCandidatesSearch's candidateSearchLimit.
-templ CandidateSearchResults(serviceTypeID, planID string, candidates []CandidateSongView, query, roleFilter string, totalMatches int, capped bool, browsable []SongOptionView, errMsg string) {
+templ CandidateSearchResults(serviceTypeID, planID string, candidates []CandidateSongView, query, roleFilter, contextFilter string, totalMatches int, capped bool, browsable []SongOptionView, errMsg string) {
 	if errMsg != "" {
 		<li class="error">{ errMsg }</li>
 	}
-	if query == "" && roleFilter == "" {
+	if query == "" && roleFilter == "" && contextFilter == "" {
 		<li class="muted">
 			Type to search your song library, or browse:
 			if len(browsable) > 0 {
@@ -715,7 +718,7 @@ templ CandidateSearchResults(serviceTypeID, planID string, candidates []Candidat
 					hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/candidates/%s/archive", serviceTypeID, planID, cand.SongID) }
 					hx-target="#set-candidates"
 					hx-swap="innerHTML"
-					hx-include="#candidate-search, #candidate-role-filter"
+					hx-include="#candidate-search, #candidate-role-filter, #candidate-context-filter"
 					hx-confirm={ fmt.Sprintf("Archive %q in Planning Center? It won't be deleted, just hidden - you (or anyone with PCO access) can unhide it there anytime.", cand.Title) }
 					aria-label="Archive song"
 					title="Archive song"
@@ -1176,6 +1179,29 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 			}
 		</div>
 		<!--
+			Context filter chips - same server-driven filtering idiom as the
+			role filters just above (toggleContextFilter, scheduling.js, is a
+			literal copy of toggleRoleFilter targeting
+			.context-filter/#candidate-context-filter instead of
+			.role-filter/#candidate-role-filter), generated from data.ContextTypes
+			(song_context_types - an org's own list, see the Song Contexts setup
+			page) rather than a fixed set of buttons. Sits in this same "Find
+			songs to add" filter area rather than a second row competing for
+			attention - grouped under its own small "Context:" label so it
+			reads as a distinct axis from the role filters above it, not more
+			of the same list. Hidden entirely until the org has actually named
+			a context (data.ContextTypes empty otherwise, unlike RoleTypes,
+			which always has at least the two seeded defaults).
+		-->
+		if len(data.ContextTypes) > 0 {
+			<div class="role-filters context-filters">
+				<span class="muted">Context:</span>
+				for _, ct := range data.ContextTypes {
+					<button type="button" class="context-filter" data-context={ fmt.Sprintf("%d", ct.ID) } onclick="toggleContextFilter(this)">{ ct.Label }</button>
+				}
+			</div>
+		}
+		<!--
 			"Browse by tag" - pure discoverability, not a new filter
 			mechanism. candidateMatchesSearch (sets_builder.go) already matches
 			typed search text against tag values, not just titles, so typing an
@@ -1213,20 +1239,23 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 			</div>
 		}
 		<!--
-			The search box and role filters both feed one server-driven
-			search request (BuildCandidatesSearch) rather than filtering an
-			already-rendered list client-side - see that handler's doc
-			comment for why (a library of hundreds of songs otherwise means
-			hundreds of rich rows computed and rendered on every Build page
-			load, whether or not this section is even open). The role filter
-			has no form control of its own to carry its value along with the
-			search box's own request, so it's mirrored into this hidden
-			input (kept in sync by toggleRoleFilter) and pulled in via
-			hx-include; "search" is a synthetic event name (see
-			htmx.trigger in toggleRoleFilter), not a real DOM search event,
-			since this is a plain text input, not type="search".
+			The search box and role/context filters all feed one
+			server-driven search request (BuildCandidatesSearch) rather than
+			filtering an already-rendered list client-side - see that
+			handler's doc comment for why (a library of hundreds of songs
+			otherwise means hundreds of rich rows computed and rendered on
+			every Build page load, whether or not this section is even
+			open). Neither filter has a form control of its own to carry its
+			value along with the search box's own request, so each is
+			mirrored into its own hidden input (kept in sync by
+			toggleRoleFilter/toggleContextFilter respectively) and pulled in
+			via hx-include; "search" is a synthetic event name (see
+			htmx.trigger in toggleRoleFilter/toggleContextFilter), not a real
+			DOM search event, since this is a plain text input, not
+			type="search".
 		-->
 		<input type="hidden" id="candidate-role-filter" name="role" value=""/>
+		<input type="hidden" id="candidate-context-filter" name="context" value=""/>
 		<div class="search-bar">
 			<input
 				type="text"
@@ -1238,7 +1267,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 				hx-trigger="input changed delay:300ms, search"
 				hx-target="#set-candidates"
 				hx-swap="innerHTML"
-				hx-include="#candidate-role-filter"
+				hx-include="#candidate-role-filter, #candidate-context-filter"
 				oninput="openCandidatesSection()"
 			/>
 			<!--
@@ -1265,7 +1294,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 		-->
 		@collapsibleSection("find-songs-candidates", "Browse all songs", true) {
 			<ul id="set-candidates" class="candidate-list">
-				@CandidateSearchResults(data.ServiceTypeID, data.PlanID, nil, "", "", 0, false, data.BrowsableSongs, "")
+				@CandidateSearchResults(data.ServiceTypeID, data.PlanID, nil, "", "", "", 0, false, data.BrowsableSongs, "")
 			</ul>
 		}
 		<!--
@@ -1368,6 +1397,38 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 						</label>
 						<button type="submit" class="primary">Mark role</button>
 					</form>
+				}
+				<!--
+					Only rendered once the org has actually named a context on
+					the Song Contexts setup page (data.ContextTypes) - unlike
+					the role quick-add above, there's nothing selectable
+					otherwise, so showing an unusable empty picker would just
+					be confusing. See QuickAddSongContext (sets_detail.go).
+				-->
+				if len(data.ContextTypes) > 0 {
+					@quickAddItem("Tag with context") {
+						<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/song-contexts", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
+							<label>
+								Song
+								<select name="song_id" required>
+									<option value="" selected disabled>Choose a song</option>
+									for _, song := range data.AllSongs {
+										<option value={ song.ID }>{ song.Attributes.Title }</option>
+									}
+								</select>
+							</label>
+							<label>
+								Context
+								<select name="context_type_id" required>
+									<option value="" selected disabled>Choose a context</option>
+									for _, ct := range data.ContextTypes {
+										<option value={ fmt.Sprintf("%d", ct.ID) }>{ ct.Label }</option>
+									}
+								</select>
+							</label>
+							<button type="submit" class="primary">Tag with context</button>
+						</form>
+					}
 				}
 				@quickAddItem("Set song vocal range") {
 					<!--
