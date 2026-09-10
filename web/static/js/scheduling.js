@@ -1172,7 +1172,7 @@ document.addEventListener("click", function (event) {
 // person_picker.templ for the matching id scheme.
 function selectPerson(el) {
   var suffix = el.dataset.suffix ? "-" + el.dataset.suffix : "";
-  document.getElementById("person-id-input" + suffix).value = el.dataset.personId;
+  setHiddenFieldValue(document.getElementById("person-id-input" + suffix), el.dataset.personId);
   document.getElementById("person-search-input" + suffix).value = el.dataset.personName;
   // Deferred, not synchronous: this handler runs during the click event's
   // target phase (invoked by the clicked .search-result div's own
@@ -1214,17 +1214,53 @@ document.addEventListener("input", function (event) {
   }
 });
 
+// setHiddenFieldValue sets a hidden <input>'s value via JS while preserving
+// its true original default (in data-original-value, captured the first
+// time this runs) for resetSetupForm to restore later.
+//
+// Per the HTML spec's value-sanitization table, hidden inputs (along with
+// submit/reset/button) have value IDL attribute mode "default": .value IS
+// the "value" content attribute - the exact same one .defaultValue reads.
+// So a plain `el.value = x` assignment on one of these doesn't just set the
+// current value, it also silently rewrites what a later native
+// form.reset() treats as "the default" to reset back to (verified against
+// the real HTML spec algorithm and confirmed live: MDN/WHATWG's "default"
+// value mode - true in every engine, not a jsdom quirk). Every hidden field
+// this app fills via JS - the shared "id" field editRow populates (see
+// parseFormID's create/update convention) and a PersonPickerField's hidden
+// person-id input (editRow's own people-fill loop, selectPerson) - hits
+// this exact trap: without capturing/restoring the pre-JS default
+// ourselves, form.reset() "resets" the field right back to whatever was
+// just set instead of its real original (usually empty) value, so the very
+// next create submit on that same form silently reuses stale data (e.g.
+// updates the row that was last edited instead of creating a new one).
+// Regular (non-hidden) fields are unaffected - text/select inputs use
+// value mode "value", where .value and .defaultValue are genuinely
+// separate, so native reset() already handles them correctly.
+function setHiddenFieldValue(el, value) {
+  if (el.dataset.originalValue === undefined) {
+    el.dataset.originalValue = el.value;
+  }
+  el.value = value;
+}
+
 // Shared reset for the setup pages' create/edit forms (song relationships,
 // song/person preferences, song roles, person relationships) - restores a
-// form to its "add a new one" state: native reset() (clears every field,
-// including person pickers - see selectPerson - whose hidden id and
-// visible search box both default back to empty) along with the hidden
-// "id" field that switches the next submit from update back to create,
-// plus the submit button/Cancel affordance out of "editing" mode. Called
-// both after a successful create/update submit (hx-on::after-request
-// below) and from the Cancel button (cancelSetupEdit).
+// form to its "add a new one" state: native reset() for ordinary fields,
+// plus explicit restoration of every hidden field's true original default
+// (see setHiddenFieldValue - native reset() can't do this part itself),
+// including person pickers' hidden id input and the "id" field that
+// switches the next submit from update back to create, plus the submit
+// button/Cancel affordance out of "editing" mode. Called both after a
+// successful create/update submit (hx-on::after-request below) and from
+// the Cancel button (cancelSetupEdit).
 function resetSetupForm(form) {
   form.reset();
+  Array.prototype.forEach.call(form.querySelectorAll("input[type=hidden]"), function (el) {
+    if (el.dataset.originalValue !== undefined) {
+      el.value = el.dataset.originalValue;
+    }
+  });
   form.classList.remove("editing");
   var submitBtn = form.querySelector("button[type=submit]");
   if (submitBtn && submitBtn.dataset.createLabel) {
@@ -1245,7 +1281,11 @@ function applyEditFields(form, fields) {
   Object.keys(fields).forEach(function (name) {
     var el = form.elements.namedItem(name);
     if (el) {
-      el.value = fields[name];
+      if (el.type === "hidden") {
+        setHiddenFieldValue(el, fields[name]);
+      } else {
+        el.value = fields[name];
+      }
     }
   });
 }
@@ -1271,7 +1311,7 @@ function editRow(button) {
     var idInput = document.getElementById("person-id-input" + idSuffix);
     var searchInput = document.getElementById("person-search-input" + idSuffix);
     if (idInput) {
-      idInput.value = people[suffix].id;
+      setHiddenFieldValue(idInput, people[suffix].id);
     }
     if (searchInput) {
       searchInput.value = people[suffix].name;

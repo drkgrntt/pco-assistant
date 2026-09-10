@@ -174,3 +174,19 @@ form.inline.stacked {
     align-self: flex-start;
   }
 }
+
+/* Editing-mode highlight - editRow() (scheduling.js) adds this class when
+   a table row's Edit button fills a setup-page create/edit form to update
+   that row instead of creating a new one; resetSetupForm removes it once
+   the form is back to "add a new one." Before this, the only visual
+   change was the submit button's own label flipping to "Update" plus a
+   Cancel button appearing next to it - both easy to miss, especially once
+   scrolled past - which is exactly the "I thought I was creating a new
+   one" confusion this exists to prevent. A clear border/background wash
+   the whole time .editing is present makes that state hard to miss. */
+form.editing {
+  padding: var(--space-3);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-md);
+  background: var(--accent-subtle);
+}
