@@ -28,6 +28,22 @@ func PositionGroupElementID(teamID, teamPositionName string) string {
 	return fmt.Sprintf("position-group-%08x", h.Sum32())
 }
 
+// TeamGroupElementID is the stable HTML id for one team's whole card
+// (teamGroupCard below) - hashed the same way as PositionGroupElementID,
+// off TeamID alone (a team-group card holds every position for one team,
+// so there's no second axis to fold in the way a position group needs its
+// own team_position_name too). Exported for the same reason
+// PositionGroupElementID is: nothing outside this package currently
+// targets it directly (team-group cards aren't swapped by any scoped
+// mutation - see teamGroupCard's own doc comment), but keeping the id
+// derivation next to its sibling avoids two different hashing conventions
+// for what's conceptually the same kind of id.
+func TeamGroupElementID(teamID string) string {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(teamID))
+	return fmt.Sprintf("team-group-%08x", h.Sum32())
+}
+
 // candidateWarningsElementID is the stable HTML id for one candidate row's
 // on-demand warnings placeholder span (see the candidate-list rendering in
 // positionGroupCard below) - hashed like PositionGroupElementID rather than
@@ -382,6 +398,16 @@ templ RosterBuilderBodyContent(data RosterBuilderData) {
 			}
 		}
 		<!--
+			hideTeamGroup/restoreHiddenTeamGroups (scheduling.js) populate
+			this with one chip per team hidden from this tab, each a "show it
+			again" button - see teamGroupCard's own doc comment for why
+			hiding is a client-only, per-browser thing with nothing server-
+			side backing it. Empty and hidden until JS has something to put
+			in it, so it never renders as a stray empty bar for someone who's
+			never hidden a team.
+		-->
+		<div id="hidden-teams-bar" class="hidden-teams-bar" hidden></div>
+		<!--
 			One card per team (see groupPositionsByTeam), laid out side by
 			side rather than stacked full-width - mirrors Planning Center's
 			own "My Teams" columns, and uses screen width better than a
@@ -392,12 +418,11 @@ templ RosterBuilderBodyContent(data RosterBuilderData) {
 		-->
 		<div class="team-groups-grid">
 			for _, group := range groupPositionsByTeam(data.Positions) {
-				<div class="team-group">
-					<h3 class="team-group-heading">{ group.TeamName }</h3>
+				@teamGroupCard(group) {
 					for _, item := range group.Positions {
 						@positionGroupCard(data.ServiceTypeID, data.PlanID, data.SchedulePreferenceOptions, item.Pos, data.ReadOnly)
 					}
-				</div>
+				}
 			}
 		</div>
 		<!--
@@ -426,6 +451,44 @@ templ RosterBuilderBodyContent(data RosterBuilderData) {
 				</ul>
 			}
 		}
+	</div>
+}
+
+// teamGroupCard is one team's whole card - collapsible and hideable, both
+// purely client-side/per-browser (scheduling.js: toggleCollapse +
+// localStorage for collapse state, the same mechanism every other
+// .collapsible on the site already uses; hideTeamGroup + a separate
+// localStorage list for hiding), not a new server-backed preference. A
+// standing "how I like my own Team tab laid out" setting is personal
+// screen tidiness, not scheduling data - it doesn't need to follow anyone
+// to another device or be visible to teammates, so there's no migration/
+// store method backing either behavior. Always renders open (collapsible,
+// not collapsed by default the way a fully-staffed positionGroupCard is -
+// a whole team disappearing by default would hide real "needs attention"
+// positions inside it) and never hidden server-side - applyStoredHiddenTeamGroups
+// (scheduling.js, run on DOMContentLoaded and after every htmx swap) is
+// what actually hides a previously-hidden team's card again after this
+// renders, the same "server always renders the default, JS reapplies
+// whatever was last chosen" split collapsibleCard's own open param uses
+// for collapse state.
+//
+// data-team-id/data-team-name carry what hideTeamGroup/restoreHiddenTeamGroups
+// need (the id to remember and the name to show on its "show again" chip)
+// without those functions having to parse rendered heading text.
+templ teamGroupCard(group teamPositionGroup) {
+	<div class="team-group collapsible open" id={ TeamGroupElementID(group.TeamID) } data-team-id={ group.TeamID } data-team-name={ group.TeamName }>
+		<h3 class="team-group-heading">
+			<button type="button" class="collapsible-toggle" onclick="toggleCollapse(this)" aria-expanded="true">
+				<span>{ group.TeamName }</span>
+				@components.IconChevronDown()
+			</button>
+			<button type="button" class="icon-btn" aria-label={ "Hide " + group.TeamName + " from this tab" } title="Hide this team's card from this tab" onclick="hideTeamGroup(this)">
+				@components.IconX()
+			</button>
+		</h3>
+		<div class="collapsible-body">
+			{ children... }
+		</div>
 	</div>
 }
 

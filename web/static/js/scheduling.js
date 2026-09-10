@@ -1526,6 +1526,150 @@ function applyStoredCollapsibleState() {
 }
 document.addEventListener("DOMContentLoaded", applyStoredCollapsibleState);
 
+// Hiding a team's whole card off the roster builder's Team tab
+// (teamGroupCard, roster_builder.templ) - a separate, coarser control from
+// collapsing (above): collapsing still shows the card, just shrunk to its
+// heading; hiding removes it from the grid entirely, with a "show it
+// again" chip left behind in #hidden-teams-bar. Same per-browser
+// localStorage-only storage as collapse state (see teamGroupCard's own
+// doc comment for why there's no server-side preference here) but one
+// JSON array under a single key, not one key per team, since - unlike
+// collapse/open, which only ever needs "is this one id open or not" -
+// rebuilding the hidden-teams bar after a reload needs the *whole* list
+// at once.
+var hiddenTeamGroupsKey = "hidden-team-groups";
+
+function readHiddenTeamGroupIDs() {
+  try {
+    var raw = localStorage.getItem(hiddenTeamGroupsKey);
+    var ids = raw ? JSON.parse(raw) : [];
+    return Array.isArray(ids) ? ids : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function writeHiddenTeamGroupIDs(ids) {
+  localStorage.setItem(hiddenTeamGroupsKey, JSON.stringify(ids));
+}
+
+// hideChipID/showTeamGroup below key off teamID (data-team-id), not the
+// card's own hashed element id (TeamGroupElementID) - teamID is what's
+// actually stored in localStorage (a raw PCO id, not a hash worth
+// recomputing client-side just to compare), and what a hidden card's team
+// is actually identified by once it's no longer in the DOM to look up.
+function hideChipID(teamID) {
+  return "hidden-team-chip-" + teamID;
+}
+
+// hideTeamGroup is teamGroupCard's own hide-icon-button handler: records
+// this team's id as hidden, hides its card, and adds a "show it again"
+// chip to #hidden-teams-bar - the only place that bar's chips get created
+// from a live click (restoreHiddenTeamGroups below rebuilds the same
+// chips from localStorage alone, e.g. after a reload, since the card that
+// would otherwise supply data-team-name isn't necessarily still in the
+// DOM to read from at that point either way - both paths build the chip
+// the same way, from whatever team name they have on hand).
+function hideTeamGroup(button) {
+  var card = button.closest(".team-group");
+  if (!card) {
+    return;
+  }
+  var teamID = card.dataset.teamId;
+  var teamName = card.dataset.teamName || teamID;
+
+  var ids = readHiddenTeamGroupIDs();
+  if (ids.indexOf(teamID) === -1) {
+    ids.push(teamID);
+    writeHiddenTeamGroupIDs(ids);
+  }
+
+  card.hidden = true;
+  addHiddenTeamChip(teamID, teamName);
+}
+
+// showTeamGroup is a hidden-teams-bar chip's own click handler - the
+// reverse of hideTeamGroup: drops the id from localStorage, un-hides the
+// card if it's still on the page (it always is on the roster builder
+// itself; harmless no-op if this ever rendered somewhere the card isn't),
+// and removes its own chip.
+function showTeamGroup(teamID) {
+  var ids = readHiddenTeamGroupIDs().filter(function (id) {
+    return id !== teamID;
+  });
+  writeHiddenTeamGroupIDs(ids);
+
+  var card = document.querySelector('.team-group[data-team-id="' + CSS.escape(teamID) + '"]');
+  if (card) {
+    card.hidden = false;
+  }
+
+  var chip = document.getElementById(hideChipID(teamID));
+  if (chip) {
+    chip.remove();
+  }
+
+  updateHiddenTeamsBarVisibility();
+}
+
+function addHiddenTeamChip(teamID, teamName) {
+  var bar = document.getElementById("hidden-teams-bar");
+  if (!bar || document.getElementById(hideChipID(teamID))) {
+    updateHiddenTeamsBarVisibility();
+    return;
+  }
+
+  var chip = document.createElement("button");
+  chip.type = "button";
+  chip.id = hideChipID(teamID);
+  chip.className = "hidden-team-chip";
+  chip.title = "Show " + teamName + "'s card again";
+  chip.textContent = "+ " + teamName;
+  chip.onclick = function () {
+    showTeamGroup(teamID);
+  };
+  bar.appendChild(chip);
+  updateHiddenTeamsBarVisibility();
+}
+
+function updateHiddenTeamsBarVisibility() {
+  var bar = document.getElementById("hidden-teams-bar");
+  if (bar) {
+    bar.hidden = bar.children.length === 0;
+  }
+}
+
+// restoreHiddenTeamGroups is hideTeamGroup's read-back half, the hidden-
+// team equivalent of applyStoredCollapsibleState - run on every page load
+// and, unlike that collapse-state restore, also after every htmx swap
+// (not just DOMContentLoaded): the roster builder's Publish/Discard
+// actions re-render the *whole* #roster-builder-body (see the
+// openCollapsibleIDs comment above), which recreates every .team-group
+// card from scratch and would otherwise silently un-hide a previously
+// hidden team on the very next mutation. Harmless to also run after
+// swaps that touch no .team-group at all (the Songs tab, say) - it just
+// finds nothing to do. Rebuilds #hidden-teams-bar's chips from scratch
+// each time rather than diffing, since a full-body swap is exactly the
+// case where any previously-live chip elements are gone anyway.
+function restoreHiddenTeamGroups() {
+  var bar = document.getElementById("hidden-teams-bar");
+  if (!bar) {
+    return;
+  }
+  bar.innerHTML = "";
+
+  readHiddenTeamGroupIDs().forEach(function (teamID) {
+    var card = document.querySelector('.team-group[data-team-id="' + CSS.escape(teamID) + '"]');
+    if (!card) {
+      return;
+    }
+    card.hidden = true;
+    addHiddenTeamChip(teamID, card.dataset.teamName || teamID);
+  });
+}
+document.addEventListener("DOMContentLoaded", restoreHiddenTeamGroups);
+document.addEventListener("htmx:afterSwap", restoreHiddenTeamGroups);
+
 // Most mutations on the set builder re-render the whole #set-builder-body
 // (see the htmx attributes throughout set_builder.templ), which would
 // otherwise snap every .collapsible back to its default open/closed state
