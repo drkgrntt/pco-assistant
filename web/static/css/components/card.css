@@ -32,11 +32,18 @@
    columns, rather than stacked full-width - most services have 2-4 teams,
    and a single-column stack meant a lot of scrolling to see them all
    (RosterBuilderBodyContent, roster_builder.templ). Degrades to one column
-   on a narrow viewport via auto-fit. */
+   on a narrow viewport via auto-fit. align-items: start (not grid's
+   default stretch) so a collapsed team-group (teamGroupCard,
+   roster_builder.templ) actually shrinks to just its heading instead of
+   being stretched back to match its still-open row-mate's height - same
+   reasoning as .card-columns' own align-items: start below, just not
+   discovered here until a real team-group could actually collapse to test
+   it against. */
 .team-groups-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
   gap: var(--space-4);
+  align-items: start;
 }
 
 /* One card per team (see groupPositionsByTeam, roster_builder.templ) -
