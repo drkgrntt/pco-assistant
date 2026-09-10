@@ -134,6 +134,22 @@ func groupNeededPositions(needed []pco.NeededPositionData, assignments []schedul
 	return out
 }
 
+// positionGroupTeamIDs collects every distinct, non-empty TeamID across
+// groups - the input resolveMissingTeamNames needs to know which teams a
+// roster's own position groups actually reference, independent of
+// whatever shared.TeamInfo happened to already resolve.
+func positionGroupTeamIDs(groups []positionGroup) []string {
+	seen := map[string]bool{}
+	var ids []string
+	for _, g := range groups {
+		if g.TeamID != "" && !seen[g.TeamID] {
+			seen[g.TeamID] = true
+			ids = append(ids, g.TeamID)
+		}
+	}
+	return ids
+}
+
 // unknownTeamSequence is the sort key positionTeamSequence returns for a
 // team id with no entry in teamSequence (its Planning Center lookup
 // failed) - deliberately larger than any real Team.Sequence rather than
@@ -256,6 +272,55 @@ func teamNamesFromIncluded(included []any) map[string]string {
 	return names
 }
 
+// resolveMissingTeamNames backfills teamNames (in place) for every id in
+// teamIDs still missing from it. teamNames is normally populated entirely
+// from shared.TeamInfo (teamInfoFromIncluded, sideloaded on the
+// GetNeededPositions call) - but that call only ever returns a plan's
+// currently *unfilled* positions (see groupNeededPositions' own comment
+// on NeededPosition.Quantity counting down to nothing, not zero), so a
+// team that's fully staffed for this plan never gets sideloaded at all
+// and drops out of shared.TeamInfo entirely, even though
+// groupNeededPositions still correctly keeps its position group (built
+// from local assignments, not from the missing NeededPosition entry).
+// Confirmed live against a real org: Team 62735 ("Vocal Team"), fully
+// staffed, rendered its raw id in the Team tab/glance card before this
+// backfill existed.
+//
+// PCO's Teams API has no where[id] filter the way People does (see
+// personLookupMapForIDs) - GetTeams only lists every team on a service
+// type - so the only way to resolve a missing name is that full list,
+// fetched here just once, only when there's an actual gap to fill (the
+// common, fully-resolved case costs nothing), and reused to backfill
+// every still-missing id at once rather than one GetTeams call per team.
+// Best-effort, same tolerance as resolveMissingTitles (sets_builder.go):
+// a failed fetch just leaves the still-missing ids on titleOrID's raw-id
+// fallback, not a new failure mode.
+func resolveMissingTeamNames(ctx context.Context, serviceTypeID string, teamNames map[string]string, teamIDs []string) {
+	needsBackfill := false
+	for _, id := range teamIDs {
+		if id == "" {
+			continue
+		}
+		if _, ok := teamNames[id]; !ok {
+			needsBackfill = true
+			break
+		}
+	}
+	if !needsBackfill {
+		return
+	}
+
+	teams, err := pco.GetTeams(ctx, serviceTypeID, &pco.TeamsParams{PerPage: 100})
+	if err != nil {
+		return
+	}
+	for _, t := range teams.Data {
+		if t.Attributes.Name != "" {
+			teamNames[t.ID] = t.Attributes.Name
+		}
+	}
+}
+
 // buildRosterBuilderData gathers everything the Team Builder page (and every
 // htmx fragment it swaps after an add/remove action) needs to render - the
 // people equivalent of buildSetBuilderData. Unlike songs, people aren't
@@ -367,6 +432,7 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 		teamNames[id] = info.Name
 		teamSequence[id] = info.Sequence
 	}
+	resolveMissingTeamNames(ctx, serviceTypeID, teamNames, positionGroupTeamIDs(groups))
 
 	// team_position ids aren't stored locally or on NeededPosition (both
 	// only carry the position's name) - resolve name -> id per team,

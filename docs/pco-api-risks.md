@@ -945,3 +945,25 @@ out to 100-200 sequential round trips per load.
   amount of UI than adding a second, roster-scoped search endpoint would
   have been, for a candidate pool that's realistically a handful of names
   per plan anyway.
+- **Fully-staffed teams showed their raw PCO id instead of a name, on the
+  Team Builder page (2026-09-10).** Reported live, against a real org's
+  account: team `62735` ("Vocal Team") rendered as `62735` on both the
+  "Teams, at a glance" card and the Team tab. Root cause was the
+  `include=team` optimization above (2026-09-04 changelog entry): it only
+  sideloads a team when that team has at least one currently-unfilled
+  position, since `GetNeededPositions`' own primary listing is filtered to
+  unfilled slots only - a fully-staffed team never appears in `Needed.Data`
+  at all, so its `Team` resource never appears in `Included` either, even
+  though `groupNeededPositions` still correctly keeps that team's position
+  group (built from local roster assignments, not from the missing
+  `NeededPosition` entry). No backfill existed for this the way
+  `resolveMissingTitles` already covers stale/archived song ids. Fixed
+  with `resolveMissingTeamNames` (`rosters_builder.go`) - a full
+  `GetTeams(..., &pco.TeamsParams{PerPage: 100})` list call (Teams has no
+  `where[id]` filter the way People does, so a full list is the only way
+  to resolve a specific missing id), fetched only when `positionGroupTeamIDs`
+  finds a team id actually missing from the map already built from
+  `TeamInfo` - the common, fully-resolved case still costs nothing. Wired
+  into all three places that independently built a `teamNames`/`teamName`
+  value from `shared.TeamInfo` (`buildRosterBuilderData`,
+  `buildRosterLightData`, `buildRosterPositionGroupData`).
