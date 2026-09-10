@@ -499,6 +499,7 @@ func (sc *SchedulingController) RegisterRoutes(router fiber.Router) {
 	group.Post("/song-context-types", sc.CreateSongContextType)
 	group.Delete("/song-context-types/:id", sc.DeleteSongContextType)
 	group.Post("/song-contexts", sc.CreateSongContext)
+	group.Post("/song-contexts/bulk", sc.BulkCreateSongContext)
 	group.Delete("/song-contexts/:id", sc.DeleteSongContext)
 
 	group.Get("/song-tags", sc.SongTagsPage)
