@@ -46,13 +46,19 @@ import (
 // docs/pco-api-risks.md's include=team finding). TeamInfo is the
 // pre-parsed result of that sideload (see teamInfoFromIncluded,
 // rosters_builder.go), so neither caller needs to touch Needed.Included
-// directly.
+// directly. That sideload only ever covers a plan's currently *unfilled*
+// positions though (GetNeededPositions' own semantics), so a fully-staffed
+// team's TeamInfo entry never arrives this way at all - resolveMissingTeamNames
+// (rosters_builder.go) is the narrower version of that eliminated GetTeams
+// call, brought back as a fallback fetched only when TeamInfo actually has
+// a gap to fill, instead of unconditionally on every roster render.
 //
 // Each PCO response is paired with its own fetch error rather than a
 // single combined one: buildRosterPositionGroupData and buildRosterLightData
 // don't actually agree on which of these failures is worth surfacing in
 // their own errMsg (buildRosterPositionGroupData silently drops a missing
-// TeamInfo entry - the team name just falls back to teamID - while
+// TeamInfo entry - resolveMissingTeamNames covers the common case, teamID
+// itself is still the last resort if even that comes up empty - while
 // buildRosterLightData reports NeededErr, which now also covers a failed
 // team sideload) - keeping the errors separate preserves that existing
 // difference instead of flattening it. It's also why only a fully
@@ -188,12 +194,17 @@ func (sc *SchedulingController) buildRosterPositionGroupData(ctx context.Context
 
 	// One team's own name, for AssignmentView.TeamName (shown on the
 	// sidebar detail card) - resolved from shared.TeamInfo (sideloaded on
-	// the GetNeededPositions call above), falling back to teamID itself if
-	// that team's entry didn't come through (e.g. NeededErr).
-	teamName := teamID
-	if info, ok := shared.TeamInfo[teamID]; ok {
-		teamName = info.Name
+	// the GetNeededPositions call above); resolveMissingTeamNames covers
+	// the case that entry didn't come through (NeededErr, or - far more
+	// commonly - this team being fully staffed, so it never sideloaded at
+	// all; see that function's own doc comment), falling back to teamID
+	// itself only if that backfill also comes up empty.
+	teamNames := map[string]string{}
+	for id, info := range shared.TeamInfo {
+		teamNames[id] = info.Name
 	}
+	resolveMissingTeamNames(ctx, serviceTypeID, teamNames, []string{teamID})
+	teamName := titleOrID(teamNames, teamID)
 
 	var candidates []pco.PersonTeamPositionAssignmentData
 	if posID != "" {
@@ -419,16 +430,20 @@ func (sc *SchedulingController) buildRosterLightData(ctx context.Context, organi
 	}
 	groups := groupNeededPositions(shared.Needed.Data, assignments)
 
-	// Team names/sequence come from shared.TeamInfo (sideloaded on the
-	// GetNeededPositions call above) rather than a separate GetTeams call -
-	// a fetch failure here is already covered by shared.NeededErr, reported
-	// above.
+	// Team names/sequence mostly come from shared.TeamInfo (sideloaded on
+	// the GetNeededPositions call above) rather than a separate GetTeams
+	// call - a fetch failure here is already covered by shared.NeededErr,
+	// reported above. resolveMissingTeamNames below covers the remaining
+	// gap: a fully-staffed team never appears in GetNeededPositions at all
+	// (see that function's own doc comment), so it's never sideloaded here
+	// either.
 	teamNames := map[string]string{}
 	teamSequence := map[string]int{}
 	for id, info := range shared.TeamInfo {
 		teamNames[id] = info.Name
 		teamSequence[id] = info.Sequence
 	}
+	resolveMissingTeamNames(ctx, serviceTypeID, teamNames, positionGroupTeamIDs(groups))
 
 	assignedIDs := assignmentPersonIDs(assignments)
 	names := personNameMapForIDs(ctx, assignedIDs)
