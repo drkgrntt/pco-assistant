@@ -196,6 +196,19 @@ templ accountMenuContent(organizationName string) {
 		<span class="account-org">{ organizationName }</span>
 	}
 	<a href="/account">Account</a>
+	<!--
+		Switch account - prompt=select_account (AuthorizeURL,
+		internal/auth/pco_oauth.go) asks PCO to show its own account
+		picker rather than silently re-approving whatever PCO session
+		cookie the browser already carries, so this works from an
+		already-signed-in state without needing Log out first (see
+		docs/plans/in-progress/pco-account-switching-plan.md). A plain
+		link straight to Start, right next to Log out, rather than
+		relying on someone knowing to click "Sign in" while already
+		signed in - the exact confusing dead end that plan was written
+		to fix.
+	-->
+	<a href="/auth/pco/start">Switch account</a>
 	<form method="post" action="/auth/logout">
 		<button type="submit">Log out</button>
 	</form>

@@ -132,6 +132,25 @@ func (ac *AuthController) Callback(c *fiber.Ctx) error {
 		logger.ErrorContext(middleware.RequestContext(c), "upserting organization failed", "error", err)
 	}
 
+	// End whatever session this browser already had before creating its
+	// new one - switching accounts via Start/AuthorizeURL's prompt=
+	// select_account (rather than an explicit Logout first) would
+	// otherwise leave the old session row live until its 30-day TTL sweep
+	// (DeleteExpiredSessions), during which it keeps counting as a billed
+	// seat for its organization (auth.SeatCounts dedupes by person_id
+	// among all unexpired sessions, not just the one this browser is
+	// actually using) and keeps showing up in that org's Account page
+	// "who's signed in" list. Best-effort and post-token-exchange, same
+	// tolerance/ordering as UpsertOrganization above and Logout's own
+	// DeleteSession call - doing this before the exchange could strand
+	// someone fully logged out over an abandoned/cancelled PCO consent
+	// screen, for a session that was otherwise still perfectly good.
+	if oldToken := c.Cookies(middleware.SessionCookieName); oldToken != "" {
+		if err := ac.store.DeleteSession(c.Context(), oldToken); err != nil {
+			logger.ErrorContext(middleware.RequestContext(c), "deleting previous session on re-sign-in", "error", err)
+		}
+	}
+
 	token, err := ac.store.CreateSession(c.Context(), personID, personName, org.Data.ID, org.Data.Attributes.Name, tokenResult.AccessToken, tokenResult.RefreshToken, tokenResult.ExpiresAt)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
