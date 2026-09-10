@@ -2,6 +2,7 @@ package scheduling
 
 import (
 	"fmt"
+	"hash/fnv"
 
 	pco "github.com/drkgrntt/go-pco"
 
@@ -197,13 +198,33 @@ templ teamStatusRollup(items []positionGroupItem) {
 	}
 }
 
+// TeamGlanceElementID is the stable HTML id for one team's collapsible
+// section within the "Team, at a glance" sidebar card (TeamGlanceList
+// below) - hashed the same way as TeamGroupElementID (roster_builder.templ)
+// and off the same TeamID, but under its own "team-glance-" prefix rather
+// than reusing TeamGroupElementID outright: build.templ renders the Team
+// tab's own team-group cards and this sidebar glance card into the DOM at
+// the same time (only one side is ever `hidden`, per glanceCardShell's own
+// doc comment - toggleBuildTab just flips which one, it doesn't remove the
+// other), so sharing an id between the two would be a real duplicate-id
+// collision, not just a naming coincidence.
+func TeamGlanceElementID(teamID string) string {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(teamID))
+	return fmt.Sprintf("team-glance-%08x", h.Sum32())
+}
+
 // TeamGlanceList is the Team glance card's content (see build.templ) - one
 // line per position, naming who's actually filling it (or "Open" when
 // nobody is yet), the roster equivalent of SongGlanceList. Grouped by team
 // (groupPositionsByTeam, roster_builder.templ - the same grouping the
-// Team tab's own Positions section uses) with a small heading per team,
-// rather than one flat list - a glance card with two or three teams on it
-// read as one undifferentiated pile of positions otherwise. Each assigned
+// Team tab's own Positions section uses), each team wrapped in a
+// collapsibleSection (collapsible.templ) keyed by TeamGlanceElementID so a
+// person who collapses a team they don't need to watch doesn't have to
+// redo that on every reload (toggleCollapse's own localStorage restore
+// handles that automatically, the same as every other collapsible on this
+// page) - a glance card with two or three teams on it read as one
+// undifferentiated pile of positions otherwise. Each assigned
 // person renders on their own line under the position (.glance-assigned,
 // build-page.css) - a column, not a wrapped comma-separated row - for the
 // same avatar-plus-name row shape PersonListItem (components/list_item.
@@ -227,53 +248,54 @@ templ TeamGlanceList(positions []PositionGroupView) {
 		</ul>
 	}
 	for _, group := range groupPositionsByTeam(positions) {
-		<p class="build-glance-team-heading">{ group.TeamName }</p>
-		@teamStatusRollup(group.Positions)
-		<ul class="build-glance-list">
-			for _, item := range group.Positions {
-				{{ pos := item.Pos }}
-				{{ elementID := PositionGroupElementID(pos.TeamID, pos.TeamPositionName) }}
-				<li>
-					<button type="button" class="glance-link" data-position-id={ elementID } onclick="jumpToTeamPosition(this)">
-						{ pos.TeamPositionName }
-					</button>
-					if len(pos.Assigned) > 0 {
-						<div class="glance-assigned">
-							for _, a := range pos.Assigned {
-								<button type="button" class="glance-link muted" data-position-id={ elementID } data-row-id={ fmt.Sprintf("%d", a.ID) } onclick="jumpToTeamPosition(this)">
-									@components.Avatar(a.AvatarURL)
-									{ a.Name }
-									<!--
-										A declined assignment is still the
-										position's assigned row until someone
-										actually removes/replaces it (see
-										assignmentStatusBucket's own staleness
-										note) - this card used to render that
-										name with nothing to distinguish it
-										from an actually-filled position,
-										which read as "someone declined and
-										we lost track of it." Flagging it
-										inline (same badge positionGroupCard's
-										own row already shows) instead of
-										hiding the name outright: the position
-										still needs a human decision either
-										way, and a "who declined" glance is as
-										useful here as it is on the Team tab.
-									-->
-									if assignmentStatusBucket(a.Status) == "Declined" {
-										@statusBadge(a.Status)
-									}
-								</button>
-							}
-						</div>
-					} else {
-						<button type="button" class="glance-link muted" data-position-id={ elementID } onclick="jumpToTeamPosition(this)">
-							Open
+		@collapsibleSection(TeamGlanceElementID(group.TeamID), group.TeamName, true) {
+			@teamStatusRollup(group.Positions)
+			<ul class="build-glance-list">
+				for _, item := range group.Positions {
+					{{ pos := item.Pos }}
+					{{ elementID := PositionGroupElementID(pos.TeamID, pos.TeamPositionName) }}
+					<li>
+						<button type="button" class="glance-link" data-position-id={ elementID } onclick="jumpToTeamPosition(this)">
+							{ pos.TeamPositionName }
 						</button>
-					}
-				</li>
-			}
-		</ul>
+						if len(pos.Assigned) > 0 {
+							<div class="glance-assigned">
+								for _, a := range pos.Assigned {
+									<button type="button" class="glance-link muted" data-position-id={ elementID } data-row-id={ fmt.Sprintf("%d", a.ID) } onclick="jumpToTeamPosition(this)">
+										@components.Avatar(a.AvatarURL)
+										{ a.Name }
+										<!--
+											A declined assignment is still the
+											position's assigned row until someone
+											actually removes/replaces it (see
+											assignmentStatusBucket's own staleness
+											note) - this card used to render that
+											name with nothing to distinguish it
+											from an actually-filled position,
+											which read as "someone declined and
+											we lost track of it." Flagging it
+											inline (same badge positionGroupCard's
+											own row already shows) instead of
+											hiding the name outright: the position
+											still needs a human decision either
+											way, and a "who declined" glance is as
+											useful here as it is on the Team tab.
+										-->
+										if assignmentStatusBucket(a.Status) == "Declined" {
+											@statusBadge(a.Status)
+										}
+									</button>
+								}
+							</div>
+						} else {
+							<button type="button" class="glance-link muted" data-position-id={ elementID } onclick="jumpToTeamPosition(this)">
+								Open
+							</button>
+						}
+					</li>
+				}
+			</ul>
+		}
 	}
 }
 

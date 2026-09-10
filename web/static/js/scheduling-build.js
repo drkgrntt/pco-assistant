@@ -733,6 +733,36 @@ document.addEventListener("htmx:afterSwap", function () {
   });
 });
 
+// applyStoredCollapsibleState (scheduling-collapsible.js) is deliberately
+// DOMContentLoaded-only by its own doc comment's reasoning: every other
+// swap target already carries its own live open/closed state forward via
+// openCollapsibleIDs above, so re-reading localStorage at swap time would
+// just recompute the same thing. The "Team, at a glance" card's per-team
+// sections (TeamGlanceElementID, status_summary.templ) are the one real
+// exception to that: whenever the Songs tab is the one initially active,
+// this card starts out as a bare loading skeleton (build.templ) with no
+// .collapsible elements in it at all, and its real content - the very
+// first time those .collapsible elements exist in the DOM - only arrives
+// later via an hx-swap-oob="true" lazy-load response (rosterGlanceLazyOOB).
+// openCollapsibleIDs' live-DOM-carry-forward can't help there (there's no
+// prior live state on a skeleton to carry), and DOMContentLoaded's own
+// restore already ran before this content existed - so a person's stored
+// collapse choice from an earlier visit never got applied until their
+// *next* full reload happened to land on the Team tab directly. Re-running
+// the same stored-state read-back after every OOB swap fixes this:
+// harmless/idempotent on every later mutation-triggered refresh (the live
+// DOM there already matches localStorage, since every explicit
+// toggleCollapse click writes to it synchronously) and exactly the fix
+// needed for this one first-render case. Wrapped in a closure rather than
+// passed by reference directly (`..., applyStoredCollapsibleState)`) since
+// schedulingJSFiles loads this file before scheduling-collapsible.js -  a
+// bare reference here would resolve before that function exists; deferring
+// the lookup into a callback only actually invoked later avoids that
+// ordering hazard.
+document.addEventListener("htmx:oobAfterSwap", function () {
+  applyStoredCollapsibleState();
+});
+
 // The set builder's "find songs to add" list (see set_builder.templ) is
 // search-driven, not client-side filtered: #candidate-search's own
 // hx-get/hx-trigger (set_builder.templ) fires the actual request to
