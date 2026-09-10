@@ -12,7 +12,7 @@ import (
 
 // quickActionRow renders one hidden quick-action-row/quick-action-panel -
 // a per-row slide-out form (tag/relate/mark-role) opened by
-// openQuickAction (scheduling.js) from the row's own menu, and closed
+// openQuickAction (scheduling-build.js) from the row's own menu, and closed
 // again by the button built in here. Factored out since the set
 // builder's order-of-service table repeats this exact tr/td/panel/
 // heading/close-button skeleton once per action (3x per song row) -
@@ -52,7 +52,7 @@ templ quickAddItem(label string) {
 // matches Planning Center's own "+ Add Item" placement at the very end of
 // the order of service, rather than tucked into a sidebar-style form.
 //
-// Two sibling <tr>s, toggled by toggleAddPlanItemRow (scheduling.js): the
+// Two sibling <tr>s, toggled by toggleAddPlanItemRow (scheduling-build.js): the
 // trigger row starts visible, the form row starts hidden. A successful
 // submit swaps the whole #set-builder-body the same as every other
 // mutation on this page, which naturally resets both rows back to this
@@ -125,7 +125,7 @@ templ addPlanItemRows(serviceTypeID, planID string) {
 // local draft to defer either action to (unlike a set song's own Remove,
 // RemoveSetSong, which only ever touches this app's local draft row).
 // Edit's own data-row-id is set directly on the button rather than relying
-// on openQuickAction's tr.song-row fallback lookup (scheduling.js), which
+// on openQuickAction's tr.song-row fallback lookup (scheduling-build.js), which
 // doesn't match this row's class.
 templ planItemRowActions(serviceTypeID, planID string, row ServiceOrderRow) {
 	<div class="set-song-actions">
@@ -187,7 +187,7 @@ templ planItemEditForm(serviceTypeID, planID string, row ServiceOrderRow) {
 }
 
 // vocalRangeNoteField renders one labeled note-text-input plus its own
-// tap-to-hear play button (playVocalNoteFromInput, scheduling.js) - the
+// tap-to-hear play button (playVocalNoteFromInput, scheduling-vocal-range.js) - the
 // same field+play-button pairing song_vocal_range.templ/vocal_range.templ
 // already use on the dedicated setup pages, factored out here for the
 // Build page's own vocal-range forms (the quick-add panel's singleton form
@@ -222,7 +222,7 @@ templ vocalRangeNoteField(label, fieldName, placeholder, listID, inputID, playLa
 
 // vocalRangeFormFields returns songVocalRange's as-measured
 // reference_key/lowest_note/highest_note as a data-edit-fields-style map
-// (see editFieldsAttr/editRow, edit_fields.go/scheduling.js) - an empty
+// (see editFieldsAttr/editRow, edit_fields.go/scheduling-setup-forms.js) - an empty
 // map when songVocalRange is the zero value (ID == 0, "no range on file")
 // or its stored reference key somehow fails to parse (defensive - it
 // already parsed once at write time). Computed with the reference key as
@@ -233,7 +233,7 @@ templ vocalRangeNoteField(label, fieldName, placeholder, listID, inputID, playLa
 // kebab-menu row form renders these values directly (it already knows
 // which song), the quick-add panel's form reads them back out of each
 // <option>'s own data-edit-fields attribute via
-// fillVocalRangeFromSongSelect (scheduling.js) once a song is picked -
+// fillVocalRangeFromSongSelect (scheduling-setup-forms.js) once a song is picked -
 // see docs/issues.md: "fill in the form with the existing data and make
 // the save an update if applicable" (scheduling.SetSongVocalRange already
 // upserts by song id regardless of what the form shows).

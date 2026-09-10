@@ -5,7 +5,7 @@
    fill, actual border/radius) rather than a bare colored line, same
    treatment as .warning (components/alert.css) but sized for site chrome:
    full-width strip, no inline margin. Dismissible per session (see the
-   .banner-dismissed toggle below, and scheduling.js's use of
+   .banner-dismissed toggle below, and scheduling-global.js's use of
    sessionStorage rather than localStorage) - closing it declutters the
    current visit, but it needs to stay apparent again next session rather
    than something a viewer can silence for good. Single instance, not a
@@ -53,7 +53,7 @@
   background: color-mix(in srgb, var(--danger) 15%, transparent);
 }
 
-/* Set on <html> by scheduling.js before <body> parses - same
+/* Set on <html> by scheduling-global.js before <body> parses - same
    flash-prevention approach as the theme toggle, so a viewer who already
    dismissed this doesn't see it flash in on every page load within the
    same session. */

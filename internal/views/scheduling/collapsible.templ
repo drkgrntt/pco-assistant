@@ -9,10 +9,10 @@ import (
 // collapsibleSection wraps a chunk of the build page that's useful but
 // secondary enough to start out of the way - collapsed by default unless
 // open is true, expandable/collapsible either way via toggleCollapse
-// (scheduling.js), which also restores whichever sections were
+// (scheduling-collapsible.js), which also restores whichever sections were
 // open/closed across the whole-body htmx swaps every mutation on this
 // page causes (see the htmx:beforeSwap/afterSwap listeners in
-// scheduling.js) - open here only sets the *first-render* state; once a
+// scheduling-build.js) - open here only sets the *first-render* state; once a
 // person toggles a section, that swap-to-swap memory takes over exactly
 // the same way regardless of which way it started. Shared between the
 // set and roster builders for "Recommended next", the set builder's

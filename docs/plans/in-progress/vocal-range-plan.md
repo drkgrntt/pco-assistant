@@ -13,7 +13,7 @@ reference-tone piece from `docs/ideas.md`'s own bullet also shipped
 (`internal/views/scheduling/vocal_range.templ`, `IconPlay` in
 `internal/views/components/icons.templ`) plays a reference tone
 (`playVocalTone`/`parseVocalNoteText`/`playVocalNoteFromInput` in
-`web/static/js/scheduling.js`). Originally built as a synthesized-only tone
+`web/static/js/scheduling-vocal-range.js`). Originally built as a synthesized-only tone
 (a Web Audio `OscillatorNode` at the correct A440-tuned frequency), on the
 reasoning that a clean sine tone is just as good a pitch reference as a
 recorded note and needs no asset files - **since reversed, also
@@ -103,7 +103,7 @@ what a new, third preview line shows. Per-row control
 (reusing the entry form's shared `key-options` datalist, `musicalKeyOptions`)
 plus two octave up/down buttons, all client-side - the transposition
 arithmetic (`renderVocalRangePreview` and its helpers, `web/static/js/
-scheduling.js`) duplicates `ParseKeyPitchClass`/`SignedSemitoneDelta`/
+scheduling-vocal-range.js`) duplicates `ParseKeyPitchClass`/`SignedSemitoneDelta`/
 `PitchClassAndOctave`/`referenceTonicOctave` (`key_engine.go`,
 `song_vocal_range.go`) function-for-function rather than round-tripping
 through htmx on every keystroke/click - the same "duplicate the
@@ -177,7 +177,7 @@ feedback rather than this plan's own original scope:**
   repeat, key-transition, and this phase's own vocal-range mismatch) always
   stay directly on the row regardless of count. Same
   `internal/views/scheduling/set_builder.templ`/`web/static/js/
-  scheduling.js`/`web/static/css/components/disclosure.css` files as the
+  scheduling-build.js`/`web/static/css/components/disclosure.css` files as the
   mismatch badge above.
 - **Vocal range as a fourth build-page setup surface**: song vocal range
   now has the same three Build-page entry points song key/tags/
@@ -208,7 +208,7 @@ feedback rather than this plan's own original scope:**
 **Play buttons added to the Build page's two vocal-range forms, follow-up
 the same day (2026-09-08)** - Part C above shipped without the
 tap-to-hear play buttons the dedicated setup pages have, specifically to
-dodge a real problem: `playVocalNoteFromInput` (`scheduling.js`) reads its
+dodge a real problem: `playVocalNoteFromInput` (`scheduling-vocal-range.js`) reads its
 target input by a fixed DOM id, which the setup pages get away with since
 each renders exactly one such form - the Build page's kebab-menu form
 renders once *per song row*, so a fixed id would collide across rows.
@@ -250,7 +250,7 @@ renders these values directly and switches its own submit button to
 form (a generic song picker, not scoped to one song) can't know which
 song ahead of render, so each `<option>` instead carries its own song's
 fields as a `data-edit-fields` attribute, and a new
-`fillVocalRangeFromSongSelect` (`scheduling.js`) - wired to the select's
+`fillVocalRangeFromSongSelect` (`scheduling-setup-forms.js`) - wired to the select's
 `onchange` - reads the chosen option's fields back out and applies them
 via a newly-extracted `applyEditFields` helper (the same fill loop
 `editRow` already did inline, pulled out so both call sites share it),
@@ -295,7 +295,7 @@ updated to match: `setSongVocalRangeFromForm`
 (`song_vocal_range.templ`, whose preview data attributes are now
 `data-low-abs`/`data-high-abs` rather than `data-low-offset`/
 `data-high-offset`), `vocalRangeFormFields` (`quick_action.templ`), and the
-client-side preview math in `scheduling.js` (`renderVocalRangePreview`),
+client-side preview math in `scheduling-vocal-range.js` (`renderVocalRangePreview`),
 which drops its own duplicated `vocalRangePreviewTonicOctave` constant
 entirely now that there's no tonic-anchor concept left to mirror.
 

@@ -13,7 +13,7 @@ import (
 // of SongDetailCards, which this mirrors in full (including the OOB/
 // non-OOB split and the "one card visible at a time" idiom - see
 // personDetailCard/candidateDetailCard below and selectPersonRow,
-// scheduling.js, which both row types share).
+// scheduling-build.js, which both row types share).
 templ PersonDetailCards(data RosterBuilderData, hidden bool) {
 	@buildDetailGroupShell("build-detail-team", hidden) {
 		for _, pos := range data.Positions {
@@ -58,7 +58,7 @@ templ personDetailCardsLazyOOB(data RosterBuilderData) {
 // more). #build-detail-team already exists in the DOM from the page's own
 // initial render (PersonDetailCards/personDetailCardsOOB), so this never
 // needs to render that shell itself - only the one new card, which starts
-// hidden like every other (selectPersonRow, scheduling.js, reveals it on
+// hidden like every other (selectPersonRow, scheduling-build.js, reveals it on
 // click), exactly as if it had been there since the last full render.
 templ personDetailCardInsertOOB(data RosterBuilderData, a AssignmentView) {
 	<div hx-swap-oob="beforeend:#build-detail-team">
@@ -80,7 +80,7 @@ templ personDetailCardRemoveOOB(assignmentID int64) {
 
 // personVocalRangeLine renders an assigned person's own stored comfortable
 // range - "Vocal range: G3-D5" - with a tap-to-hear button per note
-// (playVocalTone, web/static/js/scheduling.js), same play-button markup as
+// (playVocalTone, web/static/js/scheduling-vocal-range.js), same play-button markup as
 // songVocalRangeLine (song_detail_card.templ) so a director unsure whether
 // a vocalist can actually hit a song's range can check both from the same
 // page. No OOB refresh path exists for this line (unlike songVocalRangeLine)
@@ -120,7 +120,7 @@ templ personVocalRangeLine(a AssignmentView) {
 }
 
 // personDetailCard is one assigned person's detail card - hidden until
-// selectPersonRow (scheduling.js) reveals it, in response to clicking that
+// selectPersonRow (scheduling-build.js) reveals it, in response to clicking that
 // person's own row in a position's assignment list (roster_builder.templ).
 // Notes is read-only here (see AssignmentView.Notes) - there's no editing
 // UI for it yet, only display, same as ArrangementInfo/Notes on the song
@@ -164,7 +164,7 @@ templ personDetailCard(data RosterBuilderData, a AssignmentView) {
 }
 
 // candidateDetailCard is one not-yet-assigned candidate's own detail card -
-// hidden until selectPersonRow (scheduling.js, shared with the assigned-
+// hidden until selectPersonRow (scheduling-build.js, shared with the assigned-
 // row side above) reveals it, in response to clicking that candidate's own
 // row in a position's candidate list (positionGroupCard, roster_builder.
 // templ). The row itself only shows name/schedule preference/Add - this
@@ -231,7 +231,7 @@ templ candidateDetailGroupOOB(serviceTypeID, planID string, pos PositionGroupVie
 // place after a manual refresh, without touching the rest of the card (in
 // particular, never re-rendering buildDetailCardShell's own root element,
 // which always renders `hidden` by default - see selectPersonRow in
-// scheduling.js. Swapping that whole shell via OOB would silently re-hide
+// scheduling-build.js. Swapping that whole shell via OOB would silently re-hide
 // whatever card the person clicking Refresh is actively looking at).
 func personBadgesElementID(assignmentID int64) string {
 	return fmt.Sprintf("person-badges-%d", assignmentID)

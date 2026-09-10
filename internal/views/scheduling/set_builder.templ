@@ -447,7 +447,7 @@ templ transitionNoteMenu(message string) {
 // role/set vocal range - the last one added by Part C of docs/plans/
 // in-progress/vocal-range-plan.md) for every song row, jumping to (and
 // revealing) that row's own hidden quick-action-row via openQuickAction
-// (scheduling.js), so neither needs any per-row data passed in.
+// (scheduling-build.js), so neither needs any per-row data passed in.
 templ rowMenuToggle() {
 	@components.IconMore()
 }
@@ -604,7 +604,7 @@ templ candidateBadgeExtras(cand CandidateSongView) {
 // empty until the title's first click populates it.
 //
 // The title button carries both a plain onclick (toggleSongBrowseDetail,
-// scheduling.js - purely the CSS open/close, no network) and htmx's own
+// scheduling-build.js - purely the CSS open/close, no network) and htmx's own
 // hx-get/hx-trigger="click once" (the actual fetch, cached client-side
 // after the first open so re-toggling never re-fetches) - both listen to
 // the same click independently, same pattern the row-menu/key-transition
@@ -949,7 +949,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 												Row-scoped access to the same 3 actions the Quick add
 												panel below offers generically - see quick-action-row
 												just below and openQuickAction/toggleRowMenu
-												(scheduling.js). The song is already this row's, so
+												(scheduling-build.js). The song is already this row's, so
 												unlike the panel's forms there's no song picker to fill
 												in - just the category/relationship/role fields that
 												actually vary. The panel itself stays, since it's still
@@ -1169,7 +1169,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 			than two hardcoded opener/response buttons - a role added to that
 			table (Song Roles setup page or the quick-add panel below, no code
 			change needed) is filterable immediately. toggleRoleFilter
-			(scheduling.js) tracks which one is active in the hidden
+			(scheduling-build.js) tracks which one is active in the hidden
 			#candidate-role-filter input below, then re-triggers the search
 			box's own htmx request - see that input's own comment for why.
 		-->
@@ -1180,7 +1180,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 		</div>
 		<!--
 			Context filter chips - same server-driven filtering idiom as the
-			role filters just above (toggleContextFilter, scheduling.js, is a
+			role filters just above (toggleContextFilter, scheduling-build.js, is a
 			literal copy of toggleRoleFilter targeting
 			.context-filter/#candidate-context-filter instead of
 			.role-filter/#candidate-role-filter), generated from data.ContextTypes
@@ -1215,7 +1215,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 			tried instead and reverted - it read as one more control to
 			operate rather than a shortcut.) Clicking a chip just types that
 			value into #candidate-search and re-triggers the same search
-			request (applyTagFilter, scheduling.js); it deliberately doesn't
+			request (applyTagFilter, scheduling-build.js); it deliberately doesn't
 			set any state of its own the way the role filter's hidden input
 			does.
 
@@ -1275,7 +1275,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 				hidden role input) but gives no way back to the plain "browse
 				titles" list short of manually erasing what got typed in - not
 				obvious, especially once a role filter's own "active" button
-				state also needs clearing. clearCandidateSearch (scheduling.js)
+				state also needs clearing. clearCandidateSearch (scheduling-build.js)
 				resets both back to "" and re-triggers the same search, landing
 				back on CandidateSearchResults' empty-query-and-role state.
 			-->
@@ -1289,7 +1289,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 			thing on this page otherwise", but the toggle/swap-memory
 			behavior is unaffected either way: collapsing it still works
 			exactly as before, and openCandidatesSection()/toggleRoleFilter()
-			(scheduling.js) still force it open the moment a search term or
+			(scheduling-build.js) still force it open the moment a search term or
 			role filter is used, for whoever does collapse it.
 		-->
 		@collapsibleSection("find-songs-candidates", "Browse all songs", true) {
@@ -1433,7 +1433,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 				@quickAddItem("Set song vocal range") {
 					<!--
 						Unlike the other quick-add forms, this one's song picker also
-						drives fillVocalRangeFromSongSelect (scheduling.js) on change:
+						drives fillVocalRangeFromSongSelect (scheduling-setup-forms.js) on change:
 						each <option> below carries its song's existing range (if any)
 						as a data-edit-fields attribute (same JSON shape/helper editRow
 						already reads, editFieldsAttr) so picking an already-ranged song

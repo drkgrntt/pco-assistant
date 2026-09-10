@@ -50,7 +50,7 @@ import (
 // create itself succeeds - Planning Center just doesn't track a duration
 // for a section divider. addPlanItemRows' own item-type select only
 // offers these two real options, and hides/disables the length fields for
-// Section header client-side (toggleAddPlanItemLengthFields, scheduling.js)
+// Section header client-side (toggleAddPlanItemLengthFields, scheduling-build.js)
 // so the form doesn't imply a header's length is going anywhere; anything
 // else this switch doesn't recognize also falls back to a plain item.
 func (sc *SchedulingController) AddPlanItem(c *fiber.Ctx) error {

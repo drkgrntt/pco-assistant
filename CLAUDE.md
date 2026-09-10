@@ -265,6 +265,23 @@ actual app, split by concern rather than by feature:
   failure, just a silently unstyled component, so don't skip it. Also
   holds PWA assets (manifest, service worker, icons). Rendered live at
   `/style-guide`, which only responds when `APP_ENV=local`.
+  `web/static/js/` mirrors this same per-concern split for the app's
+  plain-ES5 JS (no bundler/modules - see `install-prompt.js`'s own doc
+  comment on that convention): `scheduling-global.js` (theme/banner/tour
+  controller/help dialogs/nav/mobile menu/app-wide htmx request feedback),
+  `scheduling-build.js` (the combined Build page - set builder popovers,
+  Songs/Team tabs, hideable team groups, candidate search, drag
+  reordering), `scheduling-setup-forms.js` (the 8 setup pages' shared
+  create/edit form helpers), `scheduling-song-tags-contexts.js`,
+  `scheduling-collapsible.js`, `scheduling-sortable-table.js`, and
+  `scheduling-vocal-range.js` - split from a single 2,611-line
+  `scheduling.js` file. Every function across these stays global scope
+  (no imports), and every file loads unconditionally on every page (see
+  `schedulingJSFiles` in `internal/views/layout.templ`, right below
+  `designSystemCSSFiles`) since markup calls into them via inline
+  `onclick="..."` regardless of which page "owns" a given feature - the
+  same "add it to the list or it silently doesn't load" trap as the CSS
+  list above applies here too.
 
 **Request pipeline** (`routes.go`): `RequestID` -> `Recover` run ahead of
 everything else, unconditionally (no allowlist - every response, including

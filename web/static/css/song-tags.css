@@ -6,7 +6,7 @@
    docs/plans/shipped/song-tags-setup-redesign-plan.md - a plain local-DB
    read is cheap regardless of library size); #song-tag-filter and the tag
    filter chips just hide non-matching cards client-side
-   (filterSongTagCards, scheduling.js) for a large library, they never
+   (filterSongTagCards, scheduling-song-tags-contexts.js) for a large library, they never
    limit what's rendered. Each card's own "Value" input also points its
    list= at a shared #song-tag-value-options <datalist> of every tag
    value already in use, for autocomplete on a repeat tag - no CSS of its
@@ -182,7 +182,7 @@
 /* The add-tag form starts collapsed behind this <summary> toggle (see
    SongTagCard, song_tags.templ) - shown open only while actively editing
    an existing tag (editRow opens it, cancelSetupEdit closes it again,
-   scheduling.js). Keeping the form itself always in the DOM (just hidden
+   scheduling-setup-forms.js). Keeping the form itself always in the DOM (just hidden
    by <details>, not htmx-loaded on demand) is what let editRow keep
    working unchanged - it just also has to flip .open now. */
 .song-tag-add-details {

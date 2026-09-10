@@ -17,8 +17,9 @@
 //   plain user-agent sniffing, one of the few defensible uses of it since
 //   there's no feature-detectable alternative.
 //
-// Follows this codebase's existing plain-ES5 JS style (see scheduling.js/
-// register-sw.js) - var/function, no arrow functions or template literals.
+// Follows this codebase's existing plain-ES5 JS style (see the
+// scheduling-*.js files/register-sw.js) - var/function, no arrow
+// functions or template literals.
 
 var deferredInstallPrompt = null;
 

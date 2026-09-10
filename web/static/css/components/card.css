@@ -80,7 +80,7 @@
 
 /* The "Hidden teams" strip above .team-groups-grid (RosterBuilderBodyContent)
    - one chip per team hidden via teamGroupCard's own hide button, each a
-   "bring it back" toggle (hideTeamGroup/showTeamGroup, scheduling.js).
+   "bring it back" toggle (hideTeamGroup/showTeamGroup, scheduling-build.js).
    Purely a client-side, per-browser preference (localStorage) - see
    teamGroupCard's own doc comment for why this has no server-side
    counterpart. Empty/hidden by default (the "hidden" attribute on
@@ -135,7 +135,7 @@
   margin: 0;
 }
 
-/* Brief flash after jumpToTeamPosition (scheduling.js) navigates here from
+/* Brief flash after jumpToTeamPosition (scheduling-build.js) navigates here from
    the "Team, at a glance" sidebar card - a scroll alone doesn't confirm
    you landed on the right position among several open ones on a busy
    team, especially once it's already in view and nothing visibly moves.

@@ -82,7 +82,7 @@ avatars for a day: two more gaps against the reference screenshots.
   confirmed/declined/unconfirmed rollup per team (`teamStatusRollup`,
   shown only when non-zero - same "only what needs attention" idiom as
   `RosterStatusSummary`'s own chips), and every position/person as a real
-  `jumpToTeamPosition(this)` button (`scheduling.js`) that switches to the
+  `jumpToTeamPosition(this)` button (`scheduling-build.js`) that switches to the
   Team tab, force-opens that exact position's card, and scrolls to it -
   built entirely from `AssignmentView.Status`, already on the page (it's
   PCO's own `PlanPerson.status`, imported verbatim on Revert - see
@@ -101,7 +101,7 @@ avatars for a day: two more gaps against the reference screenshots.
 
 Same-day follow-up, after living with the above for a few minutes: the
 jump now leaves a brief `.jump-highlight` flash on the landed-on card
-(`card.css`/`scheduling.js`) since a scroll alone didn't confirm landing
+(`card.css`/`scheduling-build.js`) since a scroll alone didn't confirm landing
 on the right position among several already-open ones; each assigned
 person under a glance-card position now stacks on their own line
 (`.glance-assigned`, `build-page.css`) instead of wrapping in a

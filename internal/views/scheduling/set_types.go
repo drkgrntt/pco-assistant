@@ -200,7 +200,7 @@ type SetBuilderData struct {
 	// buildSetBuilderData already fetches for the detail card/mismatch
 	// warning (vocalRangesBySong), also exposed here so the quick-add
 	// panel's "Set song vocal range" form can pre-fill from whichever song
-	// its own picker selects (fillVocalRangeFromSongSelect, scheduling.js,
+	// its own picker selects (fillVocalRangeFromSongSelect, scheduling-setup-forms.js,
 	// reading each <option>'s own vocalRangeFormFields-built
 	// data-edit-fields attribute) - see SetSongView.VocalRange's doc
 	// comment for why this matters. A song id missing from this map simply
@@ -254,7 +254,7 @@ type SetSongView struct {
 	// AnchorItemID is which item (by PCO item id, "" for top of service)
 	// this song is currently placed after - carried as a data attribute so
 	// the order-of-service drag-and-drop can compute new positions without
-	// a round trip (see web/static/js/scheduling.js).
+	// a round trip (see web/static/js/scheduling-build.js).
 	AnchorItemID string
 	// Moved is true when this song has been dragged to a new position
 	// since it was last published - see scheduling.SetSong.Moved. Shown as
@@ -401,7 +401,7 @@ type SetSongView struct {
 	// ints (see the controller's songEffectiveVocalRangeAbs +
 	// scheduling.PitchClassAndOctave) so the detail card's "Vocal range"
 	// line can offer tap-to-hear buttons (playVocalTone,
-	// web/static/js/scheduling.js) the same way song_vocal_range.templ's
+	// web/static/js/scheduling-vocal-range.js) the same way song_vocal_range.templ's
 	// setup-page rows already do (vocalRangeLine) - "can I hear what this
 	// note sounds like" without leaving the Build page or reaching for an
 	// instrument. HasPlayableNotes mirrors VocalRangeDisplay != "" (true

@@ -175,7 +175,7 @@ form.inline.stacked {
   }
 }
 
-/* Editing-mode highlight - editRow() (scheduling.js) adds this class when
+/* Editing-mode highlight - editRow() (scheduling-setup-forms.js) adds this class when
    a table row's Edit button fills a setup-page create/edit form to update
    that row instead of creating a new one; resetSetupForm removes it once
    the form is back to "add a new one." Before this, the only visual

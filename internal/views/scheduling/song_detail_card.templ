@@ -10,7 +10,7 @@ import (
 // page's sidebar (see build.templ) right below the publish card - see
 // songDetailCard below for what's on one and why it exists at all. Only
 // ever one card is actually visible at a time: selectSongRow
-// (scheduling.js) shows whichever one matches the row that was just
+// (scheduling-build.js) shows whichever one matches the row that was just
 // clicked and hides the rest, the same "one open slot per song" idiom
 // set_builder.templ's own quick-action-row already uses.
 //
@@ -229,7 +229,7 @@ templ songRefreshStatusOOB(songID int64, errMsg string) {
 
 // songVocalRangeLine renders the detail card's "Vocal range: G3-D5 (in this
 // key)" line, each note with its own tap-to-hear button (playVocalTone,
-// web/static/js/scheduling.js) when the row has playable ints on file
+// web/static/js/scheduling-vocal-range.js) when the row has playable ints on file
 // (SetSongView.VocalRangeHasPlayableNotes) - mirrors vocalRangeLine's own
 // play-button markup (song_vocal_range.templ) so a button here looks and
 // behaves identically to the setup page's, just inline in the label rather
@@ -279,7 +279,7 @@ templ songVocalRangeLine(song SetSongView, oob bool) {
 }
 
 // songDetailCard is one song's detail card - hidden until selectSongRow
-// (scheduling.js) reveals it, in response to clicking that song's own row
+// (scheduling-build.js) reveals it, in response to clicking that song's own row
 // in the order of service (set_builder.templ). Its content mirrors what
 // the row itself already carries (title, arrangement info, badges) plus
 // what there wasn't room for at a table row's height (the arrangement's
@@ -307,7 +307,7 @@ templ songVocalRangeLine(song SetSongView, oob bool) {
 // elements between two different places on the page. Tag/Relate/Mark role
 // instead jump to (and reveal) the row's own hidden quick-action-row,
 // rather than yet another copy of those three forms - see openQuickAction
-// (scheduling.js), which already knows how to find that row by id.
+// (scheduling-build.js), which already knows how to find that row by id.
 templ songDetailCard(data SetBuilderData, song SetSongView) {
 	@buildDetailCardShell(fmt.Sprintf("%d", song.ID), song.Title, "closeSongDetail()") {
 		<p class="muted" id={ fmt.Sprintf("song-arrangement-info-%d", song.ID) }>

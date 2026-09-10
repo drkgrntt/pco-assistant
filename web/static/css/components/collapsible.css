@@ -2,7 +2,7 @@
    collapsibleCard) and, for .quick-add-panel/.quick-add-panel h4,
    quick_action.templ's quickAddItem. */
 
-/* Generic show/hide wrapper (see toggleCollapse in scheduling.js) for
+/* Generic show/hide wrapper (see toggleCollapse in scheduling-collapsible.js) for
    secondary build-page content that doesn't need to be visible by
    default - Recommended next, the full song candidate list, quick-add
    panels, and a fully-staffed position-group card (collapsibleCard). */
@@ -43,7 +43,7 @@
    person" section rendered pre-expanded (body visible, chevron rotated)
    any time the position card around it happened to be open, regardless of
    its own `open` prop (always false) or its own toggle ever being
-   clicked - closest(".collapsible") in scheduling.js's toggleCollapse
+   clicked - closest(".collapsible") in scheduling-collapsible.js's toggleCollapse
    correctly flips the nested section's own "open" class, but that had no
    visual effect, since the outer ancestor's "open" class alone was enough
    to satisfy the descendant selector either way. Root-caused by

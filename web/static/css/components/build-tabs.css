@@ -1,7 +1,7 @@
 /* Backs internal/views/scheduling/build_tabs.templ's buildTabs. */
 
 /* The combined Build a Service page's Songs/Team split (see BuildPlan,
-   toggleBuildTab in scheduling.js) - styled like a segmented control rather
+   toggleBuildTab in scheduling-build.js) - styled like a segmented control rather
    than the header nav's link-style .nav-dropdown-toggle (disclosure.css),
    since these are the two primary views of this page, not secondary
    navigation. */

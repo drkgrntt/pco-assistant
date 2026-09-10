@@ -24,7 +24,7 @@ import (
 // songs" (BuildCandidatesSearch), this list renders every song unconditionally
 // - a local-DB read is cheap regardless of library size, no PCO cost concern
 // here - with #song-tag-filter below just hiding non-matching cards
-// client-side (filterSongTagCards, scheduling.js) for a large library.
+// client-side (filterSongTagCards, scheduling-song-tags-contexts.js) for a large library.
 templ SongTags(personName, organizationName string, songs []pco.SongData, tagsBySong map[string][]scheduling.SongTag, categories []scheduling.SongTagCategory, categoryLabels map[string]string, errMsg string) {
 	@views.Layout("Song Tags", personName, organizationName) {
 		@songTagsHelp()
@@ -58,7 +58,7 @@ templ SongTags(personName, organizationName string, songs []pco.SongData, tagsBy
 // their own form="song-tag-bulk-form" attribute (SongTagCard) live inside
 // that swapped div, and losing an in-progress *selection* to some other
 // card's own edit is an acceptable rare edge case, not worth guarding
-// against. #song-tag-bulk-count (updateSongTagBulkCount, scheduling.js) is
+// against. #song-tag-bulk-count (updateSongTagBulkCount, scheduling-song-tags-contexts.js) is
 // kept in sync from each checkbox's own onchange and from #song-tags-list's
 // own htmx:afterSwap handler (every checkbox lives inside that div, so a
 // swap - including this form's own submit - always resets it to 0).
@@ -139,7 +139,7 @@ templ songTagFilterChips(tagValues []string) {
 // chips twice on page load). Checking existing chips isn't touched by this
 // swap losing its checked state, since it's a full outerHTML replace by
 // id: the JS side (song-tag-filter-chips oobBeforeSwap/oobAfterSwap
-// handlers, scheduling.js) captures which values were checked beforehand
+// handlers, scheduling-song-tags-contexts.js) captures which values were checked beforehand
 // and re-checks the matching new checkboxes after, so a filter someone
 // already applied survives a tag add/edit elsewhere on the page.
 templ songTagFilterChipsOOB(tagValues []string) {
@@ -242,7 +242,7 @@ templ SongTagsMutationResponse(songs []pco.SongData, tagsBySong map[string][]sch
 // (a hidden input, not a picker) since the card itself already identifies
 // the song - unlike the old shared form, there's nothing to pick here.
 // data-search backs the page's client-side filter (filterSongTagCards,
-// scheduling.js): the song's title plus every one of its tag values, so
+// scheduling-song-tags-contexts.js): the song's title plus every one of its tag values, so
 // filtering also surfaces "which songs are tagged 'grace'" without a
 // server round trip.
 templ SongTagCard(song pco.SongData, tags []scheduling.SongTag, categories []scheduling.SongTagCategory, categoryLabels map[string]string) {
@@ -350,7 +350,7 @@ func songTagCardSearchText(song pco.SongData, tags []scheduling.SongTag) string 
 
 // songTagCardTagsAttr builds one card's data-tags attribute: its tag
 // values only (no title), lowercased and pipe-delimited with leading/
-// trailing pipes so filterSongTagCards (scheduling.js) can test exact
+// trailing pipes so filterSongTagCards (scheduling-song-tags-contexts.js) can test exact
 // membership (`"|" + tag + "|"`) against a checked filter chip's value,
 // rather than songTagCardSearchText's substring match - a chip for tag
 // "Grace" shouldn't also match a card merely because some other tag's

@@ -36,7 +36,7 @@ header.site .site-nav {
 }
 
 /* Mobile: everything past the brand collapses behind the hamburger toggle
-   (see toggleMobileMenu, scheduling.js) instead of wrapping .site-primary/
+   (see toggleMobileMenu, scheduling-global.js) instead of wrapping .site-primary/
    .site-actions into several busy rows - only .mobile-menu-toggle stays in
    the visible bar. Widened back into the normal always-visible two-cluster
    layout at the same breakpoint header.site itself switches from column to
@@ -67,7 +67,7 @@ header.site .site-nav {
    as-is to form one diagonal, ::after adds another 90deg on top of it to
    form the other) as the toggle on midwestdaisy, adapted to this app's
    tokens/colors and to a plain aria-expanded attribute selector instead
-   of the checkbox-hack that drove it there - toggleMobileMenu (scheduling.js)
+   of the checkbox-hack that drove it there - toggleMobileMenu (scheduling-global.js)
    already sets aria-expanded, so no extra state is needed to key off of. */
 .hamburger-bar {
   position: absolute;
@@ -256,7 +256,7 @@ header.site form {
 
 /* Two-state (not three-way) toggle: it starts wherever the system
    preference resolves to and flips to an explicit choice from there - see
-   toggleTheme in scheduling.js. Which icon shows is driven entirely by
+   toggleTheme in scheduling-global.js. Which icon shows is driven entirely by
    these selectors (mirroring the ones the palette itself uses above), so
    it can't drift out of sync with the actual applied theme. */
 .theme-toggle {

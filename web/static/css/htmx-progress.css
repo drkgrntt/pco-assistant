@@ -1,4 +1,4 @@
-/* App-wide "something is happening" indicator - see scheduling.js, which
+/* App-wide "something is happening" indicator - see scheduling-global.js, which
    toggles .active on this for the duration of every htmx request. Single
    instance, rendered once in layout.templ, not a reusable component. */
 

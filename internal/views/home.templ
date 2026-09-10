@@ -141,7 +141,7 @@ templ Home(personName, organizationName string, data HomeData) {
 // Native <dialog> rather than a hand-rolled overlay - no modal pattern
 // existed anywhere in this codebase before this, and <dialog> gets
 // focus-trapping, Escape-to-close, and backdrop dimming for free (see
-// tour-dialog rules in home.css). scheduling.js's openOnboardingTour/
+// tour-dialog rules in home.css). scheduling-global.js's openOnboardingTour/
 // closeOnboardingTour/tourBack/tourNext drive which .tour-step is visible
 // and the dot indicator; a DOMContentLoaded check there auto-opens this
 // once per browser (localStorage "onboardingTourSeen"), and a manual
@@ -152,7 +152,7 @@ templ Home(personName, organizationName string, data HomeData) {
 // manual way back in used to be a dedicated Account page link
 // ("Replay the intro tour"); that link is gone (see
 // docs/plans/in-progress/help-system-and-nav-consolidation-plan.md) now
-// that the footer's Help button (openPageHelp, scheduling.js) finds and
+// that the footer's Help button (openPageHelp, scheduling-global.js) finds and
 // opens this same dialog directly on any page that has it - ?tour=1
 // itself is unchanged and still works if linked to by hand.
 //

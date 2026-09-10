@@ -805,7 +805,7 @@ const candidateSearchLimit = 50
 // q/role/context come straight from the query string (search text, the
 // currently-active role-filter button's code, and the currently-active
 // context-filter button's id - see toggleRoleFilter/toggleContextFilter,
-// scheduling.js); "" for any of them means "no filter on that axis." With
+// scheduling-build.js); "" for any of them means "no filter on that axis." With
 // all three unset, searchCandidates returns early with just the
 // lightweight browsable title list (see its own doc comment) rather than
 // the rich candidateSongView treatment - not computing anything expensive

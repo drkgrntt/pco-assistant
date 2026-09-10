@@ -43,7 +43,7 @@ authenticated route), so an unauthenticated page (only `login.templ` calls
 that just bounces to sign-in, and Help has nothing to help with there
 either.
 
-**The Help dispatcher** (`web/static/js/scheduling.js`'s `openPageHelp`):
+**The Help dispatcher** (`web/static/js/scheduling-global.js`'s `openPageHelp`):
 checked in order -
 
 1. `#onboarding-tour` present -> `onboardingTourController.open()`.
@@ -56,7 +56,7 @@ or a second argument threaded through `Layout`'s own signature - see "Why
 presence-of-element dispatch" below.
 
 **Two new stateless helpers**, `openHelpDialog(id)`/`closeHelpDialog(id)`
-(`scheduling.js`) - a plain `.showModal()`/`.close()` pair (with the same
+(`scheduling-global.js`) - a plain `.showModal()`/`.close()` pair (with the same
 `open`-attribute fallback the tour controllers use), no config object, no
 step state. Back every single-step dialog: the 8 setup-page ones and
 `genericHelpDialog`. See "Why these don't go through `createTourController`"
@@ -168,7 +168,7 @@ navigation - the same one-shot `sessionStorage` handoff shape
 one-off used for the Account page's old Build-tour replay link (see "Why
 the setup-page recommendation flipped"'s sibling note above and
 `build.templ`'s `buildTour` doc comment). Generalized into one reusable
-pair in `scheduling.js` instead of writing the same handoff 7 times:
+pair in `scheduling-global.js` instead of writing the same handoff 7 times:
 
 - `setPageHelpForce()` - the Next link's `onclick`, sets a `pageHelpForce`
   `sessionStorage` flag, wrapped in try/catch (storage blocked just means
@@ -222,7 +222,7 @@ same-page button).
 ### Why the account dropdown reuses `.nav-dropdown` verbatim
 
 `toggleNavDropdown`/`positionNavDropdown`/`closeNavDropdowns` and the
-document-level outside-click/Escape handlers in `scheduling.js` were
+document-level outside-click/Escape handlers in `scheduling-global.js` were
 already written against `document.querySelectorAll(".nav-dropdown...")`,
 not a single hardcoded instance - verified before reusing it rather than
 assumed. That means a second `Disclosure("nav-dropdown", ...)` call gets

@@ -6,7 +6,7 @@
    see that file's own doc comment for the shared reasoning (every active
    song renders up front, no search gate, #song-context-filter just hides
    non-matching cards client-side via filterSongContextCards,
-   scheduling.js). Deliberately has no filter-chips-by-value styling
+   scheduling-song-tags-contexts.js). Deliberately has no filter-chips-by-value styling
    (compare song-tags.css's .song-tag-filter-chips/.tag-filter-chip rules)
    - a song's contexts come from a small, org-named list (typically a
    handful), not free-text values worth browsing by chip, so this page's
@@ -123,7 +123,7 @@
 /* The add-context form starts collapsed behind this <summary> toggle (see
    SongContextCard, song_contexts.templ) - shown open only while actively
    editing an existing context (editRow opens it, cancelSetupEdit closes
-   it again, scheduling.js). Keeping the form itself always in the DOM
+   it again, scheduling-setup-forms.js). Keeping the form itself always in the DOM
    (just hidden by <details>, not htmx-loaded on demand) is what lets
    editRow keep working unchanged - it just also has to flip .open now. */
 .song-context-add-details {

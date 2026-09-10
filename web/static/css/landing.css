@@ -2,7 +2,7 @@
    so none of this adds weight to the authenticated app's pages. Built
    entirely from tokens.css's existing vocabulary for visual consistency
    with the rest of the app, and themes for free the same way everything
-   else already does (see scheduling.js's early theme-preference IIFE,
+   else already does (see scheduling-global.js's early theme-preference IIFE,
    loaded here too via Head). */
 
 .landing-header {
