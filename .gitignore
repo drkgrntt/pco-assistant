@@ -23,6 +23,7 @@ tmp/
 # IDE specific files
 .vscode
 .idea
+.serena
 
 # .env file
 .env
