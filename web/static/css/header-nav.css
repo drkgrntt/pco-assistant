@@ -198,10 +198,11 @@ header.site form {
 }
 
 /* The account dropdown's popup contents (accountMenuContent, layout.templ)
-   - reuses .nav-dropdown-menu's own column layout and its "a" styling
-   (disclosure.css) for the Account link and logout form already, so only
-   the two items that aren't plain links need anything here: the theme
-   toggle (a small square icon button, not a full-width menu row) gets a
+   - reuses .nav-dropdown-menu's own column layout, and its combined
+   "a, form button" row styling (disclosure.css) covers the Account/Switch
+   account links and the Log out button alike, so only the two items that
+   aren't plain full-width rows need anything here: the theme toggle (a
+   small square icon button, not a full-width menu row) gets a
    little room below it before the org name/Account link/logout form
    start, and the org name (a plain span, not a link) gets the same
    left/right padding disclosure.css already gives ".nav-dropdown-menu a"

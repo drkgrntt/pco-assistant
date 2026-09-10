@@ -60,14 +60,36 @@
   right: 0;
 }
 
-.nav-dropdown-menu a {
+/* .nav-dropdown-menu form button covers the account dropdown's Log out
+   action (accountMenuContent, layout.templ) - a <button type="submit">
+   inside a <form>, not a plain <a>, since logging out has to be a POST.
+   Without this, it inherited the global bare `button` rule (buttons.css) -
+   a bordered, backgrounded, shrink-to-fit control that looked like a
+   completely different kind of thing sitting in a menu of otherwise plain
+   full-width link rows. The <form> wrapping it is already a flex item of
+   .nav-dropdown-menu and stretches full width (flex's default
+   align-items: stretch), but the <button> nested inside it isn't itself a
+   flex item of that container, so it still needed its own explicit
+   display: block; width: 100% to actually fill that already-full-width
+   row - display/width alone wouldn't have been enough on its own without
+   the border/background/font reset below to stop looking like a button at
+   all. */
+.nav-dropdown-menu a,
+.nav-dropdown-menu form button {
+  display: block;
+  width: 100%;
   padding: var(--space-2) calc(var(--space-2) + 0.1rem);
+  border: none;
   border-radius: var(--radius-md);
+  background: none;
+  font: inherit;
+  text-align: left;
   text-decoration: none;
   color: var(--text);
 }
 
-.nav-dropdown-menu a:hover {
+.nav-dropdown-menu a:hover,
+.nav-dropdown-menu form button:hover {
   background: var(--accent-subtle);
 }
 
