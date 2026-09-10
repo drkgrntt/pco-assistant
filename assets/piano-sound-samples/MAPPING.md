@@ -15,5 +15,5 @@ Range chosen to cover typical choir range (bass low E2 to soprano high
 C6), per the vocal-range writeup in `docs/ideas.md`. Tracked in git -
 served unauthenticated at `/piano-samples/` (see `internal/server/
 routes.go`) and played by `playVocalTone` (`web/static/js/
-scheduling.js`) as the vocal-range reference tone's primary sound, with
+scheduling-vocal-range.js`) as the vocal-range reference tone's primary sound, with
 synthesis kept only as the fallback for a note outside this range.

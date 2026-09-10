@@ -8,7 +8,7 @@
    Color tokens were the original design system before this file existed
    and are unchanged here - light values on bare :root, dark overrides
    under prefers-color-scheme and the explicit [data-theme] toggle (see
-   scheduling.js's toggleTheme). Spacing/typography/radius/shadow/motion
+   scheduling-global.js's toggleTheme). Spacing/typography/radius/shadow/motion
    are new: chosen to exactly match the values already in use across the
    app wherever a match existed, so introducing them is a pure rename, not
    a redesign - swapping a literal 0.75rem for var(--space-3) computes to

@@ -182,7 +182,7 @@ live-reflection UI needs**, just not for this yet:
 
 - `hx-trigger="load once"` + a client-side visibility resync
   (`build_tabs.templ`'s `lazyTabTrigger`, `syncBuildTabVisibility` in
-  `scheduling.js`) - fires a fetch as soon as a fragment becomes relevant
+  `scheduling-build.js`) - fires a fetch as soon as a fragment becomes relevant
   and self-heals regardless of which of several trigger paths land last.
   This is the "fetch fresh state without a full page reload" plumbing a
   poll-driven design would reuse almost as-is, just retriggered on an

@@ -52,7 +52,7 @@
   display: flex;
 }
 
-/* Flipped by scheduling.js's positionNavDropdown when the default left: 0
+/* Flipped by scheduling-global.js's positionNavDropdown when the default left: 0
    anchoring would grow the menu off the right edge of the viewport (the
    toggle sits near the right side of the header on mobile widths). */
 .nav-dropdown.align-right .nav-dropdown-menu {
@@ -94,7 +94,7 @@
 }
 
 /* The set builder's per-row "more actions" menu (see toggleRowMenu/
-   openQuickAction in scheduling.js) - the same open/closed, floating-menu
+   openQuickAction in scheduling-build.js) - the same open/closed, floating-menu
    shape as the header's .nav-dropdown-menu above, right-anchored instead
    of left/JS-repositioned since the actions column is already the table's
    rightmost edge and has nowhere further right to overflow into. */
@@ -156,7 +156,7 @@
    the popup here is plain explanatory text, not a list of action buttons,
    and shouldn't participate in toggleRowMenu/closeRowMenus' "only one
    open at a time" bookkeeping (see toggleKeyTransitionBadge/
-   closeKeyTransitionBadges, scheduling.js). */
+   closeKeyTransitionBadges, scheduling-build.js). */
 .key-transition-badge {
   position: relative;
   display: inline-flex;
@@ -209,7 +209,7 @@
    ("Debrief on file"/"Talking point on file") that click-to-expands into
    the actual note text. Same open/close idiom as .key-transition-badge
    above (see toggleTransitionNoteBadge/closeTransitionNoteBadges,
-   scheduling.js) but deliberately styled as a plain, non-warning .badge
+   scheduling-build.js) but deliberately styled as a plain, non-warning .badge
    pill (accent, not danger) rather than reusing .conflict-badge - see
    docs/plans/shipped/transition-notes-plan.md's "informational surfacing,
    not a warning" framing. */
@@ -259,7 +259,7 @@
    songBadgeSpans, set_builder.templ) - Phase 3 of docs/plans/in-progress/
    vocal-range-plan.md. Same floating-popover shape as .key-transition-badge/
    .transition-note-badge above (see toggleVocalRangeBadge/
-   closeVocalRangeBadges, scheduling.js); the toggle itself carries either
+   closeVocalRangeBadges, scheduling-build.js); the toggle itself carries either
    .conflict-badge (a hard mismatch) or .badge (an octave-shift-fixes-it
    tip) alongside .vocal-range-toggle for its at-rest color, mirroring the
    same real-warning-vs-informational split .key-transition-toggle/

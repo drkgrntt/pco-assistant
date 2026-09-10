@@ -306,7 +306,7 @@ templ planNoteSection(serviceTypeID, planID, note string) {
 // activeTab is "songs" or "team" (see BuildPlanPage's ?tab= query param) -
 // rendered server-side so a direct link to ?tab=team lands there with no
 // JS flash of the Songs tab first, rather than relying entirely on
-// toggleBuildTab (scheduling.js) to sort it out after the page loads.
+// toggleBuildTab (scheduling-build.js) to sort it out after the page loads.
 //
 // note is this plan's local at-a-glance note (see plan_notes/GetPlanNote),
 // fetched once by BuildPlanPage regardless of activeTab and rendered by
@@ -383,7 +383,7 @@ templ BuildPlan(personName, organizationName string, setData SetBuilderData, ros
 			with its own htmx swap target, see SetBuilderBody/RosterBuilderBody)
 			that used to just stack on one long page. Splitting them into tabs
 			cuts what's on screen at once roughly in half - switching is a
-			plain client-side hidden toggle (toggleBuildTab, scheduling.js).
+			plain client-side hidden toggle (toggleBuildTab, scheduling-build.js).
 
 			Only the active tab's builder actually server-rendered above (see
 			pco-api-risks.md's mitigation #3) - the inactive one shows a
@@ -394,7 +394,7 @@ templ BuildPlan(personName, organizationName string, setData SetBuilderData, ros
 			much of a head start as possible by the time the user actually
 			looks at it. hx-get/hx-trigger live on the tab panel itself, not
 			the tab button - see tabPanelLazyAttrs' own doc comment for why
-			that's not just a style choice (a real bug: scheduling.js's
+			that's not just a style choice (a real bug: scheduling-global.js's
 			app-wide htmx-request feedback disables whatever element a
 			request is attached to, and it can't tell this "load" from a real
 			click - putting it on the button left the button unclickable for
@@ -409,7 +409,7 @@ templ BuildPlan(personName, organizationName string, setData SetBuilderData, ros
 			whether this tab was still inactive when the *request* went out,
 			so landing after a manual switch would otherwise stamp that
 			stale hidden state right back over whatever toggleBuildTab just
-			set. scheduling.js's syncBuildTabVisibility/currentBuildTab
+			set. scheduling-build.js's syncBuildTabVisibility/currentBuildTab
 			closes that race by re-deriving every tab-scoped element's
 			hidden state from whichever tab is actually aria-selected right
 			now, after every htmx swap settles - not just after a click - so
@@ -516,7 +516,7 @@ templ BuildPlan(personName, organizationName string, setData SetBuilderData, ros
 // Distinct dialog id, button ids, and localStorage/query-param keys from
 // the home tour (build-tour* vs tour*/onboarding-tour*) even though the
 // two dialogs never coexist on one page - avoids any future ambiguity if
-// that ever changes. scheduling.js's createTourController drives both
+// that ever changes. scheduling-global.js's createTourController drives both
 // tours off the same shared open/close/step-render logic (see its own doc
 // comment); buildTourController is the instance wired to this dialog.
 // Manual replay is via its plain ?build-tour=1 query param - Build has no
@@ -527,12 +527,12 @@ templ BuildPlan(personName, organizationName string, setData SetBuilderData, ros
 // consumed via forceBuildTourReplay) for the Account page's own "Replay
 // the Build page tour" link, since removed (see
 // docs/plans/in-progress/help-system-and-nav-consolidation-plan.md) now
-// that the footer's Help button (openPageHelp, scheduling.js) opens this
+// that the footer's Help button (openPageHelp, scheduling-global.js) opens this
 // dialog directly whenever it's actually on screen, on any real plan's
 // Build page. That Build-specific handoff was later removed outright
 // (rather than left as unused dead code) once the same plan doc's
 // setup-page Next-link chain needed the identical one-shot idea for a
-// different purpose and generalized it into scheduling.js's
+// different purpose and generalized it into scheduling-global.js's
 // setPageHelpForce()/pageHelpForce instead of keeping two copies.
 //
 // Gating is per-browser only (localStorage "buildTourSeen"), not
@@ -617,7 +617,7 @@ func lazyTabURL(eager bool, serviceTypeID, planID, tab string) string {
 // panel div needs to fetch its own real content, or nil when lazyURL == ""
 // (this tab is already active/eager). Deliberately attached to the panel
 // div, not the tab button, even though the button is what tabButtonAttrs
-// keeps ownership of onclick for: scheduling.js's app-wide htmx-request
+// keeps ownership of onclick for: scheduling-global.js's app-wide htmx-request
 // feedback (see its own doc comment) disables whatever element
 // event.detail.elt points at for the duration of any htmx request,
 // entirely by matching it against "button, input[type=submit]" - it has
@@ -629,7 +629,7 @@ func lazyTabURL(eager bool, serviceTypeID, planID, tab string) string {
 // window this deferred fetch exists to cover, since that's usually the
 // slower of the two tabs. The panel div is never a <button>, and (at
 // fetch time) never contains one either - it's still just
-// buildTabLoadingSkeleton's <p> - so scheduling.js's check never matches
+// buildTabLoadingSkeleton's <p> - so scheduling-global.js's check never matches
 // it. No explicit hx-target: the default (the element hx-get lives on) is
 // already the right one now that it's on the panel itself, and
 // hx-swap="innerHTML" leaves this div's own id/hidden/role attributes -

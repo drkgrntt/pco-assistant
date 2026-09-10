@@ -398,7 +398,7 @@ templ RosterBuilderBodyContent(data RosterBuilderData) {
 			}
 		}
 		<!--
-			hideTeamGroup/restoreHiddenTeamGroups (scheduling.js) populate
+			hideTeamGroup/restoreHiddenTeamGroups (scheduling-build.js) populate
 			this with one chip per team hidden from this tab, each a "show it
 			again" button - see teamGroupCard's own doc comment for why
 			hiding is a client-only, per-browser thing with nothing server-
@@ -455,7 +455,7 @@ templ RosterBuilderBodyContent(data RosterBuilderData) {
 }
 
 // teamGroupCard is one team's whole card - collapsible and hideable, both
-// purely client-side/per-browser (scheduling.js: toggleCollapse +
+// purely client-side/per-browser (scheduling-collapsible.js/scheduling-build.js - toggleCollapse +
 // localStorage for collapse state, the same mechanism every other
 // .collapsible on the site already uses; hideTeamGroup + a separate
 // localStorage list for hiding), not a new server-backed preference. A
@@ -466,7 +466,7 @@ templ RosterBuilderBodyContent(data RosterBuilderData) {
 // not collapsed by default the way a fully-staffed positionGroupCard is -
 // a whole team disappearing by default would hide real "needs attention"
 // positions inside it) and never hidden server-side - applyStoredHiddenTeamGroups
-// (scheduling.js, run on DOMContentLoaded and after every htmx swap) is
+// (scheduling-build.js, run on DOMContentLoaded and after every htmx swap) is
 // what actually hides a previously-hidden team's card again after this
 // renders, the same "server always renders the default, JS reapplies
 // whatever was last chosen" split collapsibleCard's own open param uses
@@ -553,7 +553,7 @@ templ positionGroupCard(serviceTypeID, planID string, schedulePreferenceOptions 
 					for _, cand := range pos.Candidates {
 						<!--
 							Clicking the row (like an assigned row -
-							selectPersonRow, scheduling.js) opens this
+							selectPersonRow, scheduling-build.js) opens this
 							candidate's own sidebar detail card
 							(candidateDetailCard, person_detail_card.templ),
 							which holds the on-demand "Check for conflicts"

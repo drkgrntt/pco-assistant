@@ -299,7 +299,7 @@ gets focus-trapping, Escape-to-close, and `::backdrop` dimming for free.
 per-person orientation, not per-org configuration state, so it doesn't
 consult any org data at all - auto-opens once per *browser*
 (`localStorage` `onboardingTourSeen`, checked entirely client-side in
-`scheduling.js`, no server involvement) regardless of whether the org has
+`scheduling-global.js`, no server involvement) regardless of whether the org has
 anything configured yet. A new admin joining an already-set-up org still
 gets it, which is the same "even an old account's new adopter should be
 able to see this" principle Derek asked for on Phase 2, applied to a
@@ -355,7 +355,7 @@ page.
 rules needed zero changes to reuse (already generic class names, and
 `home.css` already loads on every authenticated page) - its own doc
 comment was updated to say so rather than the CSS being moved to a new
-file. `scheduling.js`'s ~90 lines of open/close/step-render/auto-open
+file. `scheduling-global.js`'s ~90 lines of open/close/step-render/auto-open
 logic were refactored into `createTourController(config)`, a small
 factory taking `{dialogId, storageKey, queryParam, sessionForceKey}` and
 returning `{open, close, back, next}` - every DOM lookup inside it is
@@ -383,7 +383,7 @@ real `:service_type_id/:plan_id`
 `internal/server/controllers/scheduling.go`), and the Account page has no
 specific plan in mind when someone clicks "Replay the Build page tour."
 That link instead sets a one-shot `sessionStorage` flag
-(`buildTourForce`, via `scheduling.js`'s `forceBuildTourReplay`) before
+(`buildTourForce`, via `scheduling-global.js`'s `forceBuildTourReplay`) before
 the plain `<a href="/scheduling/build">` navigation to the plan-picker
 page proceeds; whichever real plan the person picks up next reads and
 immediately clears that flag on load (`createTourController`'s own
@@ -587,7 +587,7 @@ any more - everything below is built:
    checklist rendering, replacing both Phase 1's plain link list and every
    trace of Phase 2.
 5. Phase 4: the `<dialog>` markup and its four content steps
-   (`home.templ`'s `onboardingTour`), `scheduling.js`'s open/close/
+   (`home.templ`'s `onboardingTour`), `scheduling-global.js`'s open/close/
    step-navigation functions plus the two `DOMContentLoaded` listeners
    (auto-open, close-records-dismissal), `home.css`'s `.tour-*` rules, and
    the Account page's "Getting started" section linking `/?tour=1`.
@@ -597,7 +597,7 @@ any more - everything below is built:
 7. Marketing-copy audit: four new `how_it_works.templ` cards (three
    "Protect the service", one "Protect the team" - see that section above
    for exactly which and why), `landing.templ` deliberately left alone.
-8. Phase 5: `scheduling.js`'s `createTourController` factory (refactored
+8. Phase 5: `scheduling-global.js`'s `createTourController` factory (refactored
    out of Phase 4's home-tour-only functions), `build.templ`'s `buildTour`
    and its four content steps, the Account page's second "Getting
    started" line/link (`forceBuildTourReplay`'s sessionStorage handoff),

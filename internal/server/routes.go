@@ -28,7 +28,7 @@ func (s *FiberServer) RegisterFiberRoutes() {
 	s.App.Static("/static", "./web/static")
 
 	// Piano sample audio for the vocal-range reference tone
-	// (web/static/js/scheduling.js's playVocalTone) - a separate mount from
+	// (web/static/js/scheduling-vocal-range.js's playVocalTone) - a separate mount from
 	// /static since the samples live in a top-level assets/ directory, not
 	// under web/static/ (see assets/piano-sound-samples/MAPPING.md). Just
 	// audio files with no auth-relevant content, same trust level as

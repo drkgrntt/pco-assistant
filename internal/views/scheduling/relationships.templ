@@ -150,14 +150,14 @@ templ RelationshipsTable(relationships []scheduling.SongRelationship, songTitles
 }
 
 // songRelationshipsHelp is this page's Help-triggered dialog (see
-// scheduling.js's openPageHelp for the dispatch order that finds it, and
+// scheduling-global.js's openPageHelp for the dispatch order that finds it, and
 // docs/plans/in-progress/help-system-and-nav-consolidation-plan.md for why
 // setup pages get one at all - a genuinely different mechanism from the
 // Home/Build tours' auto-popping ones, so the "overbearing" objection that
 // ruled out a per-page tour in the original onboarding plan doesn't apply
 // here). One .tour-step, no dots or Back - a single step never needs
 // in-dialog step navigation - so this is opened/closed via openHelpDialog/
-// closeHelpDialog (scheduling.js) directly rather than
+// closeHelpDialog (scheduling-global.js) directly rather than
 // createTourController, which exists specifically for the auto-open/
 // dismissal-tracking machinery a Help-triggered, single-step dialog has no
 // use for. .page-help-dialog is the class openPageHelp() looks for on a
@@ -192,7 +192,7 @@ templ RelationshipsTable(relationships []scheduling.SongRelationship, songTitles
 // The mechanism is a full page navigation, not an htmx swap or in-dialog
 // step, so "click Next, land on the next page with its own Help dialog
 // already open" needs a value that survives the navigation:
-// setPageHelpForce() (scheduling.js) sets a one-shot sessionStorage flag
+// setPageHelpForce() (scheduling-global.js) sets a one-shot sessionStorage flag
 // from the Next link's onclick (no preventDefault - the plain <a href>
 // navigation proceeds exactly as it would without the onclick at all), and
 // a DOMContentLoaded listener on the destination page checks that flag

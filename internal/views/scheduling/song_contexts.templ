@@ -259,7 +259,7 @@ templ SongContextsMutationResponse(songs []pco.SongData, contextsBySong map[stri
 // instead of typing a free-text category/value pair. song_id is fixed (a
 // hidden input, not a picker) since the card itself already identifies
 // the song. data-search backs the page's client-side filter
-// (filterSongContextCards, scheduling.js): the song's title plus every one
+// (filterSongContextCards, scheduling-song-tags-contexts.js): the song's title plus every one
 // of its context labels, so filtering also surfaces "which songs are
 // tagged 'Youth'" without a server round trip.
 templ SongContextCard(song pco.SongData, contexts []scheduling.SongContext, contextTypes []scheduling.SongContextType, contextLabels map[int64]string) {

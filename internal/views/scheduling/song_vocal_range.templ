@@ -132,7 +132,7 @@ templ songVocalRangeHelp() {
 // resolves a range's raw PCO song id back to a display title (see
 // songTitleMap in the scheduling controller); an id missing from the map
 // falls back to showing the raw id. Each row's Edit button re-populates
-// song-vocal-range-form (editRow, scheduling.js) via data-edit-fields
+// song-vocal-range-form (editRow, scheduling-setup-forms.js) via data-edit-fields
 // (song_id - a plain <select>, editRow's generic field-fill handles it the
 // same as a text input - plus reference_key and the as-measured notes) -
 // no hidden "id" field needed, same reasoning as PersonVocalRangesTable: a
@@ -265,7 +265,7 @@ func computeVocalRangeNotePair(referenceKey string, lowPitchClass, lowOctave, hi
 
 // vocalRangeLine renders one labeled line of a song vocal range's Range
 // column - "As measured (in D): E3 [play] - B4 [play]" - each note with its
-// own tap-to-hear button (playVocalTone, web/static/js/scheduling.js).
+// own tap-to-hear button (playVocalTone, web/static/js/scheduling-vocal-range.js).
 // SongVocalRangesTable only ever calls this once per row now ("As
 // measured") - it used to also render a second "Current key" line
 // transposed into the song's cached PCO arrangement key, removed per
@@ -314,13 +314,13 @@ templ vocalRangeLine(label, key string, pair vocalRangeNotePair) {
 // what the preview line below shows.
 //
 // The transposition math runs entirely client-side
-// (renderVocalRangePreview, scheduling.js) rather than round-tripping
+// (renderVocalRangePreview, scheduling-vocal-range.js) rather than round-tripping
 // through htmx on every keystroke/click - the data-* attributes below are
 // r's own stored reference_key plus its exact low/high notes expressed as
 // absolute semitones (scheduling.AbsoluteSemitone), the same inputs
 // scheduling.EffectiveVocalRange takes server-side, so the JS mirrors that
 // function's arithmetic (see that section's own doc comment in
-// scheduling.js for why duplicating it is safe here) rather than
+// scheduling-vocal-range.js for why duplicating it is safe here) rather than
 // re-deriving new math. The key input reuses musicalKeyOptions' shared
 // "key-options" datalist (rendered once, in SongVocalRanges' entry form)
 // rather than a per-row copy - a <datalist> can back any number of

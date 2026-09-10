@@ -12,7 +12,7 @@ re-derived from scratch):
    tags yet" song still gets a card) - not search-gated the way the Build
    page's own "Browse all songs" is, since a plain local-DB read is cheap
    regardless of library size. A client-side filter box
-   (`filterSongTagCards`, `web/static/js/scheduling.js`) hides non-matching
+   (`filterSongTagCards`, `web/static/js/scheduling-song-tags-contexts.js`) hides non-matching
    cards for a large library, but never gates the initial render.
 3. **Adding a tag: inline, from within each song's own card** - not a
    separate flat form above the list. Each card gets its own small
@@ -69,7 +69,7 @@ Pain points this plan is responding to:
 ## What already solves the "search a big list by typing" half elsewhere
 
 `internal/views/scheduling/person_picker.templ` (`PersonPickerField`/
-`PersonSearchResults`, `selectPerson` in `web/static/js/scheduling.js`) is
+`PersonSearchResults`, `selectPerson` in `web/static/js/scheduling-setup-forms.js`) is
 exactly this pattern, already built and in use on the Person
 Relationships/Preferences pages: a text box + hidden id input + a live
 results `<div>`, backed by `/scheduling/people-search` re-querying on

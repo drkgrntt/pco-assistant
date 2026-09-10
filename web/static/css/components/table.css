@@ -56,7 +56,7 @@ table.sortable tbody tr:hover,
   background: var(--surface-hover);
 }
 
-/* Sortable admin tables (see makeSortable in scheduling.js) - never used
+/* Sortable admin tables (see makeSortable in scheduling-sortable-table.js) - never used
    on the set builder's order-of-service table, where row order is real
    data, not just a display convenience. */
 .sortable-col {

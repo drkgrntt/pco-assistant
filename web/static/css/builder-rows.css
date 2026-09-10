@@ -6,7 +6,7 @@
    search dropdown used elsewhere in the app. */
 
 /* The set builder's "find songs to add" filters - a role toggle plus the
-   search box below it (see filterCandidates in scheduling.js). */
+   search box below it (see filterCandidates in scheduling-build.js). */
 .role-filters {
   display: flex;
   flex-wrap: wrap;
@@ -26,7 +26,7 @@
    wrapper) - no layout rule needed here beyond the shared ".context-filter:
    active" look above, kept as its own selector (rather than folding
    context buttons into .role-filter) so toggleRoleFilter's own
-   querySelectorAll(".role-filter") in scheduling.js can't clear a context
+   querySelectorAll(".role-filter") in scheduling-build.js can't clear a context
    chip's active state (or vice versa) - two independent toggle groups, not
    one shared one. */
 
@@ -82,7 +82,7 @@
   background: var(--surface-hover);
 }
 
-/* Collapsed by default (toggleSongBrowseDetail, scheduling.js) - shown
+/* Collapsed by default (toggleSongBrowseDetail, scheduling-build.js) - shown
    full-width below the title/add-button line once opened, same
    .open-gated visibility idiom as .key-transition-badge.open above, just
    without the floating/absolute positioning: this expands the row itself
@@ -131,14 +131,14 @@
   margin-block: var(--space-4);
 }
 
-/* Clicking a song row (see selectSongRow, scheduling.js) opens its detail
+/* Clicking a song row (see selectSongRow, scheduling-build.js) opens its detail
    card in the sidebar (components/build-detail-card.css) - cursor:pointer
    signals the row itself is clickable, not just its action buttons/drag
    handle. .selected gets the same highlight .assignment-list li.selected/
    .candidate-list li.selected below use, for the people equivalent -
    assignment rows (personDetailCard) and candidate rows
    (candidateDetailCard) both open a sidebar detail card the same way (see
-   selectPersonRow, scheduling.js), so both get the same "this row is
+   selectPersonRow, scheduling-build.js), so both get the same "this row is
    clickable" treatment here. */
 tr.song-row {
   cursor: pointer;
@@ -322,7 +322,7 @@ tr.song-row.selected {
 
 /* touch-action: none stops a touch-drag on the handle from also scrolling
    the page - without it, dragging on a touchscreen just scrolls instead of
-   moving the row (see the pointer-events drag logic in scheduling.js). */
+   moving the row (see the pointer-events drag logic in scheduling-build.js). */
 .drag-handle {
   display: inline-flex;
   cursor: grab;
@@ -345,7 +345,7 @@ tr.dragging {
 }
 
 /* Drop indicator. A drop always means "place after the row the pointer is
-   below the midpoint of" (see findDropTargetRow in scheduling.js), so the
+   below the midpoint of" (see findDropTargetRow in scheduling-build.js), so the
    marker line belongs on that row's *bottom* edge, not its top - a
    top-edge line would visually point at the row above instead of the one
    actually being targeted. The inset line plus a matching outer glow reads

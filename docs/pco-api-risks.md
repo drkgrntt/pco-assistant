@@ -172,7 +172,7 @@ that first. Facts worth adding here that aren't in CLAUDE.md:
   succeeds - Planning Center just doesn't track a duration for a section
   divider. **Used**: `AddPlanItem`'s own item-type picker hides/disables
   its length fields for "Section header" (`toggleAddPlanItemLengthFields`,
-  `scheduling.js`) rather than showing fields that quietly do nothing.
+  `scheduling-build.js`) rather than showing fields that quietly do nothing.
 - **`Item#create`'s `item_type: "media"` doesn't stick** - confirmed live
   (2026-09-09): comes back silently downgraded to a plain `"item"` (no
   attached media resource, so there's nothing for PCO to actually treat as
@@ -381,7 +381,7 @@ out to 100-200 sequential round trips per load.
   lazy-loads via htmx. The trigger design went through five iterations
   (hover/focus/click combinations, each fixing a real bug the last one
   caused - full history in git blame on `build_tabs.templ`/
-  `scheduling.js`) before settling on plain `load once` plus a
+  `scheduling-build.js`) before settling on plain `load once` plus a
   client-side visibility resync (`syncBuildTabVisibility`) that makes
   hidden-state self-healing regardless of whether a click or a
   still-in-flight background fetch lands last.

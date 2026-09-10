@@ -548,7 +548,7 @@ pattern as `song_tags`/`song_relationships`:**
   both the add-range form and the ranges table
   (`internal/views/scheduling/vocal_range.templ`), plays a reference tone
   via `playVocalTone`/`playVocalNoteFromInput`
-  (`web/static/js/scheduling.js`). Initially built as a **synthesized**
+  (`web/static/js/scheduling-vocal-range.js`). Initially built as a **synthesized**
   tone only (a Web Audio `OscillatorNode` at the correct frequency,
   standard equal-tempered A440 tuning), reasoning that a clean sine tone
   is just as good a pitch reference as a recorded note and needs zero

@@ -118,7 +118,7 @@ main:has(.build-layout) {
 }
 
 /* The Build page's "at a glance" sidebar (see build.templ, toggleBuildTab
-   in scheduling.js) - a standing summary of whichever tab isn't currently
+   in scheduling-build.js) - a standing summary of whichever tab isn't currently
    open. Mobile-first: stacked full-width below the tabs by default (no
    room for a true margin on a phone), moving beside them at the same
    900px breakpoint the landing page's own two-column sections use. */
@@ -198,7 +198,7 @@ main:has(.build-layout) {
 
 /* glance-link is TeamGlanceList's button-as-text idiom (status_summary.
    templ) - a position name or an assigned person's own name/avatar,
-   clickable via jumpToTeamPosition (scheduling.js), styled to read as
+   clickable via jumpToTeamPosition (scheduling-build.js), styled to read as
    plain row content rather than a button. Same reset idiom
    .collapsible-toggle already uses (collapsible.css), not a new pattern.
    inline-flex + gap so an avatar (when present - assigned-person links

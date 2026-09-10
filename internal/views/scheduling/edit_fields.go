@@ -7,7 +7,7 @@ import (
 
 // editFieldsAttr JSON-encodes a setup-page row's current values for its
 // Edit button's data-edit-fields attribute (see editRow in
-// web/static/js/scheduling.js, which reads it back and writes each value into
+// web/static/js/scheduling-setup-forms.js, which reads it back and writes each value into
 // the matching named form field). templ escapes the attribute value for
 // us; this only needs to produce valid JSON. Encoding a map[string]string
 // can't actually fail, but a swallowed "{}" beats panicking a page render

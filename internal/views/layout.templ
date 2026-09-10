@@ -46,6 +46,26 @@ var designSystemCSSFiles = []string{
 	"style-guide.css",
 }
 
+// schedulingJSFiles is loaded after htmx.min.js (see Head below) - the
+// former single scheduling.js (2,611 lines) split into one file per
+// concern, the same per-concern split designSystemCSSFiles already uses
+// for CSS above. Every function/listener across these files is still
+// plain global scope (no modules/bundler - see CLAUDE.md's web/static
+// bullet), so load order among them doesn't matter functionally; this
+// just keeps the original file's own section order for readability. A new
+// scheduling*.js file must be added here to actually load, same "adding
+// the file alone isn't enough" trap designSystemCSSFiles' own doc comment
+// warns about for CSS.
+var schedulingJSFiles = []string{
+	"scheduling-global.js",
+	"scheduling-build.js",
+	"scheduling-setup-forms.js",
+	"scheduling-song-tags-contexts.js",
+	"scheduling-collapsible.js",
+	"scheduling-sortable-table.js",
+	"scheduling-vocal-range.js",
+}
+
 // Head is the <head> every page shares - the authenticated app shell
 // (Layout, below) and the public Landing page alike - so cache-busted
 // asset links, the favicon/manifest, and font preconnects live in exactly
@@ -75,7 +95,9 @@ templ Head(title string) {
 			<link rel="stylesheet" href={ "/static/css/" + f + "?v=" + AssetVersion }/>
 		}
 		<script src={ "/static/js/htmx.min.js?v=" + AssetVersion }></script>
-		<script src={ "/static/js/scheduling.js?v=" + AssetVersion }></script>
+		for _, f := range schedulingJSFiles {
+			<script src={ "/static/js/" + f + "?v=" + AssetVersion }></script>
+		}
 		<script src={ "/static/js/register-sw.js?v=" + AssetVersion }></script>
 		<script src={ "/static/js/install-prompt.js?v=" + AssetVersion }></script>
 		{ children... }
@@ -95,7 +117,7 @@ templ Layout(title string, personName string, organizationName string) {
 						Below header.site's own row/column breakpoint, this is the
 						only other thing in the visible bar - everything else
 						(site-nav, site-actions) collapses behind it (see
-						toggleMobileMenu, scheduling.js) rather than wrapping into
+						toggleMobileMenu, scheduling-global.js) rather than wrapping into
 						several busy rows. Hidden entirely at that breakpoint, where
 						site-nav/site-actions are just always visible again.
 					-->
@@ -125,7 +147,7 @@ templ Layout(title string, personName string, organizationName string) {
 							footer Help button. Reuses the exact same "nav-dropdown"
 							mechanism as the "Setup" dropdown above (toggleNavDropdown,
 							positionNavDropdown, closeNavDropdowns, the document-level
-							outside-click/Escape handlers - all in scheduling.js) rather
+							outside-click/Escape handlers - all in scheduling-global.js) rather
 							than inventing a second one: every one of those already
 							operates on every ".nav-dropdown*" element on the page, not
 							a single hardcoded instance, so a second dropdown sharing
@@ -245,13 +267,13 @@ templ navMenuContent() {
 }
 
 // genericHelpDialog is the Help button's (site-footer, above) last-resort
-// fallback - see scheduling.js's openPageHelp doc comment for the full
+// fallback - see scheduling-global.js's openPageHelp doc comment for the full
 // dispatch order. Rendered unconditionally in Layout itself (not gated on
 // personName, unlike the footer's Help button that's the only thing that
 // can open it) so it always exists regardless of which page's own
 // {children...} rendered - the same "exists on every page, findable by
 // id" reasoning as installPromptBanner below, just never auto-shown.
-// Opens/closes via openHelpDialog/closeHelpDialog (scheduling.js), the
+// Opens/closes via openHelpDialog/closeHelpDialog (scheduling-global.js), the
 // same minimal stateless pair backing the 8 new setup-page dialogs -
 // there's exactly one step here too, so createTourController's
 // auto-open/localStorage/query-param machinery (built for the Home/Build

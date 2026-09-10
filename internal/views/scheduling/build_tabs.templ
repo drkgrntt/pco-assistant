@@ -12,7 +12,7 @@ type BuildTab struct {
 
 // tabButtonAttrs builds one tab button's full attribute set - just the
 // plain client-side toggleBuildTab onclick every tab gets. A plain Go
-// func rather than an inline templ attribute since scheduling.js's onclick
+// func rather than an inline templ attribute since scheduling-build.js's onclick
 // string is built the same way every tab, and keeping this as its own
 // small function leaves room for tabPanelLazyAttrs' doc comment to explain
 // why the lazy-fetch attributes deliberately do *not* live here too (see
@@ -37,7 +37,7 @@ func tabButtonAttrs(t BuildTab) templ.Attributes {
 // inactive" hidden state that was true when the request went out, so
 // landing it after toggleBuildTab already switched tabs stamped the wrong
 // hidden/visible state right back on top of what the click had just set
-// correctly. See scheduling.js's syncBuildTabVisibility/currentBuildTab
+// correctly. See scheduling-build.js's syncBuildTabVisibility/currentBuildTab
 // for the actual, ordering-independent fix to that (it can still happen
 // with only "load" firing, if that fetch is still in flight at the moment
 // of a click - the trigger fix here only stops making it worse with a

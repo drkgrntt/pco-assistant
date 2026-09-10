@@ -28,7 +28,7 @@
 
 /* Keeps the "+1 8ve"/"-1 8ve" indicator from shifting the octave buttons
    left/right as its text appears/disappears (empty at the default, no
-   shift, state - see renderVocalRangePreview, scheduling.js). */
+   shift, state - see renderVocalRangePreview, scheduling-vocal-range.js). */
 .vocal-range-preview-shift {
   display: inline-block;
   min-width: 3.5rem;
