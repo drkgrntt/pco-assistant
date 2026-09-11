@@ -42,8 +42,12 @@ templ Privacy() {
 						Once you're signed in, Resonance reads your church's own data
 						live from Planning Center, as you, to show it back to you: people
 						and team members, songs, plans, teams, positions, and service
-						types. That data stays in Planning Center - Resonance is looking
-						at it, not copying it into its own database.
+						types. Planning Center stays the source of truth for all of it -
+						Resonance isn't building its own copy of your library or
+						schedule. A few pieces of it do get cached locally for a short
+						time, purely to avoid re-fetching the same data on every page load
+						and to stay under Planning Center's own API rate limit - see the
+						next section.
 					</p>
 					<h2>What Resonance actually stores</h2>
 					<p>
@@ -74,11 +78,13 @@ templ Privacy() {
 					<p>
 						Some Planning Center data - song arrangement details like key,
 						tempo, and length, and people's team-availability history - gets
-						cached locally for a short time, purely so Resonance doesn't have
-						to re-fetch it from Planning Center on every page load. This isn't
-						new data collection; it's a temporary copy of data Planning
-						Center already has, and it expires and refreshes automatically on
-						its own.
+						cached in Resonance's own database for a short time, purely so
+						Resonance doesn't have to re-fetch it from Planning Center on
+						every page load and so normal use doesn't run into Planning
+						Center's rate limit on how many requests an account can make.
+						This isn't new data collection; it's a temporary copy of data
+						Planning Center already has, and it expires and refreshes
+						automatically on its own.
 					</p>
 					<h2>Account and session data</h2>
 					<p>Resonance also stores what it needs to keep your organization signed in and billed correctly:</p>

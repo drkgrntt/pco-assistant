@@ -5,14 +5,18 @@
    else already does (see scheduling-global.js's early theme-preference IIFE,
    loaded here too via Head). */
 
+/* Border/background and content both run edge to edge - only the
+   .landing-header-inner padding keeps the brand/nav/actions off the
+   viewport's own edges. */
 .landing-header {
+  border-bottom: 1px solid var(--border);
+}
+
+.landing-header-inner {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  max-width: 60rem;
-  margin: 0 auto;
   padding: var(--space-4);
-  border-bottom: 1px solid var(--border);
 }
 
 .landing-brand {
@@ -315,18 +319,20 @@
 
 /* === Footer ====================================================================== */
 
+/* Same edge-to-edge treatment as .landing-header above. */
 .landing-footer {
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.landing-footer-inner {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-  max-width: 60rem;
-  margin: 0 auto;
   padding: var(--space-6) var(--space-4);
-  border-top: 1px solid var(--border);
-  color: var(--muted);
-  font-size: var(--text-sm);
 }
 
 .landing-footer-nav {

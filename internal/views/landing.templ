@@ -115,17 +115,19 @@ templ Landing() {
 // CLAUDE.md's Architecture section).
 templ marketingHeader() {
 	<header class="landing-header">
-		<a href="/" class="landing-brand">Resonance</a>
-		<nav class="landing-nav">
-			<a href="/how-it-works">How it works</a>
-			<a href="/pricing">Pricing</a>
-		</nav>
-		<div class="landing-header-actions">
-			<button type="button" class="theme-toggle" onclick="toggleTheme()" aria-label="Switch between light and dark theme" title="Switch between light and dark theme">
-				@components.IconSun()
-				@components.IconMoon()
-			</button>
-			<a href="/login">Sign in</a>
+		<div class="landing-header-inner">
+			<a href="/" class="landing-brand">Resonance</a>
+			<nav class="landing-nav">
+				<a href="/how-it-works">How it works</a>
+				<a href="/pricing">Pricing</a>
+			</nav>
+			<div class="landing-header-actions">
+				<button type="button" class="theme-toggle" onclick="toggleTheme()" aria-label="Switch between light and dark theme" title="Switch between light and dark theme">
+					@components.IconSun()
+					@components.IconMoon()
+				</button>
+				<a href="/login">Sign in</a>
+			</div>
 		</div>
 	</header>
 }
@@ -133,13 +135,15 @@ templ marketingHeader() {
 // marketingFooter mirrors marketingHeader - see its doc comment.
 templ marketingFooter() {
 	<footer class="landing-footer">
-		<span>Resonance · built on Planning Center Services</span>
-		<nav class="landing-footer-nav">
-			<a href="/how-it-works">How it works</a>
-			<a href="/pricing">Pricing</a>
-			<a href="/privacy">Privacy</a>
-			<a href="/terms">Terms</a>
-			<a href="/login">Sign in</a>
-		</nav>
+		<div class="landing-footer-inner">
+			<span>Resonance · built on Planning Center Services</span>
+			<nav class="landing-footer-nav">
+				<a href="/how-it-works">How it works</a>
+				<a href="/pricing">Pricing</a>
+				<a href="/privacy">Privacy</a>
+				<a href="/terms">Terms</a>
+				<a href="/login">Sign in</a>
+			</nav>
+		</div>
 	</footer>
 }
