@@ -56,14 +56,15 @@ with at least Viewer access can still sign in.
   another campus, or whatever fits your church - a per-org list you name
   yourself, not a fixed lookup) - shown as badges and filterable while
   building a set, the same way Song Roles is
-- **Song Tag Suggestions** - a non-AI suggestion tool that groups songs
-  sharing a significant word in their titles (e.g. "King of Kings,"
-  "Christ the King," and "All Hail King Jesus" all sharing "king"), so you
-  can review a group and tag them all at once instead of tagging every
-  song by hand. Also surfaces a second, higher-precision set of
-  suggestions straight from Planning Center's own Themes field on a song
-  (CCLI/PCO's own curated theological vocabulary, e.g. "Kingship" or
-  "God's Attributes"), shown as its own labeled section on the same page
+- **Song Tag Suggestions** - a non-AI suggestion tool, built into the Song
+  Tags setup page as a dismissible Suggestions panel (not a separate page),
+  that groups songs sharing a significant word in their titles (e.g. "King
+  of Kings," "Christ the King," and "All Hail King Jesus" all sharing
+  "king"), so you can review a group and tag them all at once instead of
+  tagging every song by hand. Also surfaces a second, higher-precision set
+  of suggestions straight from Planning Center's own Themes field on a
+  song (CCLI/PCO's own curated theological vocabulary, e.g. "Kingship" or
+  "God's Attributes"), shown as its own labeled section of the same panel
 - **Song Info** - each song's Planning Center arrangement (key, tempo,
   meter, length) is cached locally so showing it doesn't mean a live
   Planning Center request per song on every page load - a song gets

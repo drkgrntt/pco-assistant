@@ -1,25 +1,23 @@
 package scheduling
 
-import "pco-assistant/internal/scheduling"
-
-// SongTagSuggestionsData is the Song Tag Suggestions page's full view
-// model - see the controller's songTagSuggestions for how Suggestions is
-// computed (shared-title-word grouping over the org's whole song library),
-// and songThemeSuggestions for how ThemeSuggestions is computed (grouping
-// by a shared value from PCO's own Themes field on a song).
-type SongTagSuggestionsData struct {
-	Suggestions      []SongTagSuggestionGroup
-	ThemeSuggestions []SongTagSuggestionGroup
-	TagCategories    []scheduling.SongTagCategory
-	ErrMsg           string
-	// SuccessMsg reports the outcome of the last Apply/Ignore action, same
-	// pattern as every other setup page's PublishMsg/success line.
-	SuccessMsg string
+// SongTagSuggestionsPanelData is the Song Tags page's Suggestions panel
+// view model (SongTagSuggestionsPanel, song_tags.templ) - see the
+// controller's songTagSuggestions for how TitleGroups is computed
+// (shared-title-word grouping over the org's whole song library), and
+// songThemeSuggestions for how ThemeGroups is computed (grouping by a
+// shared value from PCO's own Themes field on a song). Unlike the former
+// standalone page's SongTagSuggestionsData, there's no ErrMsg/SuccessMsg
+// here - the panel is rendered as an OOB swap alongside SongTagsList's own
+// success/error messaging (song_tags.templ), so a second copy of that
+// would be redundant.
+type SongTagSuggestionsPanelData struct {
+	TitleGroups []SongTagSuggestionGroup
+	ThemeGroups []SongTagSuggestionGroup
 }
 
 // SongTagSuggestionGroup is one shared-value suggestion group - Word holds
-// a shared title word for a Suggestions entry, or a shared PCO theme
-// phrase (possibly containing spaces/punctuation) for a ThemeSuggestions
+// a shared title word for a TitleGroups entry, or a shared PCO theme
+// phrase (possibly containing spaces/punctuation) for a ThemeGroups
 // entry - plus every song that value appears on.
 type SongTagSuggestionGroup struct {
 	Word  string

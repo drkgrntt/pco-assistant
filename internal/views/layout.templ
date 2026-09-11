@@ -41,7 +41,6 @@ var designSystemCSSFiles = []string{
 	"home.css",
 	"sign-in.css",
 	"song-contexts.css",
-	"song-tag-suggestions.css",
 	"song-tags.css",
 	"song-vocal-range.css",
 	"style-guide.css",
@@ -249,17 +248,28 @@ templ navMenuContent() {
 	<a href="/scheduling/song-relationships">Song Relationships</a>
 	<a href="/scheduling/song-roles">Song Roles</a>
 	<a href="/scheduling/song-contexts">Song Contexts</a>
-	<a href="/scheduling/song-tags">Song Tags</a>
 	<!--
-		Hidden once there's nothing pending there (see
-		middleware.PopulateNavState/nav_state.go) - an "actionable
-		inbox" item that's actually empty is clutter, not
-		configuration to revisit. Reappears on its own the moment
-		a new song creates a suggestion.
+		The former separate "Song Tag Suggestions" link (a standalone
+		page) is gone - see
+		docs/plans/shipped/song-tags-suggestions-merge-plan.md - its
+		suggestions now live in a dismissible panel on this same Song
+		Tags page. The badge preserves the old link's "something's
+		pending" ambient nudge (middleware.PopulateNavState/
+		nav_state.go): an actionable inbox item that's actually empty
+		is clutter, not configuration to revisit, and it reappears on
+		its own the moment a new song creates a suggestion. No
+		existing per-nav-link badge precedent to match (components.
+		Badge isn't otherwise used inside navMenuContent), and
+		PopulateNavState only ever tracks a pending bool, not a count
+		(deliberately unchanged by this merge - see that doc), so this
+		is a plain indicator rather than a real "(N)" count.
 	-->
-	if navSuggestionsPending(ctx) {
-		<a href="/scheduling/song-tag-suggestions">Song Tag Suggestions</a>
-	}
+	<a href="/scheduling/song-tags">
+		Song Tags
+		if navSuggestionsPending(ctx) {
+			@components.Badge("status-pending", "New")
+		}
+	</a>
 	<a href="/scheduling/song-preferences">Song / Person Preferences</a>
 	<a href="/scheduling/person-relationships">Person Relationships</a>
 	<a href="/scheduling/position-preferences">Position Preferences</a>

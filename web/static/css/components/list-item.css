@@ -49,7 +49,7 @@
    siblings end up right-aligned on the title's own first line instead of
    getting pushed below it - a row with no arrangement-info span (most
    rows: assignment/candidate/suggestion rows on the Team tab, a
-   song_tag_suggestions.templ entry, etc.) renders as that one line only,
+   song_tags.templ suggestion-panel entry, etc.) renders as that one line only,
    wrapping further only if the browser genuinely runs out of horizontal
    space. */
 .suggestion-list li > span:first-child,

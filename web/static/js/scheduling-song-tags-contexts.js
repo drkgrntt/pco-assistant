@@ -57,6 +57,52 @@ document.addEventListener("htmx:afterSwap", function (event) {
   updateSongTagBulkCount();
 });
 
+// applySongTagSuggestion backs the Song Tags page's Suggestions panel
+// (SongTagSuggestionsPanel, song_tags.templ) - selecting a suggestion
+// doesn't apply anything itself, it just opens/pre-fills the existing
+// songTagBulkAddForm and checks the matching songs' own
+// .song-tag-bulk-checkboxes, exactly as if someone had opened that form
+// and clicked those checkboxes by hand. Nothing actually gets tagged
+// until that form is reviewed and submitted - same "review before it
+// commits" property this app's other setup-page forms already have. The
+// triggering button carries its own data (data-category/data-value/
+// data-song-ids, set by songTagSuggestionRow, song_tags.templ) rather
+// than this function deriving anything itself, so the exact same
+// suggestion data driving the panel's own recap text is what ends up
+// pre-filled here.
+function applySongTagSuggestion(button) {
+  var category = button.dataset.category || "";
+  var value = button.dataset.value || "";
+  var songIds = (button.dataset.songIds || "").split(",").filter(function (id) {
+    return id !== "";
+  });
+
+  var details = document.querySelector(".song-tag-bulk-details");
+  if (details) {
+    details.open = true;
+  }
+
+  var form = document.getElementById("song-tag-bulk-form");
+  if (!form) {
+    return;
+  }
+  var categorySelect = form.querySelector('select[name="category"]');
+  if (categorySelect) {
+    categorySelect.value = category;
+  }
+  var valueInput = form.querySelector('input[name="value"]');
+  if (valueInput) {
+    valueInput.value = value;
+  }
+
+  document.querySelectorAll(".song-tag-bulk-checkbox").forEach(function (checkbox) {
+    checkbox.checked = songIds.indexOf(checkbox.value) !== -1;
+  });
+  updateSongTagBulkCount();
+
+  form.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
 // filterSongContextCards backs the Song Contexts setup page's own
 // "Tag a song" filter box (song_contexts.templ): the free-text
 // #song-context-filter box, applied against each already-rendered

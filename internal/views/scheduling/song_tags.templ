@@ -25,7 +25,7 @@ import (
 // - a local-DB read is cheap regardless of library size, no PCO cost concern
 // here - with #song-tag-filter below just hiding non-matching cards
 // client-side (filterSongTagCards, scheduling-song-tags-contexts.js) for a large library.
-templ SongTags(personName, organizationName string, songs []pco.SongData, tagsBySong map[string][]scheduling.SongTag, categories []scheduling.SongTagCategory, categoryLabels map[string]string, errMsg string) {
+templ SongTags(personName, organizationName string, songs []pco.SongData, tagsBySong map[string][]scheduling.SongTag, categories []scheduling.SongTagCategory, categoryLabels map[string]string, panelData SongTagSuggestionsPanelData, errMsg string) {
 	@views.Layout("Song Tags", personName, organizationName) {
 		@songTagsHelp()
 		<h1>Song Tags</h1>
@@ -43,6 +43,7 @@ templ SongTags(personName, organizationName string, songs []pco.SongData, tagsBy
 			</label>
 			@songTagFilterChips(distinctTagValues(tagsBySong))
 		</div>
+		@SongTagSuggestionsPanel(panelData)
 		@songTagBulkAddForm(categories)
 		@SongTagsList(songs, tagsBySong, categories, categoryLabels, "", errMsg)
 	}
@@ -89,6 +90,173 @@ templ songTagBulkAddForm(categories []scheduling.SongTagCategory) {
 		</form>
 		<p class="muted song-tag-bulk-hint">Check the songs below, then submit.</p>
 	</details>
+}
+
+// SongTagSuggestionsPanel is the "already know the tag, just need to find
+// which songs share it" counterpart to songTagBulkAddForm above - see
+// docs/plans/shipped/song-tags-suggestions-merge-plan.md for why this
+// replaced the old standalone /scheduling/song-tag-suggestions page.
+// Selecting a suggestion doesn't apply anything itself (no server round
+// trip): applySongTagSuggestion (scheduling-song-tags-contexts.js) just
+// opens/fills songTagBulkAddForm's own form and checks the matching
+// songs' .song-tag-bulk-checkboxes, so review-then-submit still happens
+// through that one existing form - see this page's own doc comment on why
+// that form lives outside #song-tags-list, the same reason this panel
+// does too. Rendered at page load here, and refreshed via
+// songTagSuggestionsPanelOOB below on every Create/Bulk/Delete (a tag
+// change can shrink or remove a group) - id="song-tag-suggestions-panel"
+// is what that OOB swap targets, kept in sync with the same id on both,
+// same "must render unconditionally, even empty, so an OOB swap always
+// has a matching id to replace into" gotcha songTagFilterChips documents
+// above.
+templ SongTagSuggestionsPanel(data SongTagSuggestionsPanelData) {
+	@collapsibleSection("song-tag-suggestions-panel", "Suggestions", songTagSuggestionsPanelHasPending(data)) {
+		@songTagSuggestionsPanelBody(data)
+	}
+}
+
+// songTagSuggestionsPanelOOB is SongTagSuggestionsPanel's out-of-band
+// refresh, included in SongTagsMutationResponse below - a full outerHTML
+// replace by id, the same approach songTagFilterChipsOOB takes for the
+// filter chips. Hand-duplicates collapsibleSection's own small wrapper
+// markup (rather than modifying collapsibleSection to accept an
+// hx-swap-oob attribute, which every other caller would have to thread
+// through unused) so the id itself can carry hx-swap-oob="true"; the
+// actual suggestion content stays in the one shared
+// songTagSuggestionsPanelBody so there's nothing to keep in sync between
+// this and SongTagSuggestionsPanel beyond that wrapper.
+templ songTagSuggestionsPanelOOB(data SongTagSuggestionsPanelData) {
+	<div class={ "collapsible", templ.KV("open", songTagSuggestionsPanelHasPending(data)) } id="song-tag-suggestions-panel" hx-swap-oob="true">
+		<button type="button" class="collapsible-toggle" onclick="toggleCollapse(this)" aria-expanded={ fmt.Sprintf("%t", songTagSuggestionsPanelHasPending(data)) }>
+			<span>Suggestions</span>
+			@components.IconChevronDown()
+		</button>
+		<div class="collapsible-body">
+			@songTagSuggestionsPanelBody(data)
+		</div>
+	</div>
+}
+
+func songTagSuggestionsPanelHasPending(data SongTagSuggestionsPanelData) bool {
+	return len(data.TitleGroups) > 0 || len(data.ThemeGroups) > 0
+}
+
+// songTagSuggestionsPanelBody is the actual suggestions content shared by
+// SongTagSuggestionsPanel and its OOB variant above - two sources, same
+// row family, mirroring the old standalone page's two sections
+// (SongTagSuggestionsList) just rendered as rows instead of cards.
+templ songTagSuggestionsPanelBody(data SongTagSuggestionsPanelData) {
+	if !songTagSuggestionsPanelHasPending(data) {
+		<p class="muted">No suggestions right now.</p>
+	}
+	if len(data.TitleGroups) > 0 {
+		<h4>From song titles</h4>
+		<ul class="suggestion-list">
+			for _, group := range data.TitleGroups {
+				@songTagSuggestionRow(group, fmt.Sprintf("%q appears in %d song titles", group.Word, len(group.Songs)))
+			}
+		</ul>
+	}
+	if len(data.ThemeGroups) > 0 {
+		<h4>From Planning Center themes</h4>
+		<ul class="suggestion-list">
+			for _, group := range data.ThemeGroups {
+				@songTagSuggestionRow(group, fmt.Sprintf("%q appears on %d songs", group.Word, len(group.Songs)))
+			}
+		</ul>
+	}
+}
+
+// songTagSuggestionRow is one suggestion group's row in the
+// suggestion-list/ListItem family (components/list_item.templ) - the
+// closest existing precedent is set_builder.templ's "Recommended next
+// songs"/"Songs to reinforce" panels (search "recommended-next-songs"
+// there): a title span, muted meta, and a trailing action, reused here
+// rather than inventing a new row shape. Unlike that panel's rows, this
+// one also recaps the not-yet-tagged songs it's about to select
+// (suggestionRowSongTitles) - the matching cards can be anywhere in this
+// page's own unconditionally-rendered all-songs list, not just the ones
+// currently in view, so this recap is the only place that list appears,
+// not a redundant second copy of something already on screen. Skipped
+// entirely once every song in the group is already tagged (nothing left
+// to select) - matches songTagSuggestionGroups' own allTagged-skip
+// behavior (internal/scheduling/song_tag_suggestions.go), which already
+// keeps a fully-tagged group out of TitleGroups/ThemeGroups in the first
+// place; this is a defensive second check, not the primary guarantee.
+templ songTagSuggestionRow(group SongTagSuggestionGroup, why string) {
+	{{ untagged := untaggedSuggestedSongs(group.Songs) }}
+	if len(untagged) > 0 {
+		@components.ListItem("", nil, capitalize(group.Word)) {
+			<span class="muted">{ why }</span>
+			<span class="muted">{ suggestionRowSongTitles(untagged) }</span>
+			<button
+				type="button"
+				onclick="applySongTagSuggestion(this)"
+				data-category={ scheduling.TagCategoryTheme }
+				data-value={ capitalize(group.Word) }
+				data-song-ids={ suggestionRowSongIDs(untagged) }
+			>
+				Select these songs
+			</button>
+			<form
+				hx-post="/scheduling/song-tags/suggestions/ignore"
+				hx-target="#song-tag-suggestions-panel"
+				hx-swap="outerHTML"
+				hx-confirm={ fmt.Sprintf("Stop suggesting %q? This can't be undone from here.", group.Word) }
+			>
+				<input type="hidden" name="word" value={ group.Word }/>
+				<button type="submit" class="danger">Ignore</button>
+			</form>
+		}
+	}
+}
+
+// untaggedSuggestedSongs filters a suggestion group down to the songs that
+// aren't already tagged with its word - those are the only ones
+// applySongTagSuggestion (scheduling-song-tags-contexts.js) needs to
+// select, and the only ones worth recapping (an already-tagged song's own
+// card already shows the tag).
+func untaggedSuggestedSongs(songs []SuggestedSongView) []SuggestedSongView {
+	out := make([]SuggestedSongView, 0, len(songs))
+	for _, s := range songs {
+		if !s.AlreadyTagged {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// suggestionRowSongTitles/suggestionRowSongIDs build songTagSuggestionRow's
+// comma-joined title recap and its button's data-song-ids attribute
+// (comma-split by applySongTagSuggestion) - both driven off the same
+// already-filtered untagged slice so they stay in lockstep.
+func suggestionRowSongTitles(songs []SuggestedSongView) string {
+	titles := make([]string, len(songs))
+	for i, s := range songs {
+		titles[i] = s.Title
+	}
+	return strings.Join(titles, ", ")
+}
+
+func suggestionRowSongIDs(songs []SuggestedSongView) string {
+	ids := make([]string, len(songs))
+	for i, s := range songs {
+		ids[i] = s.SongID
+	}
+	return strings.Join(ids, ",")
+}
+
+// capitalize turns a suggestion's lowercase word (see songTagSuggestions in
+// the controller) into a reasonable starting point for the tag value's
+// text input - "king" -> "King". Purely a starting point: the input is
+// fully editable, so renaming it to "Kingship" or anything else is just
+// typing over this default. Moved here from the former standalone
+// song_tag_suggestions.templ - same helper, same reasoning.
+func capitalize(word string) string {
+	if word == "" {
+		return word
+	}
+	return strings.ToUpper(word[:1]) + word[1:]
 }
 
 // songTagsHelp is this page's Help-triggered dialog - see
@@ -227,12 +395,15 @@ templ SongTagsList(songs []pco.SongData, tagsBySong map[string][]scheduling.Song
 // htmx response (song_tags.go): SongTagsList as the primary swap target,
 // plus songTagFilterChipsOOB's own out-of-band refresh so a newly-used tag
 // value's filter chip appears without a reload - see that function's doc
-// comment. Kept separate from SongTagsList itself so SongTags' initial
-// full-page render (which calls SongTagsList directly) doesn't render the
-// chips twice.
-templ SongTagsMutationResponse(songs []pco.SongData, tagsBySong map[string][]scheduling.SongTag, categories []scheduling.SongTagCategory, categoryLabels map[string]string, successMsg, errMsg string) {
+// comment - and songTagSuggestionsPanelOOB's own refresh, since any of
+// these three mutations can shrink or remove a suggestion group (a tag
+// just got added/edited/removed). Kept separate from SongTagsList itself
+// so SongTags' initial full-page render (which calls SongTagsList
+// directly) doesn't render the chips/panel twice.
+templ SongTagsMutationResponse(songs []pco.SongData, tagsBySong map[string][]scheduling.SongTag, categories []scheduling.SongTagCategory, categoryLabels map[string]string, panelData SongTagSuggestionsPanelData, successMsg, errMsg string) {
 	@SongTagsList(songs, tagsBySong, categories, categoryLabels, successMsg, errMsg)
 	@songTagFilterChipsOOB(distinctTagValues(tagsBySong))
+	@songTagSuggestionsPanelOOB(panelData)
 }
 
 // SongTagCard is one song's persistent card: its existing tags as chips
