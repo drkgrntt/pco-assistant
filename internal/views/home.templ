@@ -56,7 +56,7 @@ templ Home(personName, organizationName string, data HomeData) {
 		if data.SuggestionCount > 0 {
 			<p>
 				{ fmt.Sprintf("%d song tag suggestion(s) waiting for review.", data.SuggestionCount) }
-				<a href="/scheduling/song-tag-suggestions">Review suggestions</a>
+				<a href="/scheduling/song-tags">Review suggestions</a>
 			</p>
 		}
 
@@ -113,12 +113,15 @@ templ Home(personName, organizationName string, data HomeData) {
 					waiting, same SuggestionCount fact the nudge paragraph
 					above already computes, not a second lookup. Mirrors the
 					nav dropdown's own version of this (see layout.templ,
-					middleware.PopulateNavState).
+					middleware.PopulateNavState). Links to the Song Tags
+					page itself (its own Suggestions panel, not a dedicated
+					page - see
+					docs/plans/shipped/song-tags-suggestions-merge-plan.md).
 				-->
 				if group.Title == "Protect the service" && data.SuggestionCount > 0 {
 					<li>
-						<a href="/scheduling/song-tag-suggestions">Song tag suggestions</a>
-						<span class="muted">Review songs sharing a title word and tag them together.</span>
+						<a href="/scheduling/song-tags">Song tag suggestions</a>
+						<span class="muted">Review songs sharing a title word or theme and tag them together.</span>
 					</li>
 				}
 			</ul>

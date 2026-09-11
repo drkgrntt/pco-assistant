@@ -41,7 +41,7 @@ const homeLookAheadPlansCap = 3
 type HomeController struct {
 	// schedulingController is shared (constructed once in routes.go, not
 	// duplicated) so Home can reuse its private page-builder methods
-	// (planStatus, rosterStatus, buildSongTagSuggestionsData) instead of
+	// (planStatus, rosterStatus, songTagSuggestionPendingCount) instead of
 	// re-implementing any of them - see buildHomeData.
 	schedulingController *SchedulingController
 	authStore            *auth.Store
@@ -77,9 +77,9 @@ func (hc *HomeController) Index(c *fiber.Ctx) error {
 // it reusing logic other pages already have, not new queries: the next
 // plan per service type (capped, see homeServiceTypesCap) with its real
 // song/team status exactly like the Build page's own plan list computes
-// per-row (combinedPlansForServiceType, build.go); the Song Tag
-// Suggestions count, straight from that page's own data-builder; and
-// trial/plan status from organizations, same calculation buildBillingData
+// per-row (combinedPlansForServiceType, build.go); the Song Tags page's
+// own Suggestions panel pending count (songTagSuggestionPendingCount,
+// song_tags.go); and trial/plan status from organizations, same calculation buildBillingData
 // already does. Every piece is best-effort - a failed lookup just leaves
 // that section empty, never breaks the page. No Song Info cache coverage
 // here any more - that nudge is gone now that a miss syncs itself in the
@@ -193,8 +193,7 @@ func (hc *HomeController) buildHomeData(ctx context.Context, organizationID stri
 		}
 	}
 
-	suggestions := hc.schedulingController.buildSongTagSuggestionsData(ctx, organizationID)
-	data.SuggestionCount = len(suggestions.Suggestions)
+	data.SuggestionCount = hc.schedulingController.songTagSuggestionPendingCount(ctx, organizationID)
 
 	data.Onboarding = hc.buildOnboardingChecklist(ctx, organizationID)
 
