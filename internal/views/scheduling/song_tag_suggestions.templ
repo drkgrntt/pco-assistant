@@ -79,24 +79,20 @@ templ SongTagSuggestionsList(data SongTagSuggestionsData) {
 // than derived here.
 templ songTagSuggestionGroupCard(group SongTagSuggestionGroup, categories []scheduling.SongTagCategory, cardTitle string) {
 	@components.Card(cardTitle) {
-		<ul class="candidate-list">
-			for _, song := range group.Songs {
-				@components.ListItem("", nil, song.Title) {
-					if song.AlreadyTagged {
-						@components.Badge("published", "Already tagged")
-					}
-				}
-			}
-		</ul>
 		<form
 			class="inline"
 			hx-post="/scheduling/song-tag-suggestions/apply"
 			hx-target="#song-tag-suggestions-list"
 			hx-swap="outerHTML"
 		>
-			<div class="quick-add-panel">
+			<div class="song-tag-suggestion-songs">
 				for _, song := range group.Songs {
-					if !song.AlreadyTagged {
+					if song.AlreadyTagged {
+						<label class="checkbox-label song-tag-suggestion-tagged">
+							{ song.Title }
+							@components.Badge("published", "Already tagged")
+						</label>
+					} else {
 						<label class="checkbox-label">
 							<input type="checkbox" name="song_ids" value={ song.SongID } checked/>
 							{ song.Title }
