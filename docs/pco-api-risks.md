@@ -967,3 +967,17 @@ out to 100-200 sequential round trips per load.
   into all three places that independently built a `teamNames`/`teamName`
   value from `shared.TeamInfo` (`buildRosterBuilderData`,
   `buildRosterLightData`, `buildRosterPositionGroupData`).
+- **Song Tag Suggestions now also reads PCO's own `Themes` field
+  (2026-09-11)** - Phase 1 of
+  `docs/plans/in-progress/song-theme-and-lyric-tag-suggestions-plan.md`.
+  `pco.SongData.Attributes.Themes` is a plain string already returned by
+  the exact same `services/v2/songs` call `scheduling.FetchActiveSongs`
+  already makes and already caches for 60s - this app just never read that
+  field before. **Zero new PCO calls, zero new caching, no migration at
+  all** - `scheduling.SongThemeSuggestions` (new, alongside the existing
+  title-word `SongTagSuggestions`, both now delegating to a shared
+  `songTagSuggestionGroups` helper) and `middleware.PopulateNavState`'s
+  extended pending-suggestions check both just do a second pure
+  computation over the same `songs`/`tags`/`ignored` data already in
+  scope. Phase 2 of that plan (lyric-derived suggestions, extending
+  `song_arrangement_cache`) is not yet built.

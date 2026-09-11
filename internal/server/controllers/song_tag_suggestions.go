@@ -25,13 +25,11 @@ func songTitleWords(title string) map[string]bool {
 	return scheduling.SongTitleWords(title)
 }
 
-// songTagSuggestions renders the shared scheduling.SongTagSuggestions
-// result (see its own doc comment for the actual grouping/matching rules)
-// into this page's view types - all the real logic now lives in
+// songTagSuggestionGroupViews is the shared scheduling.SongTagSuggestionGroup
+// -> views.SongTagSuggestionGroup translation both songTagSuggestions and
+// songThemeSuggestions use - all the real logic lives in
 // internal/scheduling; this is just the view-shape translation.
-func songTagSuggestions(songs []pco.SongData, existingTags []scheduling.SongTag, ignoredWords map[string]bool) []views.SongTagSuggestionGroup {
-	groups := scheduling.SongTagSuggestions(songs, existingTags, ignoredWords)
-
+func songTagSuggestionGroupViews(groups []scheduling.SongTagSuggestionGroup) []views.SongTagSuggestionGroup {
 	out := make([]views.SongTagSuggestionGroup, len(groups))
 	for i, g := range groups {
 		songViews := make([]views.SuggestedSongView, len(g.Songs))
@@ -45,6 +43,21 @@ func songTagSuggestions(songs []pco.SongData, existingTags []scheduling.SongTag,
 		out[i] = views.SongTagSuggestionGroup{Word: g.Word, Songs: songViews}
 	}
 	return out
+}
+
+// songTagSuggestions renders the shared scheduling.SongTagSuggestions
+// result (see its own doc comment for the actual grouping/matching rules)
+// into this page's view types.
+func songTagSuggestions(songs []pco.SongData, existingTags []scheduling.SongTag, ignoredWords map[string]bool) []views.SongTagSuggestionGroup {
+	return songTagSuggestionGroupViews(scheduling.SongTagSuggestions(songs, existingTags, ignoredWords))
+}
+
+// songThemeSuggestions renders the shared scheduling.SongThemeSuggestions
+// result (see its own doc comment) into this page's view types - mirrors
+// songTagSuggestions exactly, just fed from PCO's own Themes field instead
+// of shared title words.
+func songThemeSuggestions(songs []pco.SongData, existingTags []scheduling.SongTag, ignoredWords map[string]bool) []views.SongTagSuggestionGroup {
+	return songTagSuggestionGroupViews(scheduling.SongThemeSuggestions(songs, existingTags, ignoredWords))
 }
 
 func (sc *SchedulingController) buildSongTagSuggestionsData(ctx context.Context, organizationID string) views.SongTagSuggestionsData {
@@ -72,6 +85,7 @@ func (sc *SchedulingController) buildSongTagSuggestionsData(ctx context.Context,
 	}
 
 	data.Suggestions = songTagSuggestions(songs, tags, ignored)
+	data.ThemeSuggestions = songThemeSuggestions(songs, tags, ignored)
 
 	return data
 }

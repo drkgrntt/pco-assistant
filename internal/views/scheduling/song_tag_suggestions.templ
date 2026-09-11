@@ -13,12 +13,11 @@ templ SongTagSuggestions(personName, organizationName string, data SongTagSugges
 	@views.Layout("Song Tag Suggestions", personName, organizationName) {
 		<h1>Song Tag Suggestions</h1>
 		<p class="muted">
-			Songs whose titles share a word, grouped up so you can tag them all
-			at once - e.g. "King of Kings," "Christ the King," and "All Hail King
-			Jesus" would show up sharing "king." Discovery is automatic; nothing
-			gets tagged until you review a group, adjust the value if you want
-			(rename "king" to "Kingship," say), and apply it. Not every shared
-			word is a real theme - ignore a group and it won't come back.
+			Songs that share suggestion-worthy vocabulary, grouped up so you can
+			tag them all at once. Discovery is automatic; nothing gets tagged
+			until you review a group, adjust the value if you want, and apply
+			it. Not every shared word or theme is a real fit for your library -
+			ignore a group and it won't come back.
 		</p>
 		@SongTagSuggestionsList(data)
 	}
@@ -28,7 +27,9 @@ templ SongTagSuggestions(personName, organizationName string, data SongTagSugges
 // swap target (id="song-tag-suggestions-list") for Apply/Ignore - the
 // whole list re-renders each time since applying or ignoring one group can
 // change what else still needs review (a song tagged here no longer shows
-// as untagged in any other group it happens to share a word with).
+// as untagged in any other group it happens to share a word/theme with).
+// Two sections, same Card/checklist/Apply/Ignore pattern, fed from
+// different sources - see SongTagSuggestionsData's doc comment.
 templ SongTagSuggestionsList(data SongTagSuggestionsData) {
 	<div id="song-tag-suggestions-list">
 		if data.ErrMsg != "" {
@@ -37,70 +38,100 @@ templ SongTagSuggestionsList(data SongTagSuggestionsData) {
 		if data.SuccessMsg != "" {
 			<p class="success">{ data.SuccessMsg }</p>
 		}
+		<h2>From song titles</h2>
+		<p class="muted">
+			Songs whose titles share a word - e.g. "King of Kings," "Christ the
+			King," and "All Hail King Jesus" would show up sharing "king."
+		</p>
 		for _, group := range data.Suggestions {
-			@components.Card(fmt.Sprintf("%q appears in %d song titles", group.Word, len(group.Songs))) {
-				<ul class="candidate-list">
-					for _, song := range group.Songs {
-						@components.ListItem("", nil, song.Title) {
-							if song.AlreadyTagged {
-								@components.Badge("published", "Already tagged")
-							}
-						}
-					}
-				</ul>
-				<form
-					class="inline"
-					hx-post="/scheduling/song-tag-suggestions/apply"
-					hx-target="#song-tag-suggestions-list"
-					hx-swap="outerHTML"
-				>
-					<div class="quick-add-panel">
-						for _, song := range group.Songs {
-							if !song.AlreadyTagged {
-								<label class="checkbox-label">
-									<input type="checkbox" name="song_ids" value={ song.SongID } checked/>
-									{ song.Title }
-								</label>
-							}
-						}
-					</div>
-					<label>
-						Category
-						<select name="category">
-							for _, cat := range data.TagCategories {
-								if cat.Code == scheduling.TagCategoryTheme {
-									<option value={ cat.Code } selected>{ cat.Label }</option>
-								} else {
-									<option value={ cat.Code }>{ cat.Label }</option>
-								}
-							}
-						</select>
-					</label>
-					<label>
-						Value
-						<input type="text" name="value" value={ capitalize(group.Word) } required/>
-					</label>
-					<button type="submit" class="primary">Apply to selected</button>
-				</form>
-				<form
-					hx-post="/scheduling/song-tag-suggestions/ignore"
-					hx-target="#song-tag-suggestions-list"
-					hx-swap="outerHTML"
-					hx-confirm={ fmt.Sprintf("Stop suggesting %q? This can't be undone from here.", group.Word) }
-				>
-					<input type="hidden" name="word" value={ group.Word }/>
-					<button type="submit" class="danger">Not a theme - ignore</button>
-				</form>
-			}
+			@songTagSuggestionGroupCard(group, data.TagCategories, fmt.Sprintf("%q appears in %d song titles", group.Word, len(group.Songs)))
 		}
 		if len(data.Suggestions) == 0 {
 			<p class="muted">
-				No suggestions right now - either your songs don't share much
-				title vocabulary yet, or you've already tagged or ignored
-				everything worth flagging.
+				No title-word suggestions right now - either your songs don't
+				share much title vocabulary yet, or you've already tagged or
+				ignored everything worth flagging.
+			</p>
+		}
+		<h2>From Planning Center themes</h2>
+		<p class="muted">
+			Songs that share a theme value already set on the song in Planning
+			Center (CCLI/PCO's own curated vocabulary, e.g. "Kingship" or
+			"God's Attributes") - nothing this app derived itself.
+		</p>
+		for _, group := range data.ThemeSuggestions {
+			@songTagSuggestionGroupCard(group, data.TagCategories, fmt.Sprintf("%q appears on %d songs", group.Word, len(group.Songs)))
+		}
+		if len(data.ThemeSuggestions) == 0 {
+			<p class="muted">
+				No Planning Center theme suggestions right now - most of your
+				library either doesn't have themes set in Planning Center, or
+				everything's already tagged/ignored.
 			</p>
 		}
 	</div>
+}
+
+// songTagSuggestionGroupCard is the Card/checklist/Apply-form/Ignore-form
+// block one suggestion group renders as, shared by both the title-word and
+// Planning-Center-themes sections above (SongTagSuggestionsList) - only the
+// card's title text differs between sources, so that's passed in rather
+// than derived here.
+templ songTagSuggestionGroupCard(group SongTagSuggestionGroup, categories []scheduling.SongTagCategory, cardTitle string) {
+	@components.Card(cardTitle) {
+		<ul class="candidate-list">
+			for _, song := range group.Songs {
+				@components.ListItem("", nil, song.Title) {
+					if song.AlreadyTagged {
+						@components.Badge("published", "Already tagged")
+					}
+				}
+			}
+		</ul>
+		<form
+			class="inline"
+			hx-post="/scheduling/song-tag-suggestions/apply"
+			hx-target="#song-tag-suggestions-list"
+			hx-swap="outerHTML"
+		>
+			<div class="quick-add-panel">
+				for _, song := range group.Songs {
+					if !song.AlreadyTagged {
+						<label class="checkbox-label">
+							<input type="checkbox" name="song_ids" value={ song.SongID } checked/>
+							{ song.Title }
+						</label>
+					}
+				}
+			</div>
+			<label>
+				Category
+				<select name="category">
+					for _, cat := range categories {
+						if cat.Code == scheduling.TagCategoryTheme {
+							<option value={ cat.Code } selected>{ cat.Label }</option>
+						} else {
+							<option value={ cat.Code }>{ cat.Label }</option>
+						}
+					}
+				</select>
+			</label>
+			<label>
+				Value
+				<input type="text" name="value" value={ capitalize(group.Word) } required/>
+			</label>
+			<button type="submit" class="primary">Apply to selected</button>
+		</form>
+		<form
+			hx-post="/scheduling/song-tag-suggestions/ignore"
+			hx-target="#song-tag-suggestions-list"
+			hx-swap="outerHTML"
+			hx-confirm={ fmt.Sprintf("Stop suggesting %q? This can't be undone from here.", group.Word) }
+		>
+			<input type="hidden" name="word" value={ group.Word }/>
+			<button type="submit" class="danger">Not a fit - ignore</button>
+		</form>
+	}
 }
 
 // capitalize turns a suggestion's lowercase word (see songTagSuggestions in

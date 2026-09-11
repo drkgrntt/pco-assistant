@@ -1,6 +1,7 @@
 package scheduling
 
 import (
+	"strings"
 	"testing"
 
 	pco "github.com/drkgrntt/go-pco"
@@ -9,6 +10,12 @@ import (
 func song(id, title string) pco.SongData {
 	s := pco.SongData{ID: id}
 	s.Attributes.Title = title
+	return s
+}
+
+func songWithThemes(id, title, themes string) pco.SongData {
+	s := song(id, title)
+	s.Attributes.Themes = themes
 	return s
 }
 
@@ -195,6 +202,180 @@ func TestSongTitleWords(t *testing.T) {
 			if !got[w] {
 				t.Errorf("SongTitleWords(%q) missing %q, got %v", tt.title, w, got)
 			}
+		}
+	}
+}
+
+// TestSongThemeValues locks in SongThemeValues' comma-split/trim/
+// drop-empty-segments rules, including the real "leading empty segment"
+// shape confirmed live against PCO ("How He Loves").
+func TestSongThemeValues(t *testing.T) {
+	tests := []struct {
+		name   string
+		themes string
+		want   []string
+	}{
+		{
+			name:   "comma-separated, trimmed",
+			themes: "Kingship, Majesty / God's Attributes, Praise, Worthiness / God's Attributes",
+			want:   []string{"Kingship", "Majesty / God's Attributes", "Praise", "Worthiness / God's Attributes"},
+		},
+		{
+			name:   "leading empty segment dropped (real PCO example)",
+			themes: ", Father, Glory, God's Attributes, Love, oh how he loves us",
+			want:   []string{"Father", "Glory", "God's Attributes", "Love", "oh how he loves us"},
+		},
+		{
+			name:   "single value",
+			themes: "Atonement",
+			want:   []string{"Atonement"},
+		},
+		{
+			name:   "empty string",
+			themes: "",
+			want:   nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := SongThemeValues(tt.themes)
+			if len(got) != len(tt.want) {
+				t.Fatalf("SongThemeValues(%q) = %v, want %v", tt.themes, got, tt.want)
+			}
+			for i, w := range tt.want {
+				if got[i] != w {
+					t.Errorf("SongThemeValues(%q)[%d] = %q, want %q", tt.themes, i, got[i], w)
+				}
+			}
+		})
+	}
+}
+
+// TestSongThemeSuggestionsGroupsSharedThemeValues mirrors
+// TestSongTagSuggestionsGroupsSharedTitleWords, but for Themes: 2+ songs
+// sharing an exact theme phrase group together.
+func TestSongThemeSuggestionsGroupsSharedThemeValues(t *testing.T) {
+	songs := []pco.SongData{
+		songWithThemes("1", "How Great Is Our God", "Kingship, Majesty / God's Attributes, Praise"),
+		songWithThemes("2", "Break Every Chain", "Atonement, Freedom, Power, Redemption"),
+		songWithThemes("3", "Jesus Paid It All", "Crucifixion, Reconciliation, Redemption"),
+		songWithThemes("4", "10,000 Reasons", ""), // no themes at all
+	}
+
+	groups := SongThemeSuggestions(songs, nil, nil)
+
+	var redemptionTitles []string
+	for _, g := range groups {
+		if g.Word == "Redemption" {
+			for _, s := range g.Songs {
+				redemptionTitles = append(redemptionTitles, s.Title)
+			}
+		}
+	}
+
+	if len(redemptionTitles) != 2 {
+		t.Fatalf(`expected 2 songs in the "Redemption" group, got %d: %v`, len(redemptionTitles), redemptionTitles)
+	}
+}
+
+// TestSongThemeSuggestionsPreservesPCOCasing confirms the group's Word
+// keeps PCO's own original casing rather than a lowercased reconstruction
+// - even when the songs sharing a theme were supplied in a different
+// order, the alphabetically-first song's own casing wins (see
+// songTagSuggestionGroups' doc comment).
+func TestSongThemeSuggestionsPreservesPCOCasing(t *testing.T) {
+	songs := []pco.SongData{
+		// Alphabetically first by title ("Awesome" < "Zion") carries the
+		// properly-cased value - that's the casing the group should adopt.
+		songWithThemes("1", "Awesome God", "God's Attributes"),
+		songWithThemes("2", "Zion Song", "god's attributes"),
+	}
+
+	groups := SongThemeSuggestions(songs, nil, nil)
+
+	found := false
+	for _, g := range groups {
+		if strings.EqualFold(g.Word, "god's attributes") {
+			found = true
+			if g.Word != "God's Attributes" {
+				t.Errorf("expected group Word to preserve the alphabetically-first song's casing %q, got %q", "God's Attributes", g.Word)
+			}
+			if len(g.Songs) != 2 {
+				t.Errorf("expected both songs grouped together despite differing casing, got %+v", g.Songs)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("expected a case-insensitively-merged theme group, found none")
+	}
+}
+
+// TestSongThemeSuggestionsAppliesFloorAndIgnoreList confirms the existing
+// "2+ songs" floor and ignored-word skip both apply to Theme-derived
+// groups the same way they do for title words.
+func TestSongThemeSuggestionsAppliesFloorAndIgnoreList(t *testing.T) {
+	songs := []pco.SongData{
+		songWithThemes("1", "Song A", "Atonement, Solitary Theme"),
+		songWithThemes("2", "Song B", "Atonement"),
+	}
+
+	groups := SongThemeSuggestions(songs, nil, nil)
+	var words []string
+	for _, g := range groups {
+		words = append(words, g.Word)
+	}
+	if len(words) != 1 || words[0] != "Atonement" {
+		t.Fatalf(`expected only a single "Atonement" group (singleton "Solitary Theme" excluded), got %v`, words)
+	}
+
+	ignored := map[string]bool{"atonement": true}
+	groups = SongThemeSuggestions(songs, nil, ignored)
+	for _, g := range groups {
+		if g.Word == "Atonement" {
+			t.Errorf("ignored theme %q still produced a group", g.Word)
+		}
+	}
+}
+
+// TestSongThemeSuggestionsFlagsAlreadyTaggedSongs confirms the existing
+// exact-match (case-insensitive) "already tagged" suppression works for a
+// theme-derived group the same way it does for a title-word group.
+func TestSongThemeSuggestionsFlagsAlreadyTaggedSongs(t *testing.T) {
+	songs := []pco.SongData{
+		songWithThemes("1", "Song A", "Redemption"),
+		songWithThemes("2", "Song B", "Redemption"),
+	}
+	tags := []SongTag{songTag("1", TagCategoryTheme, "redemption")}
+
+	groups := SongThemeSuggestions(songs, tags, nil)
+
+	var taggedByID = map[string]bool{}
+	for _, g := range groups {
+		if g.Word != "Redemption" {
+			continue
+		}
+		for _, s := range g.Songs {
+			taggedByID[s.SongID] = s.AlreadyTagged
+		}
+	}
+
+	if !taggedByID["1"] {
+		t.Error(`song 1 should be AlreadyTagged for "Redemption"`)
+	}
+	if taggedByID["2"] {
+		t.Error(`song 2 should NOT be AlreadyTagged for "Redemption"`)
+	}
+
+	// And fully-applied groups disappear entirely, same as title words.
+	tags = []SongTag{
+		songTag("1", TagCategoryTheme, "redemption"),
+		songTag("2", TagCategoryTheme, "Redemption"),
+	}
+	groups = SongThemeSuggestions(songs, tags, nil)
+	for _, g := range groups {
+		if g.Word == "Redemption" {
+			t.Errorf("fully-applied theme group %q should have been omitted, got %+v", g.Word, g.Songs)
 		}
 	}
 }

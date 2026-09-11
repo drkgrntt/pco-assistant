@@ -4,18 +4,23 @@ import "pco-assistant/internal/scheduling"
 
 // SongTagSuggestionsData is the Song Tag Suggestions page's full view
 // model - see the controller's songTagSuggestions for how Suggestions is
-// computed (shared-title-word grouping over the org's whole song library).
+// computed (shared-title-word grouping over the org's whole song library),
+// and songThemeSuggestions for how ThemeSuggestions is computed (grouping
+// by a shared value from PCO's own Themes field on a song).
 type SongTagSuggestionsData struct {
-	Suggestions   []SongTagSuggestionGroup
-	TagCategories []scheduling.SongTagCategory
-	ErrMsg        string
+	Suggestions      []SongTagSuggestionGroup
+	ThemeSuggestions []SongTagSuggestionGroup
+	TagCategories    []scheduling.SongTagCategory
+	ErrMsg           string
 	// SuccessMsg reports the outcome of the last Apply/Ignore action, same
 	// pattern as every other setup page's PublishMsg/success line.
 	SuccessMsg string
 }
 
-// SongTagSuggestionGroup is one shared-word suggestion: a word found in
-// two or more song titles, plus every song that title word appears in.
+// SongTagSuggestionGroup is one shared-value suggestion group - Word holds
+// a shared title word for a Suggestions entry, or a shared PCO theme
+// phrase (possibly containing spaces/punctuation) for a ThemeSuggestions
+// entry - plus every song that value appears on.
 type SongTagSuggestionGroup struct {
 	Word  string
 	Songs []SuggestedSongView

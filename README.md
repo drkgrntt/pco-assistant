@@ -60,7 +60,10 @@ with at least Viewer access can still sign in.
   sharing a significant word in their titles (e.g. "King of Kings,"
   "Christ the King," and "All Hail King Jesus" all sharing "king"), so you
   can review a group and tag them all at once instead of tagging every
-  song by hand
+  song by hand. Also surfaces a second, higher-precision set of
+  suggestions straight from Planning Center's own Themes field on a song
+  (CCLI/PCO's own curated theological vocabulary, e.g. "Kingship" or
+  "God's Attributes"), shown as its own labeled section on the same page
 - **Song Info** - each song's Planning Center arrangement (key, tempo,
   meter, length) is cached locally so showing it doesn't mean a live
   Planning Center request per song on every page load - a song gets
