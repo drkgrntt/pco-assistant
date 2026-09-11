@@ -151,7 +151,7 @@ templ songTagSuggestionsPanelBody(data SongTagSuggestionsPanelData) {
 	}
 	if len(data.TitleGroups) > 0 {
 		<h4>From song titles</h4>
-		<ul class="suggestion-list">
+		<ul class="suggestion-list song-tag-suggestion-list">
 			for _, group := range data.TitleGroups {
 				@songTagSuggestionRow(group, fmt.Sprintf("%q appears in %d song titles", group.Word, len(group.Songs)))
 			}
@@ -159,7 +159,7 @@ templ songTagSuggestionsPanelBody(data SongTagSuggestionsPanelData) {
 	}
 	if len(data.ThemeGroups) > 0 {
 		<h4>From Planning Center themes</h4>
-		<ul class="suggestion-list">
+		<ul class="suggestion-list song-tag-suggestion-list">
 			for _, group := range data.ThemeGroups {
 				@songTagSuggestionRow(group, fmt.Sprintf("%q appears on %d songs", group.Word, len(group.Songs)))
 			}

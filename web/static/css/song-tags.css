@@ -205,6 +205,26 @@
   display: none;
 }
 
+/* .song-tag-suggestion-list modifies the shared .suggestion-list row style
+   (list-item.css) for the Suggestions panel only - a plain .suggestion-list
+   still stays single-column everywhere else it's used (e.g.
+   set_builder.templ's "Recommended next songs"/"Songs to reinforce"
+   panels), so this can't just go on the base class. Same two-column-from-
+   tablet-up idea as .song-tags-list above, but a wider 900px breakpoint
+   (matching build-page.css's own switch) since each row carries more
+   content than a song card - a title, "why" text, the not-yet-tagged
+   song recap, and two buttons - and needs more room per column before
+   splitting reads as cramped rather than compact. align-items: start
+   keeps a short row from stretching to match a taller neighbor's height,
+   the same reason .song-tags-list sets it. */
+@media (min-width: 900px) {
+  .song-tag-suggestion-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+
 .song-tag-add-form {
   margin-top: var(--space-2);
   margin-bottom: 0;
