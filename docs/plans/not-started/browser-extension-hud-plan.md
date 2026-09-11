@@ -55,7 +55,7 @@ computing it.
 | Blockout collision | `person_blockouts` cache + roster warnings | Team |
 | Cross-team same-week conflict | `crossTeamWarning`, `rosters.go` | Team |
 | Publish/draft status (does the local draft match what's live?) | `sets.go`/plan status helpers | Service (avoids confusion about which version is "real") |
-| Vocal-range mismatch badge | not built - see `docs/plans/in-progress/vocal-range-plan.md` Phase 3 | Team |
+| Vocal-range mismatch badge | shipped - see `docs/plans/shipped/vocal-range-plan.md` Phase 3 | Team |
 
 ### Recommended first-pass set (deliberately small)
 

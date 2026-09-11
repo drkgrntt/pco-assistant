@@ -15,7 +15,7 @@ import (
 
 // --- Person vocal range ------------------------------------------------
 //
-// Phase 1 of docs/plans/in-progress/vocal-range-plan.md: a standalone
+// Phase 1 of docs/plans/shipped/vocal-range-plan.md: a standalone
 // person-level vocal range setup page, mirroring PersonRelationshipsPage/
 // CreatePersonRelationship/DeletePersonRelationship's shape (a page handler
 // plus create/delete, no separate update route) - a resubmit for the same
@@ -29,7 +29,7 @@ import (
 // parseVocalNote parses a note-with-octave string ("C#4", "Bb2", "G3")
 // into a 0-11 pitch class and an octave - a thin wrapper around
 // scheduling.ParseNote. This used to carry its own standalone regex/letter
-// table (predating the key engine, docs/plans/in-progress/
+// table (predating the key engine, docs/plans/shipped/
 // vocal-range-plan.md's Phase 2 prerequisite); now that
 // internal/scheduling/key_engine.go exists as the single place this
 // parsing logic lives, this just delegates rather than keeping a second

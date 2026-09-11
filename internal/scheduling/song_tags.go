@@ -149,7 +149,7 @@ func (s *Store) UpdateSongTag(ctx context.Context, organizationID string, id int
 // HasAnySongTags reports whether the organization has tagged at least one
 // song - a cheap existence check for the home page's setup checklist (see
 // HomeController.buildHomeData and
-// docs/plans/in-progress/onboarding-and-ambient-framing-plan.md), same
+// docs/plans/shipped/onboarding-and-ambient-framing-plan.md), same
 // shape as HasAnySongRelationships.
 func (s *Store) HasAnySongTags(ctx context.Context, organizationID string) (bool, error) {
 	var exists bool

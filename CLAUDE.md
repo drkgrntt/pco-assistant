@@ -43,7 +43,7 @@ fit different phases of a task - not just "delegate or don't":
   spot (four have run well this way so far: a new read-only page, a
   warning-logic addition, a new outbound-email package, and the
   live-sync-reflection poll-while-open banner + extended MergeSet
-  reconciliation, see docs/plans/in-progress/live-sync-reflection-plan.md -
+  reconciliation, see docs/plans/shipped/live-sync-reflection-plan.md -
   none of which touched files another one of them was also touching).
 - **Explore** for the reconnaissance a spec needs before it can be
   written - "where does X live," "what's the existing pattern for Y,"
@@ -57,9 +57,10 @@ fit different phases of a task - not just "delegate or don't":
   concrete architecture a builder agent can execute without guessing - the
   gap between a docs/plans/ doc that deliberately doesn't pick a mechanism
   and lists "needs a real decision, not a default" open questions (see
-  live-sync-reflection-plan.md's own phrasing) and an exact function/file/
-  field list ready to hand to a builder. Plan resolves *how*, Explore
-  resolves *where it lives*, general-purpose (worktree) *writes the code*
+  `docs/plans/shipped/live-sync-reflection-plan.md`'s own phrasing) and an
+  exact function/file/field list ready to hand to a builder. Plan resolves
+  *how*, Explore resolves *where it lives*, general-purpose (worktree)
+  *writes the code*
   - three phases of the same task, not competing options for the same one.
 
 Whichever type, keep doing the rest directly: anything needing iterative

@@ -615,7 +615,7 @@ func (sc *SchedulingController) RefreshSongInfo(c *fiber.Ctx) error {
 // trackedItemChange is one detected difference between an already-tracked,
 // active (non-tombstoned) set_songs row and its live Planning Center item -
 // see reconcileTrackedItems, MergeSet's expanded reconciliation (step 3 of
-// docs/plans/in-progress/live-sync-reflection-plan.md). Purely a report;
+// docs/plans/shipped/live-sync-reflection-plan.md). Purely a report;
 // nothing here mutates anything itself.
 type trackedItemChange struct {
 	RowID int64
@@ -845,7 +845,7 @@ func (sc *SchedulingController) MergeSet(c *fiber.Ctx) error {
 }
 
 // SyncCheck is the poll-while-open live-sync check's endpoint
-// (docs/plans/in-progress/live-sync-reflection-plan.md, option C): polled
+// (docs/plans/shipped/live-sync-reflection-plan.md, option C): polled
 // every 30s by the set builder page's own hidden trigger element
 // (set_builder.templ) while a Build page's Songs tab is open, carrying the
 // fingerprint (see SetBuilderData.PCOSyncFingerprint/pcoItemsFingerprint)

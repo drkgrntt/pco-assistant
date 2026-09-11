@@ -24,7 +24,7 @@ type HomeData struct {
 	OrgPlan       string
 	TrialDaysLeft int
 	// Onboarding is the promise-grouped setup checklist (Phase 3 of
-	// docs/plans/in-progress/onboarding-and-ambient-framing-plan.md) that
+	// docs/plans/shipped/onboarding-and-ambient-framing-plan.md) that
 	// replaced both the old flat Setup link list and the dismissible
 	// nudge card that briefly preceded it - see buildHomeData. Always
 	// populated: it's the permanent home for setup now, not a transient

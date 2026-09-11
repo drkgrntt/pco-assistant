@@ -467,7 +467,7 @@ func (sc *SchedulingController) QuickAddSongContext(c *fiber.Ctx) error {
 	return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(middleware.RequestContext(c), orgID, serviceTypeID, planID, errMsg)))
 }
 
-// QuickAddSongVocalRange is Part C of docs/plans/in-progress/
+// QuickAddSongVocalRange is Part C of docs/plans/shipped/
 // vocal-range-plan.md - the Build page's quick-add-panel/row-kebab-menu
 // entry point for scheduling.Store's SetSongVocalRange, the same Store
 // method (via setSongVocalRangeFromForm, song_vocal_range.go) the

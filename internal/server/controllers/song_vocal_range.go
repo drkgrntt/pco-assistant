@@ -16,7 +16,7 @@ import (
 
 // --- Song vocal range ---------------------------------------------------
 //
-// Phase 2 of docs/plans/in-progress/vocal-range-plan.md: a standalone
+// Phase 2 of docs/plans/shipped/vocal-range-plan.md: a standalone
 // song-level vocal range setup page, mirroring song_tags.go's shape (a
 // song <select>-driven page handler plus create/delete, no separate
 // update - a resubmit for the same song upserts in place, see

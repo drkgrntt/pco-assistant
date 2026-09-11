@@ -1,13 +1,12 @@
 # Plan: switching between linked Planning Center accounts
 
-**Status: in progress.** Option A's build-order steps 1-3 are done -
+**Status: shipped 2026-09-10.** Option A's build-order steps 1-4 are done -
 `prompt=select_account`, the orphaned-previous-session fix in `Callback`,
-and a "Switch account" link (`internal/views/layout.templ`'s
-`accountMenuContent`, next to Log out). Step 4 (live round-trip against the
-real dev PCO org - does PCO's picker actually appear, does switching land
-on the right org) hasn't happened yet; step 5 (`/oauth/revoke` on Logout)
-is still an open follow-on, not part of this pass. Move to `shipped/` once
-step 4 is confirmed.
+a "Switch account" link (`internal/views/layout.templ`'s
+`accountMenuContent`, next to Log out), and step 4 (live round-trip
+against the real dev PCO org) confirmed working as expected in practice.
+Step 5 (`/oauth/revoke` on Logout) remains a smaller, still-open follow-on,
+not part of this pass.
 
 Written 2026-09-09, prompted by direct feedback from a meeting with the
 worship pastor (`docs/issues.md` at commit `6eaa828`, working tree since

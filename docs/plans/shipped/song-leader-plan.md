@@ -47,7 +47,7 @@ since the setting was never plan-scoped to begin with - see
 `SetVocalNoteCategory` (`internal/server/controllers/build.go`).
 
 Written 2026-09-06, prompted by a conversation about vocal-range work
-(`docs/plans/in-progress/vocal-range-plan.md`) that surfaced a related but
+(`docs/plans/shipped/vocal-range-plan.md`) that surfaced a related but
 distinct gap: this app has no structured concept of "who's actually
 leading this song," even though that information already exists informally
 today - directors type a name into the "Vocals" Item Note box (see

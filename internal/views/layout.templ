@@ -142,7 +142,7 @@ templ Layout(title string, personName string, organizationName string) {
 						<!--
 							One dropdown instead of four loose items (theme toggle,
 							Account link, org+person name, logout form) - see
-							docs/plans/in-progress/help-system-and-nav-consolidation-plan.md
+							docs/plans/shipped/help-system-and-nav-consolidation-plan.md
 							for why this consolidation happened alongside the new
 							footer Help button. Reuses the exact same "nav-dropdown"
 							mechanism as the "Setup" dropdown above (toggleNavDropdown,
@@ -208,7 +208,7 @@ templ accountToggleContent(personName string) {
 // info and the Data & Caches tools - and finally the logout form.
 // Feedback used to live in this same row and moved to the new site
 // footer instead (see genericHelpDialog's own doc comment and
-// docs/plans/in-progress/help-system-and-nav-consolidation-plan.md) - it's
+// docs/plans/shipped/help-system-and-nav-consolidation-plan.md) - it's
 // no longer here.
 templ accountMenuContent(organizationName string) {
 	<button type="button" class="theme-toggle" onclick="toggleTheme()" aria-label="Switch between light and dark theme" title="Switch between light and dark theme">
@@ -225,7 +225,7 @@ templ accountMenuContent(organizationName string) {
 		picker rather than silently re-approving whatever PCO session
 		cookie the browser already carries, so this works from an
 		already-signed-in state without needing Log out first (see
-		docs/plans/in-progress/pco-account-switching-plan.md). A plain
+		docs/plans/shipped/pco-account-switching-plan.md). A plain
 		link straight to Start, right next to Log out, rather than
 		relying on someone knowing to click "Sign in" while already
 		signed in - the exact confusing dead end that plan was written

@@ -18,7 +18,7 @@ per-instance identity at all. It's used in two families of place today:
   `ExistingConflicts`) and "sung in each of the last two plans"
   (`RecentlyRepeated`, computed by `RepeatWarnings`) - both in
   `internal/server/controllers/sets_builder.go`. The Phase 3 vocal-range
-  mismatch badge (docs/plans/in-progress/vocal-range-plan.md, being built
+  mismatch badge (docs/plans/shipped/vocal-range-plan.md, being built
   now alongside this doc) will be a third member of this same family, same
   file.
 - **Team tab** (`roster_builder.templ`, `person_detail_card.templ`):

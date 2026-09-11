@@ -3,7 +3,7 @@ package scheduling
 import "testing"
 
 // Unit tests for song_vocal_range.go's pure math -
-// docs/plans/in-progress/vocal-range-plan.md's Phase 2, EffectiveVocalRange
+// docs/plans/shipped/vocal-range-plan.md's Phase 2, EffectiveVocalRange
 // section, updated for migration 00043's shape (the exact entered pitch
 // class/octave, not an offset from a re-anchored tonic - see that
 // migration's own comment for why).

@@ -174,7 +174,7 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 	// vocalRangesBySong backs the detail card's "Vocal range" line
 	// (SetSongView.VocalRangeDisplay) - one bulk local-DB read, same
 	// shape as arrangementCache/attachmentCache above, no PCO call. See
-	// docs/plans/in-progress/vocal-range-plan.md's Phase 2 section.
+	// docs/plans/shipped/vocal-range-plan.md's Phase 2 section.
 	vocalRangesBySong, _ := sc.store.ListSongVocalRanges(ctx, organizationID)
 
 	// vocalistPersonIDs/personVocalRanges/vocalRangeCheckNames back Phase 3's
@@ -182,7 +182,7 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 	// vocalRangeWarningForSong below). "Who counts as a vocalist to check"
 	// is exactly this plan's roster assignments (not an eligibility pool,
 	// and not a team/position-name heuristic) intersected with who actually
-	// has a PersonVocalRange on file - see docs/plans/in-progress/
+	// has a PersonVocalRange on file - see docs/plans/shipped/
 	// vocal-range-plan.md's Phase 3 "who counts" section. Both roster and
 	// person-range reads are local-DB only, same as vocalRangesBySong
 	// above; vocalRangeCheckNames is the one new PCO call this phase adds
@@ -1262,7 +1262,7 @@ func trackedPCOItemIDs(setSongs, pendingDeletions []scheduling.SetSong) map[stri
 // pcoItemsFingerprint returns a deterministic fingerprint of a plan's live
 // items - the poll-while-open live-sync check's comparison value (see
 // SetBuilderData.PCOSyncFingerprint and SyncCheck, sets_publish.go; design
-// in docs/plans/in-progress/live-sync-reflection-plan.md). Two
+// in docs/plans/shipped/live-sync-reflection-plan.md). Two
 // fingerprints are equal iff the same set of item ids exist with the same
 // Sequence and UpdatedAt values each - which covers every kind of change
 // the poll needs to catch:
@@ -1486,7 +1486,7 @@ func formatTotalDuration(seconds int) string {
 // parseKeyPitchClass/semitoneDistance, inlined here for keyTransitionWarnings
 // alone) moved to scheduling.ParseKeyPitchClass/scheduling.SemitoneDistance -
 // see internal/scheduling/key_engine.go and
-// docs/plans/in-progress/vocal-range-plan.md's "Phase 2 prerequisite: the
+// docs/plans/shipped/vocal-range-plan.md's "Phase 2 prerequisite: the
 // key engine" section for why (song vocal range, Phase 2, is a second
 // consumer that also needs to transpose a stored interval, not just
 // compare two bare keys - that needed a shared, storage-reachable home,
@@ -1793,7 +1793,7 @@ func buildSongNoteViews(itemID string, noteCategories []pco.ItemNoteCategoryData
 // personNameMapForIDs in buildSetBuilderData, batched once for the whole
 // render rather than a per-row lookup.
 //
-// vocalRangesBySong is Phase 2 of docs/plans/in-progress/vocal-range-plan.md
+// vocalRangesBySong is Phase 2 of docs/plans/shipped/vocal-range-plan.md
 // (scheduling.ListSongVocalRanges, buildSetBuilderData) - a song with a
 // stored range gets its practical sung range transposed into this row's
 // own effective key (scheduling.EffectiveVocalRange) and rendered on the
@@ -1965,7 +1965,7 @@ func vocalistsWithRangesOnFile(personIDs []string, ranges map[string]scheduling.
 }
 
 // vocalRangeWarning is one song row's own Phase 3 verdict (docs/plans/
-// in-progress/vocal-range-plan.md) - see vocalRangeWarningForSong. Label ==
+// shipped/vocal-range-plan.md) - see vocalRangeWarningForSong. Label ==
 // "" means no vocalist assigned to this plan's roster mismatches this
 // song's range at all.
 type vocalRangeWarning struct {

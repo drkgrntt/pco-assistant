@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// This file is the "key engine" docs/plans/in-progress/vocal-range-plan.md's
+// This file is the "key engine" docs/plans/shipped/vocal-range-plan.md's
 // Phase 2 prerequisite section names: the pitch-class parsing/transposition
 // primitives, factored out of internal/server/controllers/sets_builder.go
 // (where keyPitchClasses/parseKeyPitchClass/semitoneDistance were inlined
@@ -151,7 +151,7 @@ func ParseNote(s string) (pitchClass, octave int, ok bool) {
 // internally-consistent absolute integer for comparison (octave*12 +
 // pitch_class - no requirement to match real MIDI note numbering, just
 // that two absolute values are directly comparable and subtractable), per
-// docs/plans/in-progress/vocal-range-plan.md's storage-shape section.
+// docs/plans/shipped/vocal-range-plan.md's storage-shape section.
 func AbsoluteSemitone(pitchClass, octave int) int {
 	return octave*12 + pitchClass
 }

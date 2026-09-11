@@ -75,7 +75,7 @@ templ Home(personName, organizationName string, data HomeData) {
 			Checklist form replaced the old flat Setup link list, then a
 			since-removed dismissible nudge card, per Derek's "weak sauce"
 			feedback - see
-			docs/plans/in-progress/onboarding-and-ambient-framing-plan.md's
+			docs/plans/shipped/onboarding-and-ambient-framing-plan.md's
 			Phase 3. Reuses .plan-list's card-row treatment (already used
 			for "Needs attention" above); each item's Done state
 			(components.Badge) reflects real local data (HomeController.
@@ -128,7 +128,7 @@ templ Home(personName, organizationName string, data HomeData) {
 
 // onboardingTour is the guided first-run orientation - the heavier option
 // (alongside Phase 3's checklist) from the "richer" round of feedback in
-// docs/plans/in-progress/onboarding-and-ambient-framing-plan.md, built as
+// docs/plans/shipped/onboarding-and-ambient-framing-plan.md, built as
 // a real multi-step dialog rather than folding more content into the
 // checklist itself. Unlike Phase 3 (which reflects an org's real setup
 // data), this is pure orientation - the same for every person regardless
@@ -151,7 +151,7 @@ templ Home(personName, organizationName string, data HomeData) {
 // has been seen, unlike Phase 2's now-removed ShowOnboardingNudge). The
 // manual way back in used to be a dedicated Account page link
 // ("Replay the intro tour"); that link is gone (see
-// docs/plans/in-progress/help-system-and-nav-consolidation-plan.md) now
+// docs/plans/shipped/help-system-and-nav-consolidation-plan.md) now
 // that the footer's Help button (openPageHelp, scheduling-global.js) finds and
 // opens this same dialog directly on any page that has it - ?tour=1
 // itself is unchanged and still works if linked to by hand.

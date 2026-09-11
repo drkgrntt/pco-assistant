@@ -1,9 +1,9 @@
 # Plan: Help system + header/nav consolidation
 
-**Status: built 2026-09-08** (not yet deployed).
+**Status: shipped 2026-09-10.**
 
 Derek's ask, right after
-`docs/plans/in-progress/onboarding-and-ambient-framing-plan.md`'s Phase 4/5
+`docs/plans/shipped/onboarding-and-ambient-framing-plan.md`'s Phase 4/5
 tours shipped: a persistent, on-demand **Help** button that opens whichever
 tour belongs to the current page - never auto-opening, only on click - plus
 consolidating the header's loose theme-toggle/Account/Feedback/logout row

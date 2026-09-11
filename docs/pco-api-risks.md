@@ -650,7 +650,7 @@ out to 100-200 sequential round trips per load.
   same reasoning the plan doc used to decline a persistent marker for the
   window itself.
 - **Live-sync reflection, option C (poll-while-open banner)** - full design
-  in `docs/plans/in-progress/live-sync-reflection-plan.md`. New traffic:
+  in `docs/plans/shipped/live-sync-reflection-plan.md`. New traffic:
   one `GetItems` call per open Build-page Songs tab every 30s
   (`SyncCheck`, `sets_publish.go`), tagged `pco.WithPriority(ctx, 20)` so
   it never contends with interactive traffic sharing the same token - cost
