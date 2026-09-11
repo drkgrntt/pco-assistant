@@ -1,0 +1,167 @@
+package views
+
+// Privacy is the public "/privacy" marketing page - Resonance's privacy
+// policy. Same chrome as Pricing/HowItWorks (marketingHeader/
+// marketingFooter, landing.css) but a plain single-column reading layout
+// (landing-legal, landing.css) rather than the hero/feature-card marketing
+// layout those pages use, since this is dense section-headed prose, not a
+// pitch. See MarketingController.Privacy (routes it in) and
+// middleware/auth.go's publicPrefixes (makes it reachable with no
+// session, same as Pricing/HowItWorks).
+templ Privacy() {
+	<!DOCTYPE html>
+	<html lang="en">
+		@Head("Privacy Policy") {
+			<link rel="stylesheet" href={ "/static/css/landing.css?v=" + AssetVersion }/>
+		}
+		<body class="landing">
+			@marketingHeader()
+			<main>
+				<article class="landing-legal">
+					<h1>Privacy Policy</h1>
+					<p class="landing-legal-updated">Last updated September 11, 2026</p>
+					<h2>Who runs this</h2>
+					<p>
+						Resonance is a one-person project, run by Derek Garnett. It's not
+						a company - there's no team, no legal department, just one
+						person building a tool for churches that use Planning Center
+						Services. Questions, concerns, or requests about your data all go
+						to the same place: support@derekgarnett.com.
+					</p>
+					<h2>Signing in</h2>
+					<p>
+						Resonance has no username-and-password system of its own. The
+						only way to sign in is "Sign in with Planning Center" - an OAuth
+						connection through Planning Center Online, the company behind
+						Planning Center Services (Resonance isn't affiliated with them).
+						Resonance never sees, asks for, or stores your Planning Center
+						password.
+					</p>
+					<h2>What Resonance reads from Planning Center, and doesn't store</h2>
+					<p>
+						Once you're signed in, Resonance reads your church's own data
+						live from Planning Center, as you, to show it back to you: people
+						and team members, songs, plans, teams, positions, and service
+						types. That data stays in Planning Center - Resonance is looking
+						at it, not copying it into its own database.
+					</p>
+					<h2>What Resonance actually stores</h2>
+					<p>
+						Planning Center has no concept of a few things Resonance needs,
+						so those live in Resonance's own database instead:
+					</p>
+					<ul>
+						<li>
+							Relationships and tags your church's admins define between
+							songs or people - things like "these two songs flow well
+							together" or "avoid scheduling these two people together" -
+							plus roles/contexts for songs, scheduling preferences, and
+							vocal range notes.
+						</li>
+						<li>
+							Draft sets and rosters you're building, before they're
+							published to real Planning Center plan items and assignments.
+						</li>
+					</ul>
+					<p>
+						A few of these write straight back to Planning Center the moment
+						you set them - a position scheduling preference, for instance -
+						because Planning Center has no draft concept for that field
+						either. Most everything else stays purely local until you publish
+						or refresh.
+					</p>
+					<h2>A short-lived performance cache</h2>
+					<p>
+						Some Planning Center data - song arrangement details like key,
+						tempo, and length, and people's team-availability history - gets
+						cached locally for a short time, purely so Resonance doesn't have
+						to re-fetch it from Planning Center on every page load. This isn't
+						new data collection; it's a temporary copy of data Planning
+						Center already has, and it expires and refreshes automatically on
+						its own.
+					</p>
+					<h2>Account and session data</h2>
+					<p>Resonance also stores what it needs to keep your organization signed in and billed correctly:</p>
+					<ul>
+						<li>
+							An organization record: your church's name, subscription
+							status/plan, and the Stripe customer/subscription IDs used for
+							billing. No payment card data itself - Stripe holds that.
+						</li>
+						<li>
+							Session records that keep you signed in. Only a hashed,
+							irreversible version of your session token is stored - never
+							the raw token itself.
+						</li>
+						<li>
+							The Planning Center OAuth access and refresh tokens needed to
+							keep acting on your behalf while you're signed in.
+						</li>
+					</ul>
+					<h2>Cookies</h2>
+					<p>
+						Resonance sets exactly one cookie, and it's first-party: the
+						session cookie that keeps you signed in. There are no
+						third-party advertising or tracking cookies, and no analytics or
+						tracking scripts of any kind anywhere in the app.
+					</p>
+					<h2>Feedback you submit</h2>
+					<p>
+						If you use the feedback form, your message - and your email
+						address, if you choose to give one - is stored in Resonance's own
+						database and also emailed directly to Derek via Mailgun, a
+						transactional email provider, so it can actually be read and
+						responded to.
+					</p>
+					<h2>Who this gets shared with</h2>
+					<p>Resonance shares data with exactly three outside services, each for a specific reason:</p>
+					<ul>
+						<li>
+							<strong>Planning Center Online</strong> - your identity provider
+							and the source of your church's own scheduling data. Resonance
+							acts on it as you, authenticated through the OAuth connection
+							you granted when you signed in.
+						</li>
+						<li>
+							<strong>Stripe</strong> - handles payment processing and
+							subscription billing. All actual payment details live with
+							Stripe, not Resonance.
+						</li>
+						<li>
+							<strong>Mailgun</strong> - sends the feedback emails described
+							above.
+						</li>
+					</ul>
+					<p>Resonance doesn't sell data to anyone, and there's no advertising of any kind.</p>
+					<h2>Data retention and deletion</h2>
+					<p>
+						There's no self-serve "delete my data" button yet. If you want
+						your organization's data deleted, or want to know exactly what's
+						stored, email support@derekgarnett.com and it'll be handled by
+						hand. Draft data - sets, rosters, relationships, preferences -
+						stays until it's deleted this way or naturally superseded by a
+						newer draft. Anything already published lives on in your church's
+						own Planning Center account from that point on, governed by
+						Planning Center's own retention, not Resonance's.
+					</p>
+					<h2>Children's privacy</h2>
+					<p>Resonance isn't directed at children and isn't knowingly used by anyone under 13.</p>
+					<h2>Changes to this policy</h2>
+					<p>
+						This policy may be updated from time to time. The "Last updated"
+						date at the top is how to tell it changed. Anything material gets
+						communicated in a reasonable way - noted in-app, for instance -
+						not buried in a silent edit.
+					</p>
+					<h2>Questions</h2>
+					<p>
+						Derek runs Resonance out of Missouri, USA, and handles privacy
+						questions and requests personally. Reach out any time at
+						support@derekgarnett.com.
+					</p>
+				</article>
+			</main>
+			@marketingFooter()
+		</body>
+	</html>
+}

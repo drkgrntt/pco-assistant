@@ -29,11 +29,14 @@ const refreshBuffer = 5 * time.Minute
 // under /static/, so they need their own entries here), Stripe's
 // webhook (which authenticates itself via a signature - see
 // internal/billing.HandleWebhook - not a session cookie, since Stripe's
-// servers have neither), and the Pricing/HowItWorks marketing pages
-// (MarketingController) - unlike "/" (Landing) these have no signed-in
-// variant at all, so they don't need Landing's soft-auth special case
-// below, just a straight allowlist entry like /login.
-var publicPrefixes = []string{"/health", "/login", "/auth/", "/static/", "/piano-samples/", "/sw.js", "/manifest.json", "/billing/webhook", "/pricing", "/how-it-works"}
+// servers have neither), and the Pricing/HowItWorks/Privacy/Terms
+// marketing pages (MarketingController) - unlike "/" (Landing) these have
+// no signed-in variant at all, so they don't need Landing's soft-auth
+// special case below, just a straight allowlist entry like /login. Privacy
+// and Terms specifically need to be reachable with no session at all,
+// same as any other legal disclosure page - someone deciding whether to
+// sign in at all has to be able to read them first.
+var publicPrefixes = []string{"/health", "/login", "/auth/", "/static/", "/piano-samples/", "/sw.js", "/manifest.json", "/billing/webhook", "/pricing", "/how-it-works", "/privacy", "/terms"}
 
 // RequireAuth gates every route not covered by publicPrefixes behind a
 // valid, unexpired session. On success it stashes the signed-in person's id

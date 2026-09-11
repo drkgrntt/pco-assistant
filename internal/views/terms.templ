@@ -1,0 +1,62 @@
+package views
+
+// Terms is the public "/terms" marketing page - Resonance's terms of use.
+// Same chrome/layout as Privacy (marketingHeader/marketingFooter,
+// landing-legal in landing.css) - see that file's doc comment for why.
+// See MarketingController.Terms (routes it in) and middleware/auth.go's
+// publicPrefixes (makes it reachable with no session, same as
+// Pricing/HowItWorks).
+templ Terms() {
+	<!DOCTYPE html>
+	<html lang="en">
+		@Head("Terms of Use") {
+			<link rel="stylesheet" href={ "/static/css/landing.css?v=" + AssetVersion }/>
+		}
+		<body class="landing">
+			@marketingHeader()
+			<main>
+				<article class="landing-legal">
+					<h1>Terms of Use</h1>
+					<p class="landing-legal-updated">Last updated September 11, 2026</p>
+					<h2>Acceptance of these terms</h2>
+					<p>By signing in to Resonance and using it on behalf of a church or ministry, you agree to these terms. If you don't agree to them, don't sign in.</p>
+					<h2>Eligibility and signing in</h2>
+					<p>Resonance doesn't have its own accounts or passwords - you sign in exclusively with "Sign in with Planning Center," using a Planning Center account that already has some access to the Services product. If your Planning Center account has no Services access at all, you'll be blocked at sign-in - that's Planning Center's own access model, not something Resonance adds on top.</p>
+					<p>To use Resonance, you must be at least 18 years old (or the age of majority where you live) and have the authority to act on behalf of the church or organization you're signing up.</p>
+					<h2>What Resonance does</h2>
+					<p>Resonance reads your church's own songs, people, plans, teams, and positions live from your Planning Center account. On top of that, it lets admins track things Planning Center itself has no concept of - relationships between songs and between people, tags, roles, scheduling preferences - and build draft song sets and team rosters here before committing to anything.</p>
+					<p>Nothing changes in your real Planning Center data until you choose to Publish a draft - that's the one deliberate action that pushes a set or roster to real Planning Center plan records. Discard does the opposite: it throws away a draft's local changes and reverts it back to whatever's actually live in Planning Center. Your church, and its admins, remain solely responsible for reviewing anything before and after it's published. Resonance is a planning aid, not a substitute for that judgment - we don't warrant that any suggestion, warning, or conflict check it surfaces is complete or error-free.</p>
+					<h2>Relationship to Planning Center</h2>
+					<p>Resonance is an independent, unofficial tool built to work with Planning Center Services. It is not affiliated with, endorsed by, or sponsored by Planning Center Online. Resonance depends entirely on Planning Center's own API being available and behaving as documented - an outage, a change, or unexpected behavior on Planning Center's side can affect Resonance's own availability or behavior, and that's outside our control.</p>
+					<h2>Billing, trials, and cancellation</h2>
+					<p>New organizations get a 30-day free trial automatically the first time they sign in - no card required up front. After the trial, using Resonance requires a paid subscription, billed through Stripe.</p>
+					<p>A "seat" is a distinct admin: someone who actually builds sets or rosters here. Anyone who only views a published schedule is free, no matter how many of them there are. Two tiers exist:</p>
+					<ul>
+						<li>Standard: $14/month, 2 admin seats included. Going over 2 seats doesn't cost anything extra or block you - it just shows a non-blocking upsell nudge on the billing page.</li>
+						<li>Multi-Campus: $28/month, 5 admin seats included, plus $5/month for each additional seat, kept in sync with your organization's actual seat count by a daily billing job.</li>
+					</ul>
+					<p>You can change or cancel your plan any time from the billing page, which hands off to Stripe's own Billing Portal - Resonance has no separate cancellation flow of its own. Fees already paid for a billing period are non-refundable for that period, except where the law requires otherwise.</p>
+					<h2>Acceptable use</h2>
+					<p>Don't use Resonance to violate Planning Center's own terms of service. Don't use Resonance in a way that abuses or overloads its use of Planning Center's API. Don't try to access another organization's data. Don't reverse-engineer Resonance beyond what the law allows.</p>
+					<h2>Service availability</h2>
+					<p>We aim to keep Resonance reliably available, but we don't guarantee it will be uninterrupted or error-free - especially given how much of what it does depends on Planning Center's own systems being up and behaving as documented, which we don't control.</p>
+					<h2>No warranty</h2>
+					<p>Resonance is provided "as is" and "as available," without warranties of any kind, express or implied, to the fullest extent the law allows. That includes any warranty that it will be uninterrupted, accurate, or error-free, and any warranty that a suggestion, warning, or conflict check it surfaces catches everything it could.</p>
+					<h2>Limitation of liability</h2>
+					<p>To the extent the law allows, our total liability for any claim related to Resonance is limited to what your organization paid for the service in the 12 months before the claim, and we're not liable for indirect, incidental, or consequential damages - lost data, lost revenue, a missed rehearsal, or anything like that. This isn't meant to be a loophole; it's a realistic limit for a project run by one person, not a company.</p>
+					<h2>Your data</h2>
+					<p>Your church's own scheduling data stays yours. Resonance stores the relationship, tag, preference, and draft data described above only to provide the service, as described in our <a href="/privacy">Privacy Policy</a>.</p>
+					<h2>Termination</h2>
+					<p>We may suspend or terminate your access for violating these terms, non-payment, or abuse. You can stop using Resonance any time by canceling through the billing portal; either way, your data is handled as described in the Privacy Policy.</p>
+					<h2>Changes to these terms</h2>
+					<p>We may update these terms from time to time. The "Last updated" date at the top is how you can tell something changed. Continuing to use Resonance after a change means you accept the new terms.</p>
+					<h2>Governing law</h2>
+					<p>These terms are governed by the laws of the State of Missouri, USA, without regard to its conflict-of-laws rules.</p>
+					<h2>Contact</h2>
+					<p>Resonance is a personal, solo-operated project run by Derek Garnett - not a registered company. Questions about these terms? Reach out at <a href="mailto:support@derekgarnett.com">support@derekgarnett.com</a>.</p>
+				</article>
+			</main>
+			@marketingFooter()
+		</body>
+	</html>
+}
