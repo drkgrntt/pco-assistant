@@ -90,8 +90,15 @@ func PopulateNavState(schedulingStore *scheduling.Store) fiber.Handler {
 		tags, tagsErr := schedulingStore.ListSongTags(ctx, orgID, "", "")
 		ignored, ignoredErr := schedulingStore.ListIgnoredSongTagSuggestionWords(ctx, orgID)
 		if tagsErr == nil && ignoredErr == nil {
-			groups := scheduling.SongTagSuggestions(songs, tags, ignored)
-			suggestionsPending := len(groups) > 0
+			// scheduling.SongThemeSuggestions reads Themes off the exact
+			// same songs slice already fetched above (part of the same
+			// FetchActiveSongs response FetchActiveSongs already returns),
+			// so ORing its result in here is a zero-cost addition - no new
+			// PCO call, no new store query, just a second pure computation
+			// over data this handler already has in scope.
+			titleGroups := scheduling.SongTagSuggestions(songs, tags, ignored)
+			themeGroups := scheduling.SongThemeSuggestions(songs, tags, ignored)
+			suggestionsPending := len(titleGroups) > 0 || len(themeGroups) > 0
 			c.Locals(views.NavSuggestionsPendingKey, suggestionsPending)
 
 			mu.Lock()

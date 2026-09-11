@@ -107,7 +107,10 @@ func isAllDigits(s string) bool {
 // one suggestion group - the same information the controllers package
 // renders into views.SongTagSuggestionGroup/views.SuggestedSongView, kept
 // view-free here so this package doesn't need to depend on the views
-// package just to compute a suggestion list.
+// package just to compute a suggestion list. Word holds whatever display
+// text the extractor that built this group chose (see wordsForSong) - a
+// single title word for SongTagSuggestions, a whole theme phrase (possibly
+// containing spaces/punctuation) for SongThemeSuggestions.
 type SongTagSuggestionGroup struct {
 	Word  string
 	Songs []SongTagSuggestionSong
@@ -119,17 +122,34 @@ type SongTagSuggestionSong struct {
 	AlreadyTagged bool
 }
 
-// SongTagSuggestions groups songs by significant words their titles share
-// (see SongTitleWords), keeping only groups with 2+ distinct songs,
-// skipping any word in ignoredWords, and flagging a song AlreadyTagged
-// when it already has a tag whose value exactly matches the word
-// (case-insensitively) - an intentionally exact match: a tag already
-// renamed to "Kingship" won't suppress a "king" suggestion on its own,
-// since there's no reliable non-AI way to know they're the same idea. A
-// group disappears entirely once every song in it is already tagged -
-// nothing left to suggest. Sorted by group size descending, then word
-// ascending, so the biggest/most useful groups surface first.
-func SongTagSuggestions(songs []pco.SongData, existingTags []SongTag, ignoredWords map[string]bool) []SongTagSuggestionGroup {
+// wordsForSong returns a song's candidate suggestion terms as
+// normalizedKey -> displayText pairs. normalizedKey drives
+// grouping/matching (case-insensitive, matching the existing "already
+// tagged" comparison against a tag's trimmed+lowercased value);
+// displayText is what's actually shown/used as the tag value default. For
+// title words these are identical (SongTitleWords already returns
+// lowercase). For theme phrases they differ: PCO's Themes string arrives
+// pre-capitalized ("God's Attributes", "Kingship") and that casing is
+// preserved as the display default rather than lowercased and
+// reconstituted - only the grouping/matching key gets lowercased.
+type wordsForSong func(pco.SongData) map[string]string
+
+// songTagSuggestionGroups is the shared grouping algorithm behind both
+// SongTagSuggestions (title words) and SongThemeSuggestions (PCO Themes) -
+// keeping only groups with 2+ distinct songs, skipping any key in
+// ignoredWords, and flagging a song AlreadyTagged when it already has a
+// tag whose value exactly matches the key (case-insensitively) - an
+// intentionally exact match: a tag already renamed to "Kingship" won't
+// suppress a "king" suggestion on its own, since there's no reliable
+// non-AI way to know they're the same idea. A group disappears entirely
+// once every song in it is already tagged - nothing left to suggest.
+// Sorted by group size descending, then display text ascending, so the
+// biggest/most useful groups surface first. The group's own Word is taken
+// from extract(groupSongs[0])[key] - the alphabetically-first song's own
+// casing for that key (groupSongs is sorted by title just above) - so
+// display text is deterministic regardless of input song order, rather
+// than the (possibly-lowercased) key itself.
+func songTagSuggestionGroups(songs []pco.SongData, existingTags []SongTag, ignoredWords map[string]bool, extract wordsForSong) []SongTagSuggestionGroup {
 	taggedWordsBySong := map[string]map[string]bool{}
 	for _, tag := range existingTags {
 		if taggedWordsBySong[tag.SongID] == nil {
@@ -138,16 +158,16 @@ func SongTagSuggestions(songs []pco.SongData, existingTags []SongTag, ignoredWor
 		taggedWordsBySong[tag.SongID][strings.ToLower(strings.TrimSpace(tag.Value))] = true
 	}
 
-	songsByWord := map[string][]pco.SongData{}
+	songsByKey := map[string][]pco.SongData{}
 	for _, song := range songs {
-		for word := range SongTitleWords(song.Attributes.Title) {
-			songsByWord[word] = append(songsByWord[word], song)
+		for key := range extract(song) {
+			songsByKey[key] = append(songsByKey[key], song)
 		}
 	}
 
 	var groups []SongTagSuggestionGroup
-	for word, groupSongs := range songsByWord {
-		if len(groupSongs) < 2 || ignoredWords[word] {
+	for key, groupSongs := range songsByKey {
+		if len(groupSongs) < 2 || ignoredWords[key] {
 			continue
 		}
 
@@ -158,7 +178,7 @@ func SongTagSuggestions(songs []pco.SongData, existingTags []SongTag, ignoredWor
 		songViews := make([]SongTagSuggestionSong, 0, len(groupSongs))
 		allTagged := true
 		for _, song := range groupSongs {
-			tagged := taggedWordsBySong[song.ID][word]
+			tagged := taggedWordsBySong[song.ID][key]
 			if !tagged {
 				allTagged = false
 			}
@@ -172,7 +192,8 @@ func SongTagSuggestions(songs []pco.SongData, existingTags []SongTag, ignoredWor
 			continue
 		}
 
-		groups = append(groups, SongTagSuggestionGroup{Word: word, Songs: songViews})
+		displayText := extract(groupSongs[0])[key]
+		groups = append(groups, SongTagSuggestionGroup{Word: displayText, Songs: songViews})
 	}
 
 	sort.Slice(groups, func(i, j int) bool {
@@ -183,4 +204,67 @@ func SongTagSuggestions(songs []pco.SongData, existingTags []SongTag, ignoredWor
 	})
 
 	return groups
+}
+
+// titleWordsForSong is the wordsForSong extractor behind SongTagSuggestions
+// - title words are already lowercase (SongTitleWords), so the normalized
+// key and display text are identical.
+func titleWordsForSong(song pco.SongData) map[string]string {
+	words := SongTitleWords(song.Attributes.Title)
+	out := make(map[string]string, len(words))
+	for w := range words {
+		out[w] = w
+	}
+	return out
+}
+
+// SongTagSuggestions groups songs by significant words their titles share
+// (see SongTitleWords) - see songTagSuggestionGroups for the full grouping/
+// matching/sorting rules this delegates to.
+func SongTagSuggestions(songs []pco.SongData, existingTags []SongTag, ignoredWords map[string]bool) []SongTagSuggestionGroup {
+	return songTagSuggestionGroups(songs, existingTags, ignoredWords, titleWordsForSong)
+}
+
+// SongThemeValues splits PCO's own Themes attribute (a comma-separated,
+// already-curated string, e.g. "Kingship, Majesty / God's Attributes,
+// Praise") into its individual trimmed values, dropping empty segments (a
+// leading/trailing comma produces one - confirmed live, e.g. "How He
+// Loves" -> ", Father, Glory, God's Attributes, Love, oh how he loves us").
+// Unlike SongTitleWords, no stopword filtering or minimum-length filtering
+// applies - these aren't raw free text, they're PCO/CCLI's own curated
+// theme vocabulary, already meaningful as-is.
+func SongThemeValues(themes string) []string {
+	var values []string
+	for _, v := range strings.Split(themes, ",") {
+		v = strings.TrimSpace(v)
+		if v == "" {
+			continue
+		}
+		values = append(values, v)
+	}
+	return values
+}
+
+// themeWordsForSong is the wordsForSong extractor behind
+// SongThemeSuggestions - each of a song's SongThemeValues, keyed by its
+// lowercased+trimmed form (for grouping/matching) mapped to its original
+// PCO casing (for display), deduped per song the same way title words
+// dedupe per title.
+func themeWordsForSong(song pco.SongData) map[string]string {
+	values := SongThemeValues(song.Attributes.Themes)
+	out := make(map[string]string, len(values))
+	for _, v := range values {
+		out[strings.ToLower(strings.TrimSpace(v))] = v
+	}
+	return out
+}
+
+// SongThemeSuggestions groups songs sharing a value from PCO's own Themes
+// field (see SongThemeValues) - mirrors SongTagSuggestions' signature and
+// return type exactly (see songTagSuggestionGroups for the full grouping/
+// matching/sorting rules both delegate to). Word holds a theme phrase here
+// (e.g. "God's Attributes"), not a single word - PCO's own casing is
+// preserved rather than lowercased.
+func SongThemeSuggestions(songs []pco.SongData, existingTags []SongTag, ignoredWords map[string]bool) []SongTagSuggestionGroup {
+	return songTagSuggestionGroups(songs, existingTags, ignoredWords, themeWordsForSong)
 }
