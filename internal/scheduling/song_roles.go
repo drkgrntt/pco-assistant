@@ -135,7 +135,7 @@ func (s *Store) UpdateSongRole(ctx context.Context, organizationID string, id in
 // HasAnySongRoles reports whether the organization has tagged at least one
 // song with a role - a cheap existence check for the home page's setup
 // checklist (see HomeController.buildHomeData and
-// docs/plans/in-progress/onboarding-and-ambient-framing-plan.md), same
+// docs/plans/shipped/onboarding-and-ambient-framing-plan.md), same
 // shape as HasAnySongRelationships.
 func (s *Store) HasAnySongRoles(ctx context.Context, organizationID string) (bool, error) {
 	var exists bool

@@ -10,7 +10,7 @@ package controllers
 // (suggestedDominantSeventh/suggestedKeyChangeMove - see
 // docs/plans/shipped/key-change-tip-plan.md), and the vocal-range mismatch/
 // octave-shift-tip check (vocalRangeWarningForSong/vocalRangeFitsShifted/
-// vocalRangeViolationNotes - see docs/plans/in-progress/
+// vocalRangeViolationNotes - see docs/plans/shipped/
 // vocal-range-plan.md's Phase 3). All are pure functions over already-in-hand
 // data, same as mergeServiceOrder/songsInBoth in sets_builder_test.go, so
 // they're tested directly here rather than through buildSetBuilderData.
@@ -111,7 +111,7 @@ func TestServiceLengthWarningFloorProtectsSmallAverages(t *testing.T) {
 
 // TestParseKeyPitchClass*/TestSemitoneDistanceWrapsAround relocated to
 // internal/scheduling/key_engine_test.go - see
-// docs/plans/in-progress/vocal-range-plan.md's "Phase 2 prerequisite: the
+// docs/plans/shipped/vocal-range-plan.md's "Phase 2 prerequisite: the
 // key engine" section (pure relocation, no behavior change; the parser/
 // distance functions they test now live as scheduling.ParseKeyPitchClass/
 // scheduling.SemitoneDistance, called by keyTransitionWarnings below).
@@ -322,7 +322,7 @@ func TestKeyTransitionWarningsIncludesSuggestion(t *testing.T) {
 	}
 }
 
-// --- Phase 3: vocal range mismatch/tip (docs/plans/in-progress/vocal-range-plan.md) ---
+// --- Phase 3: vocal range mismatch/tip (docs/plans/shipped/vocal-range-plan.md) ---
 
 func TestVocalRangeWarningForSongNoVocalistsYieldsNoWarning(t *testing.T) {
 	got := vocalRangeWarningForSong(50, 65, nil, map[string]scheduling.PersonVocalRange{}, map[string]string{})

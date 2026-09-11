@@ -55,7 +55,7 @@ func oauthRedirectURI() string  { return os.Getenv("PCO_OAUTH_REDIRECT_URI") }
 // product tab/session the person has open too, not just this app's
 // connection - so more disruptive than switching actually calls for). This
 // app sends select_account rather than login for that reason - see
-// docs/plans/in-progress/pco-account-switching-plan.md for the fuller
+// docs/plans/shipped/pco-account-switching-plan.md for the fuller
 // writeup. Confirm live against a real sign-out/switch round trip rather
 // than assuming docs are the whole story, per CLAUDE.md's own instruction
 // for PCO-behavior claims.

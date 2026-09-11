@@ -1,6 +1,16 @@
 # Plan: vocal range (person + song) and the key engine
 
-**Status: Phase 1 shipped 2026-09-07** - the standalone person vocal range
+**Status: Phases 1-3 shipped 2026-09-07 through 2026-09-08 (see the
+per-phase paragraphs below for exact dates/detail). The matrix view and the
+crowdsourced-default piece remain not started and have been spun out to
+their own doc,
+`docs/plans/not-started/vocal-range-matrix-and-crowdsourced-default-plan.md`
+- see that doc for their design content, and this doc's own "Phase 3:
+mismatch warning UI, and the eventual matrix view" and "Crowdsourced
+default" sections below (kept here unchanged) for the full build history
+they were spun out of.**
+
+Phase 1 shipped 2026-09-07 - the standalone person vocal range
 setup page (migration `00036_person_vocal_range.sql` - `00035` was already
 taken by `song_attachment_cache` by the time this landed, so the number
 shifted from this doc's own `00035` guess; `internal/scheduling/
@@ -650,7 +660,7 @@ without any further conversion.
 Per this task's own instruction (and `docs/ideas.md`'s own explicit flag
 - "the priciest single item in this file"), this section deliberately
 does **not** pick an answer. Following the phrasing convention
-`docs/plans/in-progress/live-sync-reflection-plan.md` uses for its own
+`docs/plans/shipped/live-sync-reflection-plan.md` uses for its own
 unresolved mechanism questions:
 
 1. **Join key coverage, not just existence.** `SongData.Attributes.CCLINumber`

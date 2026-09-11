@@ -3,7 +3,7 @@ package controllers
 // Pure-function coverage for MergeSet's already-tracked-item reconciliation
 // (reconcileTrackedItems/trackedItemOrderChanged, sets_publish.go) - the
 // live-sync-reflection plan's step 3
-// (docs/plans/in-progress/live-sync-reflection-plan.md). Reuses
+// (docs/plans/shipped/live-sync-reflection-plan.md). Reuses
 // sets_builder_test.go's helper constructors (foreignItem/songItem/setSong/
 // publishedSetSong) rather than introducing fixtures or a mocking
 // framework, same convention as deriveMergeImportRows' own tests.

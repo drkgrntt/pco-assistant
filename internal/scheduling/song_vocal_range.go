@@ -9,7 +9,7 @@ import (
 
 // SongVocalRange is one song's sung range on record for an organization -
 // see migration 00041 (and 00043, which fixed this shape - see that
-// migration's own comment) and docs/plans/in-progress/vocal-range-plan.md's
+// migration's own comment) and docs/plans/shipped/vocal-range-plan.md's
 // Phase 2 section. The low/high notes are stored as their own exact pitch
 // class + octave, the same shape PersonVocalRange already uses, alongside
 // ReferenceKey (the key it was measured against - a bare (low, high) note
@@ -100,7 +100,7 @@ func (s *Store) SongVocalRange(ctx context.Context, organizationID, songID strin
 // HasAnySongVocalRanges reports whether the organization has recorded at
 // least one song's vocal range - a cheap existence check for the home
 // page's setup checklist (see HomeController.buildHomeData and
-// docs/plans/in-progress/onboarding-and-ambient-framing-plan.md), same
+// docs/plans/shipped/onboarding-and-ambient-framing-plan.md), same
 // shape as HasAnySongRelationships.
 func (s *Store) HasAnySongVocalRanges(ctx context.Context, organizationID string) (bool, error) {
 	var exists bool

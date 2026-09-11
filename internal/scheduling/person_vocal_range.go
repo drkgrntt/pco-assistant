@@ -92,7 +92,7 @@ func (s *Store) PersonVocalRange(ctx context.Context, organizationID, personID s
 // HasAnyPersonVocalRanges reports whether the organization has recorded at
 // least one person's vocal range - a cheap existence check for the home
 // page's setup checklist (see HomeController.buildHomeData and
-// docs/plans/in-progress/onboarding-and-ambient-framing-plan.md), same
+// docs/plans/shipped/onboarding-and-ambient-framing-plan.md), same
 // shape as HasAnySongRelationships.
 func (s *Store) HasAnyPersonVocalRanges(ctx context.Context, organizationID string) (bool, error) {
 	var exists bool

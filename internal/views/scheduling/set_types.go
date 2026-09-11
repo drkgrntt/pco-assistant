@@ -139,7 +139,7 @@ type SetBuilderData struct {
 	// PCOSyncFingerprint is a hash of every plan item's (id, sequence,
 	// updated_at) as of this render (see pcoItemsFingerprint,
 	// sets_builder.go) - the poll-while-open live-sync check's baseline
-	// (docs/plans/in-progress/live-sync-reflection-plan.md). The hidden
+	// (docs/plans/shipped/live-sync-reflection-plan.md). The hidden
 	// #pco-sync-fp input in set_builder.templ carries this value; a
 	// background poll every 30s (SyncCheck, sets_publish.go) refetches the
 	// plan's items, recomputes the same fingerprint, and only shows a
@@ -392,7 +392,7 @@ type SetSongView struct {
 	// and the /scheduling/song-vocal-range setup page), in which case the
 	// detail card shows nothing rather than a placeholder. Detail-card
 	// only, same scope as Structure/HasChordChart above - Phase 2 of
-	// docs/plans/in-progress/vocal-range-plan.md.
+	// docs/plans/shipped/vocal-range-plan.md.
 	VocalRangeDisplay string
 
 	// VocalRangeHasPlayableNotes/VocalRangeLowPitchClass/VocalRangeLowOctave/
@@ -415,7 +415,7 @@ type SetSongView struct {
 	VocalRangeHighOctave       int
 
 	// VocalRangeWarningLabel/VocalRangeWarningMessage/VocalRangeWarningIsTip
-	// are Phase 3 of docs/plans/in-progress/vocal-range-plan.md: a
+	// are Phase 3 of docs/plans/shipped/vocal-range-plan.md: a
 	// range-mismatch warning (or downgraded octave-shift tip) when a
 	// vocalist assigned to this plan's roster has a stored
 	// scheduling.PersonVocalRange that doesn't cover this song's own

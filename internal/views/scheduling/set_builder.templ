@@ -233,7 +233,7 @@ templ keyTransitionMenu(message string, suggestion string) {
 // vocalRangeMismatchToggle/vocalRangeTipToggle/vocalRangeMenu are the
 // vocal-range warning Disclosure's toggle-button content and popup
 // contents (see songBadgeSpans above and SetSongView.VocalRangeWarning*) -
-// Phase 3 of docs/plans/in-progress/vocal-range-plan.md. Two toggle
+// Phase 3 of docs/plans/shipped/vocal-range-plan.md. Two toggle
 // variants, the same split keyTransitionToggle (a real problem, styled
 // with a leading ⚠ like ConflictBadge) vs. transitionNoteToggle (an
 // informational surfacing, plain pill, no warning icon) already
@@ -286,7 +286,7 @@ templ badgeOverflowMenu(extras templ.Component) {
 // conflict, recently-repeated, key-transition, and vocal-range-mismatch
 // warnings, all rendered inline right on this row instead of a separate
 // top-of-page list - see docs/plans/shipped/in-place-set-warnings-plan.md
-// and, for the vocal-range warning, docs/plans/in-progress/
+// and, for the vocal-range warning, docs/plans/shipped/
 // vocal-range-plan.md's Phase 3. Mirrors songCandidateMeta's identical
 // ConflictBadge usage for a not-yet-added candidate's
 // ConflictTitles/RecentlyRepeated.
@@ -445,7 +445,7 @@ templ transitionNoteMenu(message string) {
 // rowMenuToggle/rowMenuItems are the row-menu Disclosure's toggle-button
 // content and popup contents - the same 4 fixed actions (tag/relate/mark
 // role/set vocal range - the last one added by Part C of docs/plans/
-// in-progress/vocal-range-plan.md) for every song row, jumping to (and
+// shipped/vocal-range-plan.md) for every song row, jumping to (and
 // revealing) that row's own hidden quick-action-row via openQuickAction
 // (scheduling-build.js), so neither needs any per-row data passed in.
 templ rowMenuToggle() {
@@ -745,7 +745,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 	<div id="set-builder-body">
 		<!--
 			Poll-while-open live-sync check (option C,
-			docs/plans/in-progress/live-sync-reflection-plan.md) - only while
+			docs/plans/shipped/live-sync-reflection-plan.md) - only while
 			there's something to publish toward (!data.ReadOnly, mirroring
 			every other publish/discard/merge action on this page). #pco-sync-fp
 			carries the fingerprint this render's own GetItems call captured

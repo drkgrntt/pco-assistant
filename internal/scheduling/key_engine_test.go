@@ -2,7 +2,7 @@ package scheduling
 
 import "testing"
 
-// Unit tests for the key engine (key_engine.go) - docs/plans/in-progress/
+// Unit tests for the key engine (key_engine.go) - docs/plans/shipped/
 // vocal-range-plan.md's Phase 2 prerequisite. TestParseKeyPitchClass*/
 // TestSemitoneDistanceWrapsAround below are relocated verbatim from
 // internal/server/controllers/sets_builder_warnings_test.go (no behavior

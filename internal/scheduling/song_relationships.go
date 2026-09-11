@@ -183,7 +183,7 @@ func (s *Store) UpdateSongRelationship(ctx context.Context, organizationID strin
 // least one song relationship of any kind - a cheap existence check (no
 // row data fetched/scanned) for the home page's setup checklist
 // (see HomeController.buildHomeData and
-// docs/plans/in-progress/onboarding-and-ambient-framing-plan.md), not
+// docs/plans/shipped/onboarding-and-ambient-framing-plan.md), not
 // meant as a general-purpose alternative to ListSongRelationships.
 func (s *Store) HasAnySongRelationships(ctx context.Context, organizationID string) (bool, error) {
 	var exists bool

@@ -149,7 +149,7 @@ func (s *Store) UpdateSongPersonPreference(ctx context.Context, organizationID s
 // HasAnySongPersonPreferences reports whether the organization has set at
 // least one song/person preference - a cheap existence check for the home
 // page's setup checklist (see HomeController.buildHomeData and
-// docs/plans/in-progress/onboarding-and-ambient-framing-plan.md), same
+// docs/plans/shipped/onboarding-and-ambient-framing-plan.md), same
 // shape as HasAnySongRelationships.
 func (s *Store) HasAnySongPersonPreferences(ctx context.Context, organizationID string) (bool, error) {
 	var exists bool

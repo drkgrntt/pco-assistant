@@ -1,6 +1,6 @@
 # Plan: ambient promise-framing + first-run onboarding nudge
 
-**Status: Phases 1, 3, 4, and 5 built 2026-09-08** (not yet deployed).
+**Status: shipped 2026-09-10.**
 Phase 5 (the Build-page tour) was built overriding this doc's own prior
 "Proposed, not started" recommendation to hold off - Derek's explicit
 direction, after Phase 4 shipped, to build it anyway rather than wait for
@@ -19,7 +19,7 @@ guidance was itself revisited and built after all, under a genuinely
 different mechanism (a Help-triggered, click-to-open dialog per page,
 never auto-popping) that sidesteps the "overbearing" objection that
 recommendation was built on - see
-`docs/plans/in-progress/help-system-and-nav-consolidation-plan.md` for what
+`docs/plans/shipped/help-system-and-nav-consolidation-plan.md` for what
 shipped and why that mechanism specifically doesn't re-raise the original
 concern. The recommendation text below is kept as-is, not rewritten, per
 this doc's own "don't delete superseded reasoning" convention.
@@ -90,7 +90,7 @@ lists under the two promises, each item keeping its existing one-line
 description but gaining a short "why" clause tying it to what Build
 actually does with it. Also folds in two setup pages that shipped
 (`/scheduling/vocal-range`, `/scheduling/song-vocal-range` -
-`docs/plans/in-progress/vocal-range-plan.md`) but were never added to this
+`docs/plans/shipped/vocal-range-plan.md`) but were never added to this
 list - the gap this section exists to close, not unique to vocal range:
 
 - **Protect the service**: song relationships, song roles, song tags -
@@ -421,13 +421,13 @@ shipped thing:
   promise" section calls primarily service-side) also to "Protect the
   service"; "Makes 'can they hit this note' a lookup" (person vocal
   range) to "Protect the team", matching
-  `docs/plans/in-progress/vocal-range-plan.md`'s own promise split.
+  `docs/plans/shipped/vocal-range-plan.md`'s own promise split.
 - **Deliberately skipped**: song lead sheet attachments and the song
   archive action itself - real, shipped, useful, but conveniences, not
   guardrails (no before/after "catches a problem" scenario), so they
   don't fit this page's format without stretching. Also skipped: a
   service-side **song vocal range mismatch warning** card - checked
-  against `docs/plans/in-progress/vocal-range-plan.md`'s own status line
+  against `docs/plans/shipped/vocal-range-plan.md`'s own status line
   and confirmed **Phase 3 (the actual mismatch warning) hasn't shipped
   yet** - only Phase 1/2 (the person/song range setup pages and the
   transposed-range display on Build) are live. Advertising an automatic
@@ -465,7 +465,7 @@ cover, not against "would this be nice to have."
 
 **Per-setup-page first-visit guidance: recommend skipping, it's already
 covered.** **Revisited and built anyway, same day - see
-`docs/plans/in-progress/help-system-and-nav-consolidation-plan.md`.** Both
+`docs/plans/shipped/help-system-and-nav-consolidation-plan.md`.** Both
 options Derek raised here were auto-popping (a modal that shows itself, or
 a guided sequence someone is walked through) - what actually got built
 instead is a click-to-open Help button per page, never auto-shown, which
