@@ -253,7 +253,7 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 	// here from songs/inSet, already in hand, rather than a fresh fetch;
 	// searchCandidates builds the identical list on its own early-return
 	// path for this same list's htmx re-renders.
-	data.BrowsableSongs = buildBrowsableSongs(songs, inSet)
+	data.BrowsableSongs = buildBrowsableSongs(songs, inSet, rolesBySong, roleTypeLabels, tagsBySong, tagCategoryLabels)
 
 	pendingDeletions, err := sc.store.ListPendingDeletions(ctx, set.ID)
 	if err != nil {
@@ -636,22 +636,36 @@ func (l candidateLookups) candidateSongView(song pco.SongData) views.CandidateSo
 	}
 }
 
-// buildBrowsableSongs is candidateSongView's lightweight counterpart -
-// title-only, for the "Browse all songs" list's empty-query-and-role state
-// (see views.SetBuilderData.BrowsableSongs) rather than the rich search
-// results the same list shows once someone actually searches. Deliberately
-// skips every per-song lookup candidateSongView needs (roles, tags,
-// conflicts, arrangement info, reinforcement status) - none of that is
-// wanted here, so this is just an id+title filter over songs, cheap enough
-// to run on every render unconditionally. songs is expected already
+// buildBrowsableSongs is candidateSongView's lighter counterpart for the
+// "Browse all songs" list's empty-query-and-role state (see
+// views.SetBuilderData.BrowsableSongs) rather than the rich search results
+// the same list shows once someone actually searches. Populates only the
+// three signals cheap enough to compute for the whole library on every
+// render - not-sung-recently, roles, tags (docs/issues.md: noticing these
+// without having to click into a song) - each sourced from a bulk local-DB
+// map or a field fetchActiveSongs already returned for every song, never a
+// new PCO call or a per-song lookup. Deliberately still skips conflicts,
+// repeat/reinforcement status, arrangement info (that last one specifically
+// excluded per the issue's own wording), and contexts - those cost real
+// per-song computation (AvoidPairings, plan history) and stay behind each
+// row's click-to-expand detail instead (CandidateDetails/
+// candidateDetailExtras, set_builder.templ). songs is expected already
 // title-ordered (fetchActiveSongs' own contract) - this doesn't re-sort.
-func buildBrowsableSongs(songs []pco.SongData, inSet map[string]bool) []views.SongOptionView {
-	browsable := make([]views.SongOptionView, 0, len(songs))
+func buildBrowsableSongs(songs []pco.SongData, inSet map[string]bool, rolesBySong map[string][]scheduling.SongRole, roleTypeLabels map[string]string, tagsBySong map[string][]scheduling.SongTag, tagCategoryLabels map[string]string) []views.CandidateSongView {
+	browsable := make([]views.CandidateSongView, 0, len(songs))
 	for _, song := range songs {
 		if inSet[song.ID] {
 			continue
 		}
-		browsable = append(browsable, views.SongOptionView{SongID: song.ID, Title: song.Attributes.Title})
+		roleViews, _ := songRoleViews(rolesBySong, roleTypeLabels, song.ID)
+		tagViews, _ := songTagViews(tagsBySong, tagCategoryLabels, song.ID)
+		browsable = append(browsable, views.CandidateSongView{
+			SongID:         song.ID,
+			Title:          song.Attributes.Title,
+			NotSungInLabel: notSungInLabel(song.Attributes.LastScheduledAt, tagsBySong[song.ID]),
+			Roles:          roleViews,
+			Tags:           tagViews,
+		})
 	}
 	return browsable
 }
@@ -892,7 +906,7 @@ func (sc *SchedulingController) ArchiveSong(c *fiber.Ctx) error {
 // Best-effort throughout, same convention as buildSetBuilderData: a failed
 // lookup just degrades whatever it backs (e.g. no conflict badges) instead
 // of failing the search outright.
-func (sc *SchedulingController) searchCandidates(ctx context.Context, organizationID, serviceTypeID, planID, query, role, context string) (results []views.CandidateSongView, totalMatches int, capped bool, browsable []views.SongOptionView) {
+func (sc *SchedulingController) searchCandidates(ctx context.Context, organizationID, serviceTypeID, planID, query, role, context string) (results []views.CandidateSongView, totalMatches int, capped bool, browsable []views.CandidateSongView) {
 	set, err := sc.store.GetOrCreateSet(ctx, organizationID, serviceTypeID, planID)
 	if err != nil {
 		return nil, 0, false, nil
@@ -909,7 +923,21 @@ func (sc *SchedulingController) searchCandidates(ctx context.Context, organizati
 	songs, _ := fetchActiveSongs(ctx, organizationID)
 
 	if query == "" && role == "" && context == "" {
-		return nil, 0, false, buildBrowsableSongs(songs, inSet)
+		// Same role/tag lookups buildCandidateLookups gathers below for a
+		// real search - duplicated here rather than shared, matching this
+		// function's own doc comment on why that tradeoff is fine (cheap
+		// local-DB bulk reads, not a PCO call), so the plain browse state
+		// doesn't have to run buildCandidateLookups' other, pricier lookups
+		// (AvoidPairings, plan history) it has no use for.
+		roleTypes, _ := sc.store.ListSongRoleTypes(ctx)
+		roleTypeLabels := songRoleTypeLabelMap(roleTypes)
+		allRoles, _ := sc.store.ListSongRoles(ctx, organizationID, "", "")
+		rolesBySong := songRolesBySong(allRoles)
+		allTags, _ := sc.store.ListSongTags(ctx, organizationID, "", "")
+		tagCategories, _ := sc.store.ListSongTagCategories(ctx)
+		tagsBySong := songTagsBySong(allTags)
+		tagCategoryLabels := songTagCategoryLabelMap(tagCategories)
+		return nil, 0, false, buildBrowsableSongs(songs, inSet, rolesBySong, roleTypeLabels, tagsBySong, tagCategoryLabels)
 	}
 
 	lookups := sc.buildCandidateLookups(ctx, organizationID, serviceTypeID, songs, set.ID)

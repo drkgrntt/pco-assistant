@@ -6,12 +6,18 @@
    search dropdown used elsewhere in the app. */
 
 /* The set builder's "find songs to add" filters - a role toggle plus the
-   search box below it (see filterCandidates in scheduling-build.js). */
+   search box below it (see filterCandidates in scheduling-build.js).
+   align-items: center added per docs/issues.md feedback - without it this
+   flex row defaults to stretch, so a plain inline label (e.g.
+   .context-filters' "Context:" span below) sat taller-but-uncentered next
+   to the ~44px-tall filter buttons beside it instead of lining up with
+   their vertical middle. */
 .role-filters {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: var(--space-2);
-  margin-block: var(--space-2);
+  margin-block: var(--space-3);
 }
 
 .role-filter.active,
@@ -28,7 +34,24 @@
    context buttons into .role-filter) so toggleRoleFilter's own
    querySelectorAll(".role-filter") in scheduling-build.js can't clear a context
    chip's active state (or vice versa) - two independent toggle groups, not
-   one shared one. */
+   one shared one. A top border/padding is added here (docs/issues.md:
+   "roles and contexts seem scrunched and not really visually separated")
+   so the context row reads as its own group instead of just more of the
+   role-filter row directly above it - cheaper than new wrapper markup
+   since .context-filters is already a distinct second class on this one
+   div. */
+.context-filters {
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+}
+
+/* Same "not visually separated" feedback applies one level further down -
+   the "Browse by tag" accordions (set_builder.templ) sat directly under
+   the context filters with only generic paragraph/div spacing between
+   them. */
+.tag-filters {
+  margin-block-start: var(--space-3);
+}
 
 #candidate-search {
   width: 100%;

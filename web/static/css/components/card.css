@@ -38,11 +38,14 @@
    being stretched back to match its still-open row-mate's height - same
    reasoning as .card-columns' own align-items: start below, just not
    discovered here until a real team-group could actually collapse to test
-   it against. */
+   it against. minmax floor bumped 20rem -> 24rem and gap 4 -> 5 per
+   docs/issues.md ("feels scrunched... make it wide and breathable like
+   the service tab") - fewer, wider columns at typical Build-page widths
+   rather than several narrow ones packed edge to edge. */
 .team-groups-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
-  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(24rem, 1fr));
+  gap: var(--space-5);
   align-items: start;
 }
 
@@ -118,12 +121,16 @@
    neighbor and far less of its own padding than the old standalone
    .position-group card had (previously var(--space-4) var(--space-5) of
    padding *plus* a var(--space-4) margin between every single position -
-   the "each position takes up too much space" this replaces). */
+   the "each position takes up too much space" this replaces). Horizontal
+   padding added back in small doses (0 -> space-2, vertical space-2 ->
+   space-3) per docs/issues.md's "scrunched" feedback - enough breathing
+   room that rows don't touch the card's own edge, well short of
+   reverting to the pre-redesign per-position card padding above. */
 .team-group .position-group {
   background: none;
   border: none;
   border-radius: 0;
-  padding: var(--space-2) 0;
+  padding: var(--space-3) var(--space-2);
   margin-block: 0;
 }
 

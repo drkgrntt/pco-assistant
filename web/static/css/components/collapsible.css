@@ -5,16 +5,26 @@
 /* Generic show/hide wrapper (see toggleCollapse in scheduling-collapsible.js) for
    secondary build-page content that doesn't need to be visible by
    default - Recommended next, the full song candidate list, quick-add
-   panels, and a fully-staffed position-group card (collapsibleCard). */
+   panels, and a fully-staffed position-group card (collapsibleCard).
+   background/border-radius/horizontal padding added per docs/issues.md
+   ("hard to quickly, visually distinguish as accordions... they usually
+   feel more like headers at a glance") - previously a background-less,
+   border-less "reset" button was visually identical to a plain heading
+   except for the chevron, which only reads as an affordance once you
+   already know to look for it. The subtle tint reads as "clickable chip"
+   at a glance instead, in both the open and closed state (kept
+   consistent rather than only tinting one, so the visual language stays
+   the same regardless of state). */
 .collapsible-toggle {
   display: flex;
   align-items: center;
   gap: var(--space-2);
   width: 100%;
   min-height: 0;
-  background: none;
+  background: var(--surface-hover);
   border: none;
-  padding: var(--space-2) 0;
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
   font: inherit;
   font-weight: var(--font-medium);
   color: var(--text);
@@ -23,7 +33,7 @@
 }
 
 .collapsible-toggle:hover {
-  background: none;
+  background: var(--accent-subtle);
   color: var(--accent);
 }
 

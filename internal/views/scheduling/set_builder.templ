@@ -715,7 +715,7 @@ templ candidateBadgeExtras(cand CandidateSongView) {
 // since this expands inline within the row rather than floating over
 // anything, and comparing two or three songs at once while browsing is
 // the actual point.
-templ songBrowseRow(serviceTypeID, planID string, song SongOptionView) {
+templ songBrowseRow(serviceTypeID, planID string, song CandidateSongView) {
 	<li class="song-browse-row">
 		<button
 			type="button"
@@ -728,6 +728,7 @@ templ songBrowseRow(serviceTypeID, planID string, song SongOptionView) {
 			hx-swap="innerHTML"
 			hx-trigger="click once"
 		>{ song.Title }</button>
+		@songBrowseMeta(song)
 		<form hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/songs", serviceTypeID, planID) } hx-target="#set-builder-body" hx-swap="outerHTML">
 			<input type="hidden" name="song_id" value={ song.SongID }/>
 			<button type="submit" class="icon-btn" aria-label="Add to set" title="Add to set">
@@ -740,20 +741,71 @@ templ songBrowseRow(serviceTypeID, planID string, song SongOptionView) {
 	</li>
 }
 
+// songBrowseMeta is songBrowseRow's own "at a glance" preview - the three
+// signals cheap enough to compute for the whole library on every render
+// (not-sung-recently, roles, tags - see buildBrowsableSongs' own doc
+// comment, sets_builder.go), shown immediately rather than waiting for the
+// click-to-expand detail panel below (CandidateDetails), which covers
+// everything else (arrangement info, conflicts, repeat/reinforcement
+// status, contexts) that isn't cheap enough to compute for the whole
+// library unconditionally. Deliberately not songCandidateMeta itself, which
+// would duplicate these same three badges once that detail panel is also
+// open - see candidateDetailExtras, its complementary "everything else"
+// counterpart.
+templ songBrowseMeta(song CandidateSongView) {
+	if song.NotSungInLabel != "" {
+		@components.BadgeTitled("status-pending", song.NotSungInLabel, "Last scheduled over 6 months ago - consider whether this still belongs in rotation")
+	}
+	for _, role := range song.Roles {
+		@components.Badge("", role.Label)
+	}
+	for _, tag := range song.Tags {
+		@components.TagBadge(tag.Value, tag.Category)
+	}
+}
+
 // CandidateDetails is songBrowseRow's lazy-loaded detail content -
-// BuildCandidateDetails' whole response, just the same songCandidateMeta
-// badge/meta cluster the rich search rows and suggestion lists already
-// show, computed for the one song clicked (see that handler's doc
-// comment). errMsg covers the two failure paths there (set lookup failed,
-// song not found); HasMeta covers the common case of a song with nothing
-// on record yet, so the reveal doesn't just look like nothing happened.
+// BuildCandidateDetails computes the same full CandidateSongView
+// candidateSongView always does (see that handler's doc comment), but this
+// only renders candidateDetailExtras, not the whole songCandidateMeta
+// cluster - songBrowseRow's own songBrowseMeta already showed
+// NotSungInLabel/Roles/Tags inline before this was ever clicked, so
+// re-rendering those here would just duplicate them. errMsg covers the two
+// failure paths in BuildCandidateDetails (set lookup failed, song not
+// found); HasExtraMeta covers the common case of a song with nothing left
+// to reveal beyond what's already visible above, so the reveal doesn't
+// just look like nothing happened.
 templ CandidateDetails(cand CandidateSongView, errMsg string) {
 	if errMsg != "" {
 		<p class="error" role="alert">{ errMsg }</p>
-	} else if !cand.HasMeta() {
-		<p class="muted">Nothing on record for this song yet.</p>
+	} else if !cand.HasExtraMeta() {
+		<p class="muted">Nothing else on record for this song.</p>
 	} else {
-		@songCandidateMeta(cand)
+		@candidateDetailExtras(cand)
+	}
+}
+
+// candidateDetailExtras is CandidateDetails' own content - songCandidateMeta's
+// fields minus the three songBrowseMeta already shows inline on every
+// browse row (NotSungInLabel, Roles, Tags), so expanding a row doesn't
+// duplicate badges already visible before the click. Contexts stay here
+// rather than moving to songBrowseMeta - the issue that prompted this split
+// only asked for not-sung-recently/roles/tags at a glance, not contexts too.
+templ candidateDetailExtras(cand CandidateSongView) {
+	if cand.NewSongLabel != "" {
+		@components.BadgeTitled("status-pending", cand.NewSongLabel, "New to the church - a repeat helps it stick")
+	}
+	if cand.ArrangementInfo != "" {
+		<span class="muted arrangement-info">{ cand.ArrangementInfo }</span>
+	}
+	if len(cand.ConflictTitles) > 0 {
+		@components.ConflictBadge(fmt.Sprintf("avoid pairing with %s", strings.Join(cand.ConflictTitles, ", ")))
+	}
+	if cand.RecentlyRepeated {
+		@components.ConflictBadge("sung in each of the last two plans")
+	}
+	for _, context := range cand.Contexts {
+		@components.Badge("", context.Label)
 	}
 }
 
@@ -814,7 +866,7 @@ templ candidateSearchStatusOOB(candidates []CandidateSongView, query, roleFilter
 //   - Normal results.
 //   - Capped results: the same rows, plus a trailing hint that more exist -
 //     see BuildCandidatesSearch's candidateSearchLimit.
-templ CandidateSearchResults(serviceTypeID, planID string, candidates []CandidateSongView, query, roleFilter, contextFilter string, totalMatches int, capped bool, browsable []SongOptionView, errMsg string) {
+templ CandidateSearchResults(serviceTypeID, planID string, candidates []CandidateSongView, query, roleFilter, contextFilter string, totalMatches int, capped bool, browsable []CandidateSongView, errMsg string) {
 	if errMsg != "" {
 		<li class="error" role="alert">{ errMsg }</li>
 	}
@@ -877,7 +929,7 @@ templ CandidateSearchResults(serviceTypeID, planID string, candidates []Candidat
 // region doesn't announce its own initial content anyway, so
 // #candidate-search-status starts out empty there instead (see that call
 // site's own doc comment).
-templ CandidateSearchResultsWithStatus(serviceTypeID, planID string, candidates []CandidateSongView, query, roleFilter, contextFilter string, totalMatches int, capped bool, browsable []SongOptionView, errMsg string) {
+templ CandidateSearchResultsWithStatus(serviceTypeID, planID string, candidates []CandidateSongView, query, roleFilter, contextFilter string, totalMatches int, capped bool, browsable []CandidateSongView, errMsg string) {
 	@CandidateSearchResults(serviceTypeID, planID, candidates, query, roleFilter, contextFilter, totalMatches, capped, browsable, errMsg)
 	@candidateSearchStatusOOB(candidates, query, roleFilter, contextFilter, totalMatches, capped, errMsg)
 }
@@ -917,6 +969,20 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 			poll element itself is deliberate: the only content that should
 			ever change from this request arrives as those two OOB fragments,
 			never as this element's own body.
+
+			The [!document.hidden] trigger filter (docs/issues.md: "what
+			happens if the user has 4-5 tabs open... only poll on the active
+			tab") skips firing the request on any tick where this tab isn't
+			the visible one - htmx re-evaluates a trigger filter on every
+			interval, not just once at page load, so switching tabs away
+			mid-session starts skipping ticks immediately, and switching back
+			resumes on the next one (up to 30s later, not instant - not worth
+			an extra "check immediately on refocus" listener for a background
+			sync check with no urgency). This doesn't dedupe N *different*
+			people/tabs each polling their own session (docs/pco-api-risks.md
+			already tracks that as a known, tolerated cost that scales with
+			concurrent open tabs) - it only stops one person's own idle
+			background tabs from adding to it.
 		-->
 		if !data.ReadOnly {
 			<input type="hidden" id="pco-sync-fp" value={ data.PCOSyncFingerprint }/>
@@ -924,7 +990,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 			<div
 				id="pco-sync-poll"
 				hx-get={ fmt.Sprintf("/scheduling/sets/%s/%s/sync-check", data.ServiceTypeID, data.PlanID) }
-				hx-trigger="every 30s"
+				hx-trigger="every 30s[!document.hidden]"
 				hx-swap="none"
 				hx-vals="js:{fp: document.getElementById('pco-sync-fp').value}"
 			></div>

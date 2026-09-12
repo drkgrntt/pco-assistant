@@ -219,18 +219,24 @@ type SetBuilderData struct {
 	// BrowsableSongs is the "Browse all songs" list's empty-query-and-role
 	// state (CandidateSearchResults) - every active, not-yet-added song's
 	// id+title, in the same title order fetchActiveSongs already returns
-	// them, so someone can skim titles before typing anything. Deliberately
-	// the lightweight SongOptionView, not the rich CandidateSongView the
-	// same list's actual search results use: computing roles/tags/
-	// conflicts/arrangement info for the whole library on every page load
-	// is exactly what BuildCandidatesSearch/searchCandidates exist to avoid
-	// (see their own doc comments) - this only ever needs a title, so it
-	// skips all of that. Built once here from the same songs/inSet
-	// buildSetBuilderData already has (see buildBrowsableSongs,
-	// sets_builder.go); searchCandidates builds the identical list on its
-	// own early-return path for BuildCandidatesSearch's re-renders (e.g.
-	// clearing the search box back to empty).
-	BrowsableSongs []SongOptionView
+	// them, so someone can skim titles before typing anything. Uses
+	// CandidateSongView (not the plain SongOptionView the search results
+	// row-picker <select>s use), but only NotSungInLabel/Roles/Tags ever get
+	// populated on it here - see buildBrowsableSongs' own doc comment
+	// (sets_builder.go) for why those three specifically (docs/issues.md:
+	// noticing them without clicking into a song) and why the rest
+	// (conflicts, repeat/reinforcement status, arrangement info, contexts)
+	// deliberately still don't: those need real per-song computation
+	// (AvoidPairings, plan history) that's exactly what
+	// BuildCandidatesSearch/searchCandidates exist to avoid paying for the
+	// whole library on every page load (see their own doc comments) - they
+	// stay behind each row's click-to-expand CandidateDetails instead (see
+	// candidateDetailExtras, set_builder.templ). Built once here from the
+	// same songs/inSet buildSetBuilderData already has (see
+	// buildBrowsableSongs, sets_builder.go); searchCandidates builds the
+	// identical list on its own early-return path for BuildCandidatesSearch's
+	// re-renders (e.g. clearing the search box back to empty).
+	BrowsableSongs []CandidateSongView
 }
 
 type SetSongView struct {
@@ -672,12 +678,19 @@ type CandidateSongView struct {
 // "nothing on record for this song yet" apart from a rendering bug, since
 // an empty candidate otherwise renders as a blank space with no visible
 // change on click.
-func (c CandidateSongView) HasMeta() bool {
+// HasExtraMeta reports whether cand has anything left to show beyond the
+// three fields the "Browse all songs" row already shows inline before
+// anyone clicks it (NotSungInLabel, Roles, Tags - see BrowsableSongs' own
+// doc comment) - CandidateDetails uses this so its "nothing else on
+// record" message only fires when there's truly nothing left to reveal,
+// not just because the fields it checks happen to be the ones already
+// visible above it. (An earlier HasMeta checked all of these fields
+// together, back when CandidateDetails rendered the whole songCandidateMeta
+// cluster on click instead of just the extras - removed once nothing but
+// its own test used it anymore.)
+func (c CandidateSongView) HasExtraMeta() bool {
 	return c.NewSongLabel != "" ||
-		c.NotSungInLabel != "" ||
 		c.ArrangementInfo != "" ||
-		len(c.Roles) > 0 ||
-		len(c.Tags) > 0 ||
 		len(c.Contexts) > 0 ||
 		len(c.ConflictTitles) > 0 ||
 		c.RecentlyRepeated

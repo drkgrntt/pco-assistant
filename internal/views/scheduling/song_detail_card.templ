@@ -142,7 +142,7 @@ templ SongNoteFormFragment(data SetBuilderData, song SetSongView, note SongNoteV
 // not called "Refresh song info"
 // (a phrase this page's own Publish panel already uses for the opposite-
 // direction action, pushing local key/length/arrangement values out to
-// Planning Center - see publish_panel.templ's "Re-sync key, length &
+// Planning Center - see publish_panel.templ's "Re-push key, length &
 // arrangement" button) - two same-named buttons moving data in opposite
 // directions is exactly the kind of thing worth a distinct name for. Mirrors
 // KeyFormFragment's own multi-piece update: the card's own arrangement-info
@@ -468,7 +468,7 @@ templ songDetailMenuItems(data SetBuilderData, song SetSongView) {
 	}
 	<button
 		type="button"
-		title="Pull this song's key, tempo, meter, and length from Planning Center right now, overwriting whatever's cached here - use this if one of those was just changed directly in Planning Center. This is the opposite direction from Re-sync key, length &amp; arrangement on the Publish panel, which pushes this app's own values out to Planning Center."
+		title="Pull this song's key, tempo, meter, and length from Planning Center right now, overwriting whatever's cached here - use this if one of those was just changed directly in Planning Center. This is the opposite direction from Re-push key, length &amp; arrangement on the Publish panel, which pushes this app's own values out to Planning Center."
 		hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/refresh-arrangement-info", data.ServiceTypeID, data.PlanID, song.ID) }
 		hx-target={ fmt.Sprintf("#song-arrangement-info-%d", song.ID) }
 		hx-swap="outerHTML"
