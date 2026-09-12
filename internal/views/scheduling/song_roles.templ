@@ -2,7 +2,9 @@ package scheduling
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
+	"strings"
 
 	pco "github.com/drkgrntt/go-pco"
 
@@ -11,111 +13,167 @@ import (
 	"pco-assistant/internal/views/components"
 )
 
-templ SongRoles(personName, organizationName string, songs []pco.SongData, roles []scheduling.SongRole, roleTypes []scheduling.SongRoleType, songTitles map[string]string, roleLabels map[string]string, errMsg string) {
+// SongRoles is the setup page for opener/response (and any other
+// DB-driven) role tagging - see
+// docs/plans/shipped/song-roles-bucket-redesign-plan.md for why this
+// renders one persistent components.Card per SongRoleType ("bucket")
+// rather than Song Tags' one-card-per-song shape (song_tags.templ, its
+// own explicit model). The role side is the small, fixed, enumerable one
+// here (six rows today, DB-driven via song_role_types) while the song
+// side is the large, open one - the opposite shape from Song Tags' free-
+// text values - so grouping by role (not by song) answers "what are our
+// good opener songs" by construction, no scanning a flat table required.
+// Six persistent cards is a fundamentally different render cost than Song
+// Tags' "one card per active song", so unlike that page there's no filter
+// box/client-side hide mechanism here - every bucket just renders.
+templ SongRoles(personName, organizationName string, songs []pco.SongData, roleTypes []scheduling.SongRoleType, rolesByRole map[string][]scheduling.SongRole, songTitles map[string]string, errMsg string) {
 	@views.Layout("Song Roles", personName, organizationName) {
 		@songRolesHelp()
 		<h1>Song Roles</h1>
 		<p class="muted">Tag songs as good openers or good response songs, for use when building a set.</p>
-		<form
-			id="song-role-form"
-			class="inline"
-			hx-post="/scheduling/song-roles"
-			hx-target="#song-roles-table"
-			hx-swap="outerHTML"
-			hx-on::after-request="if(event.detail.successful && event.detail.elt === this) resetSetupForm(this)"
-		>
-			<input type="hidden" name="id"/>
-			<label>
-				Song
-				<select name="song_id" required>
-					<option value="" selected disabled>Choose a song</option>
-					for _, song := range songs {
-						<option value={ song.ID }>{ song.Attributes.Title }</option>
-					}
-				</select>
-			</label>
-			<label>
-				Role
-				<select name="role">
-					for _, t := range roleTypes {
-						<option value={ t.Code }>{ t.Label }</option>
-					}
-				</select>
-			</label>
-			<button type="submit" class="primary">Add</button>
-			<button type="button" class="cancel-edit" onclick="cancelSetupEdit(this)" hidden>Cancel</button>
-		</form>
-		@SongRolesTable(roles, songTitles, roleLabels, errMsg)
+		@SongRoleBuckets(songs, roleTypes, rolesByRole, songTitles, errMsg)
 	}
 }
 
-// SongRolesTable is both the initial-render fragment and the htmx swap
-// target (id="song-roles-table") - see RelationshipsTable for why errMsg
-// lives inside it rather than the page around it. roleLabels resolves role
-// codes to their song_role_types label (see songRoleTypeLabelMap in the
-// scheduling controller) - a code removed from that table since the tag
-// was created falls back to showing the raw code.
-templ SongRolesTable(roles []scheduling.SongRole, songTitles map[string]string, roleLabels map[string]string, errMsg string) {
-	<div id="song-roles-table">
+// SongRoleBuckets is both the initial-render fragment and the htmx swap
+// target (id="song-roles-list") for every create/edit/delete on this page
+// - see SongTagsList's own doc comment (song_tags.templ) for why errMsg
+// lives inside the swapped fragment rather than the page around it: an
+// htmx response only replaces this div, so an error from a create/update/
+// delete has nowhere else to render. rolesByRole groups the org's tags by
+// role code (songRolesByRoleCode, controllers/sets_roles.go) so each
+// bucket's own lookup below is a map read, not a query. roleTypes drives
+// both which buckets render (in sort_order, matching every other place
+// this vocabulary displays - the add form's own role <select>, the Build
+// page's role-filter chips) and each bucket's own role <select> options.
+templ SongRoleBuckets(songs []pco.SongData, roleTypes []scheduling.SongRoleType, rolesByRole map[string][]scheduling.SongRole, songTitles map[string]string, errMsg string) {
+	<div id="song-roles-list" class="song-roles-list">
 		if errMsg != "" {
-			<p class="error">{ errMsg }</p>
+			<p class="error" role="alert">{ errMsg }</p>
 		}
-		@components.SortableTableWrap() {
-			<thead>
-					<tr>
-						<th>Song</th>
-						<th>Role</th>
-						<th></th>
-					</tr>
-				</thead>
-				<tbody>
-					for _, role := range roles {
-						<tr>
-							<td>
-								if title, ok := songTitles[role.SongID]; ok {
-									{ title }
-								} else {
-									{ role.SongID }
-								}
-							</td>
-							<td>{ displayNameOrID(roleLabels, role.Role) }</td>
-							<td>
-								<button
-									class="icon-btn"
-									aria-label="Edit tag"
-									title="Edit tag"
-									data-edit-form="song-role-form"
-									data-edit-fields={ editFieldsAttr(map[string]string{
-										"id":      strconv.FormatInt(role.ID, 10),
-										"song_id": role.SongID,
-										"role":    role.Role,
-									}) }
-									onclick="editRow(this)"
-								>
-									@components.IconEdit()
-								</button>
-								<button
-									class="danger icon-btn"
-									aria-label="Remove tag"
-									title="Remove tag"
-									hx-delete={ fmt.Sprintf("/scheduling/song-roles/%d", role.ID) }
-									hx-target="#song-roles-table"
-									hx-swap="outerHTML"
-									hx-confirm="Remove this tag?"
-								>
-									@components.IconRemove()
-								</button>
-							</td>
-						</tr>
-					}
-					if len(roles) == 0 {
-						<tr>
-							<td colspan="3" class="muted">No songs tagged yet - tag an opener or response song so Build can anchor a set's shape instead of starting from a blank order.</td>
-						</tr>
-					}
-				</tbody>
+		for _, t := range roleTypes {
+			@SongRoleBucketCard(t, roleTypes, songs, rolesByRole[t.Code], songTitles)
 		}
 	</div>
+}
+
+// SongRoleBucketCard is one role's persistent card: every song currently
+// tagged with roleType, as chips sorted alphabetically by title
+// (sortRolesByTitle below - a popular bucket, e.g. every song eligible as
+// an opener, could hold many songs, unlike Song Tags' per-song chip rows
+// which are already small by construction), each with inline edit/remove,
+// plus this bucket's own small "add a song" form. The same song
+// legitimately appearing as a chip in more than one bucket (e.g. a song
+// that works as both Opener and Response) is intended, ordinary, and
+// deliberately not warned about here - song_roles stays a plain song/role
+// pair, unique per pair, same as before this redesign.
+//
+// The add/edit form's own `role` <select> defaults to this bucket's code
+// (matched via `selected?`) but stays a real, changeable field - exactly
+// how the old flat table's single shared form let an edit retarget both
+// song_id and role at once, just scoped one form per bucket instead of
+// one page-wide shared form. Editing a chip (data-edit-form) opens *this*
+// bucket's own form pre-filled from that chip's current song_id/role, but
+// choosing a different role and submitting still moves it to that other
+// bucket - the whole #song-roles-list gets swapped back after either an
+// add or an edit, so the moved chip reappears under its new bucket
+// regardless of which bucket's form it was edited from.
+templ SongRoleBucketCard(roleType scheduling.SongRoleType, roleTypes []scheduling.SongRoleType, songs []pco.SongData, roles []scheduling.SongRole, songTitles map[string]string) {
+	<div class="song-role-card">
+		@components.Card(roleType.Label) {
+			if len(roles) == 0 {
+				<p class="muted song-role-empty">No songs tagged yet.</p>
+			} else {
+				<div class="song-role-chips">
+					for _, role := range sortRolesByTitle(roles, songTitles) {
+						<span class="song-role-chip">
+							<span class="song-role-chip-title">{ displayNameOrID(songTitles, role.SongID) }</span>
+							<button
+								class="icon-btn"
+								aria-label="Edit tag"
+								title="Edit tag"
+								data-edit-form={ songRoleFormID(roleType.Code) }
+								data-edit-fields={ editFieldsAttr(map[string]string{
+									"id":      strconv.FormatInt(role.ID, 10),
+									"song_id": role.SongID,
+									"role":    role.Role,
+								}) }
+								onclick="editRow(this)"
+							>
+								@components.IconEdit()
+							</button>
+							<button
+								class="danger icon-btn"
+								aria-label="Remove tag"
+								title="Remove tag"
+								hx-delete={ fmt.Sprintf("/scheduling/song-roles/%d", role.ID) }
+								hx-target="#song-roles-list"
+								hx-swap="outerHTML"
+								hx-confirm="Remove this tag?"
+							>
+								@components.IconRemove()
+							</button>
+						</span>
+					}
+				</div>
+			}
+			<details class="song-role-add-details">
+				<summary class="song-role-add-toggle">+ Add a song</summary>
+				<form
+					id={ songRoleFormID(roleType.Code) }
+					class="inline song-role-add-form"
+					hx-post="/scheduling/song-roles"
+					hx-target="#song-roles-list"
+					hx-swap="outerHTML"
+					hx-on::after-request="if(event.detail.successful && event.detail.elt === this) resetSetupForm(this)"
+				>
+					<input type="hidden" name="id"/>
+					<label>
+						Song
+						<select name="song_id" required>
+							<option value="" selected disabled>Choose a song</option>
+							for _, song := range songs {
+								<option value={ song.ID }>{ song.Attributes.Title }</option>
+							}
+						</select>
+					</label>
+					<label>
+						Role
+						<select name="role">
+							for _, t := range roleTypes {
+								<option value={ t.Code } selected?={ t.Code == roleType.Code }>{ t.Label }</option>
+							}
+						</select>
+					</label>
+					<button type="submit" class="primary">Add</button>
+					<button type="button" class="cancel-edit" onclick="cancelSetupEdit(this)" hidden>Cancel</button>
+				</form>
+			</details>
+		}
+	</div>
+}
+
+// songRoleFormID is one bucket's own add/edit form id, shared between the
+// form itself and its own chips' Edit buttons (data-edit-form) - each
+// bucket needs its own uniquely-id'd form since every card renders one,
+// mirroring songTagFormID (song_tags.templ).
+func songRoleFormID(roleCode string) string {
+	return "song-role-form-" + roleCode
+}
+
+// sortRolesByTitle returns roles sorted alphabetically (case-insensitive)
+// by their song's resolved title (falling back to the raw song id, same
+// as the chip itself shows - displayNameOrID) - per the plan doc's own
+// recommendation over created_at recency, for scan-ability in a bucket
+// that could hold many songs. Doesn't mutate the slice passed in, since
+// it's read from rolesByRole's shared map on every render.
+func sortRolesByTitle(roles []scheduling.SongRole, songTitles map[string]string) []scheduling.SongRole {
+	sorted := make([]scheduling.SongRole, len(roles))
+	copy(sorted, roles)
+	sort.Slice(sorted, func(i, j int) bool {
+		return strings.ToLower(displayNameOrID(songTitles, sorted[i].SongID)) < strings.ToLower(displayNameOrID(songTitles, sorted[j].SongID))
+	})
+	return sorted
 }
 
 // songRolesHelp is this page's Help-triggered dialog - see

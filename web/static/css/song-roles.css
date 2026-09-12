@@ -1,0 +1,85 @@
+/* Backs internal/views/scheduling/song_roles.templ - one persistent card
+   per song_role_types row ("bucket", components.Card's .position-group,
+   see card.css) showing every song currently tagged with that role as
+   chips with inline edit/remove, plus its own small "add a song" form
+   scoped to that role. See
+   docs/plans/shipped/song-roles-bucket-redesign-plan.md for why this is a
+   different shape from song-tags.css's one-card-per-song layout: the role
+   side is the small, fixed, enumerable one here (six rows today), so
+   there's no filter box/client-side hide mechanism the way that page
+   needs one for its much larger per-song card count - every bucket just
+   renders, full stop. */
+
+.song-roles-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+@media (min-width: 768px) {
+  .song-roles-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+
+.song-role-empty {
+  margin: 0;
+}
+
+.song-role-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+/* A song's title plus its own edit/remove icon buttons, inline - no
+   category badge the way song-tags.css's .tag-chip needs one (a role
+   bucket has no sub-categorization; the bucket itself already says
+   everything a category badge would). */
+.song-role-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: color-mix(in srgb, var(--text) 8%, var(--surface));
+  border-radius: var(--radius-full);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.song-role-chip-title {
+  padding-inline-start: var(--space-1);
+}
+
+/* The add-song form starts collapsed behind this <summary> toggle (see
+   SongRoleBucketCard, song_roles.templ) - shown open only while actively
+   editing an existing tag (editRow opens it, cancelSetupEdit closes it
+   again, scheduling-setup-forms.js) - same mechanism/CSS shape as
+   song-tags.css's .song-tag-add-details family. */
+.song-role-add-details {
+  margin-top: var(--space-2);
+}
+
+.song-role-add-details[open] {
+  margin-top: var(--space-3);
+}
+
+.song-role-add-toggle {
+  cursor: pointer;
+  color: var(--accent);
+  font-size: var(--text-sm);
+  list-style: none;
+  user-select: none;
+}
+
+.song-role-add-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.song-role-add-form {
+  margin-top: var(--space-2);
+  margin-bottom: 0;
+}

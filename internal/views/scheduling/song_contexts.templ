@@ -22,7 +22,11 @@ import (
 //
 // "Tag a song" mirrors SongTags' own card-per-song shape (see
 // docs/plans/shipped/song-tags-setup-redesign-plan.md) rather than
-// SongRolesTable's flat table: one persistent card per active song,
+// grouping by context type the way Song Roles groups by role bucket (see
+// docs/plans/shipped/song-roles-bucket-redesign-plan.md) - a song's
+// contexts are the small, unbounded-per-song side here (a song can belong
+// to several contexts), so this stays grouped by song: one persistent
+// card per active song,
 // tagged or not, with its own contexts as chips and its own small inline
 // "add a context" form, plus songContextBulkAddForm for tagging several
 // songs with one context at once. Deliberately NOT mirroring
@@ -146,8 +150,9 @@ templ songContextSelectOOB(contextTypes []scheduling.SongContextType) {
 
 // SongContextTypesList is both the initial-render fragment and the htmx
 // swap target (id="song-context-types-list") for CreateSongContextType/
-// DeleteSongContextType - see SongRolesTable's doc comment for why errMsg
-// lives inside the swapped fragment rather than the page around it. A
+// DeleteSongContextType - see SongRoleBuckets' doc comment (song_roles.templ)
+// for why errMsg lives inside the swapped fragment rather than the page
+// around it. A
 // plain components.TableWrap (not SortableTableWrap): there's nothing to
 // sort by yet, same reasoning as the source plan doc's own note on this.
 templ SongContextTypesList(contextTypes []scheduling.SongContextType, errMsg string) {
