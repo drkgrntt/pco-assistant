@@ -1,13 +1,16 @@
 # Plan: vocal range matrix view + crowdsourced default
 
-Not started. Spun out of `docs/plans/shipped/vocal-range-plan.md`'s own
-two remaining unbuilt pieces once that plan's Phases 1-3 (person vocal
-range, song vocal range + the key engine, and the roster-cross-referenced
-mismatch warning) shipped 2026-09-07 through 2026-09-08 - see that doc for
-the full build history and context these two pieces build on (the key
-engine's exact math, the mismatch-warning surface they'd extend/visualize,
-and the "Which product promise this serves" reasoning). Nothing below has
-been built; the content that follows is pulled forward unchanged from that
+Spun out of `docs/plans/shipped/vocal-range-plan.md`'s own two remaining
+unbuilt pieces once that plan's Phases 1-3 (person vocal range, song vocal
+range + the key engine, and the roster-cross-referenced mismatch warning)
+shipped 2026-09-07 through 2026-09-08 - see that doc for the full build
+history and context these two pieces build on (the key engine's exact
+math, the mismatch-warning surface they'd extend/visualize, and the
+"Which product promise this serves" reasoning). Of the two pieces below,
+**the matrix view has since shipped (2026-09-12 - see its own "Status"
+note under "The matrix view" heading below)**; the crowdsourced-default
+piece remains genuinely not started, unchanged from what's written here.
+The content that follows is otherwise pulled forward unchanged from that
 plan's own "Phase 3: mismatch warning UI, and the eventual matrix view"
 and "Crowdsourced default: needs a real decision, not a default" sections.
 
@@ -69,6 +72,17 @@ otherwise-blank songs, never a blocker for the rest of that plan.
 
 ## The matrix view (from "Phase 3: mismatch warning UI, and the eventual matrix view")
 
+**Status: shipped 2026-09-12, see `internal/server/controllers/
+vocal_range_matrix.go`/`internal/views/scheduling/vocal_range_matrix.templ`
+(+ `vocal_range_matrix_types.go`) - one plan at a time (that plan's own
+roster as rows, that plan's own set songs as columns), reusing
+`classifyVocalRangeCell` (extracted from `vocalRangeWarningForSong`,
+`sets_builder.go`) so every cell agrees with the Songs tab's own per-song
+mismatch badge, linked from the Build page next to "Run sheet" rather than
+a new Songs/Team-style tab (see that templ file's own doc comment for why
+a tab was rejected). The crowdsourced-default section immediately below
+remains genuinely not started - unrelated to this build.**
+
 **The matrix view**: a presentation-only page once both ranges exist,
 cross-tabulating a team's people (rows) against a plan's songs (columns)
 to show "who can sing what, in the key it's actually in" at a glance.
@@ -91,8 +105,8 @@ range + the key engine - are now live; see
 
 5. **Crowdsourced default**: not scheduled - blocked on the product
    decisions in "Crowdsourced default" above.
-6. **Matrix view**: a separate future plan doc, once steps 1-4 (Phases
-   1-3 plus the key engine, now shipped) are live.
+6. **Matrix view**: shipped 2026-09-12 - see the "Status" note under "The
+   matrix view" heading above.
 
 ## Verification note carried over
 

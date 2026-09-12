@@ -1,0 +1,57 @@
+/* Backs internal/views/scheduling/vocal_range_matrix.templ - the person x
+   song grid (see docs/plans/not-started/
+   vocal-range-matrix-and-crowdsourced-default-plan.md's "The matrix view"
+   section). Reuses components/table.css's .table-wrap/table chrome and
+   components/disclosure.css's .vocal-range-badge styling for tip/mismatch
+   cells (the exact same classes set_builder.templ's per-song badge
+   already uses) - this file only adds the grid-specific layout those
+   don't cover: sticky row/column headers so a wide matrix stays orientable
+   while scrolling, and cell alignment/verdict coloring. */
+
+.vocal-range-matrix-table th,
+.vocal-range-matrix-table td {
+  text-align: center;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.vocal-range-matrix-table thead th:first-child,
+.vocal-range-matrix-table tbody th {
+  text-align: left;
+}
+
+/* Sticky first column (row headers) and sticky header row, so scrolling a
+   wide matrix (many songs, or many people) both directions still keeps
+   whichever person/song a cell belongs to in view. */
+.vocal-range-matrix-table th:first-child,
+.vocal-range-matrix-table td:first-child {
+  position: sticky;
+  left: 0;
+  background: var(--surface);
+}
+
+.vocal-range-matrix-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  z-index: 1;
+}
+
+.vocal-range-matrix-table thead th:first-child {
+  z-index: 2;
+}
+
+.vocal-range-matrix-sub {
+  display: block;
+  font-weight: normal;
+  font-size: var(--text-sm);
+}
+
+.vocal-range-matrix-unknown {
+  font-size: var(--text-sm);
+}
+
+.vocal-range-matrix-fits {
+  color: var(--success);
+  font-weight: 600;
+}

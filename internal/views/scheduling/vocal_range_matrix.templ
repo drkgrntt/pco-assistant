@@ -1,0 +1,145 @@
+package scheduling
+
+import (
+	"fmt"
+
+	"pco-assistant/internal/views"
+	"pco-assistant/internal/views/components"
+)
+
+// VocalRangeMatrix renders the vocal-range/key matrix view for one plan -
+// see docs/plans/not-started/vocal-range-matrix-and-crowdsourced-default-plan.md's
+// "The matrix view" section and the controller's VocalRangeMatrixPage/
+// buildVocalRangeMatrixData for how VocalRangeMatrixData is assembled. A
+// pure read over this plan's own set songs (columns) and roster
+// assignments (rows) - no new storage, no new PCO calls beyond the same
+// batched personNameMapForIDs pattern this package already uses elsewhere.
+//
+// Linked from the Build page's nav-links row (build.templ), next to "Run
+// sheet" - a new tab was considered and rejected: BuildPlan's existing
+// Songs/Team split is a tightly-coupled two-tab lazy-load system (every
+// conditional on that page keys off activeTab == "team", not a
+// tab-agnostic switch - see build.templ's own doc comments), so a third
+// tab would mean reaching into that machinery rather than adding a
+// self-contained page; a plain link (like Run sheet's) is the lower-risk,
+// still-one-click way to reach a genuinely separate, presentation-only
+// view without handing this app's own friction-reduction discipline a new
+// place to check (see CLAUDE.md's Product direction section).
+//
+// Unlike RunSheet, this keeps the normal app chrome (views.Layout) rather
+// than its own bare <html> - it's meant to be read and clicked around on
+// screen (expanding tip/mismatch cells), not printed, so the nav/back link
+// is worth keeping rather than stripping away.
+//
+// Tip/mismatch cells (vocalRangeMatrixCell below) reuse set_builder.templ's
+// own vocalRangeTipToggle/vocalRangeMismatchToggle/vocalRangeMenu
+// components verbatim, inside the exact same "vocal-range-badge"
+// components.Disclosure wrapper the Songs tab's own per-song badge uses -
+// toggled by scheduling-build.js's existing toggleVocalRangeBadge, already
+// loaded on every page (see schedulingJSFiles, layout.templ) - rather than
+// a second copy of that markup/JS. This is the same verdict that badge
+// already computes per vocalist, just laid out as a grid instead of one
+// badge per row.
+templ VocalRangeMatrix(personName, organizationName string, data VocalRangeMatrixData) {
+	@views.Layout("Vocal Range Matrix", personName, organizationName) {
+		<div class="build-page-nav">
+			<div class="build-page-nav-primary">
+				<a href={ templ.URL(fmt.Sprintf("/scheduling/build/%s/%s", data.ServiceTypeID, data.PlanID)) }>&larr; Back to plan</a>
+			</div>
+		</div>
+		<h1>
+			if data.PlanTitle != "" {
+				{ data.PlanTitle }
+			} else if data.PlanDates != "" {
+				{ data.PlanDates }
+			} else {
+				Vocal range matrix
+			}
+		</h1>
+		if data.PlanTitle != "" && data.PlanDates != "" {
+			<p class="muted">{ data.PlanDates }</p>
+		}
+		<p class="muted">Who can sing what, in the key it's actually in - each cell compares a roster member's stored vocal range against a song's own practical range in this plan's key, using the same fits/octave-shift-tip/mismatch check as the Songs tab's own per-song badge.</p>
+		if data.ErrMsg != "" {
+			<p class="error">{ data.ErrMsg }</p>
+		}
+		if len(data.People) == 0 {
+			<p class="muted">No one is assigned to this plan's roster yet - fill positions on the Team tab to see them here.</p>
+		} else if len(data.Songs) == 0 {
+			<p class="muted">No songs in this plan's set yet - add songs on the Songs tab to see them here.</p>
+		} else {
+			@components.TableWrap() {
+				<table class="vocal-range-matrix-table">
+					<thead>
+						<tr>
+							<th scope="col">Person</th>
+							for _, song := range data.Songs {
+								<th scope="col">
+									{ song.Title }
+									if song.Key != "" {
+										<span class="vocal-range-matrix-sub muted">{ song.Key }</span>
+									}
+									if song.RangeDisplay != "" {
+										<span class="vocal-range-matrix-sub muted">{ song.RangeDisplay }</span>
+									}
+								</th>
+							}
+						</tr>
+					</thead>
+					<tbody>
+						for _, person := range data.People {
+							<tr>
+								<th scope="row">
+									{ person.Name }
+									if person.RangeDisplay != "" {
+										<span class="vocal-range-matrix-sub muted">{ person.RangeDisplay }</span>
+									}
+								</th>
+								for _, song := range data.Songs {
+									@vocalRangeMatrixCell(data.Cells[person.PersonID][song.SongID])
+								}
+							</tr>
+						}
+					</tbody>
+				</table>
+			}
+		}
+	}
+}
+
+// vocalRangeMatrixCell renders one grid cell - see VocalRangeMatrixCell's
+// own doc comment for the four possible verdicts. Unknown renders a plain
+// neutral dash rather than a false pass or warning (this feature's own
+// scoping decision), Fits a short positive mark, and Tip/Mismatch reuse
+// set_builder.templ's own Disclosure components verbatim - see
+// VocalRangeMatrix's top doc comment for why.
+templ vocalRangeMatrixCell(cell VocalRangeMatrixCell) {
+	<td>
+		switch cell.Verdict {
+			case VocalRangeMatrixFits:
+				<span class="vocal-range-matrix-fits" title="Fits as written">✓</span>
+			case VocalRangeMatrixTip:
+				@components.Disclosure(
+					"vocal-range-badge",
+					"badge vocal-range-toggle",
+					"toggleVocalRangeBadge(this)",
+					"",
+					"",
+					vocalRangeTipToggle("tip"),
+					vocalRangeMenu(cell.Message),
+				)
+			case VocalRangeMatrixMismatch:
+				@components.Disclosure(
+					"vocal-range-badge",
+					"conflict-badge vocal-range-toggle",
+					"toggleVocalRangeBadge(this)",
+					"",
+					"",
+					vocalRangeMismatchToggle("mismatch"),
+					vocalRangeMenu(cell.Message),
+				)
+			default:
+				<span class="vocal-range-matrix-unknown muted" title="No stored vocal range on file for this person or this song">—</span>
+		}
+	</td>
+}
