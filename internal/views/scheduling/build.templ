@@ -32,7 +32,7 @@ templ Build(personName, organizationName string, serviceTypes []pco.ServiceTypeD
 			<button type="submit" class="primary">Show plans</button>
 		</form>
 		if errMsg != "" {
-			<p class="error">{ errMsg }</p>
+			<p class="error" role="alert">{ errMsg }</p>
 		}
 		@BuildPlansList(initialPlans, selectedServiceTypeID, "", page, totalPages, tab, "")
 	}
@@ -107,7 +107,7 @@ templ buildPlansTabBar(serviceTypeID, tab string) {
 templ BuildPlansList(plans []PlanRow, serviceTypeID, search string, page, totalPages int, tab string, errMsg string) {
 	<div id="build-plans">
 		if errMsg != "" {
-			<p class="error">{ errMsg }</p>
+			<p class="error" role="alert">{ errMsg }</p>
 		}
 		if serviceTypeID != "" {
 			@buildPlansTabBar(serviceTypeID, tab)
@@ -142,6 +142,7 @@ templ BuildPlansList(plans []PlanRow, serviceTypeID, search string, page, totalP
 					<input
 						type="text"
 						id="build-plans-search"
+						aria-label="Search plans"
 						placeholder="Search by plan title, date, or note..."
 						autocomplete="off"
 						value={ search }
@@ -149,12 +150,37 @@ templ BuildPlansList(plans []PlanRow, serviceTypeID, search string, page, totalP
 					/>
 					<button type="submit">Search</button>
 				</div>
+				<!--
+					No aria-live on #build-plans-results itself (4.1.3 Status
+					Messages, Finding 2's own Open Questions -
+					docs/plans/shipped/wcag-aa-audit-plan.md) - announcing the
+					whole plan list on every search/page change would be more
+					noise than help. BuildPlansResults instead renders its own
+					small "N plans found" summary as a separate, visually-hidden
+					aria-live region alongside the real list.
+				-->
 				<div id="build-plans-results">
 					@BuildPlansResults(plans, serviceTypeID, search, page, totalPages, tab, "")
 				</div>
 			</form>
 		}
 	</div>
+}
+
+// buildPlansSummary is the short sentence BuildPlansResults' own visually-
+// hidden aria-live summary announces (see its doc comment) - deliberately
+// distinct from the visible empty-state text just below it in the same
+// component ("No upcoming/past plans found."), which stays as-is; this is
+// just the terse screen-reader-only echo of the same fact, plus the
+// found-some-plans case that visible text has no equivalent for.
+func buildPlansSummary(plans []PlanRow, tab string) string {
+	if len(plans) == 0 {
+		if tab == "past" {
+			return "No past plans found"
+		}
+		return "No upcoming plans found"
+	}
+	return fmt.Sprintf("%d plan(s) found", len(plans))
 }
 
 // BuildPlansResults is #build-plans-results' content - the plan list plus
@@ -167,8 +193,17 @@ templ BuildPlansList(plans []PlanRow, serviceTypeID, search string, page, totalP
 // search instead of a fresh one.
 templ BuildPlansResults(plans []PlanRow, serviceTypeID, search string, page, totalPages int, tab, errMsg string) {
 	if errMsg != "" {
-		<p class="error">{ errMsg }</p>
+		<p class="error" role="alert">{ errMsg }</p>
 	}
+	<!--
+		A short, separate summary rather than aria-live on this whole
+		container (4.1.3 Status Messages, Finding 2's Open Questions -
+		docs/plans/shipped/wcag-aa-audit-plan.md) - this re-renders on every
+		Search/Prev/Next submit, so announcing the full plan list each time
+		would bury the one thing worth saying ("did my search change
+		anything") under a re-read of every row.
+	-->
+	<p class="visually-hidden" role="status" aria-live="polite" aria-atomic="true">{ buildPlansSummary(plans, tab) }</p>
 	<ul class="plan-list">
 		for _, plan := range plans {
 			<li>

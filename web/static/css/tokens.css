@@ -34,6 +34,24 @@
   --text: hsl(218deg 8% 18%);
   --border: hsl(218deg 28% 91%);
   --muted: hsl(218deg 11% 38%);
+  /* --control-border is --border's own hue/saturation, just much darker -
+     1.4.11 Non-text Contrast (Finding 5,
+     docs/plans/shipped/wcag-aa-audit-plan.md): --border itself computes to
+     only ~1.16:1 (on --bg) / ~1.25:1 (on --surface), far under the 3:1 a
+     form control's own resting-state boundary needs, since it's the only
+     visual cue an input/select/textarea has before it's focused. Bumping
+     --border itself that far (91% lightness down to ~56%) would land it as
+     a heavy, obviously-out-of-place mid-gray everywhere else it's already
+     used today (card edges, table rows, dividers - see tokens.css's own
+     Color: Canvas & Elevation comment and forms.css's own use of it) - a
+     visual redesign of the whole app's chrome, not an accessibility nudge
+     - so this is a second, narrower token used only for form-control
+     borders (forms.css) instead, per that finding's own resolved
+     alternative. Computed the same way as every other pair in this file's
+     audit: light --control-border on --bg is ~3.42:1, on --surface
+     ~3.67:1; dark --control-border (below) on --bg is ~3.39:1 - all clear
+     3:1 with real margin. */
+  --control-border: hsl(218deg 28% 56%);
 
   /* --- Color: Brand & Accents --- */
   --accent: hsl(174deg 47% 32%);
@@ -133,6 +151,10 @@
     --text: hsl(218deg 20% 89%);
     --border: hsl(218deg 10% 22%);
     --muted: hsl(218deg 10% 62%);
+    /* See :root's own --control-border comment above - same hue/saturation
+       as dark --border, just much lighter (22% to 44%) for the same 3:1
+       reason. */
+    --control-border: hsl(218deg 10% 44%);
 
     --accent: hsl(173deg 43% 60%);
     --accent-subtle: hsl(172deg 29% 15%);
@@ -155,6 +177,7 @@
   --text: hsl(218deg 20% 89%);
   --border: hsl(218deg 10% 22%);
   --muted: hsl(218deg 10% 62%);
+  --control-border: hsl(218deg 10% 44%);
 
   --accent: hsl(173deg 43% 60%);
   --accent-subtle: hsl(172deg 29% 15%);

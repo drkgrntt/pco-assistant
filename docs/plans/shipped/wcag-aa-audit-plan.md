@@ -1,6 +1,24 @@
 # Plan: WCAG 2.2 AA gaps found in a first full accessibility audit
 
-Not built yet. Prompted by a first end-to-end WCAG 2.2 Level AA audit of
+**Status: shipped.** All 4 phases built: Finding 3 (skip link +
+`#main-content`), Finding 4 (`aria-label` on `#build-plans-search`/
+`#candidate-search`), Finding 2 (`role="alert"` on the shared `.error`
+pattern at all ~31 sites but one, plus `aria-live="polite"` on
+`#set-builder-body`/`#roster-builder-body` and a separate small
+"N found" live-region summary - not the raw swap target - for
+`#build-plans-results`/`#set-candidates`), Finding 1 (Move up/Move down
+added to `rowMenuItems`, wired to the existing `RepositionSetSong`
+endpoint, alongside the untouched pointer-drag handle), and Finding 5
+(a new `--control-border` token, not a shared `--border` bump - see its
+own section below for why). **One site was deliberately left as-is and
+still needs Finding 2's fix applied**:
+`internal/views/scheduling/song_roles.templ`'s one `.error` paragraph
+(~line 61) was skipped because that file was being rewritten by a
+parallel role-bucket-redesign effort expected to fold this same fix in as
+part of its own rebuild - if that effort falls through or lands without
+it, this one paragraph still needs `role="alert"` added by hand.
+
+Originally: not built yet. Prompted by a first end-to-end WCAG 2.2 Level AA audit of
 the app (layout, the shared `internal/views/components` set, the Build
 page, the design-token color system, and the drag-reorder/htmx-swap
 interactions) - nothing here was already tracked anywhere. The app is in

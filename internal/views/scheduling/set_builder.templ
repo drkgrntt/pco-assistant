@@ -3,6 +3,7 @@ package scheduling
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"pco-assistant/internal/scheduling"
@@ -184,6 +185,64 @@ func nextSongRowAfter(order []ServiceOrderRow, songRowID int64) (SetSongView, bo
 		}
 	}
 	return SetSongView{}, false
+}
+
+// rowToken returns the exact drag-and-drop "after" token identifying this
+// row - "row:<set song row id>" for one of this set's own songs,
+// "item:<pco item id>" for a foreign row (header/media/other-set song) -
+// the same format each <tr>'s own data-token carries client-side
+// (scheduling-build.js's rowToken/data-token, and parseAfterToken,
+// sets_reorder.go, on the way back in). Lets moveUpAfterToken/
+// moveDownAfterToken below compute the same ?after= value the
+// pointer-drag path already sends, purely server-side from data already
+// in scope, rather than duplicating any of that JS.
+func rowToken(row ServiceOrderRow) string {
+	if row.IsSong {
+		return fmt.Sprintf("row:%d", row.Song.ID)
+	}
+	return fmt.Sprintf("item:%s", row.ItemID)
+}
+
+// moveUpAfterToken/moveDownAfterToken compute the ?after= token for the
+// "Move up"/"Move down" row-menu actions (Finding 1,
+// docs/plans/shipped/wcag-aa-audit-plan.md's Open Questions - option (c):
+// buttons alongside the existing pointer-drag handle, not a replacement
+// for it) on the row at index i in order. Mirrors exactly what dragging
+// that row and dropping it immediately above/below its current neighbor
+// would send (see scheduling-build.js's previousTargetRow/onPointerUp):
+// moving up re-anchors after whatever currently precedes that
+// predecessor, so the row ends up immediately above it (or at the very
+// top of service, after="", when the predecessor has no predecessor of
+// its own); moving down re-anchors after the row immediately below,
+// so it ends up immediately below that. ok is false when there's no such
+// move (already first/last) - the caller omits that button entirely
+// rather than rendering one that would no-op.
+func moveUpAfterToken(order []ServiceOrderRow, i int) (after string, ok bool) {
+	switch {
+	case i <= 0:
+		return "", false
+	case i == 1:
+		return "", true // moving to the very top of service
+	default:
+		return rowToken(order[i-2]), true
+	}
+}
+
+func moveDownAfterToken(order []ServiceOrderRow, i int) (after string, ok bool) {
+	if i+1 >= len(order) {
+		return "", false
+	}
+	return rowToken(order[i+1]), true
+}
+
+// afterValsJSON is the hx-vals payload for the Move up/down buttons below -
+// a single static {"after": "..."} object (unlike the sync-poll's
+// hx-vals="js:{...}" elsewhere in this file, this value is already known
+// at render time, so there's nothing to read from the DOM). strconv.Quote
+// both Go- and JSON-escapes the token identically for the plain ASCII
+// "row:<id>"/"item:<id>" shapes rowToken produces.
+func afterValsJSON(after string) string {
+	return fmt.Sprintf(`{"after": %s}`, strconv.Quote(after))
 }
 
 // songBadges is the badge cluster in a song row's own Tags column -
@@ -443,16 +502,24 @@ templ transitionNoteMenu(message string) {
 }
 
 // rowMenuToggle/rowMenuItems are the row-menu Disclosure's toggle-button
-// content and popup contents - the same 4 fixed actions (tag/relate/mark
-// role/set vocal range - the last one added by Part C of docs/plans/
-// shipped/vocal-range-plan.md) for every song row, jumping to (and
-// revealing) that row's own hidden quick-action-row via openQuickAction
-// (scheduling-build.js), so neither needs any per-row data passed in.
+// content and popup contents - 4 fixed actions (tag/relate/mark role/set
+// vocal range - the last one added by Part C of docs/plans/
+// shipped/vocal-range-plan.md) that jump to (and reveal) that row's own
+// hidden quick-action-row via openQuickAction (scheduling-build.js), so none
+// of those need any per-row data passed in, plus the Move up/Move down
+// pair added by Finding 1 (docs/plans/shipped/wcag-aa-audit-plan.md) - the
+// keyboard/switch-access reorder alternative that Open Question resolved
+// on: buttons here alongside the existing pointer-drag handle
+// (IconDrag/.drag-handle, scheduling-build.js), not a replacement for it.
+// Those two *do* need per-row data (data.ServiceOrder and this row's own
+// index within it) to compute the same ?after= token a drag-and-drop of
+// this row would send - see moveUpAfterToken/moveDownAfterToken above -
+// so unlike the other four, rowMenuItems takes data/i now.
 templ rowMenuToggle() {
 	@components.IconMore()
 }
 
-templ rowMenuItems() {
+templ rowMenuItems(data SetBuilderData, i int) {
 	<button type="button" onclick="openQuickAction(this, 'tag')">
 		@components.IconTag()
 		Tag this song
@@ -469,6 +536,38 @@ templ rowMenuItems() {
 		@components.IconMusicNote()
 		Set vocal range
 	</button>
+	<!--
+		Same RepositionSetSong endpoint the pointer-drag handle already
+		posts to (sets_reorder.go) - these buttons just supply a
+		precomputed ?after= token instead of a drop point, so the server
+		side treats a keyboard/switch-access move exactly like a drag.
+	-->
+	{{ row := data.ServiceOrder[i] }}
+	{{ repositionURL := fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/reposition", data.ServiceTypeID, data.PlanID, row.Song.ID) }}
+	if after, ok := moveUpAfterToken(data.ServiceOrder, i); ok {
+		<button
+			type="button"
+			hx-post={ repositionURL }
+			hx-target="#set-builder-body"
+			hx-swap="outerHTML"
+			hx-vals={ afterValsJSON(after) }
+		>
+			@components.IconArrowUp()
+			Move up
+		</button>
+	}
+	if after, ok := moveDownAfterToken(data.ServiceOrder, i); ok {
+		<button
+			type="button"
+			hx-post={ repositionURL }
+			hx-target="#set-builder-body"
+			hx-swap="outerHTML"
+			hx-vals={ afterValsJSON(after) }
+		>
+			@components.IconArrowDown()
+			Move down
+		</button>
+	}
 }
 
 // replaceMenuToggle/replaceMenuItems are the "replace this song" Disclosure's
@@ -650,12 +749,42 @@ templ songBrowseRow(serviceTypeID, planID string, song SongOptionView) {
 // on record yet, so the reveal doesn't just look like nothing happened.
 templ CandidateDetails(cand CandidateSongView, errMsg string) {
 	if errMsg != "" {
-		<p class="error">{ errMsg }</p>
+		<p class="error" role="alert">{ errMsg }</p>
 	} else if !cand.HasMeta() {
 		<p class="muted">Nothing on record for this song yet.</p>
 	} else {
 		@songCandidateMeta(cand)
 	}
+}
+
+// candidateSearchSummary is candidateSearchStatusOOB's announced text -
+// "" for the initial browse state (no query/filter active yet, so there's
+// nothing search-result-shaped to announce) and on an error (the error
+// paragraph above already announces itself via role="alert"), otherwise a
+// short "N matching song(s) found"/"No matching songs found"/capped-hint
+// sentence mirroring the visible list without repeating every row.
+func candidateSearchSummary(candidates []CandidateSongView, query, roleFilter, contextFilter string, totalMatches int, capped bool, errMsg string) string {
+	if errMsg != "" || (query == "" && roleFilter == "" && contextFilter == "") {
+		return ""
+	}
+	if len(candidates) == 0 {
+		return "No matching songs found"
+	}
+	if capped {
+		return fmt.Sprintf("Showing %d of %d matching songs - refine your search for more specific results", len(candidates), totalMatches)
+	}
+	return fmt.Sprintf("%d matching song(s) found", len(candidates))
+}
+
+// candidateSearchStatusOOB is the out-of-band update for
+// #candidate-search-status (see SetBuilderBodyContent's own doc comment on
+// it) - CandidateSearchResults' own swap only replaces #set-candidates'
+// innerHTML, which doesn't reach this sibling status element, so it needs
+// its own targeted swap alongside the real result rows on every response.
+templ candidateSearchStatusOOB(candidates []CandidateSongView, query, roleFilter, contextFilter string, totalMatches int, capped bool, errMsg string) {
+	<div id="candidate-search-status" hx-swap-oob="true" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true">
+		{ candidateSearchSummary(candidates, query, roleFilter, contextFilter, totalMatches, capped, errMsg) }
+	</div>
 }
 
 // CandidateSearchResults is the "Browse all songs" list's actual content -
@@ -687,7 +816,7 @@ templ CandidateDetails(cand CandidateSongView, errMsg string) {
 //     see BuildCandidatesSearch's candidateSearchLimit.
 templ CandidateSearchResults(serviceTypeID, planID string, candidates []CandidateSongView, query, roleFilter, contextFilter string, totalMatches int, capped bool, browsable []SongOptionView, errMsg string) {
 	if errMsg != "" {
-		<li class="error">{ errMsg }</li>
+		<li class="error" role="alert">{ errMsg }</li>
 	}
 	if query == "" && roleFilter == "" && contextFilter == "" {
 		<li class="muted">
@@ -733,6 +862,26 @@ templ CandidateSearchResults(serviceTypeID, planID string, candidates []Candidat
 	}
 }
 
+// CandidateSearchResultsWithStatus bundles CandidateSearchResults' own
+// #set-candidates content with candidateSearchStatusOOB's out-of-band
+// summary update (Finding 2, docs/plans/shipped/wcag-aa-audit-plan.md) -
+// BuildCandidatesSearch/BuildCandidateArchive (sets_builder.go) render this
+// instead of CandidateSearchResults directly, so every real search/filter/
+// archive response also refreshes the separate #candidate-search-status
+// live region alongside the actual result rows. The one remaining direct
+// CandidateSearchResults call (SetBuilderBodyContent's own initial,
+// non-htmx page render, further down) deliberately doesn't need this
+// wrapper: embedding an hx-swap-oob element inside a plain server-rendered
+// page (no htmx swap in progress to process it) would just be a stray,
+// invalidly-nested <div> inside <ul id="set-candidates"> - and a live
+// region doesn't announce its own initial content anyway, so
+// #candidate-search-status starts out empty there instead (see that call
+// site's own doc comment).
+templ CandidateSearchResultsWithStatus(serviceTypeID, planID string, candidates []CandidateSongView, query, roleFilter, contextFilter string, totalMatches int, capped bool, browsable []SongOptionView, errMsg string) {
+	@CandidateSearchResults(serviceTypeID, planID, candidates, query, roleFilter, contextFilter, totalMatches, capped, browsable, errMsg)
+	@candidateSearchStatusOOB(candidates, query, roleFilter, contextFilter, totalMatches, capped, errMsg)
+}
+
 // SetBuilderBodyContent is the actual content - split out from
 // SetBuilderBody so the Build page's initial full-page render
 // (build.templ) can embed just this, without also embedding
@@ -742,7 +891,14 @@ templ CandidateSearchResults(serviceTypeID, planID string, candidates []Candidat
 // publish card (and a duplicate id) sitting in the main content instead of
 // being relocated anywhere.
 templ SetBuilderBodyContent(data SetBuilderData) {
-	<div id="set-builder-body">
+	<!--
+		aria-live="polite" (4.1.3 Status Messages, Finding 2 -
+		docs/plans/shipped/wcag-aa-audit-plan.md) - the primary swap target
+		for basically every action on this page (add/remove/duplicate/
+		reposition a song, assign/unassign a person, errors), previously
+		silent to a screen reader user.
+	-->
+	<div id="set-builder-body" aria-live="polite">
 		<!--
 			Poll-while-open live-sync check (option C,
 			docs/plans/shipped/live-sync-reflection-plan.md) - only while
@@ -774,7 +930,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 			></div>
 		}
 		if data.ErrMsg != "" {
-			<p class="error">{ data.ErrMsg }</p>
+			<p class="error" role="alert">{ data.ErrMsg }</p>
 		}
 		if data.PublishMsg != "" {
 			<p class="success">{ data.PublishMsg }</p>
@@ -956,7 +1112,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 												the only way to tag/relate/role a song that isn't in
 												this order of service yet.
 											-->
-											@components.Disclosure("row-menu", "icon-btn row-menu-toggle", "toggleRowMenu(this)", "More actions for this song", "More actions", rowMenuToggle(), rowMenuItems())
+											@components.Disclosure("row-menu", "icon-btn row-menu-toggle", "toggleRowMenu(this)", "More actions for this song", "More actions", rowMenuToggle(), rowMenuItems(data, i))
 										</div>
 									}
 								</td>
@@ -1261,6 +1417,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 				type="text"
 				id="candidate-search"
 				name="q"
+				aria-label="Search songs and candidates"
 				placeholder="Search songs or tags..."
 				autocomplete="off"
 				hx-get={ fmt.Sprintf("/scheduling/build/%s/%s/candidates/search", data.ServiceTypeID, data.PlanID) }
@@ -1293,7 +1450,30 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 			role filter is used, for whoever does collapse it.
 		-->
 		@collapsibleSection("find-songs-candidates", "Browse all songs", true) {
-			<ul id="set-candidates" class="candidate-list">
+			<!--
+				A short, separate summary rather than aria-live on #set-candidates
+				itself (4.1.3 Status Messages, Finding 2's Open Questions -
+				docs/plans/shipped/wcag-aa-audit-plan.md) - #candidate-search
+				re-fires this list on every keystroke (300ms debounce), so
+				announcing the whole list each time would be more noise than
+				help. Starts empty (a live region doesn't announce its own
+				initial content anyway) and is updated out-of-band by every
+				real search/filter/archive response - see
+				CandidateSearchResultsWithStatus/candidateSearchStatusOOB -
+				since #set-candidates' own innerHTML swap doesn't reach a
+				sibling element.
+			-->
+			<div id="candidate-search-status" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></div>
+			<!--
+				aria-live="off" here overrides #set-builder-body's own
+				aria-live="polite" (an aria-live value on an ancestor otherwise
+				applies to every descendant mutation, per the ARIA live-region
+				spec) - without it, every per-keystroke swap of this list would
+				still get swept into the outer region's announcements despite
+				#candidate-search-status existing specifically so the list
+				itself doesn't have to be the thing announced.
+			-->
+			<ul id="set-candidates" class="candidate-list" aria-live="off">
 				@CandidateSearchResults(data.ServiceTypeID, data.PlanID, nil, "", "", "", 0, false, data.BrowsableSongs, "")
 			</ul>
 		}

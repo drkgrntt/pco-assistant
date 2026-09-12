@@ -797,10 +797,13 @@ const candidateSearchLimit = 50
 // every single Build page render regardless of whether this collapsible
 // section was even open (a real church library can run to hundreds of
 // songs - see docs/pco-api-risks.md). Same hx-target-a-narrow-fragment shape as
-// BuildPlansSearch (build.go): this renders only
-// views.CandidateSearchResults, the <ul id="set-candidates">'s inner
-// content, never the whole page or even the whole builder body - so typing
-// here never touches (or loses focus in) anything else on the page.
+// BuildPlansSearch (build.go): this renders
+// views.CandidateSearchResultsWithStatus (CandidateSearchResults' own
+// content plus the #candidate-search-status live-region OOB update -
+// Finding 2, docs/plans/shipped/wcag-aa-audit-plan.md), the <ul
+// id="set-candidates">'s inner content, never the whole page or even the
+// whole builder body - so typing here never touches (or loses focus in)
+// anything else on the page.
 //
 // q/role/context come straight from the query string (search text, the
 // currently-active role-filter button's code, and the currently-active
@@ -824,7 +827,7 @@ func (sc *SchedulingController) BuildCandidatesSearch(c *fiber.Ctx) error {
 	context := c.Query("context")
 
 	candidates, totalMatches, capped, browsable := sc.searchCandidates(ctx, organizationID, serviceTypeID, planID, query, role, context)
-	return render(c, views.CandidateSearchResults(serviceTypeID, planID, candidates, query, role, context, totalMatches, capped, browsable, ""))
+	return render(c, views.CandidateSearchResultsWithStatus(serviceTypeID, planID, candidates, query, role, context, totalMatches, capped, browsable, ""))
 }
 
 // ArchiveSong flips a song's PCO `hidden` attribute to true from the
@@ -862,7 +865,7 @@ func (sc *SchedulingController) ArchiveSong(c *fiber.Ctx) error {
 	}
 
 	candidates, totalMatches, capped, browsable := sc.searchCandidates(ctx, organizationID, serviceTypeID, planID, query, role, context)
-	return render(c, views.CandidateSearchResults(serviceTypeID, planID, candidates, query, role, context, totalMatches, capped, browsable, errMsg))
+	return render(c, views.CandidateSearchResultsWithStatus(serviceTypeID, planID, candidates, query, role, context, totalMatches, capped, browsable, errMsg))
 }
 
 // searchCandidates is BuildCandidatesSearch's actual work, split out so the

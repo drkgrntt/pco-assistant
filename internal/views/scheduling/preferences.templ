@@ -65,7 +65,7 @@ templ Preferences(personName, organizationName string, songs []pco.SongData, pre
 templ PreferencesTable(preferences []scheduling.SongPersonPreference, songTitles map[string]string, personNames map[string]string, preferenceLabels map[string]string, errMsg string) {
 	<div id="preferences-table">
 		if errMsg != "" {
-			<p class="error">{ errMsg }</p>
+			<p class="error" role="alert">{ errMsg }</p>
 		}
 		@components.SortableTableWrap() {
 			<thead>

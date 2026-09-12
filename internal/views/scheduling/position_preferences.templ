@@ -32,7 +32,7 @@ templ PositionPreferences(personName, organizationName string, serviceTypes []pc
 			</label>
 		</form>
 		if errMsg != "" {
-			<p class="error">{ errMsg }</p>
+			<p class="error" role="alert">{ errMsg }</p>
 		}
 		if selectedServiceTypeID != "" {
 			<form class="inline" hx-get="/scheduling/position-preferences/assignments" hx-target="#position-assignments" hx-swap="outerHTML">
@@ -87,7 +87,7 @@ templ positionPreferencesHelp() {
 templ PositionAssignmentsFragment(rows []PreferenceRow, teamID, teamPositionID string, options []SchedulePreferenceOption, errMsg string) {
 	<div id="position-assignments">
 		if errMsg != "" {
-			<p class="error">{ errMsg }</p>
+			<p class="error" role="alert">{ errMsg }</p>
 		}
 		if teamID != "" && teamPositionID != "" {
 			@components.TableWrap() {

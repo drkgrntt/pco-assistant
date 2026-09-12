@@ -264,7 +264,7 @@ templ rosterTopOOB(data RosterBuilderData) {
 
 templ rosterTopContent(data RosterBuilderData) {
 	if data.ErrMsg != "" {
-		<p class="error">{ data.ErrMsg }</p>
+		<p class="error" role="alert">{ data.ErrMsg }</p>
 	}
 	if data.PublishMsg != "" {
 		<p class="success">{ data.PublishMsg }</p>
@@ -350,7 +350,13 @@ templ rosterTopContent(data RosterBuilderData) {
 // SetBuilderBodyContent, which this mirrors, for why it's split out from
 // RosterBuilderBody.
 templ RosterBuilderBodyContent(data RosterBuilderData) {
-	<div id="roster-builder-body">
+	<!--
+		aria-live="polite" (4.1.3 Status Messages, Finding 2 -
+		docs/plans/shipped/wcag-aa-audit-plan.md) - the primary swap target
+		for basically every action on this page (assign/unassign a person,
+		errors), previously silent to a screen reader user.
+	-->
+	<div id="roster-builder-body" aria-live="polite">
 		@rosterTop(data)
 		<!--
 			Ad hoc creation of the setup-level entity this page's "Recommended

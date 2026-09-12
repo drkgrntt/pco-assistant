@@ -178,7 +178,7 @@ templ SongNoteFormFragment(data SetBuilderData, song SetSongView, note SongNoteV
 templ SongArrangementInfoRefreshFragment(data SetBuilderData, song SetSongView, errMsg string) {
 	<p class="muted" id={ fmt.Sprintf("song-arrangement-info-%d", song.ID) }>
 		if errMsg != "" {
-			<span class="error">{ errMsg }</span>
+			<span class="error" role="alert">{ errMsg }</span>
 		} else if song.ArrangementInfo != "" {
 			{ song.ArrangementInfo }
 		} else {
@@ -664,7 +664,7 @@ templ keyForm(data SetBuilderData, song SetSongView, errMsg string) {
 		hx-swap="outerHTML"
 	>
 		if errMsg != "" {
-			<p class="error">{ errMsg }</p>
+			<p class="error" role="alert">{ errMsg }</p>
 		}
 		<label>
 			Key (this week)
@@ -759,7 +759,7 @@ templ leaderForm(data SetBuilderData, song SetSongView, errMsg string) {
 		hx-swap="outerHTML"
 	>
 		if errMsg != "" {
-			<p class="error">{ errMsg }</p>
+			<p class="error" role="alert">{ errMsg }</p>
 		}
 		<label>
 			Leading this week
@@ -802,7 +802,7 @@ templ descriptionForm(data SetBuilderData, song SetSongView, errMsg string) {
 		hx-swap="outerHTML"
 	>
 		if errMsg != "" {
-			<p class="error">{ errMsg }</p>
+			<p class="error" role="alert">{ errMsg }</p>
 		}
 		<label>
 			This week's note
@@ -830,7 +830,7 @@ templ songNoteForm(data SetBuilderData, song SetSongView, note SongNoteView, err
 		<input type="hidden" name="category_id" value={ note.CategoryID }/>
 		<input type="hidden" name="note_id" value={ note.NoteID }/>
 		if errMsg != "" {
-			<p class="error">{ errMsg }</p>
+			<p class="error" role="alert">{ errMsg }</p>
 		}
 		<label>
 			{ note.CategoryName }

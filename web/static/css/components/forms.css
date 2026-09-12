@@ -48,6 +48,25 @@ button {
   color: var(--text);
 }
 
+/* 1.4.11 Non-text Contrast (Finding 5,
+   docs/plans/shipped/wcag-aa-audit-plan.md) - input/select/textarea's own
+   resting-state border is the only visual cue their boundary exists at
+   all before they're focused (the focus-visible outline just below covers
+   the focused state, not this one), so it needs --control-border's
+   higher-contrast value rather than the plain --border every other bordered
+   element (cards, tables, dividers, buttons) keeps using - see that
+   token's own comment in tokens.css for why this is a second token rather
+   than a shared bump. Deliberately not extended to plain <button> here
+   (unlike the combined rule above, which does include it) - the audit that
+   raised this finding only computed/flagged input/select/textarea, and
+   most buttons in this app already carry their own border-color from
+   buttons.css (.button/.primary/.icon-btn), not this base rule. */
+input:not([type="checkbox"]):not([type="radio"]),
+select,
+textarea {
+  border-color: var(--control-border);
+}
+
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,

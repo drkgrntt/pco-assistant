@@ -19,7 +19,7 @@ templ Billing(personName, organizationName string, data BillingData) {
 // when this lived inline in Billing above.
 templ BillingBody(data BillingData) {
 	if data.ErrMsg != "" {
-		<p class="error">{ data.ErrMsg }</p>
+		<p class="error" role="alert">{ data.ErrMsg }</p>
 	}
 	if data.CheckoutResult == "success" {
 		<p class="success">You're all set - thanks for subscribing!</p>
