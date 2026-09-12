@@ -277,6 +277,18 @@ roster grouped by team/position, flagging any still-short-handed spots -
 the artifact a worship leader would otherwise assemble by hand every
 week. Linked from the Build page next to "Open in Planning Center."
 
+**Vocal range matrix** - a one-plan-at-a-time grid, every roster member
+(rows) against every set song (columns), showing at a glance who can sing
+what in the key it's actually in. Each cell reuses the exact same
+fits/octave-shift-tip/mismatch check the Songs tab's own per-song "range
+mismatch"/"range tip" badge already computes - a green check when a
+person's stored range covers the song's own transposed range, the same
+click-to-expand tip/mismatch badge otherwise, or a plain neutral dash
+when either the person or the song has no stored vocal range on file (never
+a false pass or a false warning). A pure read over data already on the
+Build page - no new data entry, no new Planning Center calls - linked from
+the Build page next to "Run sheet."
+
 **Account** - `/account` consolidates account/organization identity,
 billing (the same plan picker/Stripe portal `/billing` itself renders),
 and a "Data & Caches" section with two cache-clear actions (Song Info's

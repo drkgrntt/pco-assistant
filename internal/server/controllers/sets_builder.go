@@ -2020,20 +2020,21 @@ func vocalRangeWarningForSong(songLowAbs, songHighAbs int, vocalistPersonIDs []s
 		}
 		personLow := scheduling.AbsoluteSemitone(pr.LowestPitchClass, pr.LowestOctave)
 		personHigh := scheduling.AbsoluteSemitone(pr.HighestPitchClass, pr.HighestOctave)
-		if songLowAbs >= personLow && songHighAbs <= personHigh {
+
+		result := classifyVocalRangeCell(songLowAbs, songHighAbs, personLow, personHigh)
+		if result.Verdict == vocalRangeCellFits {
 			continue // fits as written
 		}
 
 		name := titleOrID(personNames, personID)
 		personRangeText := fmt.Sprintf("%s-%s", formatVocalNote(pr.LowestPitchClass, pr.LowestOctave), formatVocalNote(pr.HighestPitchClass, pr.HighestOctave))
 
-		if fits, direction := vocalRangeFitsShifted(songLowAbs, songHighAbs, personLow, personHigh); fits {
-			tipLines = append(tipLines, fmt.Sprintf("%s's range is %s - fits if sung an octave %s than written.", name, personRangeText, direction))
+		if result.Verdict == vocalRangeCellTip {
+			tipLines = append(tipLines, fmt.Sprintf("%s's range is %s - fits if sung an octave %s than written.", name, personRangeText, result.Direction))
 			continue
 		}
 
-		reach := strings.Join(vocalRangeViolationNotes(songLowAbs, songHighAbs, personLow, personHigh), " and ")
-		hardLines = append(hardLines, fmt.Sprintf("%s's range is %s; this song's current key needs %s to reach %s.", name, personRangeText, name, reach))
+		hardLines = append(hardLines, fmt.Sprintf("%s's range is %s; this song's current key needs %s to reach %s.", name, personRangeText, name, result.Reach))
 	}
 
 	switch {
@@ -2051,6 +2052,54 @@ func vocalRangeWarningForSong(songLowAbs, songHighAbs int, vocalistPersonIDs []s
 	default:
 		return vocalRangeWarning{}
 	}
+}
+
+// vocalRangeCellVerdict is one person-vs-one-song classification - fits as
+// written, fits only after a full octave shift (a tip), or a hard
+// mismatch. See classifyVocalRangeCell below, the one place this
+// three-way rule is expressed: both vocalRangeWarningForSong above (the
+// Songs tab's per-song badge, one combined message per affected vocalist)
+// and the vocal-range matrix (vocal_range_matrix.go, one verdict per
+// person x song cell) classify each person/song pair through it, so the
+// matrix can never disagree with the badge about the same pair. See
+// docs/plans/not-started/vocal-range-matrix-and-crowdsourced-default-plan.md's
+// "The matrix view" section.
+type vocalRangeCellVerdict int
+
+const (
+	vocalRangeCellFits vocalRangeCellVerdict = iota
+	vocalRangeCellTip
+	vocalRangeCellMismatch
+)
+
+// vocalRangeCellResult is classifyVocalRangeCell's return value. Direction
+// is only set when Verdict == vocalRangeCellTip ("lower"/"higher", see
+// vocalRangeFitsShifted); Reach is only set when Verdict ==
+// vocalRangeCellMismatch (e.g. "down to G3", "up to F5", or both joined by
+// " and ", see vocalRangeViolationNotes) - each caller formats these into
+// its own message text.
+type vocalRangeCellResult struct {
+	Verdict   vocalRangeCellVerdict
+	Direction string
+	Reach     string
+}
+
+// classifyVocalRangeCell is the one-pair-at-a-time core of the vocal-range
+// mismatch check: does [songLowAbs, songHighAbs] fit inside [personLow,
+// personHigh] as written, only after a full octave shift (see
+// vocalRangeFitsShifted's own doc comment on why that's checked before
+// treating a mismatch as hard), or neither? Pulled out of
+// vocalRangeWarningForSong's own loop body (see that function's doc
+// comment) so there's exactly one place this rule is expressed.
+func classifyVocalRangeCell(songLowAbs, songHighAbs, personLow, personHigh int) vocalRangeCellResult {
+	if songLowAbs >= personLow && songHighAbs <= personHigh {
+		return vocalRangeCellResult{Verdict: vocalRangeCellFits}
+	}
+	if fits, direction := vocalRangeFitsShifted(songLowAbs, songHighAbs, personLow, personHigh); fits {
+		return vocalRangeCellResult{Verdict: vocalRangeCellTip, Direction: direction}
+	}
+	reach := strings.Join(vocalRangeViolationNotes(songLowAbs, songHighAbs, personLow, personHigh), " and ")
+	return vocalRangeCellResult{Verdict: vocalRangeCellMismatch, Reach: reach}
 }
 
 // vocalRangeFitsShifted checks whether shifting the song's own range a

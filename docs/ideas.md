@@ -408,11 +408,13 @@ pattern as `song_tags`/`song_relationships`:**
   stored range doesn't cover the song's own transposed range, including
   the octave-shift downgrade-to-tip logic this bullet always intended (see
   `vocalRangeWarningForSong`, `sets_builder.go`, and the plan doc's own
-  Phase 3 status note). Still open: only the crowdsourced-default piece
-  immediately below and the matrix view further down, which remain
-  genuine cross-org/design decisions, not coding questions - both spun
-  out of `vocal-range-plan.md` once its Phases 1-3 shipped into their own
-  doc,
+  Phase 3 status note). ~~The matrix view further down~~ **shipped
+  2026-09-12** - see `internal/server/controllers/vocal_range_matrix.go`/
+  `internal/views/scheduling/vocal_range_matrix.templ`. Still open: only
+  the crowdsourced-default piece immediately below, which remains a
+  genuine cross-org/design decision, not a coding question - spun out of
+  `vocal-range-plan.md` (along with the now-shipped matrix view) once its
+  Phases 1-3 shipped into their own doc,
   `docs/plans/not-started/vocal-range-matrix-and-crowdsourced-default-plan.md`.
   See
   `docs/plans/shipped/song-lead-sheet-attachments-plan.md` for why
@@ -462,16 +464,18 @@ pattern as `song_tags`/`song_relationships`:**
 
   Together, per-person range and per-song range are the prerequisite for
   the bigger payoff this keeps pointing at: a **preferred-key** suggestion
-  per person/song pair, and eventually a **vocal range/key matrix** view
-  across a whole team - "who can actually sing this song in this key" at
-  a glance. Worth sequencing as: person range first (small, standalone,
-  useful immediately for "can Mike hit this note" conversations even with
-  zero song data - see People, below), then song range + key engine, then
-  the matrix as a presentation layer over both once they both exist. The
-  matrix view itself is not started - see
-  `docs/plans/not-started/vocal-range-matrix-and-crowdsourced-default-plan.md`
-  for its design content, spun out of `vocal-range-plan.md` once Phases
-  1-3 shipped.
+  per person/song pair (still open - no code for this piece yet), and
+  ~~eventually a **vocal range/key matrix** view across a whole team - "who
+  can actually sing this song in this key" at a glance~~ - **shipped
+  2026-09-12**, one
+  plan at a time (that plan's own roster x that plan's own set songs, not
+  a whole-team/whole-library view - see `docs/plans/not-started/
+  vocal-range-matrix-and-crowdsourced-default-plan.md`'s own "Status" note
+  for why that scope, and where it landed). Sequenced as originally
+  planned: person range first (small, standalone, useful immediately for
+  "can Mike hit this note" conversations even with zero song data - see
+  People, below), then song range + key engine, then the matrix as a
+  presentation layer over both.
 - ~~Song leader (per-occurrence)~~ - **shipped**, grown out of this same
   vocal-range conversation rather than a pre-existing bullet here: a real
   per-occurrence `set_songs.leader_person_id`, synced on Publish/Refresh
@@ -719,8 +723,8 @@ pattern as `song_tags`/`song_relationships`:**
   single-plan numbers above.
 
   Distinct from two existing ideas worth not conflating: the **vocal
-  range/key matrix** (Songs, above) is a person x song grid about vocal
-  fit - unrelated axis, same word by coincidence. The **browser extension
+  range/key matrix** (Songs, above - shipped 2026-09-12) is a person x song
+  grid about vocal fit - unrelated axis, same word by coincidence. The **browser extension
   HUD** (Reducing friction, above) is the alternate way to deliver this
   same idea - injecting these same annotations directly onto PCO's own
   live matrix UI instead of building a native page here - worth weighing
@@ -788,18 +792,17 @@ zero song data); per-song range cost more (needed a real key engine
 factored out of the key-transition warning's one-off pitch-class parser -
 see `docs/plans/shipped/vocal-range-plan.md`'s Phase 2 status note).
 **The mismatch warning (Phase 3, the roster-cross-referenced check) has
-also now shipped, 2026-09-08** - the moderate, well-scoped lift this
-section previously called it. What's left is genuinely still open, and
-now the only remaining piece: the crowdsourced-default piece remains the
-priciest single item in this file - the first genuinely cross-org data
-pattern this app would have, needing a reliable join key and a real
-consent story before it's shippable. The eventual key matrix is
-presentation-only, and now buildable, since both per-person/per-song
-range and the mismatch warning it would visualize all exist. Both
-pieces - the crowdsourced default and the matrix view - have been spun
-out of `vocal-range-plan.md` into their own doc now that Phases 1-3
-shipped: see
-`docs/plans/not-started/vocal-range-matrix-and-crowdsourced-default-plan.md`.
+also now shipped, 2026-09-08**, and **the presentation-only key matrix
+that visualizes it across a whole roster has since shipped too,
+2026-09-12** - both pieces were spun out of `vocal-range-plan.md` into
+their own doc once Phases 1-3 shipped
+(`docs/plans/not-started/vocal-range-matrix-and-crowdsourced-default-plan.md`),
+and the matrix view is the one of that doc's two pieces that's now done
+(see its own "Status" note). What's left, and now the only remaining
+piece in this whole vocal-range thread: the crowdsourced-default piece
+remains the priciest single item in this file - the first genuinely
+cross-org data pattern this app would have, needing a reliable join key
+and a real consent story before it's shippable.
 
 Priciest of the rest: **stage density/band-balance checking** (a new
 capability/profile axis on both people and services, nothing existing to

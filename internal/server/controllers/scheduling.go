@@ -531,6 +531,7 @@ func (sc *SchedulingController) RegisterRoutes(router fiber.Router) {
 	group.Post("/build/plans/:service_type_id/:plan_id/note", sc.UpdatePlanNote)
 	group.Get("/build/:service_type_id/:plan_id", sc.BuildPlanPage)
 	group.Get("/build/:service_type_id/:plan_id/run-sheet", sc.RunSheetPage)
+	group.Get("/build/:service_type_id/:plan_id/vocal-range-matrix", sc.VocalRangeMatrixPage)
 	group.Get("/build/:service_type_id/:plan_id/songs-tab", sc.BuildSongsTabLazy)
 	group.Get("/build/:service_type_id/:plan_id/team-tab", sc.BuildTeamTabLazy)
 	group.Get("/build/:service_type_id/:plan_id/candidates/search", sc.BuildCandidatesSearch)

@@ -2,13 +2,14 @@
 
 **Status: Phases 1-3 shipped 2026-09-07 through 2026-09-08 (see the
 per-phase paragraphs below for exact dates/detail). The matrix view and the
-crowdsourced-default piece remain not started and have been spun out to
-their own doc,
+crowdsourced-default piece were spun out to their own doc,
 `docs/plans/not-started/vocal-range-matrix-and-crowdsourced-default-plan.md`
 - see that doc for their design content, and this doc's own "Phase 3:
 mismatch warning UI, and the eventual matrix view" and "Crowdsourced
 default" sections below (kept here unchanged) for the full build history
-they were spun out of.**
+they were spun out of. Of those two, the matrix view has since shipped too
+(2026-09-12 - see that doc's own "Status" note under "The matrix view"
+heading); the crowdsourced-default piece remains not started.**
 
 Phase 1 shipped 2026-09-07 - the standalone person vocal range
 setup page (migration `00036_person_vocal_range.sql` - `00035` was already
@@ -71,8 +72,8 @@ as E3 came back displayed as E4), fixed by storing the exact entered pitch
 class/octave instead of an offset at all (migration
 `00043_song_vocal_range_exact_register.sql`). Phase 3's own mismatch
 warning has since shipped too - see the status paragraph below. The
-matrix view and the crowdsourced-default question
-remain not started - see those sections below, unchanged from the
+matrix view has since shipped as well (2026-09-12); the crowdsourced-default
+question remains not started - see those sections below, unchanged from the
 original plan.
 
 **Song Vocal Range page gets play buttons + a current-key line, also
@@ -171,8 +172,9 @@ substance). Severity/threshold shipped exactly as this section already
 called as the default: warn on any note outside range, no tolerance band.
 New tests: `TestVocalRangeWarningForSong*`/`TestVocalRangeFitsShifted*`/
 `TestVocalRangeViolationNotes*` in `sets_builder_warnings_test.go`. The
-matrix view remains its own separate future plan doc, unchanged from this
-plan's original "Suggested build order" step 6.
+matrix view (this plan's own "Suggested build order" step 6) has since
+shipped too, 2026-09-12 - see `docs/plans/not-started/
+vocal-range-matrix-and-crowdsourced-default-plan.md`'s own "Status" note.
 
 **Two more Build-page pieces landed the same day, both from `docs/issues.md`
 feedback rather than this plan's own original scope:**
