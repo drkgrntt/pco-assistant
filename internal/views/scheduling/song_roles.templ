@@ -30,7 +30,7 @@ templ SongRoles(personName, organizationName string, songs []pco.SongData, roleT
 	@views.Layout("Song Roles", personName, organizationName) {
 		@songRolesHelp()
 		<h1>Song Roles</h1>
-		<p class="muted">Tag songs as good openers or good response songs, for use when building a set.</p>
+		<p class="muted">Assign songs as good openers or good response songs, for use when building a set.</p>
 		@SongRoleBuckets(songs, roleTypes, rolesByRole, songTitles, errMsg)
 	}
 }
@@ -82,7 +82,7 @@ templ SongRoleBucketCard(roleType scheduling.SongRoleType, roleTypes []schedulin
 	<div class="song-role-card">
 		@components.Card(roleType.Label) {
 			if len(roles) == 0 {
-				<p class="muted song-role-empty">No songs tagged yet.</p>
+				<p class="muted song-role-empty">No songs assigned yet.</p>
 			} else {
 				<div class="song-role-chips">
 					for _, role := range sortRolesByTitle(roles, songTitles) {
@@ -188,7 +188,7 @@ templ songRolesHelp() {
 		<div class="tour-step">
 			<h2>Song Roles</h2>
 			<p>
-				Tag songs as good openers or good response songs. Build uses these
+				Assign songs as good openers or good response songs. Build uses these
 				to anchor a set's shape instead of starting from a blank order.
 			</p>
 		</div>
