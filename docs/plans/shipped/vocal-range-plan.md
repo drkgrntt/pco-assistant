@@ -311,6 +311,26 @@ client-side preview math in `scheduling-vocal-range.js` (`renderVocalRangePrevie
 which drops its own duplicated `vocalRangePreviewTonicOctave` constant
 entirely now that there's no tonic-anchor concept left to mirror.
 
+**Build-page mismatch warning narrowed to leader-only, 2026-09-12** -
+`vocalRangeWarningForSong` (`sets_builder.go`) now checks a song row's own
+leader (`SetSongView.LeaderPersonID`) specifically, not every roster
+member with a range on file - this section's original "who counts" rule,
+above, no longer applies to this per-row Build-page badge. The badge
+exists to answer "can whoever's actually leading this song sing it,"
+which the whole-roster check was a poor proxy for once a song had its own
+distinct leader to ask about instead; a supporting vocalist's own mismatch
+is real information too, just not this specific badge's job now that the
+matrix view (`vocal_range_matrix.go`, shipped 2026-09-12 - see the note
+above) exists to surface everyone's own fit, leader included with its own
+extra emphasis. `vocalistsWithRangesOnFile` (the old roster-wide name-
+resolution helper, and its test) is gone - `leaderNames`
+(`buildSetBuilderData`, already resolved for `LeaderPersonName`) covers the
+one person this check ever names now. No `vocalistPersonIDs` signature
+change needed beyond this call site: `renderServiceOrder` and
+`vocalRangeWarningForSong` both already took an id slice, just narrowed to
+zero-or-one entries (a song's leader, or none) instead of the whole
+roster.
+
 Written 2026-09-06, expanding two related `docs/ideas.md` bullets into one
 coherent build plan: **"Vocal range per vocalist"** (People section,
 ~line 462) and **"Song vocal range (relative to key)"** (Songs section,

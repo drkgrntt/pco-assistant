@@ -416,17 +416,19 @@ type SetSongView struct {
 
 	// VocalRangeWarningLabel/VocalRangeWarningMessage/VocalRangeWarningIsTip
 	// are Phase 3 of docs/plans/shipped/vocal-range-plan.md: a
-	// range-mismatch warning (or downgraded octave-shift tip) when a
-	// vocalist assigned to this plan's roster has a stored
+	// range-mismatch warning (or downgraded octave-shift tip) when this
+	// song's own leader (LeaderPersonID) has a stored
 	// scheduling.PersonVocalRange that doesn't cover this song's own
-	// VocalRangeDisplay range - see the controller's
-	// vocalRangeWarningForSong for the full "who counts as a vocalist to
-	// check"/octave-shift-downgrade logic. VocalRangeWarningLabel == ""
-	// means nobody assigned mismatches at all (by far the common case - no
-	// roster yet, no vocalist with a range on file, or every fitting range
-	// already covers this song), in which case the row shows no badge at
-	// all. VocalRangeWarningIsTip distinguishes a hard mismatch (rendered
-	// like KeyTransitionLabel - a conflict-badge-styled warning) from an
+	// VocalRangeDisplay range - checked against the leader specifically,
+	// not every vocalist on the roster (the vocal-range matrix,
+	// vocal_range_matrix.go, is where the whole roster still gets
+	// checked) - see the controller's vocalRangeWarningForSong for the
+	// full "who counts"/octave-shift-downgrade logic. VocalRangeWarningLabel
+	// == "" means no mismatch at all (by far the common case - no leader
+	// assigned, the leader has no range on file, or their range already
+	// covers this song), in which case the row shows no badge at all.
+	// VocalRangeWarningIsTip distinguishes a hard mismatch (rendered like
+	// KeyTransitionLabel - a conflict-badge-styled warning) from an
 	// octave-shift-fixes-it tip (rendered like TransitionNotePrompts - a
 	// plain, non-warning badge) - see songBadgeSpans, set_builder.templ.
 	VocalRangeWarningLabel   string
