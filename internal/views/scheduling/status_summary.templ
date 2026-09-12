@@ -115,8 +115,9 @@ templ RosterStatusSummary(data RosterBuilderData) {
 		if data.PendingDeleteCount > 0 {
 			@statusChip(fmt.Sprintf("Pending removal: %d", data.PendingDeleteCount), true)
 		}
-		if len(data.ExistingConflicts) > 0 {
-			@statusChip(fmt.Sprintf("Warnings: %d", len(data.ExistingConflicts)), true)
+		{{ warningCount := len(data.ExistingConflicts) + assignedWarningCount(data.Positions) }}
+		if warningCount > 0 {
+			@statusChip(fmt.Sprintf("Warnings: %d", warningCount), true)
 		}
 	</div>
 }

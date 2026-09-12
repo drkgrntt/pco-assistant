@@ -147,6 +147,30 @@ func conflictCountLabel(n int) string {
 	return fmt.Sprintf("%d conflicts", n)
 }
 
+// assignedWarningCount is RosterStatusSummary's own "Warnings: N" input -
+// how many currently-assigned people have at least one frequency/blockout/
+// cross-team warning (assignmentConflictWarnings above), across every
+// position group. Added per docs/issues.md ("a few potential warnings...
+// don't seem to show up") - the chip previously only counted
+// data.ExistingConflicts (avoid-pairing), even though these three warnings
+// already render inline on the row per assignmentConflictWarnings above; the
+// Songs tab got the equivalent cleanup already (see
+// docs/plans/shipped/in-place-set-warnings-plan.md), the Team tab never
+// did. Counts affected *people*, not total warning strings, matching
+// ExistingConflicts' own "one number per thing needing attention" shape
+// (someone with both a frequency and a blockout warning still only adds 1).
+func assignedWarningCount(positions []PositionGroupView) int {
+	n := 0
+	for _, pos := range positions {
+		for _, a := range pos.Assigned {
+			if len(assignmentConflictWarnings(a)) > 0 {
+				n++
+			}
+		}
+	}
+	return n
+}
+
 // positionHeading is one position group's collapsibleCard heading - a
 // multi-span title (position name, muted fill-count, muted "who's on it"
 // summary) that collapsibleSection's plain string label can't express.

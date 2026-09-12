@@ -157,7 +157,7 @@ templ songPublishPanelContent(data SetBuilderData) {
 				draft was last touched, without discarding or altering any
 				local change (unpublished adds, removals, reordering, pending
 				note/key edits) - see MergeSet. Doesn't require a published
-				song the way Re-sync below does, so it's offered any time the
+				song the way Re-push below does, so it's offered any time the
 				set exists and isn't read-only - but only when
 				MergeAvailableCount actually says there's something to pull
 				in, so this button doesn't sit here doing nothing every week
@@ -180,7 +180,14 @@ templ songPublishPanelContent(data SetBuilderData) {
 				cache entry) - see RefreshSongInfo. Only shown once there's at
 				least one already-published song to refresh; Discard above
 				still exists for anything this doesn't cover (title, order,
-				which songs are even in the set).
+				which songs are even in the set). Labeled "Re-push", not
+				"Re-sync" (docs/issues.md: "the re-sync is just an enigma to
+				me") - "sync" already means something else on this page (the
+				poll banner/Merge button above, both of which pull *from*
+				Planning Center), while this button only ever pushes *to* it,
+				same direction as Publish - just a much narrower one (existing
+				items' info only, never create/delete/reorder the way Publish
+				does).
 			-->
 			if data.UnpublishedCount < len(data.SetSongs) {
 				<form
@@ -192,7 +199,7 @@ templ songPublishPanelContent(data SetBuilderData) {
 					<button
 						type="submit"
 						title="Fixes a wrong/missing key, length, or arrangement on songs already published to Planning Center - without discarding and republishing the whole set"
-					>Re-sync key, length &amp; arrangement</button>
+					>Re-push key, length &amp; arrangement</button>
 				</form>
 			}
 		</div>

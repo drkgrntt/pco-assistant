@@ -981,3 +981,19 @@ out to 100-200 sequential round trips per load.
   computation over the same `songs`/`tags`/`ignored` data already in
   scope. Phase 2 of that plan (lyric-derived suggestions, extending
   `song_arrangement_cache`) is not yet built.
+- **Poll-while-open live-sync check now skips backgrounded tabs
+  (2026-09-12)** - reported directly (`docs/issues.md`: "what happens if
+  the user has 4-5 tabs open... only poll on the active tab"). The
+  "Live-sync reflection, option C" entry above already documented that
+  cost as scaling with concurrent open tabs and *tolerated* it (bounded,
+  low-priority-tagged, cheap fingerprint check) rather than mitigated it -
+  this closes the specific case of one person's own idle background tabs
+  adding to that scaling, not the separate N-different-people-with-the-
+  same-plan-open case, which still costs N polls by design (no shared/
+  dedup state exists, per that entry's own reasoning). `#pco-sync-poll`'s
+  `hx-trigger` (`set_builder.templ`) gained a `[!document.hidden]` filter -
+  a plain htmx trigger-filter expression, re-evaluated every tick, no new
+  JS - so a tick simply doesn't fire while its own Build page tab isn't
+  the visible one; switching back resumes on the next 30s tick, not
+  instantly. Only the Songs tab polls at all (the Team tab has no
+  equivalent), so this only ever bounds that one poll.
