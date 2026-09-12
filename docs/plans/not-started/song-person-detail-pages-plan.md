@@ -1,10 +1,11 @@
 # Plan: standalone song and person detail pages
 
 Not built yet - written up for review before anyone picks it up, same
-spirit as `docs/plans/not-started/song-roles-bucket-redesign-plan.md` (a
-sibling not-yet-built redesign of one of the same setup pages this plan
-also touches - see "Interaction with the Song Roles bucket redesign"
-below). Prompted by the same underlying complaint that drove
+spirit as `docs/plans/shipped/song-roles-bucket-redesign-plan.md` (a
+redesign of one of the same setup pages this plan also touches, shipped
+since this plan was first written - see "Interaction with the Song Roles
+bucket redesign" below, now updated to reflect that it already landed).
+Prompted by the same underlying complaint that drove
 `docs/plans/shipped/song-tags-setup-redesign-plan.md`: that doc fixed
 "the ability to look through and organize things" for exactly one of
 seven song-related setup pages (Song Tags). This plan generalizes that
@@ -315,19 +316,22 @@ lightweight rows' checkboxes instead of the old page's full cards.
 
 ## Interaction with the Song Roles bucket redesign
 
-`docs/plans/not-started/song-roles-bucket-redesign-plan.md` (also
-not-started) proposes reshaping the *flat Song Roles setup page itself*
-into one card per role bucket (Opener, Response, ...) rather than one row
-per tag - a change to how the org-wide "browse all songs by role" view
-looks. This plan retires that flat page outright rather than reshaping
-it, so if that bucket redesign lands first, its `SongRoleBuckets`
-component/bucket-grouping logic (`ListSongRoleTypes`/`ListSongRoles`
-grouped by role code) is still directly useful here as the song *library
-index* page's own "browse by role" view (which needs exactly the "by
-role, not by song" grouping that plan builds), even though the flat
-per-role-bucket page it was written for goes away. Either build order
-works; whichever ships first, the other should re-check this note rather
-than duplicating the bucket-grouping helper.
+`docs/plans/shipped/song-roles-bucket-redesign-plan.md` has since shipped:
+the flat Song Roles setup page was reshaped into one card per role bucket
+(Opener, Response, ...) rather than one row per tag, in
+`internal/views/scheduling/song_roles.templ`
+(`SongRoles`/`SongRoleBuckets`/`SongRoleBucketCard`) and
+`internal/server/controllers/sets_roles.go`
+(`songRolesByRoleCode` groups a flat `[]scheduling.SongRole` by role code -
+`ListSongRoleTypes`/`ListSongRoles` under the hood, unchanged). If this
+plan proceeds, that page's own bucket-per-role cards are the direct
+building block for the song *library index* page's "browse by role" view
+(which needs exactly the same "by role, not by song" grouping) - reuse
+`songRolesByRoleCode`/`SongRoleBucketCard` rather than duplicating that
+grouping logic. This plan still retires the flat/bucketed Song Roles setup
+page itself once the library index replaces it, same as originally
+planned - only the shape of what's being retired changed (buckets rather
+than a flat table), not the retirement itself.
 
 ## Suggested build order (phased, mirroring how multi-part plans in
 `docs/plans/shipped/` get sequenced)

@@ -1,8 +1,37 @@
 # Plan: redesign the Song Roles setup page as role buckets
 
-Not built yet - written up for review before anyone picks it up, same
-spirit as `docs/plans/shipped/song-tags-setup-redesign-plan.md` (that doc
-is this one's direct model; read it first, it's cited throughout below).
+**Status: shipped 2026-09-12.** Built against these answers to the "Open
+questions" section below, exactly as it recommended in each case:
+
+1. **Song picker inside each bucket's add-form**: a plain `<select>` of
+   every active song - cheapest, matches every sibling setup page.
+2. **A song already in one bucket, added to another**: allowed, no
+   warning or prevention - an intended, ordinary case.
+3. **Moving a song between buckets**: each bucket's add/edit form carries
+   a real `role` `<select>` (defaulting to that bucket's own code, but a
+   real changeable field) - the same "one shared form edits both song_id
+   and role" mechanism the old flat table's single form offered, just one
+   form per bucket instead of one page-wide form. Editing a chip opens its
+   own bucket's form pre-filled, and submitting after picking a different
+   role still moves it there, since the whole bucket list re-renders after
+   every add/edit.
+4. **Sort order within a bucket's chips**: alphabetical by title.
+
+Landed in `internal/views/scheduling/song_roles.templ`
+(`SongRoles`/`SongRoleBuckets`/`SongRoleBucketCard`, replacing
+`SongRolesTable`), `internal/server/controllers/sets_roles.go`
+(`songRolesByRoleCode` replacing the old row-per-tag rendering), and
+`web/static/css/song-roles.css` (added to `designSystemCSSFiles`,
+`internal/views/layout.templ`). The Build page's own role-filter chips and
+"Mark a role" quick-add (`internal/views/scheduling/set_builder.templ`,
+`internal/server/controllers/sets_builder.go`/`sets_detail.go`'s
+`QuickAddSongRole`) were confirmed unaffected - both read
+`ListSongRoleTypes`/`ListSongRoles` straight from `scheduling.Store`, never
+this setup page's markup.
+
+Originally written up for review before anyone picks it up, same spirit as
+`docs/plans/shipped/song-tags-setup-redesign-plan.md` (that doc is this
+one's direct model; read it first, it's cited throughout below).
 
 Prompted by direct feedback in `docs/issues.md`: "I'm ready to start
 thinking about a redesign of the song roles page. A table is fine, but
