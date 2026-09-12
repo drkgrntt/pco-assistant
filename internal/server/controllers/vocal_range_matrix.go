@@ -80,6 +80,7 @@ func (sc *SchedulingController) buildVocalRangeMatrixData(ctx context.Context, o
 			LowOctave:      row.Song.VocalRangeLowOctave,
 			HighPitchClass: row.Song.VocalRangeHighPitchClass,
 			HighOctave:     row.Song.VocalRangeHighOctave,
+			LeaderPersonID: row.Song.LeaderPersonID,
 		})
 	}
 

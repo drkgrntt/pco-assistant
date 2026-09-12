@@ -63,6 +63,10 @@ type VocalRangeMatrixSong struct {
 	LowOctave      int
 	HighPitchClass int
 	HighOctave     int
+	// LeaderPersonID is this song's assigned leader for this plan
+	// occurrence (SetSongView.LeaderPersonID), "" when none - used to mark
+	// the leader's own cell in the matrix, see vocalRangeMatrixCell.
+	LeaderPersonID string
 }
 
 // VocalRangeMatrixPerson is one matrix row - one person assigned to this
