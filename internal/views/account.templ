@@ -77,7 +77,7 @@ templ AccountCacheBody(data AccountData) {
 		<div class="card-columns">
 			@components.Card("Song info cache") {
 				if data.SongInfoCacheErr != "" {
-					<p class="error">{ data.SongInfoCacheErr }</p>
+					<p class="error" role="alert">{ data.SongInfoCacheErr }</p>
 				}
 				if data.SongInfoCacheMsg != "" {
 					<p class="success">{ data.SongInfoCacheMsg }</p>
@@ -99,7 +99,7 @@ templ AccountCacheBody(data AccountData) {
 			}
 			@components.Card("Person data cache") {
 				if data.PersonDataCacheErr != "" {
-					<p class="error">{ data.PersonDataCacheErr }</p>
+					<p class="error" role="alert">{ data.PersonDataCacheErr }</p>
 				}
 				if data.PersonDataCacheMsg != "" {
 					<p class="success">{ data.PersonDataCacheMsg }</p>
@@ -180,10 +180,10 @@ templ AccountInstallBody() {
 templ AccountSessionsBody(data AccountData) {
 	<div id="account-sessions-body">
 		if data.SessionsErr != "" {
-			<p class="error">{ data.SessionsErr }</p>
+			<p class="error" role="alert">{ data.SessionsErr }</p>
 		}
 		if data.SignOutErr != "" {
-			<p class="error">{ data.SignOutErr }</p>
+			<p class="error" role="alert">{ data.SignOutErr }</p>
 		}
 		if data.SignOutMsg != "" {
 			<p class="success">{ data.SignOutMsg }</p>

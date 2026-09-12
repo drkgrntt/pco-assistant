@@ -41,6 +41,7 @@ templ StyleGuide(personName, organizationName string) {
 				@sgColorSwatch("--surface")
 				@sgColorSwatch("--surface-hover")
 				@sgColorSwatch("--border")
+				@sgColorSwatch("--control-border")
 				@sgColorSwatch("--text")
 				@sgColorSwatch("--muted")
 			</div>
@@ -163,7 +164,7 @@ templ StyleGuide(personName, organizationName string) {
 			<h2>Alerts &amp; banners</h2>
 			<div class="warning">This is a warning banner - conflicts, repeat-song alerts, pending-deletion notices.</div>
 			@components.ImportBanner("This is an import banner - an invitation, not an alert (see the \"already planned in Planning Center\" prompts).", false)
-			<p class="error">This is an inline error message.</p>
+			<p class="error" role="alert">This is an inline error message.</p>
 			<p class="success">This is an inline success message.</p>
 		</section>
 

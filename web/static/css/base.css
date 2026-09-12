@@ -53,3 +53,45 @@ h2 {
   color: var(--muted);
   font-size: var(--text-md);
 }
+
+/* Skip-to-content link (2.4.1 Bypass Blocks, Finding 3 -
+   docs/plans/shipped/wcag-aa-audit-plan.md) - the very first element in
+   <body> (layout.templ), off-screen until it receives keyboard focus, at
+   which point it's pulled fully on-screen above everything else so a
+   keyboard user can jump straight past the header/nav to <main
+   id="main-content"> instead of re-tabbing through it on every page. */
+.skip-link {
+  position: absolute;
+  top: -3rem;
+  left: var(--space-2);
+  z-index: 1000;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--accent-solid);
+  color: white;
+  text-decoration: none;
+  transition: top var(--duration-fast) var(--ease-standard);
+}
+
+.skip-link:focus-visible {
+  top: var(--space-2);
+}
+
+/* Screen-reader-only content - visually hidden but still in the
+   accessibility tree, unlike [hidden]/display:none which pulls a node out
+   of it entirely. Used for the as-you-type search result-count live
+   regions (Finding 2, docs/plans/shipped/wcag-aa-audit-plan.md's
+   candidate-search/build-plans-search live-region judgment call) - the
+   standard clip-based technique (not display:none/visibility:hidden, both
+   of which screen readers skip too) rather than a new one. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

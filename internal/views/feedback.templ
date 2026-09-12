@@ -38,7 +38,7 @@ templ Feedback(personName, organizationName, errMsg string) {
 templ FeedbackResult(errMsg string, sent bool) {
 	<div id="feedback-result">
 		if errMsg != "" {
-			<p class="error">{ errMsg }</p>
+			<p class="error" role="alert">{ errMsg }</p>
 		}
 		if sent {
 			<p class="success">Thanks - your feedback was sent.</p>

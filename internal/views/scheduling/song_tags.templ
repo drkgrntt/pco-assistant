@@ -372,7 +372,7 @@ func distinctTagValues(tagsBySong map[string][]scheduling.SongTag) []string {
 templ SongTagsList(songs []pco.SongData, tagsBySong map[string][]scheduling.SongTag, categories []scheduling.SongTagCategory, categoryLabels map[string]string, successMsg, errMsg string) {
 	<div id="song-tags-list" class="song-tags-list">
 		if errMsg != "" {
-			<p class="error">{ errMsg }</p>
+			<p class="error" role="alert">{ errMsg }</p>
 		}
 		if successMsg != "" {
 			<p class="success">{ successMsg }</p>

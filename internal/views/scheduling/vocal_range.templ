@@ -96,7 +96,7 @@ templ vocalRangeHelp() {
 templ PersonVocalRangesTable(ranges []scheduling.PersonVocalRange, personNames map[string]string, errMsg string) {
 	<div id="vocal-ranges-table">
 		if errMsg != "" {
-			<p class="error">{ errMsg }</p>
+			<p class="error" role="alert">{ errMsg }</p>
 		}
 		@components.SortableTableWrap() {
 			<thead>

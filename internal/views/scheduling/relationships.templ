@@ -77,7 +77,7 @@ templ Relationships(personName, organizationName string, songs []pco.SongData, r
 templ RelationshipsTable(relationships []scheduling.SongRelationship, songTitles map[string]string, typeLabels map[string]string, errMsg string) {
 	<div id="relationships-table">
 		if errMsg != "" {
-			<p class="error">{ errMsg }</p>
+			<p class="error" role="alert">{ errMsg }</p>
 		}
 		@components.SortableTableWrap() {
 			<thead>

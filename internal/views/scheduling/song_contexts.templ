@@ -158,7 +158,7 @@ templ songContextSelectOOB(contextTypes []scheduling.SongContextType) {
 templ SongContextTypesList(contextTypes []scheduling.SongContextType, errMsg string) {
 	<div id="song-context-types-list">
 		if errMsg != "" {
-			<p class="error">{ errMsg }</p>
+			<p class="error" role="alert">{ errMsg }</p>
 		}
 		@components.TableWrap() {
 			<thead>
@@ -233,7 +233,7 @@ templ SongContextTypesMutationResponse(contextTypes []scheduling.SongContextType
 templ SongContextsList(songs []pco.SongData, contextsBySong map[string][]scheduling.SongContext, contextTypes []scheduling.SongContextType, contextLabels map[int64]string, successMsg, errMsg string) {
 	<div id="song-contexts-list" class="song-contexts-list">
 		if errMsg != "" {
-			<p class="error">{ errMsg }</p>
+			<p class="error" role="alert">{ errMsg }</p>
 		}
 		if successMsg != "" {
 			<p class="success">{ successMsg }</p>

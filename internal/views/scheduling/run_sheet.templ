@@ -116,10 +116,10 @@ templ RunSheet(setData SetBuilderData, rosterData RosterBuilderData) {
 					<button type="button" class="no-print" onclick="window.print()">Print</button>
 				</header>
 				if setData.ErrMsg != "" {
-					<p class="error no-print">{ setData.ErrMsg }</p>
+					<p class="error no-print" role="alert">{ setData.ErrMsg }</p>
 				}
 				if rosterData.ErrMsg != "" {
-					<p class="error no-print">{ rosterData.ErrMsg }</p>
+					<p class="error no-print" role="alert">{ rosterData.ErrMsg }</p>
 				}
 				<section class="run-sheet-section">
 					<h2>Order of service</h2>

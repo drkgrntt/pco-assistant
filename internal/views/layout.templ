@@ -111,6 +111,17 @@ templ Layout(title string, personName string, organizationName string) {
 	<html lang="en">
 		@Head(title)
 		<body>
+			<!--
+				Bypass Blocks (2.4.1, Finding 3 -
+				docs/plans/shipped/wcag-aa-audit-plan.md) - every page's header
+				(brand link, mobile menu toggle, Home/Build/Setup nav, account
+				dropdown) sits ahead of <main> in tab order, so without this a
+				keyboard user re-tabs through all of it on every single page
+				navigation. Visually hidden until focused (.skip-link,
+				base.css) - the standard skip-link pattern - and #main-content
+				on <main> below is its target.
+			-->
+			<a href="#main-content" class="skip-link">Skip to content</a>
 			<div id="htmx-progress-bar" aria-hidden="true"></div>
 			<header class="site">
 				<div class="site-primary">
@@ -174,7 +185,7 @@ templ Layout(title string, personName string, organizationName string) {
 					@components.IconX()
 				</button>
 			</div>
-			<main>
+			<main id="main-content">
 				@installPromptBanner()
 				{ children... }
 			</main>

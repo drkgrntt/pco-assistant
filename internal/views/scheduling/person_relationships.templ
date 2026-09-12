@@ -54,7 +54,7 @@ templ PersonRelationships(personName, organizationName string, relationships []s
 templ PersonRelationshipsTable(relationships []scheduling.PersonRelationship, personNames map[string]string, typeLabels map[string]string, errMsg string) {
 	<div id="person-relationships-table">
 		if errMsg != "" {
-			<p class="error">{ errMsg }</p>
+			<p class="error" role="alert">{ errMsg }</p>
 		}
 		@components.SortableTableWrap() {
 			<thead>
