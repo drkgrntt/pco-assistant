@@ -40,6 +40,12 @@ import (
 // a second copy of that markup/JS. This is the same verdict that badge
 // already computes per vocalist, just laid out as a grid instead of one
 // badge per row.
+//
+// Each song column also marks its one assigned-leader cell (a "★" next to
+// that person's verdict, see vocalRangeMatrixCell) with extra visual
+// weight when that leader's own verdict is Tip or Mismatch - a range
+// problem for the person actually leading the song matters more than the
+// same problem for a supporting vocalist elsewhere in the column.
 templ VocalRangeMatrix(personName, organizationName string, data VocalRangeMatrixData) {
 	@views.Layout("Vocal Range Matrix", personName, organizationName) {
 		<div class="build-page-nav">
@@ -96,7 +102,7 @@ templ VocalRangeMatrix(personName, organizationName string, data VocalRangeMatri
 									}
 								</th>
 								for _, song := range data.Songs {
-									@vocalRangeMatrixCell(data.Cells[person.PersonID][song.SongID])
+									@vocalRangeMatrixCell(data.Cells[person.PersonID][song.SongID], song.LeaderPersonID != "" && song.LeaderPersonID == person.PersonID)
 								}
 							</tr>
 						}
@@ -113,8 +119,30 @@ templ VocalRangeMatrix(personName, organizationName string, data VocalRangeMatri
 // scoping decision), Fits a short positive mark, and Tip/Mismatch reuse
 // set_builder.templ's own Disclosure components verbatim - see
 // VocalRangeMatrix's top doc comment for why.
-templ vocalRangeMatrixCell(cell VocalRangeMatrixCell) {
-	<td>
+//
+// isLeader marks the one cell per song column where that row's person is
+// the song's assigned leader (SetSongView.LeaderPersonID, threaded through
+// as VocalRangeMatrixSong.LeaderPersonID) - a small "★" glyph is added
+// before the verdict content, same always-visible-glyph-plus-title
+// convention as the Fits/Unknown cells below (real explanatory content,
+// like Tip/Mismatch's own message, still goes through
+// components.Disclosure instead - see VocalRangeMatrix's top doc comment).
+// The cell also gets extra visual weight when the leader's own verdict is
+// Tip or Mismatch - a range problem for the person actually leading the
+// song is more consequential than the same problem for a supporting
+// vocalist, same "more urgent gets the stronger tone" reasoning
+// components/badge.css's .badge.status-needed already uses elsewhere in
+// this app.
+templ vocalRangeMatrixCell(cell VocalRangeMatrixCell, isLeader bool) {
+	<td
+		class={
+			templ.KV("vocal-range-matrix-leader-cell", isLeader),
+			templ.KV("vocal-range-matrix-leader-warn", isLeader && (cell.Verdict == VocalRangeMatrixTip || cell.Verdict == VocalRangeMatrixMismatch)),
+		}
+	>
+		if isLeader {
+			<span class="vocal-range-matrix-leader-mark" title="Leading this song">★</span>
+		}
 		switch cell.Verdict {
 			case VocalRangeMatrixFits:
 				<span class="vocal-range-matrix-fits" title="Fits as written">✓</span>

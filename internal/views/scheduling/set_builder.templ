@@ -690,7 +690,7 @@ templ candidateBadgeExtras(cand CandidateSongView) {
 		@components.Badge("", context.Label)
 	}
 	for _, tag := range cand.Tags {
-		@components.BadgeTitled("tag-badge", tag.Value, tag.Category)
+		@components.TagBadge(tag.Value, tag.Category)
 	}
 }
 

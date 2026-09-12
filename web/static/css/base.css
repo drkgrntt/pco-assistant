@@ -6,7 +6,24 @@
   box-sizing: border-box;
 }
 
+/* Sticky footer: body is the flex column (header.site, .site-banner,
+   main, .site-footer - layout.templ's real, in-flow children; the skip
+   link/htmx progress bar are position:absolute/fixed, out of flow, and
+   don't count), main is the one growing item. A fixed "header height +
+   footer height, main gets calc(100vh - both)" would need those two
+   heights kept in sync by hand and break the moment either one doesn't
+   match its assumed height - which header.site already doesn't: it's
+   flex-direction:column and wraps/collapses behind the mobile menu at
+   different widths (header-nav.css), and .site-banner above main is
+   dismissible per session (site-banner.css), so neither chrome piece has
+   a fixed height to subtract in the first place. flex: 1 0 auto on main
+   (below) needs no such number - short content still fills the viewport
+   down to the footer, tall content still pushes it below the fold,
+   whatever the header/banner actually measure this load. */
 body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
   font-family: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
   margin: 0;
   font-size: var(--text-base);
@@ -16,6 +33,7 @@ body {
 }
 
 main {
+  flex: 1 0 auto;
   max-width: 60rem;
   margin: 0 auto;
   padding: var(--space-4);

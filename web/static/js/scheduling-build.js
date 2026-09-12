@@ -125,6 +125,32 @@ function closeVocalRangeBadges() {
   });
 }
 
+// TagBadge's click-to-expand treatment for a long tag value (badge.templ,
+// candidateBadgeExtras/song_tags.templ) - same open/close idiom as
+// toggleKeyTransitionBadge/toggleTransitionNoteBadge/toggleVocalRangeBadge
+// above, kept as its own wrapper class for the same reason: this popup is
+// an explanation, not an action menu, and shouldn't close (or be closed
+// by) the row's other menus/badges.
+function toggleTagBadge(button) {
+  var wrapper = button.closest(".tag-badge-wrap");
+  var opening = !wrapper.classList.contains("open");
+  closeTagBadges();
+  if (opening) {
+    wrapper.classList.add("open");
+    button.setAttribute("aria-expanded", "true");
+  }
+}
+
+function closeTagBadges() {
+  document.querySelectorAll(".tag-badge-wrap.open").forEach(function (wrapper) {
+    wrapper.classList.remove("open");
+    var toggle = wrapper.querySelector(".tag-badge-toggle");
+    if (toggle) {
+      toggle.setAttribute("aria-expanded", "false");
+    }
+  });
+}
+
 // The set builder's per-row/per-candidate "+N more" badge overflow (see
 // songBadgeSpans/songCandidateMeta, set_builder.templ) - collapses the
 // lower-priority badges (roles, tags, resurfaced transition-note prompts)
@@ -392,6 +418,9 @@ document.addEventListener("click", function (event) {
   if (!event.target.closest(".vocal-range-badge")) {
     closeVocalRangeBadges();
   }
+  if (!event.target.closest(".tag-badge-wrap")) {
+    closeTagBadges();
+  }
   if (!event.target.closest(".badge-overflow")) {
     closeBadgeOverflows();
   }
@@ -412,6 +441,7 @@ document.addEventListener("keydown", function (event) {
     closeKeyTransitionBadges();
     closeTransitionNoteBadges();
     closeVocalRangeBadges();
+    closeTagBadges();
     closeBadgeOverflows();
     closeMobileMenu();
     closeSongDetail();

@@ -177,22 +177,20 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 	// docs/plans/shipped/vocal-range-plan.md's Phase 2 section.
 	vocalRangesBySong, _ := sc.store.ListSongVocalRanges(ctx, organizationID)
 
-	// vocalistPersonIDs/personVocalRanges/vocalRangeCheckNames back Phase 3's
-	// per-row mismatch warning (SetSongView.VocalRangeWarningLabel - see
-	// vocalRangeWarningForSong below). "Who counts as a vocalist to check"
-	// is exactly this plan's roster assignments (not an eligibility pool,
-	// and not a team/position-name heuristic) intersected with who actually
-	// has a PersonVocalRange on file - see docs/plans/shipped/
-	// vocal-range-plan.md's Phase 3 "who counts" section. Both roster and
-	// person-range reads are local-DB only, same as vocalRangesBySong
-	// above; vocalRangeCheckNames is the one new PCO call this phase adds
-	// (personNameMapForIDs, same batched where[id]=... pattern leaderNames
-	// below already uses), and only for the subset of the roster that both
-	// has a range on file - bounded to a plan's own roster size, never the
-	// whole org, and 0 calls whenever nobody assigned has a range on file.
-	// Best-effort throughout, same tolerance as every other lookup here: a
-	// roster/range lookup failure just means no mismatch badges render,
-	// not a broken page.
+	// vocalistPersonIDs/personVocalRanges back this plan's roster - local-DB
+	// only, no PCO call. personVocalRanges (every PersonVocalRange on file
+	// for the org) feeds both the per-row mismatch warning below
+	// (vocalRangeWarningForSong, checked against just that song's own
+	// leader now, not the whole roster - see that function's own doc
+	// comment for why this narrowed from docs/plans/shipped/
+	// vocal-range-plan.md's original Phase 3 "who counts" rule) and the
+	// vocal-range matrix (vocal_range_matrix.go), which deliberately keeps
+	// checking the whole roster - see that file's own doc comment.
+	// vocalistPersonIDs itself is no longer the mismatch check's own input;
+	// it's now only data.RosterPersonOptions' source list (below) for the
+	// song-leader picker. Best-effort throughout, same tolerance as every
+	// other lookup here: a roster/range lookup failure just means no
+	// mismatch badges render, not a broken page.
 	var vocalistPersonIDs []string
 	if roster, found, err := sc.store.FindRoster(ctx, organizationID, serviceTypeID, planID); err == nil && found {
 		if assignments, err := sc.store.ListRosterAssignments(ctx, roster.ID); err == nil {
@@ -202,7 +200,6 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 		}
 	}
 	personVocalRanges, _ := sc.store.ListPersonVocalRanges(ctx, organizationID)
-	vocalRangeCheckNames := personNameMapForIDs(ctx, vocalistsWithRangesOnFile(vocalistPersonIDs, personVocalRanges))
 
 	// data.RosterPersonOptions is who's eligible to be picked as a song
 	// leader - see its own doc comment (set_types.go) for why this is
@@ -210,7 +207,7 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 	// vocalistPersonIDs above, not a fresh query. Resolving names costs one
 	// more batched where[id]=... call (personNameMapForIDs), bounded by
 	// this plan's own roster size - 0 calls when nobody's on the roster
-	// yet, same "opt-in cost" shape as vocalRangeCheckNames above.
+	// yet.
 	rosterPersonNames := personNameMapForIDs(ctx, vocalistPersonIDs)
 	data.RosterPersonOptions = rosterPersonOptions(vocalistPersonIDs, rosterPersonNames)
 
@@ -391,7 +388,7 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 		// set has a leader set. Feeds SetSongView.LeaderPersonName below,
 		// the same "resolve once here, not per-row" shape as titles.
 		leaderNames := personNameMapForIDs(ctx, distinctLeaderPersonIDs(setSongs))
-		data.ServiceOrder = renderServiceOrder(ctx, sc.store, organizationID, arrangementCache, attachmentCache, vocalRangesBySong, noteCategories.Data, itemNotes, merged, titles, rolesBySong, roleTypeLabels, history.RepeatedSongs, conflictTitlesBySong, transitionsByRow, leaderNames, transitionNotesBySongID, transitionNotePromptsByRow, vocalistPersonIDs, personVocalRanges, vocalRangeCheckNames)
+		data.ServiceOrder = renderServiceOrder(ctx, sc.store, organizationID, arrangementCache, attachmentCache, vocalRangesBySong, noteCategories.Data, itemNotes, merged, titles, rolesBySong, roleTypeLabels, history.RepeatedSongs, conflictTitlesBySong, transitionsByRow, leaderNames, transitionNotesBySongID, transitionNotePromptsByRow, personVocalRanges)
 
 		// ServiceLengthWarning: the one warning that stays a standalone,
 		// whole-plan banner rather than moving onto a row - it isn't
@@ -1805,12 +1802,16 @@ func buildSongNoteViews(itemID string, noteCategories []pco.ItemNoteCategoryData
 // shown) - same best-effort convention as keyTransitionWarnings' own
 // unparseable-key skip.
 //
-// vocalistPersonIDs/personVocalRanges/vocalRangeCheckNames are Phase 3's
-// mismatch-warning inputs (buildSetBuilderData) - see
+// personVocalRanges is the mismatch-warning's remaining input
+// (buildSetBuilderData, every PersonVocalRange on file for the org) - see
 // vocalRangeWarningForSong, which this calls per row (only when the row
-// actually has both a stored song range and a parseable effective key)
-// to fill SetSongView.VocalRangeWarningLabel/Message/IsTip.
-func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizationID string, arrangementCache map[string]scheduling.SongArrangementInfo, attachmentCache map[string][]scheduling.SongAttachmentInfo, vocalRangesBySong map[string]scheduling.SongVocalRange, noteCategories []pco.ItemNoteCategoryData, itemNotes map[string][]pco.ItemNoteData, rows []mergedRow, titles map[string]string, rolesBySong map[string][]scheduling.SongRole, roleTypeLabels map[string]string, repeated map[string]bool, conflictTitlesBySong map[string][]string, transitionsByRow map[int64]keyTransitionWarning, leaderNames map[string]string, transitionNotesBySongID map[string][]scheduling.TransitionNote, transitionNotePromptsByRow map[int64][]transitionNotePrompt, vocalistPersonIDs []string, personVocalRanges map[string]scheduling.PersonVocalRange, vocalRangeCheckNames map[string]string) []views.ServiceOrderRow {
+// actually has both a stored song range and a parseable effective key,
+// and only when that row has a leader assigned - see that function's own
+// doc comment) to fill SetSongView.VocalRangeWarningLabel/Message/IsTip.
+// leaderNames (already a parameter above, for SetSongView.LeaderPersonName)
+// doubles as this check's person-name source too, since the only person it
+// ever checks is a row's own leader.
+func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizationID string, arrangementCache map[string]scheduling.SongArrangementInfo, attachmentCache map[string][]scheduling.SongAttachmentInfo, vocalRangesBySong map[string]scheduling.SongVocalRange, noteCategories []pco.ItemNoteCategoryData, itemNotes map[string][]pco.ItemNoteData, rows []mergedRow, titles map[string]string, rolesBySong map[string][]scheduling.SongRole, roleTypeLabels map[string]string, repeated map[string]bool, conflictTitlesBySong map[string][]string, transitionsByRow map[int64]keyTransitionWarning, leaderNames map[string]string, transitionNotesBySongID map[string][]scheduling.TransitionNote, transitionNotePromptsByRow map[int64][]transitionNotePrompt, personVocalRanges map[string]scheduling.PersonVocalRange) []views.ServiceOrderRow {
 	// A plain sequential loop, not scheduling.RunConcurrently - unlike
 	// before Phase 2 (docs/plans/shipped/pco-call-efficiency-rollout-plan.md), a song
 	// row's only per-row lookup, resolveArrangementCacheInfo, no longer
@@ -1905,7 +1906,11 @@ func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizati
 			songView.VocalRangeHighPitchClass = highPC
 			songView.VocalRangeHighOctave = highOct
 
-			warning := vocalRangeWarningForSong(songLowAbs, songHighAbs, vocalistPersonIDs, personVocalRanges, vocalRangeCheckNames)
+			var leaderCheckIDs []string
+			if ss.LeaderPersonID != "" {
+				leaderCheckIDs = []string{ss.LeaderPersonID}
+			}
+			warning := vocalRangeWarningForSong(songLowAbs, songHighAbs, leaderCheckIDs, personVocalRanges, leaderNames)
 			songView.VocalRangeWarningLabel = warning.Label
 			songView.VocalRangeWarningMessage = warning.Message
 			songView.VocalRangeWarningIsTip = warning.IsTip
@@ -1946,31 +1951,10 @@ func songEffectiveVocalRangeAbs(vocalRangesBySong map[string]scheduling.SongVoca
 	return scheduling.EffectiveVocalRange(vr.ReferenceKey, vr.LowestPitchClass, vr.LowestOctave, vr.HighestPitchClass, vr.HighestOctave, effectiveKey)
 }
 
-// vocalistsWithRangesOnFile intersects personIDs (a plan's roster
-// assignments, possibly with duplicates) with ranges (every
-// PersonVocalRange on file for the org) - the exact set of people
-// vocalRangeCheckNames (buildSetBuilderData) needs a display name for, so
-// personNameMapForIDs is never called for a roster member who couldn't
-// possibly end up in a mismatch message anyway (no range on file at all).
-func vocalistsWithRangesOnFile(personIDs []string, ranges map[string]scheduling.PersonVocalRange) []string {
-	seen := make(map[string]bool, len(personIDs))
-	ids := make([]string, 0, len(personIDs))
-	for _, id := range personIDs {
-		if id == "" || seen[id] {
-			continue
-		}
-		seen[id] = true
-		if _, ok := ranges[id]; ok {
-			ids = append(ids, id)
-		}
-	}
-	return ids
-}
-
-// vocalRangeWarning is one song row's own Phase 3 verdict (docs/plans/
-// shipped/vocal-range-plan.md) - see vocalRangeWarningForSong. Label ==
-// "" means no vocalist assigned to this plan's roster mismatches this
-// song's range at all.
+// vocalRangeWarning is one song row's own verdict (docs/plans/shipped/
+// vocal-range-plan.md) - see vocalRangeWarningForSong. Label == "" means
+// this song has no leader assigned, or its leader's range doesn't
+// mismatch.
 type vocalRangeWarning struct {
 	Label   string
 	Message string
@@ -1979,13 +1963,18 @@ type vocalRangeWarning struct {
 
 // vocalRangeWarningForSong checks songLowAbs/songHighAbs (this song's own
 // effective, transposed range - see songEffectiveVocalRangeAbs) against
-// every one of vocalistPersonIDs (this plan's roster assignments,
-// buildSetBuilderData - may contain duplicates and non-vocalists, both
-// handled below) who also has a PersonVocalRange on file in ranges -
-// that's the whole "who counts as a vocalist to check" rule (a range on
-// file is the proxy for "this is a vocalist," not a team/position-name
-// heuristic this app would otherwise have to guess at), per the plan's own
-// Phase 3 section.
+// vocalistPersonIDs, which the caller (renderServiceOrder) sets to exactly
+// one id: this row's own song leader (SetSongView.LeaderPersonID), or
+// none at all when no leader is assigned - narrowed from this plan's
+// original Phase 3 "who counts" rule (every roster member with a
+// PersonVocalRange on file), which is still what the vocal-range matrix
+// (vocal_range_matrix.go) checks; this per-row Build-page badge cares only
+// about whether the person actually leading the song can sing it, not
+// every vocalist who happens to be on the roster. Still takes a slice
+// (rather than a single optional id) since the underlying loop/dedup/
+// hardLines-vs-tipLines logic below is unaffected by how many ids come
+// in - a leader with no stored range on file, same as any other, produces
+// no line at all (nothing to compare).
 //
 // Before flagging a hard mismatch for someone, this also checks the
 // song's range shifted a full octave up and a full octave down (see

@@ -55,3 +55,19 @@
   color: var(--success);
   font-weight: 600;
 }
+
+/* Song-leader marker (vocal_range_matrix.templ's vocalRangeMatrixCell,
+   isLeader) - a small "★" ahead of the leader's own verdict, plus extra
+   emphasis on that one cell when the leader's own range verdict is Tip or
+   Mismatch, since a range problem for the person actually leading the
+   song is more consequential than the same problem elsewhere in the
+   column. */
+.vocal-range-matrix-leader-mark {
+  margin-right: 0.25em;
+  color: var(--accent);
+}
+
+.vocal-range-matrix-leader-warn {
+  box-shadow: inset 0 0 0 2px var(--danger);
+  background: var(--danger-subtle);
+}

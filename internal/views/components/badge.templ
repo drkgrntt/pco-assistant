@@ -23,3 +23,57 @@ templ BadgeTitled(kind, label, title string) {
 templ ConflictBadge(message string) {
 	<span class="conflict-badge">⚠ { message }</span>
 }
+
+// tagBadgeCharLimit gates whether a tag value needs the truncate/expand
+// treatment below at all - short values keep rendering exactly like
+// BadgeTitled always has. It does NOT determine where the visible "…" cut
+// point falls; that's CSS text-overflow:ellipsis against a max-width
+// (see .tag-badge-truncated, badge.css), which degrades better across
+// fonts/zoom than a hardcoded substring index would - this constant only
+// decides "does this value need the expand affordance at all."
+const tagBadgeCharLimit = 24
+
+// TagBadge renders a tag-badge pill for a song's free-text theme/
+// scripture/idea tag value (see scheduling.CreateSongTagParams - category
+// is the resolved category label, same second arg BadgeTitled's title
+// param already took at both call sites). Tag values are user-typed with
+// no length limit anywhere in this app, unlike every other badge's short,
+// controlled-vocabulary label, so a long one needs different handling: a
+// value at or under tagBadgeCharLimit renders exactly as BadgeTitled
+// always has (plain pill, category as a native hover title). A longer one
+// truncates with CSS ellipsis and becomes a click-to-expand
+// components.Disclosure instead, mirroring set_builder.templ's
+// key-transition-badge/transition-note-badge/vocal-range-badge - see
+// docs/plans/shipped/in-place-set-warnings-plan.md's resolved decision
+// against hover-only title= tooltips for exactly this "short caption,
+// full text on demand" tradeoff - so the full value and category stay
+// reachable by keyboard/screen reader, not just mouse hover.
+templ TagBadge(value, category string) {
+	if len([]rune(value)) <= tagBadgeCharLimit {
+		@BadgeTitled("tag-badge", value, category)
+	} else {
+		@Disclosure(
+			"tag-badge-wrap",
+			"badge tag-badge tag-badge-toggle",
+			"toggleTagBadge(this)",
+			"",
+			category,
+			tagBadgeToggleLabel(value),
+			tagBadgeMenu(value, category),
+		)
+	}
+}
+
+// tagBadgeToggleLabel/tagBadgeMenu are TagBadge's Disclosure toggle-button
+// content and popup contents - unexported, single-use, same shape as
+// set_builder.templ's keyTransitionToggle/keyTransitionMenu.
+templ tagBadgeToggleLabel(value string) {
+	<span class="tag-badge-truncated">{ value }</span>
+}
+
+templ tagBadgeMenu(value, category string) {
+	<p>{ value }</p>
+	if category != "" {
+		<p class="muted">{ category }</p>
+	}
+}

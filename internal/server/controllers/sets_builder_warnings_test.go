@@ -495,12 +495,3 @@ func TestSongEffectiveVocalRangeAbsMissingSongYieldsNotOK(t *testing.T) {
 	}
 }
 
-func TestVocalistsWithRangesOnFileFiltersAndDedupes(t *testing.T) {
-	ranges := map[string]scheduling.PersonVocalRange{
-		"sarah": {},
-	}
-	got := vocalistsWithRangesOnFile([]string{"sarah", "sarah", "tom", ""}, ranges)
-	if len(got) != 1 || got[0] != "sarah" {
-		t.Errorf("expected exactly [\"sarah\"] (deduped, and tom/\"\" excluded - no range on file), got %v", got)
-	}
-}
