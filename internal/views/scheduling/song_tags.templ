@@ -436,7 +436,7 @@ templ SongTagCard(song pco.SongData, tags []scheduling.SongTag, categories []sch
 				<div class="song-tag-chips">
 					for _, tag := range tags {
 						<span class="tag-chip">
-							@components.BadgeTitled("tag-badge", tag.Value, displayNameOrID(categoryLabels, tag.Category))
+							@components.TagBadge(tag.Value, displayNameOrID(categoryLabels, tag.Category))
 							<button
 								class="icon-btn"
 								aria-label={ fmt.Sprintf("Edit %q tag", tag.Value) }

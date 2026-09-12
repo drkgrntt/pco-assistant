@@ -68,3 +68,67 @@
 .badge-label:first-of-type {
   margin-left: var(--space-3);
 }
+
+/* TagBadge's click-to-expand treatment for a tag value longer than
+   tagBadgeCharLimit (badge.templ) - a short always-visible truncated
+   caption that click-to-expands into the full value, per
+   docs/plans/shipped/in-place-set-warnings-plan.md's resolved decision
+   against hover-only title= tooltips. Same floating-menu shape as
+   .key-transition-badge/.key-transition-badge-menu (disclosure.css), kept
+   as its own class family since this popup is plain tag text, not a list
+   of action buttons, and shouldn't participate in any other disclosure's
+   "only one open at a time" bookkeeping (see toggleTagBadge/
+   closeTagBadges, scheduling-build.js). */
+.tag-badge-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+/* max-width caps how much text the ellipsis has to work with before
+   cutting it off - the actual "…" is produced by text-overflow below, not
+   a hardcoded substring index (see tagBadgeCharLimit's doc comment). */
+.tag-badge-truncated {
+  display: inline-block;
+  max-width: 10rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+/* Strips the plain <button> reset (forms.css) the same way
+   .key-transition-toggle does, so the toggle still looks like a .badge
+   pill (background/color/padding/border-radius come from .badge.tag-badge
+   above) rather than a form button. */
+.tag-badge-toggle {
+  display: inline-block;
+  min-height: 0;
+  border: none;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.tag-badge-wrap-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 20;
+  max-width: 20rem;
+  margin-top: 0.3rem;
+  padding: var(--space-2) calc(var(--space-2) + 0.1rem);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+
+.tag-badge-wrap-menu p {
+  margin: 0;
+}
+
+.tag-badge-wrap.open .tag-badge-wrap-menu {
+  display: block;
+}
