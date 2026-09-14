@@ -111,32 +111,28 @@ templ BuildPlansList(plans []PlanRow, serviceTypeID, search string, page, totalP
 		}
 		if serviceTypeID != "" {
 			@buildPlansTabBar(serviceTypeID, tab)
-			<!--
-				Deliberately not class="inline" - that class flex-rows its
-				children (label+input+button, side by side) once the
-				viewport is wide enough, which is right for the multi-field
-				setup-page forms it was built for but wrong here: it would
-				squeeze #build-plans-results (the list) into a narrow column
-				beside the search box instead of stacking full-width below
-				it. This form only has a couple of small fields, so plain
-				block flow (search row, then the list beneath it) is what
-				we want.
-			-->
+			// Deliberately not class="inline" - that class flex-rows its
+			// children (label+input+button, side by side) once the
+			// viewport is wide enough, which is right for the multi-field
+			// setup-page forms it was built for but wrong here: it would
+			// squeeze #build-plans-results (the list) into a narrow column
+			// beside the search box instead of stacking full-width below
+			// it. This form only has a couple of small fields, so plain
+			// block flow (search row, then the list beneath it) is what
+			// we want.
 			<form
 				hx-get="/scheduling/build/plans/search"
 				hx-target="#build-plans-results"
 				hx-swap="innerHTML"
 			>
 				<input type="hidden" name="service_type_id" value={ serviceTypeID }/>
-				<!--
-					Carries the currently-active tab forward on every Search/
-					Prev/Next submit from within this same form - see planTab
-					(build.go) and buildPlansTabBar above, which switches tabs
-					via its own separate hx-get (outside this form) rather than
-					a field inside it, since a tab switch is a clean slate
-					(fresh search, page 1), not something this form's own
-					submit should ever carry.
-				-->
+				// Carries the currently-active tab forward on every Search/
+				// Prev/Next submit from within this same form - see planTab
+				// (build.go) and buildPlansTabBar above, which switches tabs
+				// via its own separate hx-get (outside this form) rather than
+				// a field inside it, since a tab switch is a clean slate
+				// (fresh search, page 1), not something this form's own
+				// submit should ever carry.
 				<input type="hidden" name="tab" value={ tab }/>
 				<div class="search-bar">
 					<input
@@ -150,15 +146,13 @@ templ BuildPlansList(plans []PlanRow, serviceTypeID, search string, page, totalP
 					/>
 					<button type="submit">Search</button>
 				</div>
-				<!--
-					No aria-live on #build-plans-results itself (4.1.3 Status
-					Messages, Finding 2's own Open Questions -
-					docs/plans/shipped/wcag-aa-audit-plan.md) - announcing the
-					whole plan list on every search/page change would be more
-					noise than help. BuildPlansResults instead renders its own
-					small "N plans found" summary as a separate, visually-hidden
-					aria-live region alongside the real list.
-				-->
+				// No aria-live on #build-plans-results itself (4.1.3 Status
+				// Messages, Finding 2's own Open Questions -
+				// docs/plans/shipped/wcag-aa-audit-plan.md) - announcing the
+				// whole plan list on every search/page change would be more
+				// noise than help. BuildPlansResults instead renders its own
+				// small "N plans found" summary as a separate, visually-hidden
+				// aria-live region alongside the real list.
 				<div id="build-plans-results">
 					@BuildPlansResults(plans, serviceTypeID, search, page, totalPages, tab, "")
 				</div>
@@ -195,14 +189,12 @@ templ BuildPlansResults(plans []PlanRow, serviceTypeID, search string, page, tot
 	if errMsg != "" {
 		<p class="error" role="alert">{ errMsg }</p>
 	}
-	<!--
-		A short, separate summary rather than aria-live on this whole
-		container (4.1.3 Status Messages, Finding 2's Open Questions -
-		docs/plans/shipped/wcag-aa-audit-plan.md) - this re-renders on every
-		Search/Prev/Next submit, so announcing the full plan list each time
-		would bury the one thing worth saying ("did my search change
-		anything") under a re-read of every row.
-	-->
+	// A short, separate summary rather than aria-live on this whole
+	// container (4.1.3 Status Messages, Finding 2's Open Questions -
+	// docs/plans/shipped/wcag-aa-audit-plan.md) - this re-renders on every
+	// Search/Prev/Next submit, so announcing the full plan list each time
+	// would bury the one thing worth saying ("did my search change
+	// anything") under a re-read of every row.
 	<p class="visually-hidden" role="status" aria-live="polite" aria-atomic="true">{ buildPlansSummary(plans, tab) }</p>
 	<ul class="plan-list">
 		for _, plan := range plans {
@@ -414,66 +406,62 @@ templ BuildPlan(personName, organizationName string, setData SetBuilderData, ros
 			</div>
 		</div>
 		@planNoteSection(setData.ServiceTypeID, setData.PlanID, note)
-		<!--
-			Songs and Team are two independently-interactive builders (each
-			with its own htmx swap target, see SetBuilderBody/RosterBuilderBody)
-			that used to just stack on one long page. Splitting them into tabs
-			cuts what's on screen at once roughly in half - switching is a
-			plain client-side hidden toggle (toggleBuildTab, scheduling-build.js).
-
-			Only the active tab's builder actually server-rendered above (see
-			pco-api-risks.md's mitigation #3) - the inactive one shows a
-			loading placeholder here instead, and fetches its real content
-			starting as soon as this page itself has rendered (a "load"
-			hx-trigger, not gated on the user hovering/clicking its tab button
-			first - see tabPanelLazyAttrs/lazyTabTrigger below), so it's got as
-			much of a head start as possible by the time the user actually
-			looks at it. hx-get/hx-trigger live on the tab panel itself, not
-			the tab button - see tabPanelLazyAttrs' own doc comment for why
-			that's not just a style choice (a real bug: scheduling-global.js's
-			app-wide htmx-request feedback disables whatever element a
-			request is attached to, and it can't tell this "load" from a real
-			click - putting it on the button left the button unclickable for
-			as long as the background fetch was still running). Its own tab
-			panel and its sidebar glance card below both fill in together
-			once that fetch resolves (SetBuilderBodyLazy/RosterBuilderBodyLazy,
-			set_builder.templ/roster_builder.templ).
-
-			That fetch can still be in flight when the user switches tabs by
-			hand (the whole reason it's deferred at all is that it's usually
-			the slower tab) - its own out-of-band fragments only know
-			whether this tab was still inactive when the *request* went out,
-			so landing after a manual switch would otherwise stamp that
-			stale hidden state right back over whatever toggleBuildTab just
-			set. scheduling-build.js's syncBuildTabVisibility/currentBuildTab
-			closes that race by re-deriving every tab-scoped element's
-			hidden state from whichever tab is actually aria-selected right
-			now, after every htmx swap settles - not just after a click - so
-			hidden state stays correct regardless of which of the two
-			(click vs. background fetch) finishes last.
-
-			The sidebar (.build-glance) is the one thing that isn't just "the
-			inactive tab, hidden" - it's a standing glance at whichever tab
-			*isn't* open, so switching over just to check "is the roster
-			filled yet, and by whom?" while heads-down on songs isn't
-			necessary. Each card pairs the same SongStatusSummary/
-			RosterStatusSummary chips SetBuilderBody/RosterBuilderBody
-			already show at the top of their own tab (so there's no separate
-			counting logic to keep in sync) with the actual content -
-			SongGlanceList's song order, TeamGlanceList's names per position -
-			since the counts alone don't say *what's* in the lineup or *who's*
-			on it. Only one of the two cards is ever visible at a time
-			(toggleBuildTab shows whichever one belongs to the tab that just
-			went hidden) - and since it's the *other* tab's data it always
-			needs, it carries the same loading-placeholder treatment as that
-			tab's own main panel until the lazy fetch above fills it in too.
-		-->
-		<!--
-			normalizedTab mirrors activeTab's own "anything but 'team' means
-			Songs" default, just for buildTabs' equality check - every other
-			activeTab comparison on this page (hidden?/publish panels below)
-			keeps using activeTab directly and is unaffected.
-		-->
+		// Songs and Team are two independently-interactive builders (each
+		// with its own htmx swap target, see SetBuilderBody/RosterBuilderBody)
+		// that used to just stack on one long page. Splitting them into tabs
+		// cuts what's on screen at once roughly in half - switching is a
+		// plain client-side hidden toggle (toggleBuildTab, scheduling-build.js).
+		//
+		// Only the active tab's builder actually server-rendered above (see
+		// pco-api-risks.md's mitigation #3) - the inactive one shows a
+		// loading placeholder here instead, and fetches its real content
+		// starting as soon as this page itself has rendered (a "load"
+		// hx-trigger, not gated on the user hovering/clicking its tab button
+		// first - see tabPanelLazyAttrs/lazyTabTrigger below), so it's got as
+		// much of a head start as possible by the time the user actually
+		// looks at it. hx-get/hx-trigger live on the tab panel itself, not
+		// the tab button - see tabPanelLazyAttrs' own doc comment for why
+		// that's not just a style choice (a real bug: scheduling-global.js's
+		// app-wide htmx-request feedback disables whatever element a
+		// request is attached to, and it can't tell this "load" from a real
+		// click - putting it on the button left the button unclickable for
+		// as long as the background fetch was still running). Its own tab
+		// panel and its sidebar glance card below both fill in together
+		// once that fetch resolves (SetBuilderBodyLazy/RosterBuilderBodyLazy,
+		// set_builder.templ/roster_builder.templ).
+		//
+		// That fetch can still be in flight when the user switches tabs by
+		// hand (the whole reason it's deferred at all is that it's usually
+		// the slower tab) - its own out-of-band fragments only know
+		// whether this tab was still inactive when the *request* went out,
+		// so landing after a manual switch would otherwise stamp that
+		// stale hidden state right back over whatever toggleBuildTab just
+		// set. scheduling-build.js's syncBuildTabVisibility/currentBuildTab
+		// closes that race by re-deriving every tab-scoped element's
+		// hidden state from whichever tab is actually aria-selected right
+		// now, after every htmx swap settles - not just after a click - so
+		// hidden state stays correct regardless of which of the two
+		// (click vs. background fetch) finishes last.
+		//
+		// The sidebar (.build-glance) is the one thing that isn't just "the
+		// inactive tab, hidden" - it's a standing glance at whichever tab
+		// *isn't* open, so switching over just to check "is the roster
+		// filled yet, and by whom?" while heads-down on songs isn't
+		// necessary. Each card pairs the same SongStatusSummary/
+		// RosterStatusSummary chips SetBuilderBody/RosterBuilderBody
+		// already show at the top of their own tab (so there's no separate
+		// counting logic to keep in sync) with the actual content -
+		// SongGlanceList's song order, TeamGlanceList's names per position -
+		// since the counts alone don't say *what's* in the lineup or *who's*
+		// on it. Only one of the two cards is ever visible at a time
+		// (toggleBuildTab shows whichever one belongs to the tab that just
+		// went hidden) - and since it's the *other* tab's data it always
+		// needs, it carries the same loading-placeholder treatment as that
+		// tab's own main panel until the lazy fetch above fills it in too.
+		// normalizedTab mirrors activeTab's own "anything but 'team' means
+		// Songs" default, just for buildTabs' equality check - every other
+		// activeTab comparison on this page (hidden?/publish panels below)
+		// keeps using activeTab directly and is unaffected.
 		{{ normalizedTab := "songs" }}
 		if activeTab == "team" {
 			{{ normalizedTab = "team" }}
@@ -496,15 +484,13 @@ templ BuildPlan(personName, organizationName string, setData SetBuilderData, ros
 					}
 				</div>
 			</div>
-			<!--
-				The publish/discard controls live here too, not inline under
-				each tab's own table - but only the open tab's, unlike the
-				glance cards below (which show the *other* tab). See
-				SongPublishPanel/RosterPublishPanel's own doc comments for how
-				they stay synced via htmx out-of-band swaps even though the
-				forms that trigger those swaps live in the (structurally
-				separate) tab panels beside them, not inside these cards.
-			-->
+			// The publish/discard controls live here too, not inline under
+			// each tab's own table - but only the open tab's, unlike the
+			// glance cards below (which show the *other* tab). See
+			// SongPublishPanel/RosterPublishPanel's own doc comments for how
+			// they stay synced via htmx out-of-band swaps even though the
+			// forms that trigger those swaps live in the (structurally
+			// separate) tab panels beside them, not inside these cards.
 			<aside class="build-glance">
 				@SongPublishPanel(setData, activeTab == "team")
 				@SongDetailCards(setData, activeTab == "team")

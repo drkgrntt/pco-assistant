@@ -104,14 +104,12 @@ templ RunSheet(setData SetBuilderData, rosterData RosterBuilderData) {
 							<p class="muted">{ setData.PlanDates }</p>
 						}
 					</div>
-					<!--
-						Plain window.print() - the browser's own print dialog already
-						covers "export to PDF" (every modern browser's print dialog
-						offers "Save as PDF" as a destination), so there's no reason to
-						pull in a PDF-generation dependency just to duplicate that.
-						Hidden when actually printing (see run-sheet.css's @media print)
-						since it has nothing to do once print has already started.
-					-->
+					// Plain window.print() - the browser's own print dialog already
+					// covers "export to PDF" (every modern browser's print dialog
+					// offers "Save as PDF" as a destination), so there's no reason to
+					// pull in a PDF-generation dependency just to duplicate that.
+					// Hidden when actually printing (see run-sheet.css's @media print)
+					// since it has nothing to do once print has already started.
 					<button type="button" class="no-print" onclick="window.print()">Print</button>
 				</header>
 				if setData.ErrMsg != "" {
@@ -166,12 +164,10 @@ templ RunSheet(setData SetBuilderData, rosterData RosterBuilderData) {
 										}
 									</li>
 								} else {
-									<!--
-										Non-song item (header, media, or a plan item this app
-										doesn't manage) - read-only for context, same treatment
-										the order-of-service table gives it on the Build page
-										itself (see set_builder.templ).
-									-->
+									// Non-song item (header, media, or a plan item this app
+									// doesn't manage) - read-only for context, same treatment
+									// the order-of-service table gives it on the Build page
+									// itself (see set_builder.templ).
 									<li class="run-sheet-item run-sheet-other">
 										<span>{ row.ItemTitle }</span>
 										if row.ItemType != "" {
@@ -190,13 +186,11 @@ templ RunSheet(setData SetBuilderData, rosterData RosterBuilderData) {
 					} else if !anyPositionAssigned(rosterData.Positions) {
 						<p class="muted">No one assigned yet.</p>
 					} else {
-						<!--
-							Grouped by team like the roster builder page (see
-							groupPositionsByTeam, roster_builder.templ) instead of a flat
-							list of "Team / Position" headings - and, unlike the builder,
-							unassigned positions are left off entirely: the run sheet is
-							meant to show who's actually serving, not the gaps.
-						-->
+						// Grouped by team like the roster builder page (see
+						// groupPositionsByTeam, roster_builder.templ) instead of a flat
+						// list of "Team / Position" headings - and, unlike the builder,
+						// unassigned positions are left off entirely: the run sheet is
+						// meant to show who's actually serving, not the gaps.
 						for _, group := range groupPositionsByTeam(rosterData.Positions) {
 							if teamGroupHasAssignments(group) {
 								<div class="run-sheet-team-group">

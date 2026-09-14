@@ -421,21 +421,19 @@ templ songBadgeSpans(song SetSongView) {
 			badgeOverflowMenu(songBadgeExtras(song)),
 		)
 	} else if extrasCount > 0 {
-		<!--
-			Under badgeCollapseThreshold, so a desktop row shows these
-			directly (same as before) - but a row a desktop user wouldn't
-			call "busy" can still wrap onto several lines at phone width
-			(docs/plans/shipped/mobile-responsiveness-plan.md's Build-page
-			follow-up). Rather than teach badgeCollapseThreshold itself a
-			second, viewport-dependent number (Go has no media query to
-			evaluate), render both presentations and let CSS
-			(builder-rows.css's .badge-extras-desktop-only/-mobile-only)
-			pick one per viewport - the same "duplicate content, let CSS
-			choose" call song_detail_card.templ's own doc comment already
-			makes for this exact tradeoff, just applied one level down
-			(extras only, not the whole action cluster - see
-			rowMobileActionsItems below for that one).
-		-->
+		// Under badgeCollapseThreshold, so a desktop row shows these
+		// directly (same as before) - but a row a desktop user wouldn't
+		// call "busy" can still wrap onto several lines at phone width
+		// (docs/plans/shipped/mobile-responsiveness-plan.md's Build-page
+		// follow-up). Rather than teach badgeCollapseThreshold itself a
+		// second, viewport-dependent number (Go has no media query to
+		// evaluate), render both presentations and let CSS
+		// (builder-rows.css's .badge-extras-desktop-only/-mobile-only)
+		// pick one per viewport - the same "duplicate content, let CSS
+		// choose" call song_detail_card.templ's own doc comment already
+		// makes for this exact tradeoff, just applied one level down
+		// (extras only, not the whole action cluster - see
+		// rowMobileActionsItems below for that one).
 		<span class="badge-extras-desktop-only">
 			@songBadgeExtras(song)
 		</span>
@@ -564,12 +562,10 @@ templ rowMenuItems(data SetBuilderData, i int) {
 		@components.IconMusicNote()
 		Set vocal range
 	</button>
-	<!--
-		Same RepositionSetSong endpoint the pointer-drag handle already
-		posts to (sets_reorder.go) - these buttons just supply a
-		precomputed ?after= token instead of a drop point, so the server
-		side treats a keyboard/switch-access move exactly like a drag.
-	-->
+	// Same RepositionSetSong endpoint the pointer-drag handle already
+	// posts to (sets_reorder.go) - these buttons just supply a
+	// precomputed ?after= token instead of a drop point, so the server
+	// side treats a keyboard/switch-access move exactly like a drag.
 	{{ row := data.ServiceOrder[i] }}
 	{{ repositionURL := fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/reposition", data.ServiceTypeID, data.PlanID, row.Song.ID) }}
 	if after, ok := moveUpAfterToken(data.ServiceOrder, i); ok {
@@ -709,13 +705,11 @@ templ songCandidateMeta(cand CandidateSongView) {
 		@components.BadgeTitled("status-pending", cand.NotSungInLabel, "Last scheduled over 6 months ago - consider whether this still belongs in rotation")
 	}
 	if cand.ArrangementInfo != "" {
-		<!--
-			arrangement-info is a distinguishing class, not just styling -
-			list-item.css singles it out to force its own full-width line
-			below the title, while every other sibling here (badges, the
-			add form) shares the title's own first line instead. See
-			list-item.css's comment on that rule for why.
-		-->
+		// arrangement-info is a distinguishing class, not just styling -
+		// list-item.css singles it out to force its own full-width line
+		// below the title, while every other sibling here (badges, the
+		// add form) shares the title's own first line instead. See
+		// list-item.css's comment on that rule for why.
 		<span class="muted arrangement-info">{ cand.ArrangementInfo }</span>
 	}
 	if len(cand.ConflictTitles) > 0 {
@@ -1025,47 +1019,43 @@ templ CandidateSearchResultsWithStatus(serviceTypeID, planID string, candidates 
 // publish card (and a duplicate id) sitting in the main content instead of
 // being relocated anywhere.
 templ SetBuilderBodyContent(data SetBuilderData) {
-	<!--
-		aria-live="polite" (4.1.3 Status Messages, Finding 2 -
-		docs/plans/shipped/wcag-aa-audit-plan.md) - the primary swap target
-		for basically every action on this page (add/remove/duplicate/
-		reposition a song, assign/unassign a person, errors), previously
-		silent to a screen reader user.
-	-->
+	// aria-live="polite" (4.1.3 Status Messages, Finding 2 -
+	// docs/plans/shipped/wcag-aa-audit-plan.md) - the primary swap target
+	// for basically every action on this page (add/remove/duplicate/
+	// reposition a song, assign/unassign a person, errors), previously
+	// silent to a screen reader user.
 	<div id="set-builder-body" aria-live="polite">
-		<!--
-			Poll-while-open live-sync check (option C,
-			docs/plans/shipped/live-sync-reflection-plan.md) - only while
-			there's something to publish toward (!data.ReadOnly, mirroring
-			every other publish/discard/merge action on this page). #pco-sync-fp
-			carries the fingerprint this render's own GetItems call captured
-			(see data.PCOSyncFingerprint/pcoItemsFingerprint); the poll element
-			below re-fetches it every 30s via hx-vals' js: expression, so it
-			always sends whatever value SyncCheck's own OOB response last wrote
-			there, not this page load's stale value. #pco-sync-banner is a
-			persistent empty wrapper SyncCheck outerHTML-replaces
-			(hx-swap-oob="true") when it finds a difference - it has to
-			survive being replaced (unlike ImportBanner's dismiss button, which
-			only removes the inner .import-banner) so a later poll tick can
-			still find it by id to show a fresh banner. hx-swap="none" on the
-			poll element itself is deliberate: the only content that should
-			ever change from this request arrives as those two OOB fragments,
-			never as this element's own body.
-
-			The [!document.hidden] trigger filter (docs/issues.md: "what
-			happens if the user has 4-5 tabs open... only poll on the active
-			tab") skips firing the request on any tick where this tab isn't
-			the visible one - htmx re-evaluates a trigger filter on every
-			interval, not just once at page load, so switching tabs away
-			mid-session starts skipping ticks immediately, and switching back
-			resumes on the next one (up to 30s later, not instant - not worth
-			an extra "check immediately on refocus" listener for a background
-			sync check with no urgency). This doesn't dedupe N *different*
-			people/tabs each polling their own session (docs/pco-api-risks.md
-			already tracks that as a known, tolerated cost that scales with
-			concurrent open tabs) - it only stops one person's own idle
-			background tabs from adding to it.
-		-->
+		// Poll-while-open live-sync check (option C,
+		// docs/plans/shipped/live-sync-reflection-plan.md) - only while
+		// there's something to publish toward (!data.ReadOnly, mirroring
+		// every other publish/discard/merge action on this page). #pco-sync-fp
+		// carries the fingerprint this render's own GetItems call captured
+		// (see data.PCOSyncFingerprint/pcoItemsFingerprint); the poll element
+		// below re-fetches it every 30s via hx-vals' js: expression, so it
+		// always sends whatever value SyncCheck's own OOB response last wrote
+		// there, not this page load's stale value. #pco-sync-banner is a
+		// persistent empty wrapper SyncCheck outerHTML-replaces
+		// (hx-swap-oob="true") when it finds a difference - it has to
+		// survive being replaced (unlike ImportBanner's dismiss button, which
+		// only removes the inner .import-banner) so a later poll tick can
+		// still find it by id to show a fresh banner. hx-swap="none" on the
+		// poll element itself is deliberate: the only content that should
+		// ever change from this request arrives as those two OOB fragments,
+		// never as this element's own body.
+		//
+		// The [!document.hidden] trigger filter (docs/issues.md: "what
+		// happens if the user has 4-5 tabs open... only poll on the active
+		// tab") skips firing the request on any tick where this tab isn't
+		// the visible one - htmx re-evaluates a trigger filter on every
+		// interval, not just once at page load, so switching tabs away
+		// mid-session starts skipping ticks immediately, and switching back
+		// resumes on the next one (up to 30s later, not instant - not worth
+		// an extra "check immediately on refocus" listener for a background
+		// sync check with no urgency). This doesn't dedupe N *different*
+		// people/tabs each polling their own session (docs/pco-api-risks.md
+		// already tracks that as a known, tolerated cost that scales with
+		// concurrent open tabs) - it only stops one person's own idle
+		// background tabs from adding to it.
 		if !data.ReadOnly {
 			<input type="hidden" id="pco-sync-fp" value={ data.PCOSyncFingerprint }/>
 			<div id="pco-sync-banner"></div>
@@ -1084,16 +1074,14 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 			<p class="success">{ data.PublishMsg }</p>
 		}
 		@SongStatusSummary(data)
-		<!--
-			ServiceLengthWarning is the one warning check that stays a
-			standalone banner rather than moving onto a song's own row (see
-			SetSongView.RecentlyRepeated/ConflictTitles/KeyTransitionLabel,
-			rendered inline via songBadgeSpans instead) - it's a property of
-			the whole plan, not any one song or pair, so there's no row to
-			attach it to. See docs/plans/shipped/in-place-set-warnings-plan.md.
-			At most one such message at a time, so this is a single
-			conditional message, not a list/container.
-		-->
+		// ServiceLengthWarning is the one warning check that stays a
+		// standalone banner rather than moving onto a song's own row (see
+		// SetSongView.RecentlyRepeated/ConflictTitles/KeyTransitionLabel,
+		// rendered inline via songBadgeSpans instead) - it's a property of
+		// the whole plan, not any one song or pair, so there's no row to
+		// attach it to. See docs/plans/shipped/in-place-set-warnings-plan.md.
+		// At most one such message at a time, so this is a single
+		// conditional message, not a list/container.
 		if data.ServiceLengthWarning != "" {
 			<div class="warning">{ data.ServiceLengthWarning }</div>
 		}
@@ -1111,17 +1099,15 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 				</form>
 			}
 		}
-		<!--
-			A one-shot nudge, not a permanent fixture - only ever appears
-			right after AddSetSong chains a song after another one (see
-			views.SongPairPromptView, AddSetSong in sets.go), and disappears
-			again the moment you do anything else, since no other mutation
-			sets it. Lets "song A, then I add song B, and by the way these go
-			together" get captured right where it happens, instead of
-			re-picking both songs from scratch in the Quick add panel below -
-			which stays around for relating songs that *aren't* adjacent, or
-			after the fact.
-		-->
+		// A one-shot nudge, not a permanent fixture - only ever appears
+		// right after AddSetSong chains a song after another one (see
+		// views.SongPairPromptView, AddSetSong in sets.go), and disappears
+		// again the moment you do anything else, since no other mutation
+		// sets it. Lets "song A, then I add song B, and by the way these go
+		// together" get captured right where it happens, instead of
+		// re-picking both songs from scratch in the Quick add panel below -
+		// which stays around for relating songs that *aren't* adjacent, or
+		// after the fact.
 		if !data.ReadOnly && data.SongPairPrompt != nil {
 			@components.ImportBanner(fmt.Sprintf("Added %q right after %q - want to remember how these two relate?", data.SongPairPrompt.NewSongTitle, data.SongPairPrompt.PreviousSongTitle), true) {
 				<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/song-relationships", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
@@ -1178,50 +1164,44 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 								</td>
 								<td>
 									{ row.Song.Title }
-									<!--
-										Always rendered, even when there's nothing to show -
-										a song with no cached arrangement info used to just
-										omit this line entirely, making its row shorter than
-										a neighbor that has one. Reserving the same line
-										height either way (see .song-meta) keeps every row an
-										even height regardless of which songs happen to be
-										cached.
-									-->
+									// Always rendered, even when there's nothing to show -
+									// a song with no cached arrangement info used to just
+									// omit this line entirely, making its row shorter than
+									// a neighbor that has one. Reserving the same line
+									// height either way (see .song-meta) keeps every row an
+									// even height regardless of which songs happen to be
+									// cached.
 									<div class="muted song-meta" id={ fmt.Sprintf("song-meta-%d", row.Song.ID) }>{ row.Song.ArrangementInfo }</div>
 								</td>
 								<td>
 									@songBadges(row.Song)
 								</td>
-								<!--
-									.set-song-actions (the flex row of action
-									buttons) lives on an inner div, not this <td>
-									directly - display:flex on a <td> itself
-									overrides its native display:table-cell,
-									which pulls it out of the table's row-height
-									sharing entirely (confirmed via DevTools: this
-									cell was rendering visibly shorter than its
-									siblings in the same row, no matter what
-									vertical-align/min-height was set on it -
-									neither one does anything once a cell isn't
-									actually a table-cell box anymore). Keeping
-									the <td> itself unstyled lets it size like
-									every other cell in the row; the div just
-									carries the flex layout for its own children.
-								-->
+								// .set-song-actions (the flex row of action
+								// buttons) lives on an inner div, not this <td>
+								// directly - display:flex on a <td> itself
+								// overrides its native display:table-cell,
+								// which pulls it out of the table's row-height
+								// sharing entirely (confirmed via DevTools: this
+								// cell was rendering visibly shorter than its
+								// siblings in the same row, no matter what
+								// vertical-align/min-height was set on it -
+								// neither one does anything once a cell isn't
+								// actually a table-cell box anymore). Keeping
+								// the <td> itself unstyled lets it size like
+								// every other cell in the row; the div just
+								// carries the flex layout for its own children.
 								<td>
 									if !data.ReadOnly {
-										<!--
-											All 4 actions (duplicate/remove/replace-toggle/dot
-											menu) are flat siblings in one flex row, right-aligned
-											via justify-content: flex-end on .set-song-actions -
-											see that class's own comment (builder-rows.css) for why
-											this used to need a two-level split (a wide inline
-											.replace-form) and no longer does now that Replace's
-											form lives in its own row-menu popover
-											(replaceMenuItems) rather than sitting inline: every
-											item here is now a same-size compact icon button, so
-											a plain flex-wrap row stays cohesive on its own.
-										-->
+										// All 4 actions (duplicate/remove/replace-toggle/dot
+										// menu) are flat siblings in one flex row, right-aligned
+										// via justify-content: flex-end on .set-song-actions -
+										// see that class's own comment (builder-rows.css) for why
+										// this used to need a two-level split (a wide inline
+										// .replace-form) and no longer does now that Replace's
+										// form lives in its own row-menu popover
+										// (replaceMenuItems) rather than sitting inline: every
+										// item here is now a same-size compact icon button, so
+										// a plain flex-wrap row stays cohesive on its own.
 										<div class="set-song-actions">
 											<button
 												type="button"
@@ -1249,29 +1229,25 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 											if len(data.ReplaceCandidates) > 0 {
 												@components.Disclosure("row-menu", "icon-btn row-menu-toggle", "toggleRowMenu(this)", "Replace this song", "Replace", replaceMenuToggle(), replaceMenuItems(data, row))
 											}
-											<!--
-												Row-scoped access to the same 3 actions the Quick add
-												panel below offers generically - see quick-action-row
-												just below and openQuickAction/toggleRowMenu
-												(scheduling-build.js). The song is already this row's, so
-												unlike the panel's forms there's no song picker to fill
-												in - just the category/relationship/role fields that
-												actually vary. The panel itself stays, since it's still
-												the only way to tag/relate/role a song that isn't in
-												this order of service yet.
-											-->
+											// Row-scoped access to the same 3 actions the Quick add
+											// panel below offers generically - see quick-action-row
+											// just below and openQuickAction/toggleRowMenu
+											// (scheduling-build.js). The song is already this row's, so
+											// unlike the panel's forms there's no song picker to fill
+											// in - just the category/relationship/role fields that
+											// actually vary. The panel itself stays, since it's still
+											// the only way to tag/relate/role a song that isn't in
+											// this order of service yet.
 											@components.Disclosure("row-menu", "icon-btn row-menu-toggle", "toggleRowMenu(this)", "More actions for this song", "More actions", rowMenuToggle(), rowMenuItems(data, i))
 										</div>
-										<!--
-											Mobile-only twin of .set-song-actions above - see
-											rowMobileActionsToggle/rowMobileActionsItems' own doc
-											comment for why this is a second, parallel Disclosure
-											rather than something that replaces or rearranges the
-											desktop one. .set-song-actions-mobile
-											(builder-rows.css) is display:none above 640px and
-											hides .set-song-actions below it, so exactly one of the
-											two ever renders visibly at a time.
-										-->
+										// Mobile-only twin of .set-song-actions above - see
+										// rowMobileActionsToggle/rowMobileActionsItems' own doc
+										// comment for why this is a second, parallel Disclosure
+										// rather than something that replaces or rearranges the
+										// desktop one. .set-song-actions-mobile
+										// (builder-rows.css) is display:none above 640px and
+										// hides .set-song-actions below it, so exactly one of the
+										// two ever renders visibly at a time.
 										<div class="set-song-actions-mobile">
 											@components.Disclosure("row-menu", "icon-btn row-menu-toggle", "toggleRowMenu(this)", "Actions for this song", "Actions", rowMobileActionsToggle(), rowMobileActionsItems(data, i))
 										</div>
@@ -1302,7 +1278,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 										<input type="hidden" name="song_id_a" value={ row.Song.SongID }/>
 										<label>
 											Song
-											<!-- Defaults to the next song in the order (see nextSongID). -->
+											// Defaults to the next song in the order (see nextSongID).
 											<select name="song_id_b" required>
 												<option value="" disabled selected?={ nextSongID(data.ServiceOrder, i) == "" }>Choose a song</option>
 												for _, song := range data.AllSongs {
@@ -1404,7 +1380,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 								</td>
 								<td>
 									{ row.ItemTitle }
-									<!-- Always rendered, same row-height reasoning as .song-meta above. -->
+									// Always rendered, same row-height reasoning as .song-meta above.
 									<div class="muted song-meta">{ row.ItemLength }</div>
 									if row.ItemDescription != "" {
 										<div class="muted item-description">{ row.ItemDescription }</div>
@@ -1434,13 +1410,11 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 					}
 				</tbody>
 		}
-		<!--
-			The actual publish/discard controls live in the sidebar now (see
-			SongPublishPanel, build.templ) - SetBuilderBody (not this,
-			SetBuilderBodyContent) is the one that keeps that card in sync,
-			via songPublishPanelOOB, for every htmx response this content is
-			part of.
-		-->
+		// The actual publish/discard controls live in the sidebar now (see
+		// SongPublishPanel, build.templ) - SetBuilderBody (not this,
+		// SetBuilderBodyContent) is the one that keeps that card in sync,
+		// via songPublishPanelOOB, for every htmx response this content is
+		// part of.
 		if !data.ReadOnly && len(data.Suggestions) > 0 {
 			@collapsibleSection("recommended-next-songs", "Recommended next", true) {
 				<p class="muted">Based on the last song in the set.</p>
@@ -1481,35 +1455,31 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 		}
 		if !data.ReadOnly {
 		<h2>Find songs to add</h2>
-		<!--
-			Generated straight from data.RoleTypes (song_role_types) rather
-			than two hardcoded opener/response buttons - a role added to that
-			table (Song Roles setup page or the quick-add panel below, no code
-			change needed) is filterable immediately. toggleRoleFilter
-			(scheduling-build.js) tracks which one is active in the hidden
-			#candidate-role-filter input below, then re-triggers the search
-			box's own htmx request - see that input's own comment for why.
-		-->
+		// Generated straight from data.RoleTypes (song_role_types) rather
+		// than two hardcoded opener/response buttons - a role added to that
+		// table (Song Roles setup page or the quick-add panel below, no code
+		// change needed) is filterable immediately. toggleRoleFilter
+		// (scheduling-build.js) tracks which one is active in the hidden
+		// #candidate-role-filter input below, then re-triggers the search
+		// box's own htmx request - see that input's own comment for why.
 		<div class="role-filters">
 			for _, rt := range data.RoleTypes {
 				<button type="button" class="role-filter" data-role={ rt.Code } onclick="toggleRoleFilter(this)">{ rt.Label }</button>
 			}
 		</div>
-		<!--
-			Context filter chips - same server-driven filtering idiom as the
-			role filters just above (toggleContextFilter, scheduling-build.js, is a
-			literal copy of toggleRoleFilter targeting
-			.context-filter/#candidate-context-filter instead of
-			.role-filter/#candidate-role-filter), generated from data.ContextTypes
-			(song_context_types - an org's own list, see the Song Contexts setup
-			page) rather than a fixed set of buttons. Sits in this same "Find
-			songs to add" filter area rather than a second row competing for
-			attention - grouped under its own small "Context:" label so it
-			reads as a distinct axis from the role filters above it, not more
-			of the same list. Hidden entirely until the org has actually named
-			a context (data.ContextTypes empty otherwise, unlike RoleTypes,
-			which always has at least the two seeded defaults).
-		-->
+		// Context filter chips - same server-driven filtering idiom as the
+		// role filters just above (toggleContextFilter, scheduling-build.js, is a
+		// literal copy of toggleRoleFilter targeting
+		// .context-filter/#candidate-context-filter instead of
+		// .role-filter/#candidate-role-filter), generated from data.ContextTypes
+		// (song_context_types - an org's own list, see the Song Contexts setup
+		// page) rather than a fixed set of buttons. Sits in this same "Find
+		// songs to add" filter area rather than a second row competing for
+		// attention - grouped under its own small "Context:" label so it
+		// reads as a distinct axis from the role filters above it, not more
+		// of the same list. Hidden entirely until the org has actually named
+		// a context (data.ContextTypes empty otherwise, unlike RoleTypes,
+		// which always has at least the two seeded defaults).
 		if len(data.ContextTypes) > 0 {
 			<div class="role-filters context-filters">
 				<span class="muted">Context:</span>
@@ -1518,30 +1488,28 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 				}
 			</div>
 		}
-		<!--
-			"Browse by tag" - pure discoverability, not a new filter
-			mechanism. candidateMatchesSearch (sets_builder.go) already matches
-			typed search text against tag values, not just titles, so typing an
-			exact tag value into the search box above already works; the
-			problem is nobody can see what tags exist without already knowing
-			what to type. Unlike the role filters above (a small fixed list,
-			so an always-open button row is fine), tag values are unbounded
-			free text - dozens of scripture references, say - so each
-			group's chips sit behind their own collapsibleSection, collapsed
-			by default. (A single accordion with a category <select> was
-			tried instead and reverted - it read as one more control to
-			operate rather than a shortcut.) Clicking a chip just types that
-			value into #candidate-search and re-triggers the same search
-			request (applyTagFilter, scheduling-build.js); it deliberately doesn't
-			set any state of its own the way the role filter's hidden input
-			does.
-
-			Categories map 1:1 to a group here except Theme and Idea, merged
-			into one "Browse by Theme/Idea" group by groupedTagFilters (at
-			Derek's request, 2026-09-05: to someone browsing tags, "theme"
-			and "idea" read as the same kind of loose descriptive tag, not
-			two things worth separate accordions for).
-		-->
+		// "Browse by tag" - pure discoverability, not a new filter
+		// mechanism. candidateMatchesSearch (sets_builder.go) already matches
+		// typed search text against tag values, not just titles, so typing an
+		// exact tag value into the search box above already works; the
+		// problem is nobody can see what tags exist without already knowing
+		// what to type. Unlike the role filters above (a small fixed list,
+		// so an always-open button row is fine), tag values are unbounded
+		// free text - dozens of scripture references, say - so each
+		// group's chips sit behind their own collapsibleSection, collapsed
+		// by default. (A single accordion with a category <select> was
+		// tried instead and reverted - it read as one more control to
+		// operate rather than a shortcut.) Clicking a chip just types that
+		// value into #candidate-search and re-triggers the same search
+		// request (applyTagFilter, scheduling-build.js); it deliberately doesn't
+		// set any state of its own the way the role filter's hidden input
+		// does.
+		//
+		// Categories map 1:1 to a group here except Theme and Idea, merged
+		// into one "Browse by Theme/Idea" group by groupedTagFilters (at
+		// Derek's request, 2026-09-05: to someone browsing tags, "theme"
+		// and "idea" read as the same kind of loose descriptive tag, not
+		// two things worth separate accordions for).
 		if len(data.TagValuesByCategory) > 0 {
 			<div class="tag-filters">
 				for _, group := range groupedTagFilters(data.TagCategories, data.TagValuesByCategory) {
@@ -1555,22 +1523,20 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 				}
 			</div>
 		}
-		<!--
-			The search box and role/context filters all feed one
-			server-driven search request (BuildCandidatesSearch) rather than
-			filtering an already-rendered list client-side - see that
-			handler's doc comment for why (a library of hundreds of songs
-			otherwise means hundreds of rich rows computed and rendered on
-			every Build page load, whether or not this section is even
-			open). Neither filter has a form control of its own to carry its
-			value along with the search box's own request, so each is
-			mirrored into its own hidden input (kept in sync by
-			toggleRoleFilter/toggleContextFilter respectively) and pulled in
-			via hx-include; "search" is a synthetic event name (see
-			htmx.trigger in toggleRoleFilter/toggleContextFilter), not a real
-			DOM search event, since this is a plain text input, not
-			type="search".
-		-->
+		// The search box and role/context filters all feed one
+		// server-driven search request (BuildCandidatesSearch) rather than
+		// filtering an already-rendered list client-side - see that
+		// handler's doc comment for why (a library of hundreds of songs
+		// otherwise means hundreds of rich rows computed and rendered on
+		// every Build page load, whether or not this section is even
+		// open). Neither filter has a form control of its own to carry its
+		// value along with the search box's own request, so each is
+		// mirrored into its own hidden input (kept in sync by
+		// toggleRoleFilter/toggleContextFilter respectively) and pulled in
+		// via hx-include; "search" is a synthetic event name (see
+		// htmx.trigger in toggleRoleFilter/toggleContextFilter), not a real
+		// DOM search event, since this is a plain text input, not
+		// type="search".
 		<input type="hidden" id="candidate-role-filter" name="role" value=""/>
 		<input type="hidden" id="candidate-context-filter" name="context" value=""/>
 		<div class="search-bar">
@@ -1588,76 +1554,66 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 				hx-include="#candidate-role-filter, #candidate-context-filter"
 				oninput="openCandidatesSection()"
 			/>
-			<!--
-				Clicking a role filter or tag chip fills the search box (or the
-				hidden role input) but gives no way back to the plain "browse
-				titles" list short of manually erasing what got typed in - not
-				obvious, especially once a role filter's own "active" button
-				state also needs clearing. clearCandidateSearch (scheduling-build.js)
-				resets both back to "" and re-triggers the same search, landing
-				back on CandidateSearchResults' empty-query-and-role state.
-			-->
+			// Clicking a role filter or tag chip fills the search box (or the
+			// hidden role input) but gives no way back to the plain "browse
+			// titles" list short of manually erasing what got typed in - not
+			// obvious, especially once a role filter's own "active" button
+			// state also needs clearing. clearCandidateSearch (scheduling-build.js)
+			// resets both back to "" and re-triggers the same search, landing
+			// back on CandidateSearchResults' empty-query-and-role state.
 			<button type="button" class="icon-btn" aria-label="Clear search" title="Clear search" onclick="clearCandidateSearch()">
 				@components.IconX()
 			</button>
 		</div>
-		<!--
-			Open by default (see collapsibleSection's open param) - was
-			collapsed on the reasoning that the full library is "the busiest
-			thing on this page otherwise", but the toggle/swap-memory
-			behavior is unaffected either way: collapsing it still works
-			exactly as before, and openCandidatesSection()/toggleRoleFilter()
-			(scheduling-build.js) still force it open the moment a search term or
-			role filter is used, for whoever does collapse it.
-		-->
+		// Open by default (see collapsibleSection's open param) - was
+		// collapsed on the reasoning that the full library is "the busiest
+		// thing on this page otherwise", but the toggle/swap-memory
+		// behavior is unaffected either way: collapsing it still works
+		// exactly as before, and openCandidatesSection()/toggleRoleFilter()
+		// (scheduling-build.js) still force it open the moment a search term or
+		// role filter is used, for whoever does collapse it.
 		@collapsibleSection("find-songs-candidates", "Browse all songs", true) {
-			<!--
-				A short, separate summary rather than aria-live on #set-candidates
-				itself (4.1.3 Status Messages, Finding 2's Open Questions -
-				docs/plans/shipped/wcag-aa-audit-plan.md) - #candidate-search
-				re-fires this list on every keystroke (300ms debounce), so
-				announcing the whole list each time would be more noise than
-				help. Starts empty (a live region doesn't announce its own
-				initial content anyway) and is updated out-of-band by every
-				real search/filter/archive response - see
-				CandidateSearchResultsWithStatus/candidateSearchStatusOOB -
-				since #set-candidates' own innerHTML swap doesn't reach a
-				sibling element.
-			-->
+			// A short, separate summary rather than aria-live on #set-candidates
+			// itself (4.1.3 Status Messages, Finding 2's Open Questions -
+			// docs/plans/shipped/wcag-aa-audit-plan.md) - #candidate-search
+			// re-fires this list on every keystroke (300ms debounce), so
+			// announcing the whole list each time would be more noise than
+			// help. Starts empty (a live region doesn't announce its own
+			// initial content anyway) and is updated out-of-band by every
+			// real search/filter/archive response - see
+			// CandidateSearchResultsWithStatus/candidateSearchStatusOOB -
+			// since #set-candidates' own innerHTML swap doesn't reach a
+			// sibling element.
 			<div id="candidate-search-status" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></div>
-			<!--
-				aria-live="off" here overrides #set-builder-body's own
-				aria-live="polite" (an aria-live value on an ancestor otherwise
-				applies to every descendant mutation, per the ARIA live-region
-				spec) - without it, every per-keystroke swap of this list would
-				still get swept into the outer region's announcements despite
-				#candidate-search-status existing specifically so the list
-				itself doesn't have to be the thing announced.
-			-->
+			// aria-live="off" here overrides #set-builder-body's own
+			// aria-live="polite" (an aria-live value on an ancestor otherwise
+			// applies to every descendant mutation, per the ARIA live-region
+			// spec) - without it, every per-keystroke swap of this list would
+			// still get swept into the outer region's announcements despite
+			// #candidate-search-status existing specifically so the list
+			// itself doesn't have to be the thing announced.
 			<ul id="set-candidates" class="candidate-list" aria-live="off">
 				@CandidateSearchResults(data.ServiceTypeID, data.PlanID, nil, "", "", "", 0, false, data.BrowsableSongs, "")
 			</ul>
 		}
-		<!--
-			Ad hoc creation of the setup-level entities this page's
-			recommendations/badges/warnings are built from (song tags,
-			relationships, opener/response roles) - see QuickAddSongTag/
-			QuickAddSongRelationship/QuickAddSongRole in sets.go. Same fields,
-			same Store methods as the dedicated setup pages
-			(song_tags.templ/relationships.templ/song_roles.templ), just
-			reachable without leaving this page and posted to a build-scoped
-			route so the response re-renders this builder instead of a
-			setup-page table. Create-only, same as those setup pages' forms
-			minus the edit affordance - see the build-page redesign plan for
-			why editing stays their job.
-
-			Every song here also gets these same 3 actions from its own row's
-			"more actions" menu (see row-menu/quick-action-row above), already
-			scoped to that song - the faster path once a song is already in
-			the order of service. This panel stays for the one thing the row
-			menu can't do: tag/relate/mark a role on a song that isn't in this
-			set yet.
-		-->
+		// Ad hoc creation of the setup-level entities this page's
+		// recommendations/badges/warnings are built from (song tags,
+		// relationships, opener/response roles) - see QuickAddSongTag/
+		// QuickAddSongRelationship/QuickAddSongRole in sets.go. Same fields,
+		// same Store methods as the dedicated setup pages
+		// (song_tags.templ/relationships.templ/song_roles.templ), just
+		// reachable without leaving this page and posted to a build-scoped
+		// route so the response re-renders this builder instead of a
+		// setup-page table. Create-only, same as those setup pages' forms
+		// minus the edit affordance - see the build-page redesign plan for
+		// why editing stays their job.
+		//
+		// Every song here also gets these same 3 actions from its own row's
+		// "more actions" menu (see row-menu/quick-action-row above), already
+		// scoped to that song - the faster path once a song is already in
+		// the order of service. This panel stays for the one thing the row
+		// menu can't do: tag/relate/mark a role on a song that isn't in this
+		// set yet.
 		@collapsibleSection("quick-add-songs", "Quick add", false) {
 			<div class="quick-add-panel">
 				@quickAddItem("Tag a song") {
@@ -1739,13 +1695,11 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 						<button type="submit" class="primary">Mark role</button>
 					</form>
 				}
-				<!--
-					Only rendered once the org has actually named a context on
-					the Song Contexts setup page (data.ContextTypes) - unlike
-					the role quick-add above, there's nothing selectable
-					otherwise, so showing an unusable empty picker would just
-					be confusing. See QuickAddSongContext (sets_detail.go).
-				-->
+				// Only rendered once the org has actually named a context on
+				// the Song Contexts setup page (data.ContextTypes) - unlike
+				// the role quick-add above, there's nothing selectable
+				// otherwise, so showing an unusable empty picker would just
+				// be confusing. See QuickAddSongContext (sets_detail.go).
 				if len(data.ContextTypes) > 0 {
 					@quickAddItem("Tag with context") {
 						<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/song-contexts", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
@@ -1772,16 +1726,14 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 					}
 				}
 				@quickAddItem("Set song vocal range") {
-					<!--
-						Unlike the other quick-add forms, this one's song picker also
-						drives fillVocalRangeFromSongSelect (scheduling-setup-forms.js) on change:
-						each <option> below carries its song's existing range (if any)
-						as a data-edit-fields attribute (same JSON shape/helper editRow
-						already reads, editFieldsAttr) so picking an already-ranged song
-						pre-fills the fields below and swaps the submit button to
-						"Update range" - see vocalRangeFormFields' own doc comment
-						(quick_action.templ) for why.
-					-->
+					// Unlike the other quick-add forms, this one's song picker also
+					// drives fillVocalRangeFromSongSelect (scheduling-setup-forms.js) on change:
+					// each <option> below carries its song's existing range (if any)
+					// as a data-edit-fields attribute (same JSON shape/helper editRow
+					// already reads, editFieldsAttr) so picking an already-ranged song
+					// pre-fills the fields below and swaps the submit button to
+					// "Update range" - see vocalRangeFormFields' own doc comment
+					// (quick_action.templ) for why.
 					<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/song-vocal-range", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
 						<label>
 							Song

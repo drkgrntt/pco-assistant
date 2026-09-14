@@ -230,16 +230,14 @@ templ StyleGuide(personName, organizationName string) {
 		</section>
 
 		<section class="sg-section">
-			<!--
-				PersonListItem is ListItem's own variant for a row about a
-				specific person (the Team tab's assignment/candidate/
-				suggestion rows, roster_builder.templ) - same shared
-				list-item.css row, with an Avatar prepended inside the title
-				span. sgAvatarDataURI stands in for a real PCO Attributes.
-				Avatar URL here (a real photo or PCO's own generated
-				colored-initials image) so this page has no live PCO/network
-				dependency of its own.
-			-->
+			// PersonListItem is ListItem's own variant for a row about a
+			// specific person (the Team tab's assignment/candidate/
+			// suggestion rows, roster_builder.templ) - same shared
+			// list-item.css row, with an Avatar prepended inside the title
+			// span. sgAvatarDataURI stands in for a real PCO Attributes.
+			// Avatar URL here (a real photo or PCO's own generated
+			// colored-initials image) so this page has no live PCO/network
+			// dependency of its own.
 			<h2>People</h2>
 			<ul class="assignment-list">
 				@components.PersonListItem("", nil, sgAvatarDataURI, "Jane Smith") {

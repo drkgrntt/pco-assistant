@@ -78,15 +78,13 @@ templ addPlanItemRows(serviceTypeID, planID string) {
 						@components.IconX()
 					</button>
 				</p>
-				<!--
-					item_type only ever offers Item/Section header -
-					AddPlanItem's own doc comment covers why Media isn't a real
-					option here. The length fields hide/disable themselves for
-					Section header (toggleAddPlanItemLengthFields) since
-					Planning Center silently drops a header's Length either way -
-					showing editable fields that quietly do nothing would be
-					worse than not showing them.
-				-->
+				// item_type only ever offers Item/Section header -
+				// AddPlanItem's own doc comment covers why Media isn't a real
+				// option here. The length fields hide/disable themselves for
+				// Section header (toggleAddPlanItemLengthFields) since
+				// Planning Center silently drops a header's Length either way -
+				// showing editable fields that quietly do nothing would be
+				// worse than not showing them.
 				<form class="inline" hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/items", serviceTypeID, planID) } hx-target="#set-builder-body" hx-swap="outerHTML">
 					<label>
 						Title
