@@ -32,9 +32,42 @@ body {
   color: var(--text);
 }
 
+/* width: 100% - main is a flex item of body (the sticky-footer column
+   above), and margin: 0 auto below is what centers it under max-width.
+   Those two facts together are the actual bug this took three rounds to
+   find: auto cross-axis margins on a flex item opt it OUT of
+   align-items' default stretch (flex spec 8.1) - stretch is what would
+   otherwise have given main a definite width equal to body's. Without
+   an explicit width, "opted out of stretch" means main falls back to
+   shrink-to-fit sizing, computed FROM its own children's intrinsic
+   size - the exact inverse of what a percentage-width descendant (any
+   .table-wrap - table.css) needs from it. A shrink-to-fit box has no
+   definite width to publish top-down; per CSS 10.3.7, a percentage
+   width child inside one doesn't resolve against "the eventual layout
+   width", it resolves against nothing, which is why table-wrap's own
+   width: 100%/max-width: 100% kept doing nothing no matter how that
+   rule was worded - the bug was never in table.css, it was here, one
+   level up, the whole time. width: 100% (definite: resolves against
+   body's own, itself viewport-derived, width) + max-width: 60rem
+   (clamps that down) + margin: 0 auto (recentres using the post-clamp
+   width, same as any ordinary centered-column block) is the standard,
+   reliable version of this pattern - min-width: 0 (below) still matters
+   on top of it for the same reason .build-main/.build-glance
+   (build-page.css) need it: even with a definite width, a flex item's
+   automatic minimum width still floors at its content's min-content
+   size unless overridden, which would otherwise let a wide-enough
+   descendant (a table's own min-width) inflate main back past that
+   definite width anyway. A page-wide overflow-x: hidden safety net was
+   tried before either of these and reverted - it can break vertical
+   scrolling outright on some browsers, see
+   docs/plans/shipped/mobile-responsiveness-plan.md's changelog - worse
+   than the bug it was meant to paper over, and unnecessary now that the
+   real source is closed off here instead. */
 main {
   flex: 1 0 auto;
+  width: 100%;
   max-width: 60rem;
+  min-width: 0;
   margin: 0 auto;
   padding: var(--space-4);
 }
