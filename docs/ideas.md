@@ -193,7 +193,7 @@ for other volunteer-heavy ministries on the same backend.
 - How Derek (the app's operator, not any org's admin) gets cross-org
   visibility (starting with reading the `feedback` table) given the app
   has no role concept at all - **scoped, not decided**: see
-  `docs/plans/not-started/admin-tooling-plan.md`. Current call is a
+  `docs/plans/in-progress/admin-tooling-plan.md`. Current call is a
   second, separate `cmd/` web app with its own shared-secret auth,
   deliberately outside the multi-tenant PCO-OAuth session model.
 - ~~Whether Planning Center exposes any real third-party plugin/embed

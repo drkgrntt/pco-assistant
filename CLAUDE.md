@@ -206,7 +206,15 @@ someone has to remember to ask for:
 ## Architecture
 
 **Layout**: `cmd/` has the entrypoints (`api` is the server; `dbreset`,
-`dbseed`, `pcoreset` are the dev CLI tools above). `internal/` has the
+`dbseed`, `pcoreset` are the dev CLI tools above; `admin` is a second,
+separate web app for Derek as the app *operator* - not any org's admin -
+gated by a shared secret (`ADMIN_TOKEN`) instead of PCO OAuth, entirely
+outside the main app's multi-tenant auth chain; see
+`docs/plans/in-progress/admin-tooling-plan.md` for why it's a second
+binary rather than a role on the main one. Binds to `127.0.0.1` only -
+not yet deployed/exposed anywhere, since how it should actually be
+reached (SSH tunnel vs. a real subdomain) is still an open decision in
+that plan doc). `internal/` has the
 actual app, split by concern rather than by feature:
 
 - `internal/database` - connection setup + goose migrations, embedded from
