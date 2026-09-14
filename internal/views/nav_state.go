@@ -39,3 +39,29 @@ func navSuggestionsPending(ctx context.Context) bool {
 	b, _ := ctx.Value(NavSuggestionsPendingKey).(bool)
 	return b
 }
+
+// PCORateLimitedKey is true when at least one PCO call made during this
+// same request hit a 429 - see
+// docs/plans/in-progress/pco-rate-limit-user-visibility-plan.md's Phase 1.
+// Reuses navCtxKey's type (it's already a generic "unexported struct key"
+// wrapper, not nav-specific despite the type name) rather than inventing a
+// second key type for one more value.
+//
+// Unlike NavSuggestionsPendingKey and every other flag in this file, this
+// one is populated by controllers/render.go, not by
+// middleware.PopulateNavState (or any other pre-handler middleware): a
+// 429 can only be known about *after* the handler's own PCO calls have
+// run, so there's nothing for a pre-handler middleware to check yet. It's
+// also read-once at the source (middleware.HadPCORateLimit consumes the
+// mark it reads), so a given render sees it at most once, by design - see
+// that function's own doc comment.
+var PCORateLimitedKey = navCtxKey{"pco-rate-limited"}
+
+// pcoRateLimited defaults to false (hide the banner) whenever render.go
+// hasn't set it or it came back false - same fail-safe direction as
+// navSuggestionsPending above: only show the banner when there's a
+// confirmed 429 to report.
+func pcoRateLimited(ctx context.Context) bool {
+	b, _ := ctx.Value(PCORateLimitedKey).(bool)
+	return b
+}

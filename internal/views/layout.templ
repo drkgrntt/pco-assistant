@@ -36,6 +36,7 @@ var designSystemCSSFiles = []string{
 	"htmx-progress.css",
 	"header-nav.css",
 	"site-banner.css",
+	"pco-rate-limit-banner.css",
 	"build-page.css",
 	"builder-rows.css",
 	"home.css",
@@ -186,6 +187,9 @@ templ Layout(title string, personName string, organizationName string) {
 				</button>
 			</div>
 			<main id="main-content">
+				if pcoRateLimited(ctx) {
+					@pcoRateLimitBanner()
+				}
 				@installPromptBanner()
 				{ children... }
 			</main>
@@ -339,6 +343,45 @@ templ genericHelpDialog() {
 // Safari not yet standalone) and the day-count/dismissal gate passes, and
 // in that same pass picks exactly one of the button/instructional-copy
 // pair below to reveal - see that file's installPromptRefreshUI.
+// pcoRateLimitBanner is the page-level "Planning Center's rate limit was
+// reached" notice (see docs/plans/in-progress/
+// pco-rate-limit-user-visibility-plan.md's Phase 1) - shown right above
+// each page's own content, same "flows inside the page's own content
+// width, not a full-width site-chrome strip" placement as
+// installPromptBanner just above, and for the same reason: this is about
+// what this one page's render just experienced, not something app-wide
+// like the early-preview .site-banner.
+//
+// Deliberately calmer than both existing banner treatments in this file:
+// not a .warning/.site-banner-style alarm (nothing is broken, and PCO
+// itself already recovers) and not .import-banner's "invitation" framing
+// (there's no action to take here) - see pco-rate-limit-banner.css's own
+// doc comment for the token choice that keeps it reading as a quiet
+// heads-up rather than either of those.
+//
+// Not dismissible, unlike installPromptBanner/.site-banner - there's no
+// state to manage: pcoRateLimited(ctx) is read-once and re-derived fresh
+// by controllers/render.go on every full page load (see
+// views.PCORateLimitedKey), so this banner simply stops rendering on its
+// own the next time a load doesn't hit a 429, the same way the flag it
+// reads is itself already consumed on read.
+//
+// Scope limitation worth knowing: this only ever appears on a full page
+// load, since only Layout renders this. An htmx partial/fragment reload
+// (a Build page tab switch, search-as-you-type, the Songs tab's
+// SyncCheck poll) never re-renders Layout, so a 429 during a
+// fragment-only request won't update an already-visible banner from a
+// prior full load, nor will it make one newly appear until the next full
+// load. Acceptable for Phase 1 per the plan doc above; extending this to
+// fragment-level freshness (the same hx-swap-oob pattern
+// sets_publish.go's SyncCheck already uses for #pco-sync-banner) is
+// explicitly left for a later pass, not built here.
+templ pcoRateLimitBanner() {
+	<div class="pco-ratelimit-banner" role="status">
+		<p>Planning Center's rate limit was reached - some details may be stale and will refresh shortly.</p>
+	</div>
+}
+
 templ installPromptBanner() {
 	<div id="install-prompt-banner" class="import-banner" hidden>
 		<p>

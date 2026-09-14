@@ -6,6 +6,7 @@ import (
 	pco "github.com/drkgrntt/go-pco"
 
 	"pco-assistant/internal/logger"
+	"pco-assistant/internal/server/middleware"
 )
 
 // registerPCOResponseHook wires go-pco's opt-in observability hook
@@ -19,6 +20,15 @@ import (
 // ...") never reach this app's own logs. Called once from server.New() -
 // see SetResponseHook's own doc comment for why a second call would just
 // replace, not add to, this one.
+//
+// Beyond logging, the 429 branch also feeds the page-level "some details
+// may be stale" banner (docs/plans/in-progress/
+// pco-rate-limit-user-visibility-plan.md's Phase 1) via
+// middleware.RecordPCORateLimit - this is the only place in the app that
+// sees every PCO 429 regardless of which read-path call site triggered
+// it, so it's the natural place to mark "a 429 happened during this
+// request" rather than threading that signal through every individual
+// best-effort call site.
 //
 // Deliberately logs only failures, not every attempt: a single Build page
 // render can legitimately make 100-200 PCO calls (see docs/
@@ -57,6 +67,18 @@ func registerPCOResponseHook() {
 				"throttle_wait", info.ThrottleWait,
 				"duration", info.Duration,
 			)
+
+			// Beyond the log line above, also mark this request's id (when
+			// there is one) so controllers/render.go can surface a
+			// page-level "some details may be stale" banner on this same
+			// request's render - see middleware.RecordPCORateLimit's own
+			// doc comment for the full read-once mechanism. info.Ctx is
+			// the exact context the failing pco.* call was made with, so
+			// this is the one place a request-less caller (a cron job, a
+			// CLI tool) simply never hits this branch with an id to record.
+			if id, ok := logger.RequestIDFromContext(info.Ctx); ok {
+				middleware.RecordPCORateLimit(id)
+			}
 			return
 		}
 

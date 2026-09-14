@@ -1,6 +1,40 @@
 # Plan: user-visible PCO rate-limit signaling (banner, then per-row retry)
 
-Not built yet - written up for review before anyone picks it up. Prompted by
+**Status: Phase 1 shipped 2026-09-14.** The page-level banner (this doc's
+"ask 1"/first bullet under "Two distinct asks here") is built: a
+page-level, non-dismissible "Planning Center's rate limit was reached -
+some details may be stale and will refresh shortly" notice, shown on any
+full page load whose handler's own PCO calls hit a 429. Landed as
+`internal/server/middleware/pco_ratelimit.go` (the request-scoped,
+read-once 429 tracker - `RecordPCORateLimit`/`HadPCORateLimit`), wired
+from `internal/server/pco_observability.go`'s response hook and read from
+`internal/server/controllers/render.go`, surfaced via
+`internal/views/nav_state.go`'s `PCORateLimitedKey` and rendered by
+`internal/views/layout.templ`'s `pcoRateLimitBanner`
+(`web/static/css/pco-rate-limit-banner.css`). Resolved design fork 1
+below in favor of its *first* option - the shared response hook marking a
+short-lived, request-scoped tracker a handler can check once its own PCO
+calls are done (`middleware.RecordPCORateLimit`/`HadPCORateLimit`) -
+rather than threading explicit 429-typing through every individual
+read-path call site; resolved fork 2 in favor of per-page scope (not a
+single app-wide sticky banner).
+
+Known Phase-1-only limitation: this covers full page loads only, since
+only `Layout` renders the banner. An htmx partial/fragment reload (a Build
+page tab switch, search-as-you-type, the Songs tab's `SyncCheck` poll)
+never re-renders `Layout`, so a 429 during a fragment-only request won't
+update an already-visible banner from a prior full load. Acceptable for
+now; `sets_publish.go`'s `SyncCheck` + `set_builder.templ`'s
+`#pco-sync-banner` `hx-swap-oob` pattern is the natural mechanism to
+extend to if fragment-level freshness turns out to matter in practice.
+
+**Phase 2 (per-row marking + auto-retry) remains open** - not built. The
+"Design forks needing a real answer" section below (forks 3 and 4
+specifically) is still the relevant starting point for whoever picks that
+up next.
+
+Originally written up for review before anyone picked it up - see the
+status note above for what's since shipped. Prompted by
 direct feedback in `docs/issues.md`:
 
 > As I understand it, we swallow 429s from the API. Perhaps there's a more

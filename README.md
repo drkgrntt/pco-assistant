@@ -419,7 +419,12 @@ no server-side state involved.
    logs anything itself; this is unconditional (not gated by either env
    var above) so a 429 leaves a trace in the logs whether or not the
    throttle/retry are on. See `docs/pco-api-risks.md`'s throttle addendum
-   for the incident that prompted both of these.
+   for the incident that prompted both of these. Beyond the logs, a 429
+   also now surfaces in the app itself: a calm, page-level "Planning
+   Center's rate limit was reached - some details may be stale and will
+   refresh shortly" banner on the next full page load for the affected
+   request, no setup required - see `docs/pco-api-risks.md`'s Changelog
+   entry for how it's wired.
 
 8. **`.env`**:
    ```

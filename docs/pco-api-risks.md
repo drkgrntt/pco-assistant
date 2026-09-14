@@ -82,7 +82,7 @@ that first. Facts worth adding here that aren't in CLAUDE.md:
 | Publish/Refresh writes (sequential per song/assignment) | fixed | `RunConcurrently` fan-out, with ordering/error-collection made goroutine-safe (see Design decisions) |
 | Sustained-rate ceiling across all traffic on one token | enabled (prod) | go-pco `ConfigureThrottle`, `PCO_THROTTLE_ENABLED=true`, 60 req/20s default, background syncs tagged low-priority |
 | A 429 that gets through anyway | enabled (prod) | go-pco `ConfigureRetry`, `PCO_RETRY_ON_429_ENABLED=true`, waits `Retry-After`, 1 retry |
-| Visibility into PCO failures | shipped | `pco.SetResponseHook` logs every failure (never a success) through this app's logger |
+| Visibility into PCO failures | shipped | `pco.SetResponseHook` logs every failure (never a success) through this app's logger; a 429 also now surfaces to the *user*, not just the log - a calm, non-dismissible "some details may be stale" banner on the next full page load for that request (Phase 1 of `docs/plans/in-progress/pco-rate-limit-user-visibility-plan.md`) - see that doc's status note for the file list. Per-row marking of *which* fetch failed (Phase 2) is still open |
 | Unattended sync (Song Info + person-data refresh + person-data recent-history discovery) | shipped | hourly `jobs.PCOJobs` cron, one org at a time, borrowing and refreshing that org's own idle session token - reuses the exact same paced/guarded sync entry points (`triggerSongInfoQueueSync`, `triggerPersonDataSyncCtx`) an ordinary render already triggers, low-priority (`pco.WithPriority`, 20) |
 | Live-sync poll-while-open (`SyncCheck`, one `GetItems` per open Build-page Songs tab per 30s) | shipped | poll-while-open only (option C) - bounded by concurrent viewers, not total org/plan count; tagged `pco.WithPriority(ctx, 20)` so a poll tick never contends with interactive traffic on the same token; a failed poll tick is treated as "no change," never surfaced as an error |
 | Team/position lists and team-member names (fetched live, uncached, on every roster render) | fixed | cached `fetchRosterSharedPCOData` (`rosters_shared_cache.go`), 20s TTL - shorter than the 60s norm since team membership can change mid-session; manual "Refresh team data" button is the remedy for the remaining window |
@@ -997,3 +997,24 @@ out to 100-200 sequential round trips per load.
   the visible one; switching back resumes on the next 30s tick, not
   instantly. Only the Songs tab polls at all (the Team tab has no
   equivalent), so this only ever bounds that one poll.
+- **Page-level "rate limit reached" banner shipped (2026-09-14)** - Phase 1
+  of `docs/plans/in-progress/pco-rate-limit-user-visibility-plan.md`,
+  closing the first half of the direct feedback quoted at that doc's top.
+  A 429 no longer only reaches this app's own logs (the "Visibility into
+  PCO failures" row above) - `pco_observability.go`'s response hook now
+  also calls `middleware.RecordPCORateLimit(requestID)`
+  (`internal/server/middleware/pco_ratelimit.go`, new: a request-scoped,
+  read-once, mutex-guarded map, swept of entries older than 5 minutes on
+  each write so a handler that never renders - e.g. a redirect - can't
+  leak an entry). `controllers/render.go` consumes it
+  (`middleware.HadPCORateLimit`) right before every render and stashes the
+  result as `views.PCORateLimitedKey`; `layout.templ`'s `Layout` reads it
+  and shows a calm, non-dismissible "Planning Center's rate limit was
+  reached - some details may be stale and will refresh shortly" notice
+  (`pcoRateLimitBanner`, `pco-rate-limit-banner.css`) when true. Zero new
+  PCO calls - purely wiring an existing failure signal through to the
+  render that experienced it. Deliberately full-page-load only: an htmx
+  fragment reload doesn't re-render `Layout`, so a 429 during a
+  fragment-only request won't update an already-visible banner - see the
+  plan doc's own "Scope limit" note. Per-row marking (Phase 2) is not
+  built.
