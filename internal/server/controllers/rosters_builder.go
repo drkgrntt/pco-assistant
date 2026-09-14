@@ -286,6 +286,21 @@ func teamNamesFromIncluded(included []any) map[string]string {
 // staffed, rendered its raw id in the Team tab/glance card before this
 // backfill existed.
 //
+// teamSequence, if non-nil, gets the same backfill treatment alongside
+// teamNames - buildRosterBuilderData's caller needs it: a fully-staffed
+// team missing from teamSequence falls back to positionTeamSequence's
+// unknownTeamSequence, a single constant every such team collides on, so
+// two different fully-staffed teams (e.g. "Band" and "Vocal Team", both
+// missing from shared.TeamInfo) sort as equal and the stable sort leaves
+// their positions in local-assignment insertion order instead of grouped
+// by team - groupPositionsByTeam's contiguous-run walk then splits one
+// team's positions into several same-named cards wherever another team's
+// position landed in between. Confirmed live against a real org: Team
+// 62734 ("Band") rendered as a separate "Band" card per position instead
+// of one card with every position inside, for exactly this reason.
+// buildRosterPositionGroupData (rosters_scoped.go) renders a single
+// group in isolation, so it has no team-sort to protect and passes nil.
+//
 // PCO's Teams API has no where[id] filter the way People does (see
 // personLookupMapForIDs) - GetTeams only lists every team on a service
 // type - so the only way to resolve a missing name is that full list,
@@ -295,7 +310,7 @@ func teamNamesFromIncluded(included []any) map[string]string {
 // Best-effort, same tolerance as resolveMissingTitles (sets_builder.go):
 // a failed fetch just leaves the still-missing ids on titleOrID's raw-id
 // fallback, not a new failure mode.
-func resolveMissingTeamNames(ctx context.Context, serviceTypeID string, teamNames map[string]string, teamIDs []string) {
+func resolveMissingTeamNames(ctx context.Context, serviceTypeID string, teamNames map[string]string, teamSequence map[string]int, teamIDs []string) {
 	needsBackfill := false
 	for _, id := range teamIDs {
 		if id == "" {
@@ -317,6 +332,9 @@ func resolveMissingTeamNames(ctx context.Context, serviceTypeID string, teamName
 	for _, t := range teams.Data {
 		if t.Attributes.Name != "" {
 			teamNames[t.ID] = t.Attributes.Name
+		}
+		if teamSequence != nil {
+			teamSequence[t.ID] = t.Attributes.Sequence
 		}
 	}
 }
@@ -432,7 +450,7 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 		teamNames[id] = info.Name
 		teamSequence[id] = info.Sequence
 	}
-	resolveMissingTeamNames(ctx, serviceTypeID, teamNames, positionGroupTeamIDs(groups))
+	resolveMissingTeamNames(ctx, serviceTypeID, teamNames, teamSequence, positionGroupTeamIDs(groups))
 
 	// team_position ids aren't stored locally or on NeededPosition (both
 	// only carry the position's name) - resolve name -> id per team,
