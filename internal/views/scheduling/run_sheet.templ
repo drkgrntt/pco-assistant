@@ -79,11 +79,10 @@ func anyPositionAssigned(positions []PositionGroupView) bool {
 // storage, no PCO calls of its own.
 //
 // Deliberately its own <html>/<body>, not wrapped in views.Layout - same
-// reasoning as views.Landing (see its doc comment): the app nav, theme
-// toggle, and early-preview banner are all dead weight on a page meant to
-// be printed and read at a music stand or sound desk, not browsed. Still
-// shares views.Head for the same cache-busted assets/favicon, plus this
-// page's own stylesheet.
+// reasoning as views.Landing (see its doc comment): the app nav and theme
+// toggle are dead weight on a page meant to be printed and read at a
+// music stand or sound desk, not browsed. Still shares views.Head for the
+// same cache-busted assets/favicon, plus this page's own stylesheet.
 templ RunSheet(setData SetBuilderData, rosterData RosterBuilderData) {
 	<!DOCTYPE html>
 	<html lang="en">
