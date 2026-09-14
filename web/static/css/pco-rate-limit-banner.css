@@ -1,0 +1,24 @@
+/* Backs internal/views/layout.templ's pcoRateLimitBanner - the page-level
+   "Planning Center's rate limit was reached" notice (see
+   docs/plans/in-progress/pco-rate-limit-user-visibility-plan.md's Phase
+   1). Deliberately its own, quieter tint rather than reusing .warning
+   (alert.css, danger-tinted - this isn't an error, PCO itself already
+   recovers) or .import-banner (import-banner.css, accent-tinted - that
+   one's an invitation to click something, this one asks for nothing).
+   Uses the --pending tokens instead - the same "still settling, not
+   final yet" tone status-summary.css/badge.css already use for
+   in-progress states - which reads as a calm heads-up rather than either
+   an alarm or a call to action. */
+.pco-ratelimit-banner {
+  background: var(--pending-subtle);
+  border: 1px solid color-mix(in srgb, var(--pending) 35%, var(--border));
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  margin-block: var(--space-3);
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+
+.pco-ratelimit-banner p {
+  margin: 0;
+}
