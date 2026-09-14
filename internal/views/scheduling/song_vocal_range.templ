@@ -55,14 +55,12 @@ templ SongVocalRanges(personName, organizationName string, songs []pco.SongData,
 				<input type="text" name="reference_key" placeholder="e.g. G, Bb, F#m" list="key-options" required/>
 			</label>
 			@musicalKeyOptions()
-			<!--
-				Forces the two note fields (plus Save/Cancel) onto their own
-				row rather than leaving the browser to wrap wherever it runs
-				out of room - with a Song select, a Measured-in-key field, and
-				two note-field-plus-play-button groups all fighting for space
-				on one form.inline row, that produced a lopsided wrap (see
-				.form-row-break's own doc comment, forms.css).
-			-->
+			// Forces the two note fields (plus Save/Cancel) onto their own
+			// row rather than leaving the browser to wrap wherever it runs
+			// out of room - with a Song select, a Measured-in-key field, and
+			// two note-field-plus-play-button groups all fighting for space
+			// on one form.inline row, that produced a lopsided wrap (see
+			// .form-row-break's own doc comment, forms.css).
 			<div class="form-row-break"></div>
 			<div class="form-field-group">
 				<label>

@@ -14,18 +14,16 @@ import (
 templ Account(personName, organizationName string, data AccountData) {
 	@Layout("Account", personName, organizationName) {
 		<h1>Account</h1>
-		<!--
-			Identity and Billing are both "who/what is this account" info, so
-			they lay out side by side on a wide viewport (.card-columns,
-			card.css) instead of each getting its own full-width stack -
-			stacks back to one column on mobile automatically. Identity is a
-			plain heading + content div, matching Billing's own shape, rather
-			than a components.Card - BillingBody already renders its own
-			Card(s) internally (the current-plan card, or the Standard/
-			Multi-Campus choice cards), so wrapping it in another outer Card
-			would nest a card inside a card; making Identity match that plain
-			shape instead keeps the pair visually consistent.
-		-->
+		// Identity and Billing are both "who/what is this account" info, so
+		// they lay out side by side on a wide viewport (.card-columns,
+		// card.css) instead of each getting its own full-width stack -
+		// stacks back to one column on mobile automatically. Identity is a
+		// plain heading + content div, matching Billing's own shape, rather
+		// than a components.Card - BillingBody already renders its own
+		// Card(s) internally (the current-plan card, or the Standard/
+		// Multi-Campus choice cards), so wrapping it in another outer Card
+		// would nest a card inside a card; making Identity match that plain
+		// shape instead keeps the pair visually consistent.
 		<div class="card-columns">
 			<div>
 				<h2>Identity</h2>
@@ -70,10 +68,10 @@ templ AccountCacheBody(data AccountData) {
 			storage; it's automatically re-collected from Planning Center the
 			next time it's actually needed.
 		</p>
-		<!-- Same reasoning as Account's Identity/Billing pairing above - both
-			 cards are "cached local copy of PCO data," so side by side on a
-			 wide viewport (.card-columns, card.css) reads better than a full
-			 stack. -->
+		// Same reasoning as Account's Identity/Billing pairing above - both
+		// cards are "cached local copy of PCO data," so side by side on a
+		// wide viewport (.card-columns, card.css) reads better than a full
+		// stack.
 		<div class="card-columns">
 			@components.Card("Song info cache") {
 				if data.SongInfoCacheErr != "" {

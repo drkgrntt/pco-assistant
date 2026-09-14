@@ -265,23 +265,21 @@ templ TeamGlanceList(positions []PositionGroupView) {
 									<button type="button" class="glance-link muted" data-position-id={ elementID } data-row-id={ fmt.Sprintf("%d", a.ID) } onclick="jumpToTeamPosition(this)">
 										@components.Avatar(a.AvatarURL)
 										{ a.Name }
-										<!--
-											A declined assignment is still the
-											position's assigned row until someone
-											actually removes/replaces it (see
-											assignmentStatusBucket's own staleness
-											note) - this card used to render that
-											name with nothing to distinguish it
-											from an actually-filled position,
-											which read as "someone declined and
-											we lost track of it." Flagging it
-											inline (same badge positionGroupCard's
-											own row already shows) instead of
-											hiding the name outright: the position
-											still needs a human decision either
-											way, and a "who declined" glance is as
-											useful here as it is on the Team tab.
-										-->
+										// A declined assignment is still the
+										// position's assigned row until someone
+										// actually removes/replaces it (see
+										// assignmentStatusBucket's own staleness
+										// note) - this card used to render that
+										// name with nothing to distinguish it
+										// from an actually-filled position,
+										// which read as "someone declined and
+										// we lost track of it." Flagging it
+										// inline (same badge positionGroupCard's
+										// own row already shows) instead of
+										// hiding the name outright: the position
+										// still needs a human decision either
+										// way, and a "who declined" glance is as
+										// useful here as it is on the Team tab.
 										if assignmentStatusBucket(a.Status) == "Declined" {
 											@statusBadge(a.Status)
 										}

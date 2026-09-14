@@ -79,12 +79,10 @@ templ Head(title string) {
 		<meta name="viewport" content="width=device-width, initial-scale=1"/>
 		<title>{ title } - Resonance</title>
 		<link rel="manifest" href="/manifest.json"/>
-		<!--
-			Cache-busted like every other static asset below, unlike before -
-			favicons are cached unusually aggressively by browsers, so
-			swapping the icon file in place without this could leave a
-			visitor's already-cached old icon showing indefinitely.
-		-->
+		// Cache-busted like every other static asset below, unlike before -
+		// favicons are cached unusually aggressively by browsers, so
+		// swapping the icon file in place without this could leave a
+		// visitor's already-cached old icon showing indefinitely.
 		<link rel="icon" href={ "/static/icon-192.png?v=" + AssetVersion }/>
 		<link rel="apple-touch-icon" href={ "/static/icon-192.png?v=" + AssetVersion }/>
 		<meta name="theme-color" content="#2b7770"/>
@@ -110,39 +108,33 @@ templ Layout(title string, personName string, organizationName string) {
 	<!DOCTYPE html>
 	<html lang="en">
 		@Head(title) {
-			<!--
-				Every page behind this shell requires a signed-in session - there's
-				nothing for a crawler to usefully index (a login redirect at best,
-				one org's own private scheduling data at worst), unlike the public
-				marketing pages (Landing/Pricing/HowItWorks/Privacy/Terms), which
-				opt in via marketingMeta (landing.templ) instead.
-			-->
+			// Every page behind this shell requires a signed-in session - there's
+			// nothing for a crawler to usefully index (a login redirect at best,
+			// one org's own private scheduling data at worst), unlike the public
+			// marketing pages (Landing/Pricing/HowItWorks/Privacy/Terms), which
+			// opt in via marketingMeta (landing.templ) instead.
 			<meta name="robots" content="noindex, nofollow"/>
 		}
 		<body>
-			<!--
-				Bypass Blocks (2.4.1, Finding 3 -
-				docs/plans/shipped/wcag-aa-audit-plan.md) - every page's header
-				(brand link, mobile menu toggle, Home/Build/Setup nav, account
-				dropdown) sits ahead of <main> in tab order, so without this a
-				keyboard user re-tabs through all of it on every single page
-				navigation. Visually hidden until focused (.skip-link,
-				base.css) - the standard skip-link pattern - and #main-content
-				on <main> below is its target.
-			-->
+			// Bypass Blocks (2.4.1, Finding 3 -
+			// docs/plans/shipped/wcag-aa-audit-plan.md) - every page's header
+			// (brand link, mobile menu toggle, Home/Build/Setup nav, account
+			// dropdown) sits ahead of <main> in tab order, so without this a
+			// keyboard user re-tabs through all of it on every single page
+			// navigation. Visually hidden until focused (.skip-link,
+			// base.css) - the standard skip-link pattern - and #main-content
+			// on <main> below is its target.
 			<a href="#main-content" class="skip-link">Skip to content</a>
 			<div id="htmx-progress-bar" aria-hidden="true"></div>
 			<header class="site">
 				<div class="site-primary">
 					<a href="/" class="site-brand"><strong>Resonance</strong></a>
-					<!--
-						Below header.site's own row/column breakpoint, this is the
-						only other thing in the visible bar - everything else
-						(site-nav, site-actions) collapses behind it (see
-						toggleMobileMenu, scheduling-global.js) rather than wrapping into
-						several busy rows. Hidden entirely at that breakpoint, where
-						site-nav/site-actions are just always visible again.
-					-->
+					// Below header.site's own row/column breakpoint, this is the
+					// only other thing in the visible bar - everything else
+					// (site-nav, site-actions) collapses behind it (see
+					// toggleMobileMenu, scheduling-global.js) rather than wrapping into
+					// several busy rows. Hidden entirely at that breakpoint, where
+					// site-nav/site-actions are just always visible again.
 					<button
 						type="button"
 						class="mobile-menu-toggle"
@@ -161,26 +153,24 @@ templ Layout(title string, personName string, organizationName string) {
 				</div>
 				<div class="site-actions">
 					if personName != "" {
-						<!--
-							One dropdown instead of four loose items (theme toggle,
-							Account link, org+person name, logout form) - see
-							docs/plans/shipped/help-system-and-nav-consolidation-plan.md
-							for why this consolidation happened alongside the new
-							footer Help button. Reuses the exact same "nav-dropdown"
-							mechanism as the "Setup" dropdown above (toggleNavDropdown,
-							positionNavDropdown, closeNavDropdowns, the document-level
-							outside-click/Escape handlers - all in scheduling-global.js) rather
-							than inventing a second one: every one of those already
-							operates on every ".nav-dropdown*" element on the page, not
-							a single hardcoded instance, so a second dropdown sharing
-							the same classes gets positioning/outside-click-close/mobile
-							behavior for free. The two dropdowns never fight over state -
-							each tracks its own "open" class independently, scoped by
-							.closest(".nav-dropdown") - and clicking one closes the
-							other via the same "anything outside .nav-dropdown closes
-							every open one" handler that already existed for the single
-							Setup dropdown.
-						-->
+						// One dropdown instead of four loose items (theme toggle,
+						// Account link, org+person name, logout form) - see
+						// docs/plans/shipped/help-system-and-nav-consolidation-plan.md
+						// for why this consolidation happened alongside the new
+						// footer Help button. Reuses the exact same "nav-dropdown"
+						// mechanism as the "Setup" dropdown above (toggleNavDropdown,
+						// positionNavDropdown, closeNavDropdowns, the document-level
+						// outside-click/Escape handlers - all in scheduling-global.js) rather
+						// than inventing a second one: every one of those already
+						// operates on every ".nav-dropdown*" element on the page, not
+						// a single hardcoded instance, so a second dropdown sharing
+						// the same classes gets positioning/outside-click-close/mobile
+						// behavior for free. The two dropdowns never fight over state -
+						// each tracks its own "open" class independently, scoped by
+						// .closest(".nav-dropdown") - and clicking one closes the
+						// other via the same "anything outside .nav-dropdown closes
+						// every open one" handler that already existed for the single
+						// Setup dropdown.
 						@components.Disclosure("nav-dropdown", "nav-dropdown-toggle", "toggleNavDropdown(this)", "", "", accountToggleContent(personName), accountMenuContent(organizationName))
 					}
 				</div>
@@ -237,18 +227,16 @@ templ accountMenuContent(organizationName string) {
 		<span class="account-org">{ organizationName }</span>
 	}
 	<a href="/account">Account</a>
-	<!--
-		Switch account - prompt=select_account (AuthorizeURL,
-		internal/auth/pco_oauth.go) asks PCO to show its own account
-		picker rather than silently re-approving whatever PCO session
-		cookie the browser already carries, so this works from an
-		already-signed-in state without needing Log out first (see
-		docs/plans/shipped/pco-account-switching-plan.md). A plain
-		link straight to Start, right next to Log out, rather than
-		relying on someone knowing to click "Sign in" while already
-		signed in - the exact confusing dead end that plan was written
-		to fix.
-	-->
+	// Switch account - prompt=select_account (AuthorizeURL,
+	// internal/auth/pco_oauth.go) asks PCO to show its own account
+	// picker rather than silently re-approving whatever PCO session
+	// cookie the browser already carries, so this works from an
+	// already-signed-in state without needing Log out first (see
+	// docs/plans/shipped/pco-account-switching-plan.md). A plain
+	// link straight to Start, right next to Log out, rather than
+	// relying on someone knowing to click "Sign in" while already
+	// signed in - the exact confusing dead end that plan was written
+	// to fix.
 	<a href="/auth/pco/start">Switch account</a>
 	<form method="post" action="/auth/logout">
 		<button type="submit">Log out</button>
@@ -266,22 +254,20 @@ templ navMenuContent() {
 	<a href="/scheduling/song-relationships">Song Relationships</a>
 	<a href="/scheduling/song-roles">Song Roles</a>
 	<a href="/scheduling/song-contexts">Song Contexts</a>
-	<!--
-		The former separate "Song Tag Suggestions" link (a standalone
-		page) is gone - see
-		docs/plans/shipped/song-tags-suggestions-merge-plan.md - its
-		suggestions now live in a dismissible panel on this same Song
-		Tags page. The badge preserves the old link's "something's
-		pending" ambient nudge (middleware.PopulateNavState/
-		nav_state.go): an actionable inbox item that's actually empty
-		is clutter, not configuration to revisit, and it reappears on
-		its own the moment a new song creates a suggestion. No
-		existing per-nav-link badge precedent to match (components.
-		Badge isn't otherwise used inside navMenuContent), and
-		PopulateNavState only ever tracks a pending bool, not a count
-		(deliberately unchanged by this merge - see that doc), so this
-		is a plain indicator rather than a real "(N)" count.
-	-->
+	// The former separate "Song Tag Suggestions" link (a standalone
+	// page) is gone - see
+	// docs/plans/shipped/song-tags-suggestions-merge-plan.md - its
+	// suggestions now live in a dismissible panel on this same Song
+	// Tags page. The badge preserves the old link's "something's
+	// pending" ambient nudge (middleware.PopulateNavState/
+	// nav_state.go): an actionable inbox item that's actually empty
+	// is clutter, not configuration to revisit, and it reappears on
+	// its own the moment a new song creates a suggestion. No
+	// existing per-nav-link badge precedent to match (components.
+	// Badge isn't otherwise used inside navMenuContent), and
+	// PopulateNavState only ever tracks a pending bool, not a count
+	// (deliberately unchanged by this merge - see that doc), so this
+	// is a plain indicator rather than a real "(N)" count.
 	<a href="/scheduling/song-tags">
 		Song Tags
 		if navSuggestionsPending(ctx) {
