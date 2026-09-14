@@ -79,6 +79,24 @@ button.danger:hover {
   border-color: var(--danger);
 }
 
+/* A visually quieter footprint for a secondary action whose label is long
+   enough to otherwise read as prominent as the .primary/.danger buttons
+   next to it - .build-publish-card .publish-actions button (publish-panel.
+   css) already forces every button in that sidebar column to the same
+   100% width, so a long label there can't be distinguished by width the
+   way it might elsewhere; this shrinks type size and padding (and drops
+   the shared min-height floor below, since that's the other half of what
+   was keeping it as tall as its neighbors) instead. First caller: the
+   Re-push button (publish_panel.templ), which "doesn't do a ton" but was
+   reading as equally weighty as Publish/Discard purely because its own
+   label is the longest one in the column - see docs/issues.md ("it feels
+   equally important and powerful as the rest"). */
+.button-sm {
+  font-size: var(--text-sm);
+  padding: var(--space-1) var(--space-3);
+  min-height: auto;
+}
+
 /* Icon-only buttons - square, just enough padding to keep the icon from
    touching the edges. aria-label/title on each one carries the label that
    would otherwise be visible text. Ghost style - transparent until

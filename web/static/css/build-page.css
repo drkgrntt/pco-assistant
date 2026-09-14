@@ -120,8 +120,10 @@ main:has(.build-layout) {
 /* The Build page's "at a glance" sidebar (see build.templ, toggleBuildTab
    in scheduling-build.js) - a standing summary of whichever tab isn't currently
    open. Mobile-first: stacked full-width below the tabs by default (no
-   room for a true margin on a phone), moving beside them at the same
-   900px breakpoint the landing page's own two-column sections use. */
+   room for a true margin on a phone), moving beside .build-main at the
+   1200px breakpoint below - wider than the landing page's own 900px
+   two-column switch, and not a coincidence: see that media query's own
+   comment for why. */
 .build-layout {
   display: flex;
   flex-direction: column;
@@ -232,7 +234,21 @@ main:has(.build-layout) {
   margin-top: var(--space-1);
 }
 
-@media (min-width: 900px) {
+/* 1200px, not the landing page's 900px (see .build-layout's own comment
+   above): a fixed-width 18rem sidebar sitting beside .build-main is fine
+   for the Songs tab, but on the Team tab it was squeezing
+   .team-groups-grid (components/card.css) below the width its own
+   24rem-floor columns need to sit two-across - "desktop" browser windows
+   in the roughly 900-1200px range were seeing the sidebar switch to a
+   row *and* the team grid collapse to one column at the same time, per
+   docs/issues.md's "they stack on desktop view... I want it to look
+   side-by-side, at least as much as is reasonable". Keeping the sidebar
+   stacked full-width below the tabs a while longer - up to 1200px,
+   chosen so .build-main has the room for two 24rem team columns with or
+   without the sidebar sharing the row right at the threshold, no jump
+   from 2 columns to 1 the moment the sidebar appears - hands
+   .team-groups-grid the full main width to work with instead. */
+@media (min-width: 1200px) {
   .build-layout {
     flex-direction: row;
     align-items: start;

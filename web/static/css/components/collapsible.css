@@ -37,6 +37,25 @@
   color: var(--accent);
 }
 
+/* Space below every plain (non-card) collapsible, closed or open, so it
+   doesn't sit flush against whatever follows - two "Recommended next"/
+   "Could use one more sing" sections stacked back to back, say
+   (set_builder.templ). Never needed explicit margin before the toggle
+   above gained a real background/border-radius: its old transparent,
+   padding-only look didn't read as a bounded box, so the same
+   padding (unchanged here) was enough breathing room on its own; now
+   that it's a visible chip, the next element needs a real gap below it
+   instead - see docs/issues.md's follow-up on the accordion background
+   change ("that spacing was more or less taken care of by the lack of
+   background before"). :not(.position-group) scopes this to
+   collapsibleSection's own bare wrapper only - collapsibleCard's
+   .position-group.collapsible combo (roster_builder.templ) already gets
+   its spacing from .position-group's own margin-block (card.css, zeroed
+   out again when nested under .team-group), which this leaves alone. */
+.collapsible:not(.position-group) {
+  margin-block-end: var(--space-3);
+}
+
 .collapsible-toggle .icon {
   transition: transform var(--duration-base) var(--ease-standard);
 }

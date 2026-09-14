@@ -187,7 +187,10 @@ templ songPublishPanelContent(data SetBuilderData) {
 				Planning Center), while this button only ever pushes *to* it,
 				same direction as Publish - just a much narrower one (existing
 				items' info only, never create/delete/reorder the way Publish
-				does).
+				does). .button-sm (buttons.css) per a further docs/issues.md
+				push-back - this button's own label is long enough to
+				otherwise read as just as prominent as Publish/Discard above
+				it despite doing far less.
 			-->
 			if data.UnpublishedCount < len(data.SetSongs) {
 				<form
@@ -198,6 +201,7 @@ templ songPublishPanelContent(data SetBuilderData) {
 				>
 					<button
 						type="submit"
+						class="button-sm"
 						title="Fixes a wrong/missing key, length, or arrangement on songs already published to Planning Center - without discarding and republishing the whole set"
 					>Re-push key, length &amp; arrangement</button>
 				</form>
