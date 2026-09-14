@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"os"
 	"time"
 
 	"pco-assistant/internal/auth"
@@ -26,9 +27,17 @@ func NewAuthController(store *auth.Store) *AuthController {
 }
 
 func (ac *AuthController) RegisterRoutes(router fiber.Router) {
+	// Both OAuth entry points are reachable pre-login (RequireAuth's own
+	// publicPrefixes), so unlike nearly every other route in this app
+	// they're wide open to an unauthenticated hit - Callback in
+	// particular does real work (token exchange, identity/org lookups
+	// against PCO) once past its own state-cookie check. A generous
+	// per-IP budget (well above what a real sign-in flow, including a
+	// retried one, would ever need) is cheap insurance against scripted
+	// hammering without risking a false positive for a real user.
 	router.Get("/login", ac.LoginPage)
-	router.Get("/auth/pco/start", ac.Start)
-	router.Get("/auth/pco/callback", ac.Callback)
+	router.Get("/auth/pco/start", middleware.RateLimit(20, time.Minute), ac.Start)
+	router.Get("/auth/pco/callback", middleware.RateLimit(20, time.Minute), ac.Callback)
 	router.Post("/auth/logout", ac.Logout)
 }
 
@@ -52,6 +61,7 @@ func (ac *AuthController) Start(c *fiber.Ctx) error {
 		Expires:  time.Now().Add(10 * time.Minute),
 		HTTPOnly: true,
 		SameSite: fiber.CookieSameSiteLaxMode,
+		Secure:   secureCookies(),
 	})
 
 	return c.Redirect(auth.AuthorizeURL(state))
@@ -153,7 +163,12 @@ func (ac *AuthController) Callback(c *fiber.Ctx) error {
 
 	token, err := ac.store.CreateSession(c.Context(), personID, personName, org.Data.ID, org.Data.Attributes.Name, tokenResult.AccessToken, tokenResult.RefreshToken, tokenResult.ExpiresAt)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
+		// Unlike the PCO-facing errors above (whose text is already
+		// PCO's own user-safe error detail), this can be a raw
+		// driver/SQL error - never worth showing a signed-in-in-progress
+		// visitor. Log the real error server-side, return a generic one.
+		logger.ErrorContext(middleware.RequestContext(c), "creating session failed", "error", err)
+		return c.Status(fiber.StatusInternalServerError).SendString("Something went wrong signing you in. Please try again.")
 	}
 
 	c.Cookie(&fiber.Cookie{
@@ -162,6 +177,7 @@ func (ac *AuthController) Callback(c *fiber.Ctx) error {
 		Expires:  time.Now().Add(auth.SessionTTL),
 		HTTPOnly: true,
 		SameSite: fiber.CookieSameSiteLaxMode,
+		Secure:   secureCookies(),
 	})
 
 	return c.Redirect("/")
@@ -187,6 +203,15 @@ func isServicesAccessDenied(err error) bool {
 	}
 	var reqErr *pco.RequestError
 	return errors.As(err, &reqErr) && (reqErr.StatusCode == 401 || reqErr.StatusCode == 403)
+}
+
+// secureCookies reports whether the session/oauth-state cookies should be
+// marked Secure (HTTPS-only) - true everywhere except local dev, which runs
+// over plain http://localhost. Same "opt out only for local" convention as
+// middleware.DevOnly, just inverted (secure by default, not gated by
+// default).
+func secureCookies() bool {
+	return os.Getenv("APP_ENV") != "local"
 }
 
 func randomState() (string, error) {

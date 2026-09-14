@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"strings"
+	"time"
 
 	"pco-assistant/internal/feedback"
 	"pco-assistant/internal/logger"
@@ -27,7 +28,11 @@ func NewFeedbackController(client *notify.Client, feedbackStore *feedback.Store)
 
 func (fc *FeedbackController) RegisterRoutes(router fiber.Router) {
 	router.Get("/feedback", fc.FeedbackPage)
-	router.Post("/feedback", fc.SubmitFeedback)
+	// Rate limited: unlike most POST routes in this app, every hit here
+	// triggers a real side effect (an outbound Mailgun send) even though
+	// the submitter is signed in - cheap insurance against a compromised
+	// session or a buggy client retry loop spamming that inbox.
+	router.Post("/feedback", middleware.RateLimit(10, time.Minute), fc.SubmitFeedback)
 }
 
 func (fc *FeedbackController) FeedbackPage(c *fiber.Ctx) error {

@@ -12,6 +12,13 @@ This is a scratch pad file for Derek to write down thoughts on priorities, but a
     - dismissable warnings on the build page (already has its own plan doc, from before this pass: `docs/plans/not-started/dismissable-warnings-plan.md`)
     - song and person detail pages (already has its own plan doc, from before this pass: `docs/plans/not-started/song-person-detail-pages-plan.md`)
     - vocal range crowdsourcing (already has its own plan doc, from before this pass: `docs/plans/not-started/vocal-range-matrix-and-crowdsourced-default-plan.md`)
+    - security/prod-readiness follow-ups from the 2026-09-14 pre-launch
+      audit - medium/low-priority items only, the high-priority one is
+      listed below; see `docs/plans/not-started/security-hardening-followups-plan.md`
 
 - Longer term / larger sized
     - admin tooling
+    - encrypting PCO access/refresh tokens at rest (the one High-priority
+      item in `docs/plans/not-started/security-hardening-followups-plan.md` -
+      real multi-tenant blast radius, but needs a key-management decision
+      before it's a quick fix)
