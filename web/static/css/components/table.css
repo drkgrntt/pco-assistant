@@ -6,13 +6,65 @@
    the page - narrow phones can't fit 5 columns without it. Also doubles as
    the table's card: elevated off the page on --surface, rather than a bare
    table floating directly on --bg. */
+/* width: 100% + min-width: 0, not max-width: 100% alone (tried first,
+   still wasn't enough - see docs/plans/shipped/mobile-responsiveness-plan.md's
+   changelog). max-width is a *clamp*: it only ever pulls a width down
+   from whatever the box's own width calculation already produced: on a
+   plain block box that calculation is already "fill the containing
+   block, no more" (width: auto's own definition), so max-width: 100%
+   there is provably a no-op - it was never actually doing anything on
+   the setup pages this kept failing on, which is exactly why it didn't
+   fix them. The real risk is upstream of this element entirely: any
+   ancestor between here and body that's a flex/grid item without its own
+   min-width: 0 (main included - see base.css, fixed alongside this) can
+   let this table's own min-width below bubble up and inflate that
+   ancestor itself, at which point 100% of an already-too-wide ancestor
+   is still too wide - no value assigned here, max or otherwise, can undo
+   that from the child end. width: 100% doesn't fix that upstream case
+   either (it's the same "fill the containing block" value auto already
+   computes to); min-width: 0 is what actually matters here, for the one
+   case where .table-wrap itself is a flex item (the Build page's
+   .build-main, several levels up, build-page.css) rather than sitting in
+   plain block flow the way every setup page's table does - explicit,
+   rather than relying on width: auto's default behavior under a
+   flex/grid parent, which is exactly the assumption that turned out
+   not to hold further up the chain. */
 .table-wrap {
   overflow-x: auto;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   -webkit-overflow-scrolling: touch;
   margin-block: var(--space-4);
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
+}
+
+/* Scroll-shadow affordance (docs/plans/shipped/mobile-responsiveness-plan.md,
+   Phase 1) - every setup-page table and the Build page's order-of-service
+   table hit this same `min-width: 32rem` scroll below roughly a 512px
+   viewport, with previously no visual cue that more columns sit off-
+   screen. wireTableScrollAffordance (scheduling-global.js) toggles these
+   two classes on each .table-wrap based on its own scrollLeft/scrollWidth.
+   An inset box-shadow, not a child element or background gradient: it
+   paints on .table-wrap's own border box, not the scrolled content inside
+   it, so it stays put at the visible edge regardless of scroll position
+   and naturally follows the wrap's own border-radius. Not per-theme
+   tinted, same call tokens.css's own shadow tokens already make (a shadow
+   reads as "a shadow" at roughly the same darkness in both themes). */
+.table-wrap.can-scroll-left {
+  box-shadow: inset 10px 0 8px -8px rgba(0, 0, 0, 0.3);
+}
+
+.table-wrap.can-scroll-right {
+  box-shadow: inset -10px 0 8px -8px rgba(0, 0, 0, 0.3);
+}
+
+.table-wrap.can-scroll-left.can-scroll-right {
+  box-shadow:
+    inset 10px 0 8px -8px rgba(0, 0, 0, 0.3),
+    inset -10px 0 8px -8px rgba(0, 0, 0, 0.3);
 }
 
 table {

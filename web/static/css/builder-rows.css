@@ -53,6 +53,41 @@
   margin-block-start: var(--space-3);
 }
 
+/* Mobile: shrink role/context/tag filter chips down to badge-sized pills
+   instead of full ~44px bordered buttons - reported busy at phone width,
+   where a role list plus a context row plus however many tag chips a
+   collapsibleSection reveals can wrap across a lot of vertical space.
+   .role-filter covers all three (tag chips reuse .role-filter directly -
+   applyTagFilter, set_builder.templ - no class of their own), so this one
+   rule reaches every filter chip on the page without touching markup.
+   Resting look borrows .tag-badge's own muted-pill treatment (badge.css)
+   rather than forms.css's bordered <button> base - that base look, at full
+   size and repeated a dozen+ times in a wrapping row, is the "busy" part;
+   .active (above, unchanged) still overrides this via ordinary cascade
+   specificity (two classes beats one), so a selected filter still fills
+   solid-accent exactly as before, just smaller. min-height is an explicit
+   1.5rem rather than 0/auto - still clears 2.5.8 Target Size Minimum's
+   24px floor (this app's own settled call on AA vs. AAA's 44px - see
+   docs/plans/shipped/mobile-responsiveness-plan.md) even though visually
+   shorter than a full button. Desktop is untouched - plenty of room there
+   for the full button treatment already in place. */
+@media (max-width: 639px) {
+  .role-filters {
+    gap: var(--space-1);
+  }
+
+  .role-filter,
+  .context-filter {
+    padding: var(--space-1) var(--space-2);
+    min-height: 1.5rem;
+    border: none;
+    border-radius: var(--radius-full);
+    background: color-mix(in srgb, var(--text) 8%, var(--surface));
+    color: var(--muted);
+    font-size: var(--text-sm);
+  }
+}
+
 #candidate-search {
   width: 100%;
   margin-bottom: var(--space-2);
@@ -272,6 +307,70 @@ tr.song-row.selected {
 
 .row-menu-menu .replace-form select {
   max-width: none;
+}
+
+/* rowMobileActionsItems' Remove button (set_builder.templ) is the one
+   .row-menu-menu button anywhere that needs the same "this is
+   destructive" tint .icon-btn.danger gives its standalone counterpart
+   (buttons.css) - nothing already styled a danger variant inside a
+   row-menu popover before this, since Remove previously only ever
+   appeared as its own standalone icon button. */
+.row-menu-menu button.danger {
+  color: var(--danger);
+}
+
+.row-menu-menu button.danger:hover {
+  background: color-mix(in srgb, var(--danger) 8%, var(--accent-subtle));
+}
+
+.row-menu-menu button.danger .icon {
+  color: var(--danger);
+}
+
+/* Mobile/desktop split for the row's own action cluster
+   (set_builder.templ) - see rowMobileActionsToggle/rowMobileActionsItems'
+   own doc comment for why this is a second, parallel Disclosure rather
+   than something that rearranges .set-song-actions itself. Exactly one of
+   the two is ever visible: .set-song-actions-mobile stays display:none
+   until the same 640px breakpoint every other mobile-first rule in this
+   app switches on, at which point it swaps places with
+   .set-song-actions - down from up to 4 icon buttons to exactly 1 at
+   phone width, everything else reachable through it. */
+.set-song-actions-mobile {
+  display: none;
+}
+
+@media (max-width: 639px) {
+  .set-song-actions {
+    display: none;
+  }
+
+  .set-song-actions-mobile {
+    display: inline-flex;
+  }
+}
+
+/* Mobile/desktop split for a song row's own "extras" badges (roles,
+   resurfaced transition-note prompts) once there are any but not enough
+   to already cross songBadgeSpans' own badgeCollapseThreshold - see that
+   templ's own doc comment for why this is a second rendering of the same
+   content rather than a second, lower threshold taught to Go (which has
+   no viewport to evaluate). Same swap mechanics as
+   .set-song-actions/-mobile above, just inline rather than inline-flex
+   (these badges sit mid-sentence in the row's Tags column, not in their
+   own flex cell). */
+.badge-extras-mobile-only {
+  display: none;
+}
+
+@media (max-width: 639px) {
+  .badge-extras-desktop-only {
+    display: none;
+  }
+
+  .badge-extras-mobile-only {
+    display: inline;
+  }
 }
 
 .foreign-row {

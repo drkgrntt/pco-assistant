@@ -655,3 +655,48 @@ document.addEventListener("click", function (event) {
     bar.classList.add("active");
   }
 });
+
+// Scroll-shadow affordance for horizontally-scrollable tables
+// (components.SortableTableWrap/TableWrap, table.css's .table-wrap) - a
+// narrow phone can't fit every setup-page table (or the Build page's
+// order-of-service table) without horizontal scroll, and there was
+// previously no visual cue that more columns sit off-screen. Toggles
+// .can-scroll-left/.can-scroll-right on each .table-wrap based on its own
+// scrollLeft/scrollWidth, which drives the edge-fade box-shadow in
+// table.css. Tables get replaced wholesale on every htmx swap (outerHTML
+// on the wrapping div), same as scheduling-sortable-table.js's own
+// wireSortableTables - rewires on DOMContentLoaded and htmx:afterSwap for
+// the same reason, plus window resize/orientation change since a wrap's
+// scrollability itself can flip at a breakpoint (e.g. rotating a phone to
+// landscape). data-scroll-affordance-wired guards against attaching a
+// second scroll listener to a wrap that survives a resize (a swap always
+// produces a brand-new element with no dataset flag, so it never needs
+// the guard - only resize revisits already-wired wraps).
+(function () {
+  function updateScrollState(wrap) {
+    var canScroll = wrap.scrollWidth > wrap.clientWidth + 1; // +1: sub-pixel rounding slop
+    wrap.classList.toggle("can-scroll-left", canScroll && wrap.scrollLeft > 0);
+    wrap.classList.toggle(
+      "can-scroll-right",
+      canScroll && wrap.scrollLeft < wrap.scrollWidth - wrap.clientWidth - 1,
+    );
+  }
+
+  function wireTableScrollAffordance() {
+    document.querySelectorAll(".table-wrap").forEach(function (wrap) {
+      if (wrap.dataset.scrollAffordanceWired) {
+        updateScrollState(wrap);
+        return;
+      }
+      wrap.dataset.scrollAffordanceWired = "true";
+      wrap.addEventListener("scroll", function () {
+        updateScrollState(wrap);
+      });
+      updateScrollState(wrap);
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", wireTableScrollAffordance);
+  document.addEventListener("htmx:afterSwap", wireTableScrollAffordance);
+  window.addEventListener("resize", wireTableScrollAffordance);
+})();

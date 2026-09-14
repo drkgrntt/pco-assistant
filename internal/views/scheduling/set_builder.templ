@@ -420,8 +420,36 @@ templ songBadgeSpans(song SetSongView) {
 			badgeOverflowToggle(extrasCount),
 			badgeOverflowMenu(songBadgeExtras(song)),
 		)
-	} else {
-		@songBadgeExtras(song)
+	} else if extrasCount > 0 {
+		<!--
+			Under badgeCollapseThreshold, so a desktop row shows these
+			directly (same as before) - but a row a desktop user wouldn't
+			call "busy" can still wrap onto several lines at phone width
+			(docs/plans/shipped/mobile-responsiveness-plan.md's Build-page
+			follow-up). Rather than teach badgeCollapseThreshold itself a
+			second, viewport-dependent number (Go has no media query to
+			evaluate), render both presentations and let CSS
+			(builder-rows.css's .badge-extras-desktop-only/-mobile-only)
+			pick one per viewport - the same "duplicate content, let CSS
+			choose" call song_detail_card.templ's own doc comment already
+			makes for this exact tradeoff, just applied one level down
+			(extras only, not the whole action cluster - see
+			rowMobileActionsItems below for that one).
+		-->
+		<span class="badge-extras-desktop-only">
+			@songBadgeExtras(song)
+		</span>
+		<span class="badge-extras-mobile-only">
+			@components.Disclosure(
+				"badge-overflow",
+				"badge badge-overflow-toggle",
+				"toggleBadgeOverflow(this)",
+				fmt.Sprintf("Show %d more badges", extrasCount),
+				fmt.Sprintf("Show %d more badges", extrasCount),
+				badgeOverflowToggle(extrasCount),
+				badgeOverflowMenu(songBadgeExtras(song)),
+			)
+		</span>
 	}
 }
 
@@ -602,6 +630,60 @@ templ replaceMenuItems(data SetBuilderData, row ServiceOrderRow) {
 			Replace
 		</button>
 	</form>
+}
+
+// rowMobileActionsToggle/rowMobileActionsItems are a *second*, mobile-only
+// Disclosure covering the row's entire actions cluster - Duplicate,
+// Remove, Replace (replaceMenuItems' own form, reused directly - not
+// re-implemented), and everything rowMenuItems already covers
+// (tag/relate/role/vocal-range/move up/move down) - all as one popup
+// instead of the desktop row's three separate controls
+// (Duplicate/Remove buttons plus two Disclosures). See
+// docs/plans/shipped/mobile-responsiveness-plan.md: a phone-width table
+// row has no spare width for 3-4 icon buttons the way a desktop column
+// does, so mobile gets everything behind one "Actions" kebab instead -
+// same reasoning song_detail_card.templ's songDetailMenuItems already
+// applied one level up (that one folds Replace into the row's own
+// rowMenuItems for *every* viewport, since a sidebar card has room for
+// only one combined menu to begin with; this is the same fold, just also
+// covering Duplicate/Remove, and gated to mobile-only via CSS
+// (.set-song-actions-mobile, builder-rows.css) since the table row *does*
+// have the room for separate one-click Duplicate/Remove/Replace on
+// desktop and shouldn't lose that). Deliberately a second, parallel
+// Disclosure rather than replacing the desktop one - see that CSS class's
+// own comment for why duplicating the markup (not moving it via JS) is
+// the safer call here, same one song_detail_card.templ already made for
+// its own Duplicate/Remove/Replace overlap with the row.
+templ rowMobileActionsToggle() {
+	@components.IconMore()
+}
+
+templ rowMobileActionsItems(data SetBuilderData, i int) {
+	{{ row := data.ServiceOrder[i] }}
+	<button
+		type="button"
+		hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/duplicate", data.ServiceTypeID, data.PlanID, row.Song.ID) }
+		hx-target="#set-builder-body"
+		hx-swap="outerHTML"
+	>
+		@components.IconCopy()
+		Duplicate
+	</button>
+	<button
+		type="button"
+		class="danger"
+		hx-delete={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d", data.ServiceTypeID, data.PlanID, row.Song.ID) }
+		hx-target="#set-builder-body"
+		hx-swap="outerHTML"
+		hx-confirm="Remove this song from the set?"
+	>
+		@components.IconRemove()
+		Remove
+	</button>
+	if len(data.ReplaceCandidates) > 0 {
+		@replaceMenuItems(data, row)
+	}
+	@rowMenuItems(data, i)
 }
 
 // songCandidateMeta is the badge/meta cluster for one not-yet-added song -
@@ -1179,6 +1261,19 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 												this order of service yet.
 											-->
 											@components.Disclosure("row-menu", "icon-btn row-menu-toggle", "toggleRowMenu(this)", "More actions for this song", "More actions", rowMenuToggle(), rowMenuItems(data, i))
+										</div>
+										<!--
+											Mobile-only twin of .set-song-actions above - see
+											rowMobileActionsToggle/rowMobileActionsItems' own doc
+											comment for why this is a second, parallel Disclosure
+											rather than something that replaces or rearranges the
+											desktop one. .set-song-actions-mobile
+											(builder-rows.css) is display:none above 640px and
+											hides .set-song-actions below it, so exactly one of the
+											two ever renders visibly at a time.
+										-->
+										<div class="set-song-actions-mobile">
+											@components.Disclosure("row-menu", "icon-btn row-menu-toggle", "toggleRowMenu(this)", "Actions for this song", "Actions", rowMobileActionsToggle(), rowMobileActionsItems(data, i))
 										</div>
 									}
 								</td>
