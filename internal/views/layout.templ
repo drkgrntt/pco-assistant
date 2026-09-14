@@ -110,7 +110,16 @@ templ Head(title string) {
 templ Layout(title string, personName string, organizationName string) {
 	<!DOCTYPE html>
 	<html lang="en">
-		@Head(title)
+		@Head(title) {
+			<!--
+				Every page behind this shell requires a signed-in session - there's
+				nothing for a crawler to usefully index (a login redirect at best,
+				one org's own private scheduling data at worst), unlike the public
+				marketing pages (Landing/Pricing/HowItWorks/Privacy/Terms), which
+				opt in via marketingMeta (landing.templ) instead.
+			-->
+			<meta name="robots" content="noindex, nofollow"/>
+		}
 		<body>
 			<!--
 				Bypass Blocks (2.4.1, Finding 3 -

@@ -343,19 +343,31 @@ no server-side state involved.
   every page gets the correct markup/ARIA/JS wiring automatically, not just
   the right class name. See it rendered live at `/style-guide` (only
   responds when `APP_ENV=local`).
+- The five public marketing pages (Landing, Pricing, HowItWorks, Privacy,
+  Terms) carry real SEO/social metadata - description, canonical link, Open
+  Graph, and Twitter Card tags (`marketingMeta`, `internal/views/
+  landing.templ`) - plus a dynamically-generated `/sitemap.xml` and
+  `/robots.txt` (`MarketingController.Sitemap`/`.Robots`,
+  `internal/server/controllers/marketing.go`), all built off
+  `views.MarketingBaseURL` (an `APP_BASE_URL`-derived var) rather than a
+  hardcoded domain. The authenticated app shell (`Layout`,
+  `internal/views/layout.templ`) opts out with a `noindex` meta tag instead
+  - there's nothing behind sign-in worth indexing.
 
 ## Setup
 
 1. **Postgres.** Create a database and set the `DB_*` variables below to
    point at it - migrations run automatically on startup.
 
-2. **Planning Center credentials.** You need two separate things from PCO:
-   - A [Personal Access Token](https://api.planningcenteronline.com/oauth/applications)
-     (`PCO_CLIENT_ID` / `PCO_SECRET`) - used for every server-side API call
-   - An [OAuth application](https://api.planningcenteronline.com/oauth/applications)
-     (`PCO_OAUTH_CLIENT_ID` / `PCO_OAUTH_CLIENT_SECRET`) with redirect URI
-     `http://localhost:8080/auth/pco/callback` - used for "Sign in with
-     Planning Center"
+2. **Planning Center credentials.** Create an
+   [OAuth application](https://api.planningcenteronline.com/oauth/applications)
+   (`PCO_OAUTH_CLIENT_ID` / `PCO_OAUTH_CLIENT_SECRET`) with redirect URI
+   `http://localhost:8080/auth/pco/callback` - used for "Sign in with
+   Planning Center". Every PCO API call this app makes (not just sign-in)
+   authenticates as whichever person is signed in, via their own OAuth
+   access token (`middleware.RequestContext` -> `pco.WithAccessToken`) -
+   there's no separate Personal Access Token or shared service credential
+   to configure.
 
 3. **Stripe (optional for local dev).** Every organization gets a free
    trial automatically at sign-in - Stripe is only needed for the
@@ -437,9 +449,6 @@ no server-side state involved.
    DB_USERNAME=...
    DB_PASSWORD=...
    DB_SCHEMA=public
-
-   PCO_CLIENT_ID=...
-   PCO_SECRET=...
 
    PCO_OAUTH_CLIENT_ID=...
    PCO_OAUTH_CLIENT_SECRET=...

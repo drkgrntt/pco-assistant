@@ -93,7 +93,7 @@ become true:
   own right (worship-team volunteers searching the App Store rather than
   being sent a link).
 - A **third-party integration** or the admin tool
-  (`docs/plans/not-started/admin-tooling-plan.md`) needs to call this
+  (`docs/plans/in-progress/admin-tooling-plan.md`) needs to call this
   app's data from outside a browser session - that would be the first
   real forcing function for a token-based auth mechanism, and could double
   as the seed of a broader JSON API.

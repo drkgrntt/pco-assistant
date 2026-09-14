@@ -1,10 +1,20 @@
 # Plan: app-operator admin tooling (separate minimal web app)
 
-Written 2026-09-08, following a research pass into the current auth/org
-model and a decision from Derek. Not built, not started. Companion
-research: the same conversation also covered mobile/API strategy - see
-`docs/plans/not-started/mobile-app-strategy-plan.md` - a separate
-decision, bundled only because both were raised together.
+**Status: in progress.** Written 2026-09-08, following a research pass
+into the current auth/org model and a decision from Derek. The shell
+described below is built - `cmd/admin/main.go`, gated by `ADMIN_TOKEN`
+via fiber's `basicauth` middleware, binding to `127.0.0.1` only, with the
+first feature (`GET /feedback`, backed by the new `feedback.Store.List`)
+live and smoke-tested locally. Not deployed anywhere yet - open question 1
+below (how a request actually reaches it) still needs a real decision
+before that happens; the binary itself works unchanged regardless of
+which way that's decided, so building it didn't have to wait. Open
+question 2 is resolved: it shares `internal/feedback`'s `Store` directly,
+as expected.
+
+Companion research: the same conversation also covered mobile/API
+strategy - see `docs/plans/not-started/mobile-app-strategy-plan.md` - a
+separate decision, bundled only because both were raised together.
 
 ## The problem
 
@@ -94,22 +104,30 @@ occasional, simple lookups.
   `internal/feedback.Store` - it's currently write-only by design, see
   above). Everything past that (org list/billing status lookups, one-off
   data fixes) is additive once the shell exists; don't build past the
-  first real need.
+  first real need. **Built** - `feedback.Store.List`, plain
+  `html/template` rendering (not a templ component - this binary doesn't
+  share `internal/views`' design system at all, see `cmd/admin/main.go`'s
+  own doc comment).
 - **Deploy**: likely a second service in the same `docker-compose.yml`
   stack on `debian` (own container, own port), sharing the same Postgres
-  - not a new host, not new infra beyond one more compose service.
+  - not a new host, not new infra beyond one more compose service. Not
+  done yet - blocked on open question 1 below.
 
 ## Open questions (need a real decision before building, not a default)
 
 1. SSH-tunnel-only vs. real subdomain exposure (above) - depends on how
    often Derek actually expects to reach for this away from a terminal.
+   **Still open** - the binary itself (auth, routing, `127.0.0.1` bind) is
+   built and works either way; this only gates the `docker-compose.yml`/
+   nginx deploy step.
 2. Whether this binary shares `internal/feedback`'s `Store` type directly
    (adding read methods to the same package the main app writes through)
    or gets its own read-only query layer - probably the former, mirroring
    how `cmd/dbseed`/`pcoreset` already import `internal/auth`/
    `internal/scheduling` directly, but worth confirming once a second
    read-heavy use case shows up and the shape of what's needed is
-   clearer.
-3. Nothing here is scheduled - this doc exists so the architecture
-   questions are answered before building, not as a commitment to build
-   soon.
+   clearer. **Resolved**: the former - `feedback.Store.List` was added
+   directly to the existing package.
+3. Nothing here is scheduled beyond what's built - this doc exists so the
+   architecture questions are answered before building further, not as a
+   commitment to build the rest soon.

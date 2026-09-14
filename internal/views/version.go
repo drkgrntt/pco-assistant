@@ -1,6 +1,7 @@
 package views
 
 import (
+	"os"
 	"strconv"
 	"time"
 )
@@ -19,3 +20,11 @@ import (
 // something to remember to purge by hand after every deploy that touches
 // CSS/JS.
 var AssetVersion = strconv.FormatInt(time.Now().Unix(), 10)
+
+// MarketingBaseURL is the externally-reachable origin the public marketing
+// pages (landing.templ's marketingMeta, MarketingController's Sitemap) use
+// to build absolute canonical/Open Graph/Twitter Card URLs and sitemap
+// entries. Same source of truth as internal/billing/stripe.go's own
+// externally-reachable origin - both just read APP_BASE_URL - so a domain
+// change is one env var, not a second hardcoded copy of it here too.
+var MarketingBaseURL = os.Getenv("APP_BASE_URL")
