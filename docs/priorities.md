@@ -15,7 +15,3 @@ This is a scratch pad file for Derek to write down thoughts on priorities, but a
 
 - Longer term / larger sized
     - admin tooling
-
-- Corrections from this pass (2026-09-12)
-    - The "publish vs sync" item wasn't actually about Merge/"Pull in changes" - it was specifically Publish vs. the "Re-sync key, length & arrangement" button. They're not redundant (Publish is the full local-to-PCO sync; the other button is a narrow PATCH-only fix for stale info on already-published songs, a gap Publish never covers on its own), so didn't combine them - the button's *name* was the real source of confusion, since "sync" already means something else on this page (the poll banner and Merge both pull FROM PCO; this button only ever pushes TO PCO). Renamed it to "Re-push key, length & arrangement" instead. Full reasoning in `docs/issues.md`'s corresponding item.
-    - The arrangements item didn't need new investigation - `docs/ideas.md` already has a writeup of the real gap (one cached arrangement per song org-wide, no per-occurrence override), so pointed at that instead of re-deriving it.
