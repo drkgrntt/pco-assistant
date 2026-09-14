@@ -19,6 +19,7 @@ templ Landing() {
 	<!DOCTYPE html>
 	<html lang="en">
 		@Head("Worship scheduling for Planning Center") {
+			@marketingMeta("Worship scheduling for Planning Center", "Resonance catches the song fatigue, team friction, and lineup conflicts Planning Center itself can't see - before your team ever sees the published plan.", "/")
 			<link rel="stylesheet" href={ "/static/css/landing.css?v=" + AssetVersion }/>
 		}
 		<body class="landing">
@@ -150,4 +151,28 @@ templ marketingFooter() {
 			</nav>
 		</div>
 	</footer>
+}
+
+// marketingMeta is the description/canonical/Open Graph/Twitter Card meta
+// tags shared by every public, indexable page (Landing, Pricing,
+// HowItWorks, Privacy, Terms) - passed as Head's children so each page
+// supplies its own title/description/path while still sharing Head's
+// favicon/font/asset wiring. title is repeated here rather than read back
+// out of Head's own <title> since templ has no clean way to do that;
+// callers already pass the same string to both. Deliberately only called
+// from the marketing pages above - the authenticated app shell (Layout)
+// opts out of indexing instead, see its own noindex meta tag.
+templ marketingMeta(title string, description string, path string) {
+	<meta name="description" content={ description }/>
+	<link rel="canonical" href={ MarketingBaseURL + path }/>
+	<meta property="og:site_name" content="Resonance"/>
+	<meta property="og:type" content="website"/>
+	<meta property="og:title" content={ title }/>
+	<meta property="og:description" content={ description }/>
+	<meta property="og:url" content={ MarketingBaseURL + path }/>
+	<meta property="og:image" content={ MarketingBaseURL + "/static/icon-512.png" }/>
+	<meta name="twitter:card" content="summary_large_image"/>
+	<meta name="twitter:title" content={ title }/>
+	<meta name="twitter:description" content={ description }/>
+	<meta name="twitter:image" content={ MarketingBaseURL + "/static/icon-512.png" }/>
 }

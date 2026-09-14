@@ -24,9 +24,11 @@ const refreshBuffer = 5 * time.Minute
 // tone's real piano recordings, registered as a separate static mount in
 // routes.go since they live under top-level assets/, not web/static/ - a
 // sound file carries no auth-relevant content, same trust level as
-// /static/*), the PWA manifest/service worker (which
-// must be reachable pre-login for install prompts and are root-served, not
-// under /static/, so they need their own entries here), Stripe's
+// /static/*), the PWA manifest/service worker and /robots.txt/
+// /sitemap.xml (all root-served, not under /static/, so each needs its own
+// entry here - a crawler fetches /robots.txt and /sitemap.xml with no
+// session at all, same as the manifest/service worker needing to be
+// reachable pre-login), Stripe's
 // webhook (which authenticates itself via a signature - see
 // internal/billing.HandleWebhook - not a session cookie, since Stripe's
 // servers have neither), and the Pricing/HowItWorks/Privacy/Terms
@@ -36,7 +38,7 @@ const refreshBuffer = 5 * time.Minute
 // and Terms specifically need to be reachable with no session at all,
 // same as any other legal disclosure page - someone deciding whether to
 // sign in at all has to be able to read them first.
-var publicPrefixes = []string{"/health", "/login", "/auth/", "/static/", "/piano-samples/", "/sw.js", "/manifest.json", "/billing/webhook", "/pricing", "/how-it-works", "/privacy", "/terms"}
+var publicPrefixes = []string{"/health", "/login", "/auth/", "/static/", "/piano-samples/", "/sw.js", "/manifest.json", "/robots.txt", "/sitemap.xml", "/billing/webhook", "/pricing", "/how-it-works", "/privacy", "/terms"}
 
 // RequireAuth gates every route not covered by publicPrefixes behind a
 // valid, unexpired session. On success it stashes the signed-in person's id
