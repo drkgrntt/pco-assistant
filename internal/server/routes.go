@@ -15,6 +15,7 @@ func (s *FiberServer) RegisterFiberRoutes() {
 	// handler registered below - see both middlewares' own doc comments.
 	s.App.Use(middleware.RequestID())
 	s.App.Use(middleware.Recover())
+	s.App.Use(middleware.SecurityHeaders())
 
 	// Apply CORS middleware
 	s.App.Use(cors.New(cors.Config{
