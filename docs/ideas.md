@@ -342,6 +342,18 @@ pattern as `song_tags`/`song_relationships`:**
   tracked_new_songs, key/tempo); the actual gap is a rehearsal-length field
   to check against (service type? set-level?) and a scoring formula, which
   is a calibration problem, not a plumbing one.
+- **Per-position song difficulty + person expertise** - prompted by the
+  worship pastor directly (a song can be vocally simple but
+  rhythmically/instrumentally hard; a person can be strong on one
+  position and a novice on another). A genuinely wider join than anything
+  else in this file (song×position and person×position, not just
+  song×person the way vocal range is) - see
+  `docs/plans/not-started/song-difficulty-person-expertise-plan.md` for
+  the full design-fork writeup, including a real open question on whether
+  a per-person mismatch signal risks reading as a competence judgment on
+  a volunteer team (vs. folding into the set-level, person-anonymous
+  Rehearsal complexity budget above instead). Not started - forks
+  unresolved.
 - **CCLI/reporting completeness** - flag a song missing CCLI number/author
   before publish, so licensing reports don't silently have gaps. Verified
   2026-09-05: `pco.SongAttributes` (`go-pco` v0.21.0) already exposes both
