@@ -1,12 +1,12 @@
 // scheduling-global.js - app-wide chrome shared by every page: theme
-// toggle, the early-preview banner's dismissal, the guided-tour controller
-// (home page + Build page tours), the generic single-step help dialogs plus
-// the footer's openPageHelp dispatcher, the header nav dropdown + mobile
-// hamburger menu, and the app-wide htmx request feedback (progress bar +
-// button-disable, and the plain-<a> navigation loading cue). Split out of
-// the former single scheduling.js - see web/static/css/ for the same
-// per-concern split already used for this app's CSS
-// (internal/views/layout.templ's designSystemCSSFiles).
+// toggle, the guided-tour controller (home page + Build page tours), the
+// generic single-step help dialogs plus the footer's openPageHelp
+// dispatcher, the header nav dropdown + mobile hamburger menu, and the
+// app-wide htmx request feedback (progress bar + button-disable, and the
+// plain-<a> navigation loading cue). Split out of the former single
+// scheduling.js - see web/static/css/ for the same per-concern split
+// already used for this app's CSS (internal/views/layout.templ's
+// designSystemCSSFiles).
 
 // Applies the saved theme preference (light/dark) as early as possible -
 // this file loads in <head>, before <body> parses, so this runs before the
@@ -17,23 +17,6 @@
   var saved = localStorage.getItem("theme");
   if (saved === "light" || saved === "dark") {
     document.documentElement.setAttribute("data-theme", saved);
-  }
-})();
-
-// Same flash-prevention trick as the theme preference above, for the
-// early-preview banner (layout.templ): if it's already been dismissed,
-// mark <html> before <body> parses so app.css's .banner-dismissed rule
-// hides it immediately, rather than showing it for a moment and then
-// yanking it away once this file's dismissSiteBanner() runs.
-//
-// sessionStorage, not localStorage: the warning it's attached to needs to
-// stay apparent until it's genuinely no longer true, not something a
-// viewer can silence for good on one visit and then never see again -
-// closing it just keeps the current visit clutter-free, and it's back
-// next time they open the app.
-(function () {
-  if (sessionStorage.getItem("bannerDismissed") === "true") {
-    document.documentElement.classList.add("banner-dismissed");
   }
 })();
 
@@ -56,16 +39,6 @@ function toggleTheme() {
   var next = currentEffectiveTheme() === "dark" ? "light" : "dark";
   document.documentElement.setAttribute("data-theme", next);
   localStorage.setItem("theme", next);
-}
-
-// Dismisses the early-preview banner (layout.templ) for the rest of this
-// browser session only (see the sessionStorage note above) - it comes
-// back next time the tab/browser is reopened, so it stays something a
-// viewer is actually reminded of rather than a one-time notice they can
-// permanently opt out of.
-function dismissSiteBanner() {
-  document.documentElement.classList.add("banner-dismissed");
-  sessionStorage.setItem("bannerDismissed", "true");
 }
 
 // createTourController builds a small driver behind a guided <dialog> tour

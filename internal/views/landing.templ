@@ -6,10 +6,9 @@ import "pco-assistant/internal/views/components"
 // RequireAuth's soft-auth case and HomeController.Index). Deliberately its
 // own <html>/<body>, not wrapped in Layout: the app shell's nav
 // (Home/Build a Service/Setup) is all dead ends for a visitor who hasn't
-// signed in yet, and the early-preview warning banner isn't the first
-// thing someone deciding whether to try the product should see. Still
-// shares Layout's <head> (Head, layout.templ) for the same cache-busted
-// assets/favicon/fonts, plus this page's own stylesheet. Pricing and
+// signed in yet. Still shares Layout's <head> (Head, layout.templ) for
+// the same cache-busted assets/favicon/fonts, plus this page's own
+// stylesheet. Pricing and
 // HowItWorks (pricing.templ, how_it_works.templ) are this page's two
 // companion pages - same chrome (marketingHeader/marketingFooter below),
 // same stylesheet - for the two things this single page deliberately

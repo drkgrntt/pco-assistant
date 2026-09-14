@@ -1,8 +1,7 @@
 /* The site header/nav shell (layout.templ) - single instance, rendered
    once per page, not a reusable component. See components/disclosure.css
    for the "Setup" dropdown's own styling (.nav-dropdown*), split out
-   since that's a concrete usage of the shared Disclosure component, and
-   site-banner.css for the early-preview strip beneath the header. */
+   since that's a concrete usage of the shared Disclosure component. */
 
 /* Two clusters: .site-primary (brand + nav) and .site-actions (now just
    the account dropdown - theme toggle, org name, Account link, and logout
