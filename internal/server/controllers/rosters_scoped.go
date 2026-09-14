@@ -203,7 +203,7 @@ func (sc *SchedulingController) buildRosterPositionGroupData(ctx context.Context
 	for id, info := range shared.TeamInfo {
 		teamNames[id] = info.Name
 	}
-	resolveMissingTeamNames(ctx, serviceTypeID, teamNames, []string{teamID})
+	resolveMissingTeamNames(ctx, serviceTypeID, teamNames, nil, []string{teamID})
 	teamName := titleOrID(teamNames, teamID)
 
 	var candidates []pco.PersonTeamPositionAssignmentData
@@ -443,7 +443,7 @@ func (sc *SchedulingController) buildRosterLightData(ctx context.Context, organi
 		teamNames[id] = info.Name
 		teamSequence[id] = info.Sequence
 	}
-	resolveMissingTeamNames(ctx, serviceTypeID, teamNames, positionGroupTeamIDs(groups))
+	resolveMissingTeamNames(ctx, serviceTypeID, teamNames, teamSequence, positionGroupTeamIDs(groups))
 
 	assignedIDs := assignmentPersonIDs(assignments)
 	names := personNameMapForIDs(ctx, assignedIDs)
