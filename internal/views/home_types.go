@@ -18,8 +18,13 @@ type HomeData struct {
 	// hides the nudge entirely.
 	SuggestionCount int
 	// OrgStatus/OrgPlan/TrialDaysLeft mirror BillingData's own trial
-	// fields - shown here too since a trial ending is worth surfacing
-	// somewhere more visible than a page you only visit on purpose.
+	// fields. The home page banner built from these (home.templ) only
+	// shows while trialing once TrialDaysLeft <= 7 - a trial's full
+	// length isn't worth a persistent warning, but its last week is.
+	// Non-trialing non-active statuses (past-due, canceled, ...) still
+	// show unconditionally - those are real billing problems, not a
+	// countdown. The always-visible version of this same info lives on
+	// /billing and /account (views.BillingBody).
 	OrgStatus     string
 	OrgPlan       string
 	TrialDaysLeft int
