@@ -91,6 +91,7 @@ make all         # build + test
 make db-reset    # wipe local DB and rebuild from migrations (ARGS=-yes to skip confirm)
 make db-seed     # populate local DB with example scheduling data
 make pco-reset   # delete every Song/Plan in the signed-in PCO org (dev orgs only!)
+make admin       # run the separate admin app (cmd/admin) with live reload via air; requires ADMIN_TOKEN
 ```
 
 Run a single test: `go test ./internal/server/controllers/ -run TestMergeServiceOrder -v`
@@ -223,7 +224,11 @@ actual app, split by concern rather than by feature:
 - `internal/auth` - sessions (PCO access/refresh tokens encrypted at rest,
   AES-256-GCM via `token_encryption.go`, key from an optional
   `SESSION_TOKEN_ENCRYPTION_KEY` env var), PCO OAuth, organizations, seat
-  counting.
+  counting, and `people` - a durable, org-scoped name/email directory
+  upserted at sign-in (`people.go`), decoupled from any one session's
+  lifetime (unlike sessions, it isn't deleted on logout/expiry) so
+  `cmd/admin` has somewhere to read a contact from even for someone not
+  currently signed in. See `docs/plans/in-progress/admin-tooling-plan.md`.
 - `internal/billing` - Stripe checkout/portal/webhook handling.
 - `internal/notify` - Mailgun-backed outbound email (currently just
   feedback submissions from `/feedback`) - a `Client` constructed once

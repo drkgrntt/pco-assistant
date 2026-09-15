@@ -26,22 +26,37 @@
 // (reads the same .env as the main app for DB_*, via godotenv/autoload -
 // only ADMIN_TOKEN, and optionally ADMIN_PORT, are new.)
 //
-// First (and so far only) feature: GET /feedback, listing every
-// /feedback submission across every organization - the plan doc's own
-// "first real need," deliberately not built past that yet. Add the next
-// feature (org list/billing status lookups, etc.) the same way: a read
-// method on the relevant store, a handler here, a route below.
+// Pages render via cmd/admin/views, real .templ components (same engine
+// the main app uses, `templ generate` before building - see make admin/
+// .air.admin.toml) rather than hand-rolled html/template strings - just
+// its own small layout, not internal/views' design system (see that
+// package's own doc comment for why this is a templating-engine choice,
+// not an adoption of the main app's chrome/CSS/htmx).
+//
+// Features so far: GET /feedback (every /feedback submission across every
+// organization - the plan doc's own "first real need"); GET /orgs (every
+// organization's billing status, with a trial-extension action) and GET
+// /people (everyone who's ever signed in, by org, with email - see the
+// people table's own migration for why this exists separately from
+// sessions). Add the next feature the same way: a read (and, if it
+// writes anything, write) method on the relevant store, a views.templ
+// component, a handler here, a route below.
 package main
 
 import (
 	"crypto/subtle"
-	"html/template"
 	"os"
+	"strconv"
+	"time"
 
+	"pco-assistant/cmd/admin/views"
+	"pco-assistant/internal/auth"
+	"pco-assistant/internal/billing"
 	"pco-assistant/internal/database"
 	"pco-assistant/internal/feedback"
 	"pco-assistant/internal/logger"
 
+	"github.com/a-h/templ"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/basicauth"
 	_ "github.com/joho/godotenv/autoload"
@@ -65,6 +80,18 @@ func main() {
 	defer db.Close()
 
 	feedbackStore := feedback.NewStore(db)
+	authStore := auth.NewStore(db, auth.LoadTokenEncryptionKeyFromEnv())
+	// Same env vars/constructor server.go uses for the main app's
+	// billingClient - this binary just needs the one ExtendTrial method
+	// off it, not the checkout/portal/webhook paths those envs also
+	// cover.
+	billingClient := billing.New(
+		os.Getenv("STRIPE_SECRET_KEY"),
+		os.Getenv("STRIPE_PRICE_STANDARD"),
+		os.Getenv("STRIPE_PRICE_MULTI_CAMPUS"),
+		os.Getenv("STRIPE_WEBHOOK_SECRET"),
+		os.Getenv("APP_BASE_URL"),
+	)
 
 	app := fiber.New()
 	app.Use(basicauth.New(basicauth.Config{
@@ -77,8 +104,11 @@ func main() {
 		},
 	}))
 
-	app.Get("/", func(c *fiber.Ctx) error { return c.Redirect("/feedback") })
+	app.Get("/", func(c *fiber.Ctx) error { return c.Redirect("/orgs") })
 	app.Get("/feedback", feedbackPage(feedbackStore))
+	app.Get("/orgs", orgsPage(authStore))
+	app.Post("/orgs/:id/extend-trial", extendTrial(authStore, billingClient))
+	app.Get("/people", peoplePage(authStore))
 
 	addr := "127.0.0.1:" + port
 	logger.Info("admin app listening", "addr", addr)
@@ -87,52 +117,6 @@ func main() {
 	}
 }
 
-// feedbackTmpl is deliberately plain html/template, not a templ component -
-// this app doesn't share internal/views' design system (fonts, CSS,
-// htmx JS) at all, and pulling that in for one read-only table would be
-// more machinery than a single-operator lookup tool needs. html/template
-// auto-escapes every field below, which matters here specifically:
-// SubmitterEmail and Message are free-text, submitted by whoever filled out
-// the main app's /feedback form - untrusted input, even though only Derek
-// ever views this page.
-var feedbackTmpl = template.Must(template.New("feedback").Parse(`<!DOCTYPE html>
-<html lang="en">
-<head>
-	<meta charset="UTF-8">
-	<title>Feedback - admin</title>
-	<style>
-		body { font-family: system-ui, sans-serif; max-width: 60rem; margin: 2rem auto; padding: 0 1rem; color: #222; }
-		table { width: 100%; border-collapse: collapse; }
-		th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid #ddd; vertical-align: top; }
-		th { font-size: 0.85rem; text-transform: uppercase; color: #666; }
-		td.message { white-space: pre-wrap; }
-		td.when { white-space: nowrap; color: #666; font-size: 0.9rem; }
-	</style>
-</head>
-<body>
-	<h1>Feedback ({{ len . }})</h1>
-	{{ if not . }}
-		<p>No feedback submitted yet.</p>
-	{{ else }}
-	<table>
-		<thead>
-			<tr><th>When</th><th>Organization</th><th>From</th><th>Message</th></tr>
-		</thead>
-		<tbody>
-			{{ range . }}
-			<tr>
-				<td class="when">{{ .CreatedAt.Format "2006-01-02 15:04" }}</td>
-				<td>{{ .OrganizationName }}</td>
-				<td>{{ .PersonName }}{{ if .SubmitterEmail }}<br>{{ .SubmitterEmail }}{{ end }}</td>
-				<td class="message">{{ .Message }}</td>
-			</tr>
-			{{ end }}
-		</tbody>
-	</table>
-	{{ end }}
-</body>
-</html>`))
-
 func feedbackPage(store *feedback.Store) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		rows, err := store.List(c.Context())
@@ -140,12 +124,77 @@ func feedbackPage(store *feedback.Store) fiber.Handler {
 			logger.Error("listing feedback for admin app", "error", err)
 			return c.Status(fiber.StatusInternalServerError).SendString("failed to load feedback")
 		}
-
-		c.Set(fiber.HeaderContentType, "text/html; charset=utf-8")
-		if err := feedbackTmpl.Execute(c.Response().BodyWriter(), rows); err != nil {
-			logger.Error("rendering feedback page for admin app", "error", err)
-			return c.Status(fiber.StatusInternalServerError).SendString("failed to render feedback")
-		}
-		return nil
+		return render(c, views.Feedback(rows))
 	}
+}
+
+func orgsPage(store *auth.Store) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		orgs, err := store.ListOrganizations(c.Context())
+		if err != nil {
+			logger.Error("listing organizations for admin app", "error", err)
+			return c.Status(fiber.StatusInternalServerError).SendString("failed to load organizations")
+		}
+		return render(c, views.Orgs(orgs))
+	}
+}
+
+// extendTrial pushes an org's trial out by the posted number of days from
+// now. Branches on whether the org has a live Stripe subscription yet:
+//   - No subscription (still on the original signup trial): trial_ends_at
+//     is the only source of truth (see RequireActiveOrganization), so this
+//     writes it directly via auth.Store.SetOrganizationTrialEnd.
+//   - Has a subscription (already paying): the local column is instead kept
+//     in sync *from* Stripe (see UpdateOrganizationSubscription's
+//     trialEndsAt param), so this calls billing.Client.ExtendTrial to move
+//     Stripe's own trial_end - the webhook round-trips organizations.
+//     trial_ends_at back automatically from there, same as any other
+//     Stripe-side subscription change.
+func extendTrial(store *auth.Store, billingClient *billing.Client) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		id := c.Params("id")
+		days, err := strconv.Atoi(c.FormValue("days"))
+		if err != nil || days < 1 {
+			return c.Status(fiber.StatusBadRequest).SendString("days must be a positive integer")
+		}
+
+		org, err := store.GetOrganization(c.Context(), id)
+		if err != nil {
+			logger.Error("looking up organization to extend trial", "organization_id", id, "error", err)
+			return c.Status(fiber.StatusInternalServerError).SendString("failed to look up organization")
+		}
+
+		newTrialEnd := time.Now().Add(time.Duration(days) * 24 * time.Hour)
+
+		if org.StripeSubscriptionID == "" {
+			if err := store.SetOrganizationTrialEnd(c.Context(), id, newTrialEnd); err != nil {
+				logger.Error("setting trial end for organization", "organization_id", id, "error", err)
+				return c.Status(fiber.StatusInternalServerError).SendString("failed to extend trial")
+			}
+		} else if err := billingClient.ExtendTrial(c.Context(), org.StripeSubscriptionID, newTrialEnd); err != nil {
+			logger.Error("extending stripe trial for organization", "organization_id", id, "error", err)
+			return c.Status(fiber.StatusInternalServerError).SendString("failed to extend trial in stripe")
+		}
+
+		return c.Redirect("/orgs")
+	}
+}
+
+func peoplePage(store *auth.Store) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		people, err := store.ListPeople(c.Context())
+		if err != nil {
+			logger.Error("listing people for admin app", "error", err)
+			return c.Status(fiber.StatusInternalServerError).SendString("failed to load people")
+		}
+		return render(c, views.People(people))
+	}
+}
+
+// render writes a templ component as the response - same shape as the
+// main app's own render.go, just local to this binary (not worth sharing
+// a package for one helper function).
+func render(c *fiber.Ctx, component templ.Component) error {
+	c.Set(fiber.HeaderContentType, "text/html; charset=utf-8")
+	return component.Render(c.Context(), c.Response().BodyWriter())
 }

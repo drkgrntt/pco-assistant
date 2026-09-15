@@ -1,0 +1,36 @@
+package views
+
+import "pco-assistant/internal/auth"
+
+// Orgs lists every organization's billing status, with an inline
+// "extend trial N days" form per row that posts to
+// POST /orgs/:id/extend-trial (see cmd/admin/main.go's extendTrial) - see
+// docs/plans/in-progress/admin-tooling-plan.md's "Trial extension /
+// credit" section for why this is a trial-end push, not a separate
+// credit system.
+templ Orgs(orgs []auth.Organization) {
+	@layout("Organizations") {
+		<h1>Organizations ({ len(orgs) })</h1>
+		<table>
+			<thead>
+				<tr><th>Name</th><th>Status</th><th>Plan</th><th>Trial ends</th><th>Extend trial</th></tr>
+			</thead>
+			<tbody>
+				for _, org := range orgs {
+					<tr>
+						<td>{ org.Name }</td>
+						<td>{ org.Status }</td>
+						<td>{ org.Plan }</td>
+						<td class="when">{ org.TrialEndsAt.Format("2006-01-02") }</td>
+						<td>
+							<form class="inline" method="post" action={ templ.SafeURL("/orgs/" + org.ID + "/extend-trial") }>
+								<input type="number" name="days" value="60" min="1" required/>
+								<button type="submit">days</button>
+							</form>
+						</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	}
+}

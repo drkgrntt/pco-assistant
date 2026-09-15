@@ -1,0 +1,46 @@
+// Package views holds cmd/admin's own templ components - plain, small,
+// deliberately not the main app's internal/views (no htmx, no design
+// system CSS, no session/nav-state assumptions, none of which apply to
+// this shared-secret-gated, single-operator binary - see cmd/admin's own
+// package doc comment for the full reasoning on why this binary is
+// separate at all). Switching from raw html/template strings to real
+// .templ files (see docs/plans/in-progress/admin-tooling-plan.md) keeps
+// that same separation - it's a templating-engine change, not an adoption
+// of the main app's layout/components/CSS.
+package views
+
+templ layout(title string) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="UTF-8"/>
+			<title>{ title } - admin</title>
+			@style()
+		</head>
+		<body>
+			@nav()
+			{ children... }
+		</body>
+	</html>
+}
+
+templ nav() {
+	<nav>
+		<a href="/orgs">Orgs</a> &middot; <a href="/people">People</a> &middot; <a href="/feedback">Feedback</a>
+	</nav>
+}
+
+templ style() {
+	<style>
+		body { font-family: system-ui, sans-serif; max-width: 60rem; margin: 2rem auto; padding: 0 1rem; color: #222; }
+		nav { margin-bottom: 1.5rem; font-size: 0.9rem; }
+		nav a { color: #06c; text-decoration: none; }
+		table { width: 100%; border-collapse: collapse; }
+		th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid #ddd; vertical-align: top; }
+		th { font-size: 0.85rem; text-transform: uppercase; color: #666; }
+		td.message { white-space: pre-wrap; }
+		td.when { white-space: nowrap; color: #666; font-size: 0.9rem; }
+		form.inline { display: inline-flex; gap: 0.25rem; align-items: center; }
+		form.inline input[type=number] { width: 4rem; }
+	</style>
+}

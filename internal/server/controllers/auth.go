@@ -84,7 +84,7 @@ func (ac *AuthController) Callback(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadGateway).SendString(err.Error())
 	}
 
-	personID, personName, err := auth.FetchIdentity(c.Context(), tokenResult.AccessToken)
+	personID, personName, personEmail, err := auth.FetchIdentity(c.Context(), tokenResult.AccessToken)
 	if err != nil {
 		return c.Status(fiber.StatusBadGateway).SendString(err.Error())
 	}
@@ -140,6 +140,14 @@ func (ac *AuthController) Callback(c *fiber.Ctx) error {
 	// gets scoped by, so a failure here shouldn't block sign-in.
 	if err := ac.store.UpsertOrganization(c.Context(), org.Data.ID, org.Data.Attributes.Name); err != nil {
 		logger.ErrorContext(middleware.RequestContext(c), "upserting organization failed", "error", err)
+	}
+
+	// Also best-effort, same reasoning: durable record of this person's
+	// name/email for the admin app (cmd/admin) to read, independent of
+	// this session's own lifetime - see the people table's migration and
+	// docs/plans/in-progress/admin-tooling-plan.md.
+	if err := ac.store.UpsertPerson(c.Context(), org.Data.ID, personID, personName, personEmail); err != nil {
+		logger.ErrorContext(middleware.RequestContext(c), "upserting person failed", "error", err)
 	}
 
 	// End whatever session this browser already had before creating its

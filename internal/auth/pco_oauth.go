@@ -161,30 +161,31 @@ func requestToken(ctx context.Context, body url.Values) (TokenResult, error) {
 }
 
 // FetchIdentity looks up who just signed in via PCO's OIDC userinfo
-// endpoint, using the access token from ExchangeCode. Only the sub/name are
-// returned (as the session's person id/name) - the token itself is the
-// caller's concern (see sessions.go, which persists it for later API
-// calls) and isn't touched here.
-func FetchIdentity(ctx context.Context, accessToken string) (personID, personName string, err error) {
+// endpoint, using the access token from ExchangeCode. sub/name/email are
+// all returned - personEmail is persisted by the caller into the people
+// table (see Callback, people.go), not touched here; the token itself is
+// also the caller's concern (see sessions.go, which persists it for later
+// API calls).
+func FetchIdentity(ctx context.Context, accessToken string) (personID, personName, personEmail string, err error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, userinfoURL, nil)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", "", fmt.Errorf("pco oauth userinfo failed with status %d: %s", resp.StatusCode, respBody)
+		return "", "", "", fmt.Errorf("pco oauth userinfo failed with status %d: %s", resp.StatusCode, respBody)
 	}
 
 	var parsed struct {
@@ -193,10 +194,10 @@ func FetchIdentity(ctx context.Context, accessToken string) (personID, personNam
 		Email string `json:"email"`
 	}
 	if err := json.Unmarshal(respBody, &parsed); err != nil {
-		return "", "", fmt.Errorf("parse userinfo response: %w", err)
+		return "", "", "", fmt.Errorf("parse userinfo response: %w", err)
 	}
 	if parsed.Sub == "" {
-		return "", "", fmt.Errorf("pco oauth userinfo response had no sub: %s", respBody)
+		return "", "", "", fmt.Errorf("pco oauth userinfo response had no sub: %s", respBody)
 	}
 
 	name := parsed.Name
@@ -204,5 +205,5 @@ func FetchIdentity(ctx context.Context, accessToken string) (personID, personNam
 		name = parsed.Email
 	}
 
-	return parsed.Sub, name, nil
+	return parsed.Sub, name, parsed.Email, nil
 }

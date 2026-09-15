@@ -1,0 +1,40 @@
+package views
+
+import "pco-assistant/internal/feedback"
+
+// Feedback lists every /feedback submission across every organization -
+// see feedback.Store.List's own doc comment for why this binary is the
+// one place it's readable. Like every templ component, { } interpolation
+// auto-escapes - matters here specifically since SubmitterEmail/Message
+// are free-text, submitted by whoever filled out the main app's feedback
+// form, not trusted input.
+templ Feedback(rows []feedback.Feedback) {
+	@layout("Feedback") {
+		<h1>Feedback ({ len(rows) })</h1>
+		if len(rows) == 0 {
+			<p>No feedback submitted yet.</p>
+		} else {
+			<table>
+				<thead>
+					<tr><th>When</th><th>Organization</th><th>From</th><th>Message</th></tr>
+				</thead>
+				<tbody>
+					for _, f := range rows {
+						<tr>
+							<td class="when">{ f.CreatedAt.Format("2006-01-02 15:04") }</td>
+							<td>{ f.OrganizationName }</td>
+							<td>
+								{ f.PersonName }
+								if f.SubmitterEmail != "" {
+									<br/>
+									{ f.SubmitterEmail }
+								}
+							</td>
+							<td class="message">{ f.Message }</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		}
+	}
+}

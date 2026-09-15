@@ -12,6 +12,7 @@ package billing
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/stripe/stripe-go/v86"
 )
@@ -143,6 +144,32 @@ func (c *Client) SyncSeatQuantity(ctx context.Context, stripeSubscriptionID stri
 		return fmt.Errorf("updating subscription item quantity: %w", err)
 	}
 
+	return nil
+}
+
+// ExtendTrial sets stripeSubscriptionID's trial_end to trialEnd - Stripe's
+// own mechanism for pausing billing on an *already-paying* subscription
+// until that date (the same field a brand-new trial uses, just applied to
+// an existing one), used by the admin app (cmd/admin) to grant an org
+// free time without a separate local credit/coupon system - see
+// docs/plans/in-progress/admin-tooling-plan.md's "Trial extension /
+// credit" section for why this was chosen over a coupon. ProrationBehavior
+// "none": Stripe's default here would otherwise generate a proration
+// invoice item for the newly-added trial time, which makes no sense for
+// an operator-granted extension - there's nothing to bill for.
+// organizations.trial_ends_at isn't written here; it's synced from
+// Stripe's own webhook once this update fires customer.subscription.updated
+// (see webhook.go's trialEndFrom/UpdateOrganizationSubscription), the same
+// path any other trial_end change (including one made by hand in the
+// Stripe dashboard) already flows through.
+func (c *Client) ExtendTrial(ctx context.Context, stripeSubscriptionID string, trialEnd time.Time) error {
+	_, err := c.sc.V1Subscriptions.Update(ctx, stripeSubscriptionID, &stripe.SubscriptionUpdateParams{
+		TrialEnd:          stripe.Int64(trialEnd.Unix()),
+		ProrationBehavior: stripe.String("none"),
+	})
+	if err != nil {
+		return fmt.Errorf("updating subscription %s trial_end: %w", stripeSubscriptionID, err)
+	}
 	return nil
 }
 
