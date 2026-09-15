@@ -64,16 +64,16 @@ type Session struct {
 // extend to accessToken/refreshToken, which have to be stored recoverable
 // since outbound PCO calls need the literal value back (see the migration
 // that added these columns for the tradeoff this implies).
-func (s *Store) CreateSession(ctx context.Context, personID, personName, organizationID, organizationName, accessToken, refreshToken string, tokenExpiresAt time.Time) (token string, err error) {
+func (s *Store) CreateSession(ctx context.Context, personID, personName, organizationID, organizationName, accessToken, refreshToken string, tokenExpiresAt time.Time, userAgent string) (token string, err error) {
 	token, err = randomToken()
 	if err != nil {
 		return "", err
 	}
 
 	_, err = s.db.ExecContext(ctx, `
-		INSERT INTO sessions (id, person_id, person_name, organization_id, organization_name, expires_at, access_token, refresh_token, token_expires_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-	`, hashToken(token), personID, personName, organizationID, organizationName, time.Now().Add(SessionTTL), accessToken, refreshToken, tokenExpiresAt)
+		INSERT INTO sessions (id, person_id, person_name, organization_id, organization_name, expires_at, access_token, refresh_token, token_expires_at, user_agent)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+	`, hashToken(token), personID, personName, organizationID, organizationName, time.Now().Add(SessionTTL), accessToken, refreshToken, tokenExpiresAt, userAgent)
 	if err != nil {
 		return "", err
 	}
@@ -229,6 +229,13 @@ type ActiveSession struct {
 	ID                   string
 	PersonID, PersonName string
 	CreatedAt, ExpiresAt time.Time
+	// UserAgent is the raw User-Agent header captured at sign-in (see
+	// auth.Callback) - "" for any session created before that column
+	// existed, or if the request never sent one. Callers render this
+	// through DeviceLabel rather than showing it raw; the Account page's
+	// "who's signed in" list is what actually wants that, not this
+	// struct's own concern.
+	UserAgent string
 }
 
 // ListActiveSessions returns every live session for orgID, most recent
@@ -237,7 +244,7 @@ type ActiveSession struct {
 // the deduped billed count, this is just a visibility/action list).
 func (s *Store) ListActiveSessions(ctx context.Context, orgID string) ([]ActiveSession, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, person_id, person_name, created_at, expires_at
+		SELECT id, person_id, person_name, created_at, expires_at, user_agent
 		FROM sessions
 		WHERE organization_id = $1 AND expires_at > now()
 		ORDER BY created_at DESC
@@ -250,7 +257,7 @@ func (s *Store) ListActiveSessions(ctx context.Context, orgID string) ([]ActiveS
 	var sessions []ActiveSession
 	for rows.Next() {
 		var sess ActiveSession
-		if err := rows.Scan(&sess.ID, &sess.PersonID, &sess.PersonName, &sess.CreatedAt, &sess.ExpiresAt); err != nil {
+		if err := rows.Scan(&sess.ID, &sess.PersonID, &sess.PersonName, &sess.CreatedAt, &sess.ExpiresAt, &sess.UserAgent); err != nil {
 			return nil, err
 		}
 		sessions = append(sessions, sess)

@@ -14,6 +14,11 @@ type AccountSession struct {
 	SessionID            string
 	PersonID, PersonName string
 	CreatedAt, ExpiresAt time.Time
+	// Device is the short human label derived from this session's raw
+	// User-Agent (see auth.DeviceLabel) - e.g. "Safari on iPhone" - so two
+	// rows sharing PersonID (the same person signed in on two devices)
+	// read as visually distinct instead of identical.
+	Device string
 }
 
 // AccountData is the Account page's view model - identity info plus the

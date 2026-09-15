@@ -201,6 +201,7 @@ templ AccountSessionsBody(data AccountData) {
 					<thead>
 						<tr>
 							<th>Person</th>
+							<th>Device</th>
 							<th>Signed in</th>
 							<th></th>
 						</tr>
@@ -209,6 +210,7 @@ templ AccountSessionsBody(data AccountData) {
 						for _, sess := range data.Sessions {
 							<tr>
 								<td>{ sess.PersonName }</td>
+								<td>{ sess.Device }</td>
 								<td>{ sess.CreatedAt.Format("Jan 2, 2006 3:04 PM") }</td>
 								<td>
 									<form

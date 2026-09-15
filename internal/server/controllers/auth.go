@@ -161,7 +161,7 @@ func (ac *AuthController) Callback(c *fiber.Ctx) error {
 		}
 	}
 
-	token, err := ac.store.CreateSession(c.Context(), personID, personName, org.Data.ID, org.Data.Attributes.Name, tokenResult.AccessToken, tokenResult.RefreshToken, tokenResult.ExpiresAt)
+	token, err := ac.store.CreateSession(c.Context(), personID, personName, org.Data.ID, org.Data.Attributes.Name, tokenResult.AccessToken, tokenResult.RefreshToken, tokenResult.ExpiresAt, c.Get("User-Agent"))
 	if err != nil {
 		// Unlike the PCO-facing errors above (whose text is already
 		// PCO's own user-safe error detail), this can be a raw

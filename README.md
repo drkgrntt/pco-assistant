@@ -306,7 +306,9 @@ It also lists everyone currently signed in, with a per-person Sign out
 button, so a departed staff member's billed seat can be freed right away
 instead of waiting out the 30-day session expiry (see the Pricing section
 above) - any signed-in person can sign any other out, since every seat is
-already, by this product's own definition, a full admin. An "Install this
+already, by this product's own definition, a full admin. Each row also
+shows which device/browser it signed in from (e.g. "Safari on iPhone"),
+so the same person's two live sessions are easy to tell apart. An "Install this
 app" section is the persistent, findable home for adding Resonance to a
 home screen or dock, whichever install path applies (see below).
 
