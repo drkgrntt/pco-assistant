@@ -19,6 +19,8 @@ This is a scratch pad file for Derek to write down thoughts on priorities, but a
 - Longer term / larger sized
     - admin tooling
     - encrypting PCO access/refresh tokens at rest (the one High-priority
-      item in `docs/plans/not-started/security-hardening-followups-plan.md` -
-      real multi-tenant blast radius, but needs a key-management decision
-      before it's a quick fix)
+      item in `docs/plans/not-started/security-hardening-followups-plan.md`)
+      - **done 2026-09-15**. AES-256-GCM at the app layer, key from an
+      optional `SESSION_TOKEN_ENCRYPTION_KEY` env var, self-upgrading
+      (no backfill migration) - see that plan doc's own "High" item for
+      the full detail.

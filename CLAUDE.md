@@ -220,7 +220,10 @@ actual app, split by concern rather than by feature:
 - `internal/database` - connection setup + goose migrations, embedded from
   `internal/database/migrations/*.sql` and run automatically on every
   startup (`New()` calls `migrate()` - no separate migrate step).
-- `internal/auth` - sessions, PCO OAuth, organizations, seat counting.
+- `internal/auth` - sessions (PCO access/refresh tokens encrypted at rest,
+  AES-256-GCM via `token_encryption.go`, key from an optional
+  `SESSION_TOKEN_ENCRYPTION_KEY` env var), PCO OAuth, organizations, seat
+  counting.
 - `internal/billing` - Stripe checkout/portal/webhook handling.
 - `internal/notify` - Mailgun-backed outbound email (currently just
   feedback submissions from `/feedback`) - a `Client` constructed once
