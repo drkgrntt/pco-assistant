@@ -5,10 +5,10 @@ into the current auth/org model and a decision from Derek. The shell
 described below is built - `cmd/admin/main.go`, gated by `ADMIN_TOKEN`
 via fiber's `basicauth` middleware, binding to `127.0.0.1` only, with the
 first feature (`GET /feedback`, backed by the new `feedback.Store.List`)
-live and smoke-tested locally. Not deployed anywhere yet - open question 1
-below (how a request actually reaches it) still needs a real decision
-before that happens; the binary itself works unchanged regardless of
-which way that's decided, so building it didn't have to wait. Open
+live and smoke-tested locally. **Deployed 2026-09-15**: open question 1
+(how a request actually reaches it) resolved as Tailscale - see "Deploy:
+Tailscale" below - and confirmed live on `debian` (`admin`/`web` services
+both up, `ADMIN_BIND_ADDR` set, main site responding). Open
 question 2 is resolved: it shares `internal/feedback`'s `Store` directly,
 as expected.
 
@@ -297,13 +297,10 @@ the main app's own `.templ` files.
 
 ### Still open after this pass
 
-None of the above has been run against a real dev DB yet - the migration
-hasn't executed locally (it runs automatically on the main app's next
-`make run`/`make watch`), and `/orgs`' extend-trial action hasn't been
-exercised against a real Stripe test-mode subscription. Both worth doing
-before this is relied on for a real org, not just before it's deployed.
-`go build ./...`/`go vet ./...`/`go test ./...` are all clean as of this
-pass.
+**Resolved 2026-09-15**: the migration has run against a real dev DB, and
+`/orgs`' extend-trial action has been exercised against a real Stripe
+test-mode subscription. `go build ./...`/`go vet ./...`/`go test ./...`
+are all clean as of this pass.
 
 ### Admin app exposure & security
 
@@ -338,27 +335,21 @@ tradeoffs below are why, kept for reference:
 
 ### Deploy: Tailscale
 
-**Built** (code/config; not yet deployed to `debian` - awaits Derek's
-"merge and deploy", same gating as any other real change per this
-project's `CLAUDE.md`). `cmd/admin/main.go` now binds to `ADMIN_BIND_ADDR`
-(env var, default `127.0.0.1` so local `make admin` is unchanged) instead
-of a hardcoded `127.0.0.1`. `docker-compose.yml` gained a second service,
-`admin`, alongside `web` - same `network_mode: host` reasoning as `web`
-(native Postgres on the host, no bridge NAT to fight), built from a new
-`Dockerfile.admin` (mirrors the main `Dockerfile` but builds `./cmd/admin`
-and skips `web/static`/`pg_dump`, neither of which that binary uses).
-Deploying it means setting `ADMIN_BIND_ADDR` in `debian`'s `.env` to that
-host's Tailscale IP (`100.125.19.115` as of this pass, node `r-debian`,
-confirmed live via `tailscale status`) - once set, the app is reachable at
-`http://100.125.19.115:7824` from any device on Derek's tailnet
-(`pop-os`, and his phone once its Tailscale app is connected) and from
-nowhere else; no nginx change, no new public port. `ADMIN_TOKEN`/Basic
-Auth stays on as defense in depth even though the tailnet is the real
-access control. Still needed before this is live: append
-`ADMIN_BIND_ADDR=100.125.19.115` to `debian`'s `.env` (`printf ... >>
-.env`, per `CLAUDE.md`'s secrets-file convention - no need to read the
-file first) as part of the actual deploy step, and confirm the phone's
-Tailscale app connects and can reach the URL post-deploy.
+**Built and deployed 2026-09-15.** `cmd/admin/main.go` binds to
+`ADMIN_BIND_ADDR` (env var, default `127.0.0.1` so local `make admin` is
+unchanged) instead of a hardcoded `127.0.0.1`. `docker-compose.yml` gained
+a second service, `admin`, alongside `web` - same `network_mode: host`
+reasoning as `web` (native Postgres on the host, no bridge NAT to fight),
+built from a new `Dockerfile.admin` (mirrors the main `Dockerfile` but
+builds `./cmd/admin` and skips `web/static`/`pg_dump`, neither of which
+that binary uses). `debian`'s `.env` now has `ADMIN_BIND_ADDR` set to that
+host's Tailscale IP (node `r-debian`) - the app is reachable at
+`http://100.125.19.115:7824` from any device on Derek's tailnet (`pop-os`,
+and his phone once its Tailscale app is connected) and from nowhere else;
+no nginx change, no new public port. `ADMIN_TOKEN`/Basic Auth stays on as
+defense in depth even though the tailnet is the real access control.
+Confirmed live post-deploy: both `admin`/`web` containers up on `debian`
+and the main site responding.
 
 ### Log-in-as (impersonation) - design note, not built
 
