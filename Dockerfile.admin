@@ -1,0 +1,29 @@
+# ---- build stage ----
+FROM golang:1.26-alpine AS build
+WORKDIR /src
+
+RUN apk add --no-cache git
+
+# Cache module downloads separately from source changes
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+# Pin templ to the exact version this module was built against (see go.mod)
+RUN go install github.com/a-h/templ/cmd/templ@v0.3.1020
+RUN templ generate
+RUN CGO_ENABLED=0 go build -trimpath -o /out/admin ./cmd/admin
+
+# ---- runtime stage ----
+FROM alpine:3.20
+# No web/static, no pg_dump - cmd/admin serves no static assets and has no
+# backup job (that's the main app's ./cmd/api only, see Dockerfile).
+RUN apk add --no-cache ca-certificates tzdata \
+    && adduser -D -H appuser
+WORKDIR /app
+
+COPY --from=build /out/admin ./admin
+USER appuser
+
+ENTRYPOINT ["./admin"]
