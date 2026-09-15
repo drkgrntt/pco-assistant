@@ -1,0 +1,36 @@
+package views
+
+import "pco-assistant/internal/auth"
+
+// People lists everyone who's ever signed in, across every organization,
+// newest last-seen first - the durable directory FetchIdentity/
+// UpsertPerson populate at sign-in (see internal/auth/people.go),
+// independent of whether they're currently signed in.
+templ People(people []auth.Person) {
+	@layout("People") {
+		<h1>People ({ len(people) })</h1>
+		if len(people) == 0 {
+			<p>Nobody's signed in since this table was added.</p>
+		} else {
+			<table>
+				<thead>
+					<tr><th>Last seen</th><th>Organization</th><th>Name</th><th>Email</th></tr>
+				</thead>
+				<tbody>
+					for _, p := range people {
+						<tr>
+							<td class="when">{ p.UpdatedAt.Format("2006-01-02 15:04") }</td>
+							<td>{ p.OrganizationName }</td>
+							<td>{ p.Name }</td>
+							<td>
+								if p.Email != "" {
+									<a href={ templ.SafeURL("mailto:" + p.Email) }>{ p.Email }</a>
+								}
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		}
+	}
+}
