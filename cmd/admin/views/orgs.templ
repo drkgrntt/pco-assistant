@@ -1,27 +1,108 @@
 package views
 
-import "pco-assistant/internal/auth"
+import (
+	"strings"
+	"time"
 
-// Orgs lists every organization's billing status, with an inline
-// "extend trial N days" form per row that posts to
-// POST /orgs/:id/extend-trial (see cmd/admin/main.go's extendTrial) - see
+	"pco-assistant/internal/auth"
+	"pco-assistant/internal/scheduling"
+)
+
+// staleAfter is how long since an org's last recorded sign-in before its
+// "Last active" cell gets the .stale treatment - a plain, undocumented-
+// elsewhere threshold (not read from anywhere configurable), same
+// low-ceremony spirit as the rest of this binary.
+const staleAfter = 30 * 24 * time.Hour
+
+// setupLabels pairs each SetupCompletion field with the display label
+// HomeController.buildOnboardingChecklist uses for the same category, in
+// the same order, so the tooltip this builds reads the same way the
+// org's own home page checklist does.
+var setupLabels = []struct {
+	label string
+	done  func(scheduling.SetupCompletion) bool
+}{
+	{"Song relationships", func(c scheduling.SetupCompletion) bool { return c.SongRelationships }},
+	{"Song roles", func(c scheduling.SetupCompletion) bool { return c.SongRoles }},
+	{"Song contexts", func(c scheduling.SetupCompletion) bool { return c.SongContexts }},
+	{"Song tags", func(c scheduling.SetupCompletion) bool { return c.SongTags }},
+	{"Song vocal ranges", func(c scheduling.SetupCompletion) bool { return c.SongVocalRanges }},
+	{"Song/person preferences", func(c scheduling.SetupCompletion) bool { return c.SongPersonPreferences }},
+	{"Person relationships", func(c scheduling.SetupCompletion) bool { return c.PersonRelationships }},
+	{"Person vocal ranges", func(c scheduling.SetupCompletion) bool { return c.PersonVocalRanges }},
+}
+
+// setupTooltip renders a plain-text "done"/"missing" breakdown for the
+// Setup column's title attribute - no JS in this binary (see cmd/admin's
+// own doc comment), so a native tooltip is the whole mechanism.
+func setupTooltip(c scheduling.SetupCompletion) string {
+	var lines []string
+	for _, f := range setupLabels {
+		mark := "missing"
+		if f.done(c) {
+			mark = "done"
+		}
+		lines = append(lines, f.label+": "+mark)
+	}
+	return strings.Join(lines, "\n")
+}
+
+// Orgs lists every organization's billing status side by side with its
+// people-table activity (person count, total sign-ins, most recent one)
+// and its setup-page usage (how many of the 8 onboarding-checklist
+// categories - internal/server/controllers/home.go's
+// buildOnboardingChecklist - have any local data) - so Derek can see who's
+// actually using the app, not just who's paying or who's signed in,
+// without a second page. Also has an inline "extend trial N days" form
+// per row that posts to POST /orgs/:id/extend-trial (see
+// cmd/admin/main.go's extendTrial) - see
 // docs/plans/in-progress/admin-tooling-plan.md's "Trial extension /
 // credit" section for why this is a trial-end push, not a separate
 // credit system.
-templ Orgs(orgs []auth.Organization) {
+//
+// activity is keyed by organization id (auth.Store.
+// OrgActivityByOrganization) - a missing key means no people rows exist
+// yet for that org (pre-dates the people table, or nobody's signed in
+// since), rendered as "no activity yet" rather than a misleading zero.
+// setup is keyed the same way (scheduling.Store.
+// SetupCompletionByOrganization) - a missing key means none of the 8
+// categories have any data yet, rendered as "0/8" (the zero value already
+// means "nothing done", no separate "untracked" case needed here unlike
+// activity).
+templ Orgs(orgs []auth.Organization, activity map[string]auth.OrgActivity, setup map[string]scheduling.SetupCompletion) {
 	@layout("Organizations") {
 		<h1>Organizations ({ len(orgs) })</h1>
 		<table>
 			<thead>
-				<tr><th>Name</th><th>Status</th><th>Plan</th><th>Trial ends</th><th>Extend trial</th></tr>
+				<tr><th>Name</th><th>Status</th><th>Plan</th><th>Trial ends</th><th>People</th><th>Sign-ins</th><th>Last active</th><th>Setup</th><th>Extend trial</th></tr>
 			</thead>
 			<tbody>
 				for _, org := range orgs {
+					{{ a, tracked := activity[org.ID] }}
+					{{ s := setup[org.ID] }}
 					<tr>
 						<td>{ org.Name }</td>
 						<td>{ org.Status }</td>
 						<td>{ org.Plan }</td>
 						<td class="when">{ org.TrialEndsAt.Format("2006-01-02") }</td>
+						<td>{ a.PersonCount }</td>
+						<td>{ a.TotalSignIns }</td>
+						<td class="when">
+							if !tracked || a.LastActivity.IsZero() {
+								<span class="muted">no activity yet</span>
+							} else if time.Since(a.LastActivity) > staleAfter {
+								<span class="stale">{ a.LastActivity.Format("2006-01-02") }</span>
+							} else {
+								{ a.LastActivity.Format("2006-01-02") }
+							}
+						</td>
+						<td title={ setupTooltip(s) }>
+							if s.Done() == 0 {
+								<span class="muted">{ s.Done() }/{ scheduling.SetupTotal }</span>
+							} else {
+								{ s.Done() }/{ scheduling.SetupTotal }
+							}
+						</td>
 						<td>
 							<form class="inline" method="post" action={ templ.SafeURL("/orgs/" + org.ID + "/extend-trial") }>
 								<input type="number" name="days" value="60" min="1" required/>

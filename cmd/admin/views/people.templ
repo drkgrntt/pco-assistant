@@ -14,7 +14,7 @@ templ People(people []auth.Person) {
 		} else {
 			<table>
 				<thead>
-					<tr><th>Last seen</th><th>Organization</th><th>Name</th><th>Email</th></tr>
+					<tr><th>Last seen</th><th>Organization</th><th>Name</th><th>Email</th><th>Sign-ins</th></tr>
 				</thead>
 				<tbody>
 					for _, p := range people {
@@ -27,6 +27,7 @@ templ People(people []auth.Person) {
 									<a href={ templ.SafeURL("mailto:" + p.Email) }>{ p.Email }</a>
 								}
 							</td>
+							<td>{ p.SignInCount }</td>
 						</tr>
 					}
 				</tbody>
