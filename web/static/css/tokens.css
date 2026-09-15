@@ -51,20 +51,30 @@
      borders (forms.css) instead, per that finding's own resolved
      alternative. Computed the same way as every other pair in this file's
      audit: light --control-border on --bg is ~3.42:1, on --surface
-     ~3.71:1; dark --control-border (below) on --bg is ~3.42:1 - all clear
-     3:1 with real margin. */
+     ~3.71:1; dark --control-border (below) on --bg is ~3.72:1, on
+     --surface ~3.29:1 - all clear 3:1 with real margin. */
   --control-border: hsl(191deg 33% 46%);
 
-  /* --- Color: Brand & Accents --- */
-  --accent: hsl(193deg 83% 33%);
-  --accent-solid: hsl(193deg 83% 33%);
+  /* --- Color: Brand & Accents ---
+     Lightness re-checked against docs/plans/shipped/wcag-aa-audit-plan.md's
+     4.5:1 text-contrast bar after the Glacier re-tune: the first-pass hue
+     (193deg 83% 33%) computed to only ~4.45:1 on --bg (used as text in
+     nav links, badges, tab labels - see `color: var(--accent)` across
+     web/static/css/) - a hair under. Dropped 2 points of lightness
+     (33% -> 31%) to clear it with real margin (~4.93:1 on --bg, ~5.34:1
+     on --surface) without a visually distinguishable hue/sat change. */
+  --accent: hsl(193deg 83% 31%);
+  --accent-solid: hsl(193deg 83% 31%);
   --accent-subtle: hsl(193deg 44% 93%);
 
   /* --- Color: Status (softened, contextual) --- */
   --danger: hsl(0deg 49% 47%);
   --danger-subtle: hsl(1deg 56% 96%);
 
-  --success: hsl(160deg 47% 34%);
+  /* --success's lightness got the same re-check as --accent above: 34%
+     computed to ~4.42:1 against --success-subtle, just under 4.5:1.
+     Dropped to 32% (~4.87:1 on --success-subtle, ~4.91:1 on --bg). */
+  --success: hsl(160deg 47% 32%);
   --success-subtle: hsl(160deg 40% 95%);
 
   --pending: hsl(40deg 69% 32%);
@@ -191,7 +201,7 @@
     /* See :root's own --control-border comment above - same hue/saturation
        as dark --border, just much lighter (19% to 38%) for the same 3:1
        reason. */
-    --control-border: hsl(194deg 31% 38%);
+    --control-border: hsl(194deg 31% 40%);
 
     --accent: hsl(190deg 71% 58%);
     --accent-subtle: hsl(189deg 48% 12%);
@@ -214,7 +224,7 @@
   --text: hsl(189deg 37% 93%);
   --border: hsl(194deg 31% 19%);
   --muted: hsl(192deg 16% 62%);
-  --control-border: hsl(194deg 31% 38%);
+  --control-border: hsl(194deg 31% 40%);
 
   --accent: hsl(190deg 71% 58%);
   --accent-subtle: hsl(189deg 48% 12%);
