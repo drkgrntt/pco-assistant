@@ -1,6 +1,9 @@
 # Plan: user-visible PCO rate-limit signaling (banner, then per-row retry)
 
-**Status: Phase 1 shipped 2026-09-14.** The page-level banner (this doc's
+**Status: Phase 1 + Phase 2 (fragment-level banner via `SyncCheck`)
+shipped; per-row marking/auto-retry remains open.**
+
+**Phase 1 shipped 2026-09-14.** The page-level banner (this doc's
 "ask 1"/first bullet under "Two distinct asks here") is built: a
 page-level, non-dismissible "Planning Center's rate limit was reached -
 some details may be stale and will refresh shortly" notice, shown on any
@@ -19,16 +22,29 @@ rather than threading explicit 429-typing through every individual
 read-path call site; resolved fork 2 in favor of per-page scope (not a
 single app-wide sticky banner).
 
-Known Phase-1-only limitation: this covers full page loads only, since
-only `Layout` renders the banner. An htmx partial/fragment reload (a Build
-page tab switch, search-as-you-type, the Songs tab's `SyncCheck` poll)
-never re-renders `Layout`, so a 429 during a fragment-only request won't
-update an already-visible banner from a prior full load. Acceptable for
-now; `sets_publish.go`'s `SyncCheck` + `set_builder.templ`'s
-`#pco-sync-banner` `hx-swap-oob` pattern is the natural mechanism to
-extend to if fragment-level freshness turns out to matter in practice.
+**Phase 2 shipped 2026-09-15** - extended the banner to the one fragment
+reload named as the natural next step above: the Build page Songs tab's
+`SyncCheck` poll. The banner's own markup moved to
+`internal/views/components/pco_rate_limit_banner.templ`
+(`components.PCORateLimitBanner`), a dependency-free leaf package both
+`internal/views` and `internal/views/scheduling` can import without a
+cycle; `internal/views/layout.templ`'s `Layout` now wraps it in an
+always-rendered `#pco-rate-limit-banner` div (empty when not rate-limited)
+so there's a stable id to swap into, mirroring `#pco-sync-banner`'s own
+shape. `internal/server/controllers/sets_publish.go`'s `SyncCheck` now
+checks `middleware.HadPCORateLimit` once per tick (right after its own
+`GetItems` call) and every response path - including the two that used to
+be a bare empty 200 - renders a real templ component so an
+`hx-swap-oob="true"` fragment targeting `#pco-rate-limit-banner`
+(`views.PCORateLimitBannerOOB` in `internal/views/scheduling/
+set_builder.templ`, composed into both `views.SyncCheckBanner` and the new
+`views.SyncCheckUnchanged`) can ride along - populated on a 429, or empty
+to clear a banner a previous tick left showing (`HadPCORateLimit` is
+read-once, so a later clean tick is the only way to learn that's
+resolved). Still not every fragment reload - only `SyncCheck` - matching
+this doc's own original scoping of the "natural mechanism to extend to."
 
-**Phase 2 (per-row marking + auto-retry) remains open** - not built. The
+**Per-row marking + auto-retry remains open** - not built. The
 "Design forks needing a real answer" section below (forks 3 and 4
 specifically) is still the relevant starting point for whoever picks that
 up next.

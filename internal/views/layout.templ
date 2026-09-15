@@ -176,9 +176,11 @@ templ Layout(title string, personName string, organizationName string) {
 				</div>
 			</header>
 			<main id="main-content">
-				if pcoRateLimited(ctx) {
-					@pcoRateLimitBanner()
-				}
+				<div id="pco-rate-limit-banner">
+					if pcoRateLimited(ctx) {
+						@pcoRateLimitBanner()
+					}
+				</div>
 				@installPromptBanner()
 				{ children... }
 			</main>
@@ -329,12 +331,19 @@ templ genericHelpDialog() {
 // in that same pass picks exactly one of the button/instructional-copy
 // pair below to reveal - see that file's installPromptRefreshUI.
 // pcoRateLimitBanner is the page-level "Planning Center's rate limit was
-// reached" notice (see docs/plans/in-progress/
-// pco-rate-limit-user-visibility-plan.md's Phase 1) - shown right above
-// each page's own content, same "flows inside the page's own content
+// reached" notice (see
+// docs/plans/shipped/pco-rate-limit-user-visibility-plan.md) - shown right
+// above each page's own content, same "flows inside the page's own content
 // width, not a full-width site-chrome strip" placement as
 // installPromptBanner just above, and for the same reason: this is about
 // what this one page's render just experienced, not something app-wide.
+// The actual markup lives in components.PCORateLimitBanner (a
+// dependency-free leaf package both this file and
+// internal/views/scheduling can import) - this is just Layout's own thin
+// call into it, kept as a named wrapper so the surrounding "always render
+// the #pco-rate-limit-banner wrapper div, conditionally fill it" shape in
+// Layout above reads the same way installPromptBanner's own always-present
+// wrapper does.
 //
 // Deliberately calmer than installPromptBanner: not a .warning-style
 // alarm (nothing is broken, and PCO itself already recovers) and not
@@ -349,20 +358,18 @@ templ genericHelpDialog() {
 // own the next time a load doesn't hit a 429, the same way the flag it
 // reads is itself already consumed on read.
 //
-// Scope limitation worth knowing: this only ever appears on a full page
-// load, since only Layout renders this. An htmx partial/fragment reload
-// (a Build page tab switch, search-as-you-type, the Songs tab's
-// SyncCheck poll) never re-renders Layout, so a 429 during a
-// fragment-only request won't update an already-visible banner from a
-// prior full load, nor will it make one newly appear until the next full
-// load. Acceptable for Phase 1 per the plan doc above; extending this to
-// fragment-level freshness (the same hx-swap-oob pattern
-// sets_publish.go's SyncCheck already uses for #pco-sync-banner) is
-// explicitly left for a later pass, not built here.
+// Scope, as of Phase 2: a full page load through Layout (this function)
+// and the Build page's Songs-tab SyncCheck poll
+// (sets_publish.go/set_builder.templ's PCORateLimitBannerOOB, targeting
+// this same #pco-rate-limit-banner id via hx-swap-oob) both keep this
+// banner fresh. Every *other* htmx partial/fragment reload (a Build page
+// tab switch, search-as-you-type, and so on) still doesn't - those
+// responses don't render this OOB fragment, so a 429 during one of them
+// won't update or clear an already-visible banner until the next full
+// load or SyncCheck tick. Extending further than SyncCheck specifically
+// is a separate future pass, not built here.
 templ pcoRateLimitBanner() {
-	<div class="pco-ratelimit-banner" role="status">
-		<p>Planning Center's rate limit was reached - some details may be stale and will refresh shortly.</p>
-	</div>
+	@components.PCORateLimitBanner()
 }
 
 templ installPromptBanner() {

@@ -21,14 +21,14 @@ import (
 // see SetResponseHook's own doc comment for why a second call would just
 // replace, not add to, this one.
 //
-// Beyond logging, the 429 branch also feeds the page-level "some details
-// may be stale" banner (docs/plans/in-progress/
-// pco-rate-limit-user-visibility-plan.md's Phase 1) via
-// middleware.RecordPCORateLimit - this is the only place in the app that
-// sees every PCO 429 regardless of which read-path call site triggered
-// it, so it's the natural place to mark "a 429 happened during this
-// request" rather than threading that signal through every individual
-// best-effort call site.
+// Beyond logging, the 429 branch also feeds the "some details may be
+// stale" banner (docs/plans/shipped/
+// pco-rate-limit-user-visibility-plan.md's Phase 1 and Phase 2 both read
+// from this same mark) via middleware.RecordPCORateLimit - this is the
+// only place in the app that sees every PCO 429 regardless of which
+// read-path call site triggered it, so it's the natural place to mark "a
+// 429 happened during this request" rather than threading that signal
+// through every individual best-effort call site.
 //
 // Deliberately logs only failures, not every attempt: a single Build page
 // render can legitimately make 100-200 PCO calls (see docs/

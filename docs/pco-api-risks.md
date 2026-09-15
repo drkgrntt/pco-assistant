@@ -82,7 +82,7 @@ that first. Facts worth adding here that aren't in CLAUDE.md:
 | Publish/Refresh writes (sequential per song/assignment) | fixed | `RunConcurrently` fan-out, with ordering/error-collection made goroutine-safe (see Design decisions) |
 | Sustained-rate ceiling across all traffic on one token | enabled (prod) | go-pco `ConfigureThrottle`, `PCO_THROTTLE_ENABLED=true`, 60 req/20s default, background syncs tagged low-priority |
 | A 429 that gets through anyway | enabled (prod) | go-pco `ConfigureRetry`, `PCO_RETRY_ON_429_ENABLED=true`, waits `Retry-After`, 1 retry |
-| Visibility into PCO failures | shipped | `pco.SetResponseHook` logs every failure (never a success) through this app's logger; a 429 also now surfaces to the *user*, not just the log - a calm, non-dismissible "some details may be stale" banner on the next full page load for that request (Phase 1 of `docs/plans/in-progress/pco-rate-limit-user-visibility-plan.md`) - see that doc's status note for the file list. Per-row marking of *which* fetch failed (Phase 2) is still open |
+| Visibility into PCO failures | shipped | `pco.SetResponseHook` logs every failure (never a success) through this app's logger; a 429 also now surfaces to the *user*, not just the log - a calm, non-dismissible "some details may be stale" banner on the next full page load for that request, and (as of Phase 2) also kept fresh across the Build page Songs tab's `SyncCheck` poll without a full page load (`docs/plans/shipped/pco-rate-limit-user-visibility-plan.md`) - see that doc's status note for the file list. Per-row marking of *which* fetch failed remains open |
 | Unattended sync (Song Info + person-data refresh + person-data recent-history discovery) | shipped | hourly `jobs.PCOJobs` cron, one org at a time, borrowing and refreshing that org's own idle session token - reuses the exact same paced/guarded sync entry points (`triggerSongInfoQueueSync`, `triggerPersonDataSyncCtx`) an ordinary render already triggers, low-priority (`pco.WithPriority`, 20) |
 | Live-sync poll-while-open (`SyncCheck`, one `GetItems` per open Build-page Songs tab per 30s) | shipped | poll-while-open only (option C) - bounded by concurrent viewers, not total org/plan count; tagged `pco.WithPriority(ctx, 20)` so a poll tick never contends with interactive traffic on the same token; a failed poll tick is treated as "no change," never surfaced as an error |
 | Team/position lists and team-member names (fetched live, uncached, on every roster render) | fixed | cached `fetchRosterSharedPCOData` (`rosters_shared_cache.go`), 20s TTL - shorter than the 60s norm since team membership can change mid-session; manual "Refresh team data" button is the remedy for the remaining window |
@@ -998,7 +998,7 @@ out to 100-200 sequential round trips per load.
   instantly. Only the Songs tab polls at all (the Team tab has no
   equivalent), so this only ever bounds that one poll.
 - **Page-level "rate limit reached" banner shipped (2026-09-14)** - Phase 1
-  of `docs/plans/in-progress/pco-rate-limit-user-visibility-plan.md`,
+  of `docs/plans/shipped/pco-rate-limit-user-visibility-plan.md`,
   closing the first half of the direct feedback quoted at that doc's top.
   A 429 no longer only reaches this app's own logs (the "Visibility into
   PCO failures" row above) - `pco_observability.go`'s response hook now
@@ -1016,5 +1016,25 @@ out to 100-200 sequential round trips per load.
   render that experienced it. Deliberately full-page-load only: an htmx
   fragment reload doesn't re-render `Layout`, so a 429 during a
   fragment-only request won't update an already-visible banner - see the
-  plan doc's own "Scope limit" note. Per-row marking (Phase 2) is not
-  built.
+  plan doc's own "Scope limit" note. Per-row marking (Phase 2 as
+  originally scoped there) is not built.
+- **Rate-limit banner extended to the `SyncCheck` poll (2026-09-15)** -
+  Phase 2 of `docs/plans/shipped/pco-rate-limit-user-visibility-plan.md`,
+  closing the one Phase-1-named gap (an htmx fragment reload never
+  re-rendering `Layout`, so a 429 mid-poll couldn't update the banner).
+  Zero new PCO calls - `SyncCheck` still makes exactly the one `GetItems`
+  call it always did; this only changes what its response carries. The
+  banner's markup moved to `components.PCORateLimitBanner` (a
+  dependency-free leaf package, so both `internal/views` and
+  `internal/views/scheduling` can render it without an import cycle);
+  `Layout` now wraps it in an always-present `#pco-rate-limit-banner` div
+  (empty when not rate-limited) for an `hx-swap-oob="true"` target to hit,
+  mirroring `#pco-sync-banner`'s own shape. `SyncCheck` now checks
+  `middleware.HadPCORateLimit` once per tick and every response path -
+  including the two that used to be a bare empty 200 - renders a real
+  templ component (`views.SyncCheckBanner`/`views.SyncCheckUnchanged`,
+  both composing the new `views.PCORateLimitBannerOOB`) so that OOB
+  fragment can ride along either way, populated on a 429 or emptied to
+  clear a banner a previous tick left showing (`HadPCORateLimit`'s
+  read-once contract means a later clean tick is the only way to learn
+  that's resolved).

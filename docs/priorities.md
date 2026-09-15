@@ -5,7 +5,7 @@ This is a scratch pad file for Derek to write down thoughts on priorities, but a
         - Hit smaller items - **done 2026-09-12**. See `docs/issues.md`, every item is now annotated with what happened to it. The genuinely quick wins (Team tab width, filter/label alignment and separation, browse-row song flags, multi-tab poll visibility, accordion affordance, landing copy) are shipped. One more (the Team tab's undercounted "Warnings: N" chip) turned out to be a real bug hiding in the list, not a request, and got fixed alongside the rest since it was small and well-understood.
         - Plan more involved items - **done 2026-09-12**. Three items were bigger than a quick win and got their own design docs instead of a rushed inline fix:
             - `docs/plans/shipped/mobile-responsiveness-plan.md` (issues.md's mobile styles item) - **shipped 2026-09-14**, broadened to app-wide (setup pages included) per direct instruction
-            - `docs/plans/in-progress/pco-rate-limit-user-visibility-plan.md` (the two 429-handling items) - Phase 1 (the page-level "rate limit reached" banner) **shipped 2026-09-14**, doc moved to `in-progress`; Phase 2 (per-row marking/auto-retry) is still open
+            - `docs/plans/shipped/pco-rate-limit-user-visibility-plan.md` (the two 429-handling items) - Phase 1 (the page-level "rate limit reached" banner) **shipped 2026-09-14**; Phase 2 as originally scoped there (per-row marking/auto-retry) is still open, but a smaller fragment-level extension (the Build page Songs tab's `SyncCheck` poll now surfaces/clears the same banner) **shipped 2026-09-15**, doc moved to `shipped`
             - `docs/plans/not-started/max-consecutive-weeks-preference-plan.md` (the diva-preferences item)
 
 - Short term / smaller sized

@@ -855,14 +855,16 @@ func (sc *SchedulingController) MergeSet(c *fiber.Ctx) error {
 // reflect item-level edits or pure reorders, see pco-api-risks.md),
 // recomputes the same fingerprint, and compares:
 //
-//   - Equal: nothing changed since fp was captured - an empty 200, so htmx
-//     (hx-swap="none" on the polling element) does nothing at all.
-//   - Different: something changed - responds with exactly two
-//     hx-swap-oob="true" fragments, matching set_builder.templ's own ids:
-//     the banner slot (#pco-sync-banner), populated with an ImportBanner
-//     offering to run the existing MergeSet endpoint, and the hidden
-//     fingerprint input (#pco-sync-fp), updated to the fresh value so the
-//     next poll tick doesn't re-show the banner for the same
+//   - Equal: nothing changed since fp was captured - views.SyncCheckUnchanged,
+//     so htmx (hx-swap="none" on the polling element) leaves the main
+//     target alone; only its always-included rate-limit OOB fragment can
+//     do anything.
+//   - Different: something changed - views.SyncCheckBanner, with exactly
+//     two content hx-swap-oob="true" fragments matching set_builder.templ's
+//     own ids: the banner slot (#pco-sync-banner), populated with an
+//     ImportBanner offering to run the existing MergeSet endpoint, and the
+//     hidden fingerprint input (#pco-sync-fp), updated to the fresh value
+//     so the next poll tick doesn't re-show the banner for the same
 //     already-detected change.
 //
 // Tagged pco.WithPriority(ctx, 20) - same convention as the background
@@ -870,8 +872,22 @@ func (sc *SchedulingController) MergeSet(c *fiber.Ctx) error {
 // an unattended, timer-driven poll never delays interactive traffic
 // sharing the same token. A failed GetItems call (a transient PCO error,
 // or a 429 the retry backstop didn't absorb) is treated the same as "no
-// change detected" - an empty 200 - rather than surfacing an error banner
-// for what's very likely a fine plan on the next tick.
+// change detected" - views.SyncCheckUnchanged - rather than surfacing an
+// error banner for what's very likely a fine plan on the next tick.
+//
+// Every one of those three response paths also carries a fourth, always-
+// included fragment (docs/plans/shipped/
+// pco-rate-limit-user-visibility-plan.md's Phase 2):
+// views.PCORateLimitBannerOOB, targeting Layout's own
+// #pco-rate-limit-banner id, populated when this tick's own PCO call(s)
+// hit a 429 (middleware.HadPCORateLimit, read exactly once per request
+// right after the GetItems call above, before either return path below)
+// and left empty otherwise - clearing any banner a previous tick's 429 may
+// have left showing, since HadPCORateLimit's read-once contract means
+// there's no other way for a later clean tick to learn that's resolved.
+// This is why every return path here has to be a real templ render now,
+// not the previous empty c.SendStatus(fiber.StatusOK) - an OOB fragment
+// needs an actual response body to ride along in.
 func (sc *SchedulingController) SyncCheck(c *fiber.Ctx) error {
 	ctx := pco.WithPriority(middleware.RequestContext(c), 20)
 	serviceTypeID := c.Params("service_type_id")
@@ -879,16 +895,17 @@ func (sc *SchedulingController) SyncCheck(c *fiber.Ctx) error {
 	clientFP := c.Query("fp")
 
 	items, err := pco.GetItems(ctx, serviceTypeID, planID, nil)
+	rateLimited := middleware.HadPCORateLimit(middleware.CurrentRequestID(c))
 	if err != nil {
-		return c.SendStatus(fiber.StatusOK)
+		return render(c, views.SyncCheckUnchanged(rateLimited))
 	}
 
 	freshFP := pcoItemsFingerprint(items.Data)
 	if freshFP == clientFP {
-		return c.SendStatus(fiber.StatusOK)
+		return render(c, views.SyncCheckUnchanged(rateLimited))
 	}
 
-	return render(c, views.SyncCheckBanner(serviceTypeID, planID, freshFP))
+	return render(c, views.SyncCheckBanner(serviceTypeID, planID, freshFP, rateLimited))
 }
 
 // RevertSet is PublishSet's opposite: instead of pushing local changes to
