@@ -1,0 +1,24 @@
+package components
+
+// PCORateLimitBanner is the actual "Planning Center's rate limit was
+// reached" notice markup (see
+// docs/plans/shipped/pco-rate-limit-user-visibility-plan.md) - pulled out
+// of internal/views/layout.templ into this dependency-free leaf package
+// so both internal/views (Layout's own full-page banner) and
+// internal/views/scheduling (SyncCheck's fragment-level OOB banner,
+// sets_publish.go/set_builder.templ) can render the exact same markup
+// without an import cycle - internal/views and internal/views/scheduling
+// can't import each other (see CLAUDE.md's Architecture section on why
+// cross-package templ components live here instead).
+//
+// Deliberately calmer than an alert or invitation-style banner: not
+// .warning-style alarm (nothing is broken, and PCO itself already
+// recovers) and not .import-banner's "invitation" framing (there's no
+// action to take here) - see pco-rate-limit-banner.css's own doc comment
+// for the token choice that keeps it reading as a quiet heads-up rather
+// than either of those.
+templ PCORateLimitBanner() {
+	<div class="pco-ratelimit-banner" role="status">
+		<p>Planning Center's rate limit was reached - some details may be stale and will refresh shortly.</p>
+	</div>
+}

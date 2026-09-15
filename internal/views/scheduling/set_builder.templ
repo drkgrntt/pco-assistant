@@ -96,18 +96,43 @@ func mergeSortedUnique(a, b []string) []string {
 	return out
 }
 
+// PCORateLimitBannerOOB is SyncCheck's (sets_publish.go) always-included
+// third fragment - an hx-swap-oob="true" outerHTML replace of Layout's own
+// #pco-rate-limit-banner wrapper (layout.templ), extending the page-level
+// rate-limit banner (docs/plans/shipped/
+// pco-rate-limit-user-visibility-plan.md's Phase 2) to this poll-while-open
+// fragment reload, the one Phase 1 explicitly couldn't reach since it never
+// re-renders Layout. rateLimited is SyncCheck's own read of
+// middleware.HadPCORateLimit for this tick; when false this renders just
+// the empty wrapper div, clearing out any banner a previous tick's 429 may
+// have left showing - HadPCORateLimit is read-once/per-request, so the
+// client has no other way to learn "that's now resolved" than a later
+// clean tick actively clearing it. Always included in every SyncCheck
+// response (not just the changed-fingerprint one) since a 429 on this
+// tick's own GetItems call is independent of whether the plan's items
+// happened to change.
+templ PCORateLimitBannerOOB(rateLimited bool) {
+	<div id="pco-rate-limit-banner" hx-swap-oob="true">
+		if rateLimited {
+			@components.PCORateLimitBanner()
+		}
+	</div>
+}
+
 // SyncCheckBanner is SyncCheck's (sets_publish.go) response the one time
-// its poll tick actually finds a difference - two hx-swap-oob="true"
-// fragments and nothing else, matching SetBuilderBodyContent's own
+// its poll tick actually finds a difference in the plan's items - two
+// hx-swap-oob="true" fragments matching SetBuilderBodyContent's own
 // #pco-sync-banner/#pco-sync-fp ids exactly (see that templ's own doc
-// comment on the poll wiring). The banner offers the existing MergeSet
-// endpoint - the same "Pull in changes" action the manual Merge button
-// already runs - rather than any new auto-apply path, per the
-// live-sync-reflection plan's banner-not-silent-auto-merge decision.
-// Dismissible (see ImportBanner's dismissible param): dismissing removes
-// just the inner .import-banner, leaving the #pco-sync-banner wrapper in
-// place so a later poll tick can still find it by id.
-templ SyncCheckBanner(serviceTypeID, planID, fingerprint string) {
+// comment on the poll wiring), plus PCORateLimitBannerOOB above (unrelated
+// to whether the items changed, just always along for the ride). The
+// banner offers the existing MergeSet endpoint - the same "Pull in
+// changes" action the manual Merge button already runs - rather than any
+// new auto-apply path, per the live-sync-reflection plan's
+// banner-not-silent-auto-merge decision. Dismissible (see ImportBanner's
+// dismissible param): dismissing removes just the inner .import-banner,
+// leaving the #pco-sync-banner wrapper in place so a later poll tick can
+// still find it by id.
+templ SyncCheckBanner(serviceTypeID, planID, fingerprint string, rateLimited bool) {
 	<div id="pco-sync-banner" hx-swap-oob="true">
 		@components.ImportBanner("Planning Center has changes since you opened this page.", true) {
 			<form
@@ -120,6 +145,21 @@ templ SyncCheckBanner(serviceTypeID, planID, fingerprint string) {
 		}
 	</div>
 	<input type="hidden" id="pco-sync-fp" value={ fingerprint } hx-swap-oob="true"/>
+	@PCORateLimitBannerOOB(rateLimited)
+}
+
+// SyncCheckUnchanged is SyncCheck's response for its other two return
+// paths - the plan's fingerprint didn't change since the client's last
+// tick, or the tick's own GetItems call itself errored (treated the same
+// as "no change detected," per SyncCheck's own doc comment) - which no
+// longer means an empty 200 (see that doc comment's Phase 2 update): the
+// response still needs to carry PCORateLimitBannerOOB so a 429 on this
+// tick can surface or a previous one can clear, so it has to be a real
+// templ render like every other path instead. Doesn't touch
+// #pco-sync-banner/#pco-sync-fp at all - only the rate-limit banner can
+// have changed here.
+templ SyncCheckUnchanged(rateLimited bool) {
+	@PCORateLimitBannerOOB(rateLimited)
 }
 
 templ SetBuilderBody(data SetBuilderData) {

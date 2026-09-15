@@ -1,7 +1,10 @@
-/* Backs internal/views/layout.templ's pcoRateLimitBanner - the page-level
-   "Planning Center's rate limit was reached" notice (see
-   docs/plans/in-progress/pco-rate-limit-user-visibility-plan.md's Phase
-   1). Deliberately its own, quieter tint rather than reusing .warning
+/* Backs components.PCORateLimitBanner (internal/views/components/
+   pco_rate_limit_banner.templ) - the "Planning Center's rate limit was
+   reached" notice shown both by internal/views/layout.templ's
+   pcoRateLimitBanner (a full page load) and, via the same markup, the
+   Build page Songs tab's SyncCheck poll (see
+   docs/plans/shipped/pco-rate-limit-user-visibility-plan.md's Phase 1
+   and Phase 2). Deliberately its own, quieter tint rather than reusing .warning
    (alert.css, danger-tinted - this isn't an error, PCO itself already
    recovers) or .import-banner (import-banner.css, accent-tinted - that
    one's an invitation to click something, this one asks for nothing).

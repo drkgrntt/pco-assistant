@@ -42,7 +42,7 @@ func navSuggestionsPending(ctx context.Context) bool {
 
 // PCORateLimitedKey is true when at least one PCO call made during this
 // same request hit a 429 - see
-// docs/plans/in-progress/pco-rate-limit-user-visibility-plan.md's Phase 1.
+// docs/plans/shipped/pco-rate-limit-user-visibility-plan.md's Phase 1.
 // Reuses navCtxKey's type (it's already a generic "unexported struct key"
 // wrapper, not nav-specific despite the type name) rather than inventing a
 // second key type for one more value.
