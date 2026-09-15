@@ -1,10 +1,11 @@
-# PCO Assistant
+# Resonance
 
 A self-hosted scheduling assistant for [Planning Center](https://www.planningcenteronline.com/)
 Services, covering the parts PCO doesn't help with directly: relating songs
 and people to each other, tracking scheduling preferences, and warning you
 about conflicts and repeats *before* you publish a plan - not just recording
-what you already decided.
+what you already decided. (Built under the working title "PCO Assistant"
+before settling on the name Resonance.)
 
 Sign-in is "Sign in with Planning Center" (OAuth) - there's no separate user
 system. Everything the app knows about songs, people, plans, teams, and

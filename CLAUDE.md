@@ -4,8 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-PCO Assistant - a self-hosted scheduling assistant for Planning Center
-Services. It does *not* duplicate PCO's own data model: songs, people,
+Resonance - a self-hosted scheduling assistant for Planning Center
+Services (built under the working title "PCO Assistant" before settling
+on this name). It does *not* duplicate PCO's own data model: songs, people,
 plans, teams, and positions are all read live from PCO via
 [`go-pco`](https://github.com/drkgrntt/go-pco) (a separate module/repo,
 pulled in as a normal tagged dependency). This app's own Postgres database
