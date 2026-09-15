@@ -574,3 +574,21 @@ so pair it with `db-reset` for a full reseed cycle:
 ```bash
 make pco-reset
 ```
+
+Run the admin app (see `cmd/admin`) - a second, separate binary for Derek
+as the app *operator*, not any org's admin, gated by HTTP Basic Auth
+against `ADMIN_TOKEN` rather than PCO OAuth. The username field is
+ignored (send anything, or leave it blank); enter `ADMIN_TOKEN`'s value as
+the password. Requires `ADMIN_TOKEN` to be set (refuses to start
+otherwise); binds to `127.0.0.1` only, on port `7824` by default
+(override with `ADMIN_PORT`). Live-reloads via air on `.go`/`.templ` file
+changes, same as `make watch`, just its own config (`.air.admin.toml`) so
+the two can run side by side without colliding:
+```bash
+make admin
+```
+Pages so far: every organization's billing status with an inline
+trial-extension action (`/orgs`), the durable person directory described
+above (`/people`), and every `/feedback` submission (`/feedback`) - see
+`docs/plans/in-progress/admin-tooling-plan.md` for what's built vs. still
+open (exposing this beyond localhost, log-in-as, etc.).
