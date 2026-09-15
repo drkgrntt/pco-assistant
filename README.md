@@ -580,8 +580,14 @@ as the app *operator*, not any org's admin, gated by HTTP Basic Auth
 against `ADMIN_TOKEN` rather than PCO OAuth. The username field is
 ignored (send anything, or leave it blank); enter `ADMIN_TOKEN`'s value as
 the password. Requires `ADMIN_TOKEN` to be set (refuses to start
-otherwise); binds to `127.0.0.1` only, on port `7824` by default
-(override with `ADMIN_PORT`). Live-reloads via air on `.go`/`.templ` file
+otherwise); binds to `ADMIN_BIND_ADDR` (default `127.0.0.1` for local
+dev) on port `7824` by default (override with `ADMIN_PORT`). In
+production `ADMIN_BIND_ADDR` is set to the host's Tailscale IP instead, so
+the app is reachable from any device on Derek's tailnet and never opens a
+public port - see `cmd/admin/main.go`'s doc comment and
+`docs/plans/in-progress/admin-tooling-plan.md`'s "Admin app exposure &
+security" section for why Tailscale won over a public subdomain or an
+SSH-tunnel-only setup. Live-reloads via air on `.go`/`.templ` file
 changes, same as `make watch`, just its own config (`.air.admin.toml`) so
 the two can run side by side without colliding:
 ```bash
@@ -591,4 +597,4 @@ Pages so far: every organization's billing status with an inline
 trial-extension action (`/orgs`), the durable person directory described
 above (`/people`), and every `/feedback` submission (`/feedback`) - see
 `docs/plans/in-progress/admin-tooling-plan.md` for what's built vs. still
-open (exposing this beyond localhost, log-in-as, etc.).
+open (log-in-as, etc.).

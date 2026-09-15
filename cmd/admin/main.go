@@ -12,19 +12,21 @@
 // half of HTTP Basic Auth via fiber's basicauth middleware (constant-time
 // comparison under the hood) - no PCO OAuth, no session cookie, no user
 // table, deliberately outside the main app's per-request auth chain
-// entirely. Binds to 127.0.0.1 only; how a request actually reaches that
-// (an SSH tunnel, or a real subdomain behind nginx with this same
-// shared-secret check as defense in depth) is still an open decision -
-// see the plan doc's "Open questions" section. This binary works
-// unchanged either way, so building it doesn't have to wait on that
-// decision.
+// entirely. Exposure is resolved as of the 2026-09-15 planning pass:
+// Tailscale, not a public subdomain or SSH-tunnel-only. Binds to
+// ADMIN_BIND_ADDR (default 127.0.0.1, for local dev) - in production this
+// is set to the host's tailnet IP so the app is reachable directly from
+// any device on Derek's tailnet and never touches a public port at all;
+// ADMIN_TOKEN stays on as defense in depth even though the tailnet is the
+// real access control. See the plan doc's "Admin app exposure & security"
+// section for why Tailscale won over the other two options.
 //
 // Run it with:
 //
 //	ADMIN_TOKEN=... go run ./cmd/admin
 //
 // (reads the same .env as the main app for DB_*, via godotenv/autoload -
-// only ADMIN_TOKEN, and optionally ADMIN_PORT, are new.)
+// only ADMIN_TOKEN, and optionally ADMIN_PORT/ADMIN_BIND_ADDR, are new.)
 //
 // Pages render via cmd/admin/views, real .templ components (same engine
 // the main app uses, `templ generate` before building - see make admin/
@@ -77,6 +79,11 @@ func main() {
 		port = "7824"
 	}
 
+	bindAddr := os.Getenv("ADMIN_BIND_ADDR")
+	if bindAddr == "" {
+		bindAddr = "127.0.0.1"
+	}
+
 	db, err := database.Open()
 	if err != nil {
 		logger.Fatal("connect to database", "error", err)
@@ -115,7 +122,7 @@ func main() {
 	app.Post("/orgs/:id/extend-trial", extendTrial(authStore, billingClient))
 	app.Get("/people", peoplePage(authStore))
 
-	addr := "127.0.0.1:" + port
+	addr := bindAddr + ":" + port
 	logger.Info("admin app listening", "addr", addr)
 	if err := app.Listen(addr); err != nil {
 		logger.Fatal("admin app crashed", "error", err)

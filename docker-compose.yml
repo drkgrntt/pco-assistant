@@ -11,3 +11,18 @@ services:
     network_mode: host
     env_file:
       - .env
+
+  admin:
+    build:
+      context: .
+      dockerfile: Dockerfile.admin
+    container_name: pco-assistant-admin
+    restart: unless-stopped
+    # Same host-network reasoning as web above (native Postgres, no bridge
+    # NAT) - it's also what makes ADMIN_BIND_ADDR=<tailnet IP> in .env work
+    # unchanged: binding inside the container is binding on the host's own
+    # tailscale0 interface, reachable from any device on the tailnet and
+    # from nowhere else - see cmd/admin/main.go's own doc comment.
+    network_mode: host
+    env_file:
+      - .env

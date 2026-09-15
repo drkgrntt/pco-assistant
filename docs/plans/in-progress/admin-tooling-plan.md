@@ -112,22 +112,22 @@ occasional, simple lookups.
   below. The "doesn't share `internal/views`" half of that reasoning still
   holds; only the templating *engine* changed, not an adoption of the
   main app's layout/CSS/htmx.
-- **Deploy**: likely a second service in the same `docker-compose.yml`
-  stack on `debian` (own container, own port), sharing the same Postgres
-  - not a new host, not new infra beyond one more compose service. Not
-  done yet - blocked on open question 1 below.
+- **Deploy**: a second service in the same `docker-compose.yml` stack on
+  `debian` (own container, sharing the same Postgres) - see "Deploy:
+  Tailscale" below for the built version, once open question 1 resolved.
 
 ## Open questions (need a real decision before building, not a default)
 
 1. SSH-tunnel-only vs. real subdomain exposure (above) - depends on how
    often Derek actually expects to reach for this away from a terminal.
-   **Still open**, and as of the 2026-09-15 planning pass below, a third
-   option is on the table too (Tailscale/WireGuard) - see "Exposure &
-   security" below for the tradeoffs. Derek's explicitly not ready to
-   decide this yet; the binary itself (auth, routing, `127.0.0.1` bind) is
-   built and works under any of the three, so nothing is blocked on
-   picking one. This only gates the `docker-compose.yml`/nginx deploy
-   step.
+   **Resolved 2026-09-15: Tailscale.** Derek already has it running on
+   `debian` (tailnet node `r-debian`) and his usual dev machine
+   (`pop-os`), and confirmed his phone can connect - so the phone-reachability
+   requirement that ruled out the SSH-tunnel-only option doesn't force the
+   public-subdomain option either; Tailscale gets both with zero new
+   public attack surface, the outcome flagged as strictly better in the
+   "Exposure & security" section below. See "Deploy: Tailscale" below for
+   what got built.
 2. Whether this binary shares `internal/feedback`'s `Store` type directly
    (adding read methods to the same package the main app writes through)
    or gets its own read-only query layer - probably the former, mirroring
@@ -305,11 +305,10 @@ before this is relied on for a real org, not just before it's deployed.
 `go build ./...`/`go vet ./...`/`go test ./...` are all clean as of this
 pass.
 
-### Admin app exposure & security (still undecided, documented for later)
+### Admin app exposure & security
 
-Derek isn't ready to decide the exposure question (open question 1 above)
-yet, but the tradeoffs surfaced this pass are worth keeping regardless of
-which way it goes:
+**Resolved 2026-09-15: Tailscale**, see open question 1 above. The
+tradeoffs below are why, kept for reference:
 
 - **Basic Auth's real weakness here isn't the transport** - real HTTPS
   protects `ADMIN_TOKEN` in flight fine. It's that the admin app today has
@@ -336,6 +335,30 @@ which way it goes:
   Tailscale/WireGuard and isn't ready to commit to it - revisit open
   question 1 once that's true, rather than defaulting to the public
   subdomain path just because it was the original sketch's other option.
+
+### Deploy: Tailscale
+
+**Built** (code/config; not yet deployed to `debian` - awaits Derek's
+"merge and deploy", same gating as any other real change per this
+project's `CLAUDE.md`). `cmd/admin/main.go` now binds to `ADMIN_BIND_ADDR`
+(env var, default `127.0.0.1` so local `make admin` is unchanged) instead
+of a hardcoded `127.0.0.1`. `docker-compose.yml` gained a second service,
+`admin`, alongside `web` - same `network_mode: host` reasoning as `web`
+(native Postgres on the host, no bridge NAT to fight), built from a new
+`Dockerfile.admin` (mirrors the main `Dockerfile` but builds `./cmd/admin`
+and skips `web/static`/`pg_dump`, neither of which that binary uses).
+Deploying it means setting `ADMIN_BIND_ADDR` in `debian`'s `.env` to that
+host's Tailscale IP (`100.125.19.115` as of this pass, node `r-debian`,
+confirmed live via `tailscale status`) - once set, the app is reachable at
+`http://100.125.19.115:7824` from any device on Derek's tailnet
+(`pop-os`, and his phone once its Tailscale app is connected) and from
+nowhere else; no nginx change, no new public port. `ADMIN_TOKEN`/Basic
+Auth stays on as defense in depth even though the tailnet is the real
+access control. Still needed before this is live: append
+`ADMIN_BIND_ADDR=100.125.19.115` to `debian`'s `.env` (`printf ... >>
+.env`, per `CLAUDE.md`'s secrets-file convention - no need to read the
+file first) as part of the actual deploy step, and confirm the phone's
+Tailscale app connects and can reach the URL post-deploy.
 
 ### Log-in-as (impersonation) - design note, not built
 
