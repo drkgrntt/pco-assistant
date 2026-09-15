@@ -35,8 +35,11 @@
 //
 // Features so far: GET /feedback (every /feedback submission across every
 // organization - the plan doc's own "first real need"); GET /orgs (every
-// organization's billing status, with a trial-extension action) and GET
-// /people (everyone who's ever signed in, by org, with email - see the
+// organization's billing status, with a trial-extension action, plus
+// people-table activity - person count/sign-ins/last active - and
+// setup-page usage - how many of the 8 onboarding-checklist categories
+// from the org's own home page have any data) and GET /people (everyone
+// who's ever signed in, by org, with email and sign-in count - see the
 // people table's own migration for why this exists separately from
 // sessions). Add the next feature the same way: a read (and, if it
 // writes anything, write) method on the relevant store, a views.templ
@@ -55,6 +58,7 @@ import (
 	"pco-assistant/internal/database"
 	"pco-assistant/internal/feedback"
 	"pco-assistant/internal/logger"
+	"pco-assistant/internal/scheduling"
 
 	"github.com/a-h/templ"
 	"github.com/gofiber/fiber/v2"
@@ -81,6 +85,7 @@ func main() {
 
 	feedbackStore := feedback.NewStore(db)
 	authStore := auth.NewStore(db, auth.LoadTokenEncryptionKeyFromEnv())
+	schedulingStore := scheduling.NewStore(db)
 	// Same env vars/constructor server.go uses for the main app's
 	// billingClient - this binary just needs the one ExtendTrial method
 	// off it, not the checkout/portal/webhook paths those envs also
@@ -106,7 +111,7 @@ func main() {
 
 	app.Get("/", func(c *fiber.Ctx) error { return c.Redirect("/orgs") })
 	app.Get("/feedback", feedbackPage(feedbackStore))
-	app.Get("/orgs", orgsPage(authStore))
+	app.Get("/orgs", orgsPage(authStore, schedulingStore))
 	app.Post("/orgs/:id/extend-trial", extendTrial(authStore, billingClient))
 	app.Get("/people", peoplePage(authStore))
 
@@ -128,14 +133,24 @@ func feedbackPage(store *feedback.Store) fiber.Handler {
 	}
 }
 
-func orgsPage(store *auth.Store) fiber.Handler {
+func orgsPage(store *auth.Store, schedulingStore *scheduling.Store) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		orgs, err := store.ListOrganizations(c.Context())
 		if err != nil {
 			logger.Error("listing organizations for admin app", "error", err)
 			return c.Status(fiber.StatusInternalServerError).SendString("failed to load organizations")
 		}
-		return render(c, views.Orgs(orgs))
+		activity, err := store.OrgActivityByOrganization(c.Context())
+		if err != nil {
+			logger.Error("loading org activity for admin app", "error", err)
+			return c.Status(fiber.StatusInternalServerError).SendString("failed to load organization activity")
+		}
+		setup, err := schedulingStore.SetupCompletionByOrganization(c.Context())
+		if err != nil {
+			logger.Error("loading setup completion for admin app", "error", err)
+			return c.Status(fiber.StatusInternalServerError).SendString("failed to load setup completion")
+		}
+		return render(c, views.Orgs(orgs, activity, setup))
 	}
 }
 
