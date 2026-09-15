@@ -12,8 +12,19 @@ import "database/sql"
 
 type Store struct {
 	db *sql.DB
+	// tokenEncryptionKey is the raw (already base64-decoded) AES-256 key
+	// used to encrypt/decrypt sessions.access_token/refresh_token - see
+	// token_encryption.go for the full format and reasoning. nil/empty
+	// means encryption is disabled (SESSION_TOKEN_ENCRYPTION_KEY unset),
+	// in which case encryptToken/decryptToken pass values through
+	// unchanged.
+	tokenEncryptionKey []byte
 }
 
-func NewStore(db *sql.DB) *Store {
-	return &Store{db: db}
+// NewStore constructs a Store. tokenEncryptionKey should come from
+// LoadTokenEncryptionKeyFromEnv (token_encryption.go) - pass nil to
+// disable token encryption (as that helper does when
+// SESSION_TOKEN_ENCRYPTION_KEY is unset).
+func NewStore(db *sql.DB, tokenEncryptionKey []byte) *Store {
+	return &Store{db: db, tokenEncryptionKey: tokenEncryptionKey}
 }

@@ -36,7 +36,7 @@ func New() *FiberServer {
 
 		db:              db,
 		schedulingStore: scheduling.NewStore(db.DB()),
-		authStore:       auth.NewStore(db.DB()),
+		authStore:       auth.NewStore(db.DB(), auth.LoadTokenEncryptionKeyFromEnv()),
 		billingClient: billing.New(
 			os.Getenv("STRIPE_SECRET_KEY"),
 			os.Getenv("STRIPE_PRICE_STANDARD"),

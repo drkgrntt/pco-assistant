@@ -121,7 +121,7 @@ func seedSubjects(ctx context.Context, db *sql.DB, stats *seedStats) (organizati
 	reqCtx := ctx
 	organizationID = placeholderOrgID
 	sessionValid := false
-	if session, err := auth.NewStore(db).MostRecentSession(ctx); err == nil {
+	if session, err := auth.NewStore(db, auth.LoadTokenEncryptionKeyFromEnv()).MostRecentSession(ctx); err == nil {
 		// A near-expired token is left alone rather than refreshed here -
 		// see MostRecentSession - so a stale one just falls through to the
 		// plain ctx below (and, from there, to an all-placeholder result).
