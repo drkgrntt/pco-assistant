@@ -12,7 +12,7 @@ templ Home(personName, organizationName string, data HomeData) {
 
 		@onboardingTour()
 
-		if data.OrgStatus != "" && data.OrgStatus != "active" {
+		if data.OrgStatus != "" && data.OrgStatus != "active" && (data.OrgStatus != "trialing" || data.TrialDaysLeft <= 7) {
 			<p class="warning">
 				if data.OrgStatus == "trialing" {
 					if data.TrialDaysLeft > 0 {
