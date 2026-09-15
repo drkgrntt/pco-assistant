@@ -13,13 +13,15 @@ available where noted, and deleted once it's actually being built.
 
 ## Vision / positioning
 
-**Naming**: "PCO Assistant" is a placeholder/working title, not a final
-product name. "Resonance" is the current front-runner if/when it's time
-to name the product for real, with "Preflight" and "Cadence" as other
-candidates under consideration. Not decided - just noted so it isn't
-re-litigated from scratch later.
+**Naming**: ~~"PCO Assistant" is a placeholder/working title, not a final
+product name.~~ Decided: the product is named **Resonance** (domain
+purchased) - "PCO Assistant" was the working title used during
+development. "Preflight" and "Cadence" were the other candidates
+considered and passed over. See `README.md`'s and `CLAUDE.md`'s own
+intros, and the in-app title/wordmark/manifest, which already use the
+settled name.
 
-PCO Assistant is a **supplement** to Planning Center Services, not a
+Resonance is a **supplement** to Planning Center Services, not a
 replacement - it only exists because of the gaps PCO leaves for worship
 scheduling: song relationships, avoid-pairing/mentorship-aware team
 building, repeat-song and burnout warnings, before-you-publish conflict
