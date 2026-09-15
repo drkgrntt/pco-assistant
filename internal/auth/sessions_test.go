@@ -94,19 +94,19 @@ func TestListActiveSessions(t *testing.T) {
 	personA := testScopeID("person")
 	personB := testScopeID("person")
 
-	if _, err := store.CreateSession(ctx, personA, "Alice", orgID, "Test Org", "tok-a", "ref-a", time.Now().Add(time.Hour)); err != nil {
+	if _, err := store.CreateSession(ctx, personA, "Alice", orgID, "Test Org", "tok-a", "ref-a", time.Now().Add(time.Hour), ""); err != nil {
 		t.Fatalf("CreateSession (personA): %v", err)
 	}
 	// Ensure a distinct created_at ordering (created_at has second-ish
 	// resolution in Postgres by default for now(), so sleep briefly
 	// rather than relying on sub-millisecond ordering).
 	time.Sleep(1100 * time.Millisecond)
-	if _, err := store.CreateSession(ctx, personB, "Bob", orgID, "Test Org", "tok-b", "ref-b", time.Now().Add(time.Hour)); err != nil {
+	if _, err := store.CreateSession(ctx, personB, "Bob", orgID, "Test Org", "tok-b", "ref-b", time.Now().Add(time.Hour), ""); err != nil {
 		t.Fatalf("CreateSession (personB): %v", err)
 	}
 
 	// A session in a different org must not leak in.
-	if _, err := store.CreateSession(ctx, testScopeID("person"), "Other Org Person", otherOrgID, "Other Org", "tok-o", "ref-o", time.Now().Add(time.Hour)); err != nil {
+	if _, err := store.CreateSession(ctx, testScopeID("person"), "Other Org Person", otherOrgID, "Other Org", "tok-o", "ref-o", time.Now().Add(time.Hour), ""); err != nil {
 		t.Fatalf("CreateSession (other org): %v", err)
 	}
 
@@ -156,10 +156,10 @@ func TestSignOutOneSessionLeavesOthersLive(t *testing.T) {
 	personA := testScopeID("person")
 
 	// personA signs in on two devices - two rows, one PersonID.
-	if _, err := store.CreateSession(ctx, personA, "Alice", orgID, "Test Org", "tok-a1", "ref-a1", time.Now().Add(time.Hour)); err != nil {
+	if _, err := store.CreateSession(ctx, personA, "Alice", orgID, "Test Org", "tok-a1", "ref-a1", time.Now().Add(time.Hour), ""); err != nil {
 		t.Fatalf("CreateSession (personA, device 1): %v", err)
 	}
-	if _, err := store.CreateSession(ctx, personA, "Alice", orgID, "Test Org", "tok-a2", "ref-a2", time.Now().Add(time.Hour)); err != nil {
+	if _, err := store.CreateSession(ctx, personA, "Alice", orgID, "Test Org", "tok-a2", "ref-a2", time.Now().Add(time.Hour), ""); err != nil {
 		t.Fatalf("CreateSession (personA, device 2): %v", err)
 	}
 
@@ -205,18 +205,18 @@ func TestSessionForBackgroundSyncPicksMostRecent(t *testing.T) {
 		t.Error("SessionForBackgroundSync (no sessions) ok = true, want false")
 	}
 
-	if _, err := store.CreateSession(ctx, testScopeID("person"), "Alice", orgID, "Test Org", "tok-a", "ref-a", time.Now().Add(time.Hour)); err != nil {
+	if _, err := store.CreateSession(ctx, testScopeID("person"), "Alice", orgID, "Test Org", "tok-a", "ref-a", time.Now().Add(time.Hour), ""); err != nil {
 		t.Fatalf("CreateSession (Alice): %v", err)
 	}
 	// See TestListActiveSessions' identical comment: created_at has
 	// second-ish resolution, sleep briefly to guarantee ordering.
 	time.Sleep(1100 * time.Millisecond)
-	if _, err := store.CreateSession(ctx, testScopeID("person"), "Bob", orgID, "Test Org", "tok-b", "ref-b", time.Now().Add(time.Hour)); err != nil {
+	if _, err := store.CreateSession(ctx, testScopeID("person"), "Bob", orgID, "Test Org", "tok-b", "ref-b", time.Now().Add(time.Hour), ""); err != nil {
 		t.Fatalf("CreateSession (Bob): %v", err)
 	}
 
 	// A session in a different org must never be picked.
-	if _, err := store.CreateSession(ctx, testScopeID("person"), "Other Org Person", otherOrgID, "Other Org", "tok-o", "ref-o", time.Now().Add(time.Hour)); err != nil {
+	if _, err := store.CreateSession(ctx, testScopeID("person"), "Other Org Person", otherOrgID, "Other Org", "tok-o", "ref-o", time.Now().Add(time.Hour), ""); err != nil {
 		t.Fatalf("CreateSession (other org): %v", err)
 	}
 
@@ -249,7 +249,7 @@ func TestUpdateSessionTokensByIDAndDeleteSessionByID(t *testing.T) {
 	orgID := testScopeID("org")
 	cleanupSessions(t, store, orgID)
 
-	rawToken, err := store.CreateSession(ctx, testScopeID("person"), "Alice", orgID, "Test Org", "tok-orig", "ref-orig", time.Now().Add(time.Hour))
+	rawToken, err := store.CreateSession(ctx, testScopeID("person"), "Alice", orgID, "Test Org", "tok-orig", "ref-orig", time.Now().Add(time.Hour), "")
 	if err != nil {
 		t.Fatalf("CreateSession: %v", err)
 	}

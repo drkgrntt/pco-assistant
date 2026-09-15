@@ -61,6 +61,7 @@ func (ac *AccountController) buildAccountData(c *fiber.Ctx) views.AccountData {
 				PersonName: sess.PersonName,
 				CreatedAt:  sess.CreatedAt,
 				ExpiresAt:  sess.ExpiresAt,
+				Device:     auth.DeviceLabel(sess.UserAgent),
 			})
 		}
 	}
