@@ -83,9 +83,15 @@ main {
    rather than left to the browser's default h1/h2 sizing - at this page's
    1rem base they compute to the exact same 2rem/1.5rem the UA defaults
    already produced, so this only makes the size a named, reusable value
-   instead of changing it. */
+   instead of changing it. font-weight is the same story: the UA default
+   already renders h1/h2 bold, this just makes it an explicit, named value
+   instead of an implicit browser default. letter-spacing is the one real
+   change - tightens large/bold heading text so it reads dense rather than
+   loose (see --tracking-tight's own comment in tokens.css). */
 h1 {
   font-size: var(--text-3xl);
+  font-weight: var(--font-bold);
+  letter-spacing: var(--tracking-tight);
   border-bottom: 3px solid var(--accent);
   padding-bottom: var(--space-2);
   margin-bottom: var(--space-4);
@@ -93,6 +99,8 @@ h1 {
 
 h2 {
   font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
+  letter-spacing: var(--tracking-tight);
   color: var(--accent);
 }
 

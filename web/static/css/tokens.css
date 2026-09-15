@@ -113,6 +113,14 @@
   --leading-tight: 1.2;
   --leading-normal: 1.4;
 
+  /* Negative tracking for headings only - tightens large/bold text so it
+     reads dense and confident instead of loose (the same optical fix
+     kirria.com/basecamp.com both use on their own headline type). Body
+     copy and the existing positive-tracking uppercase labels
+     (build-page.css, table.css, etc.) are untouched - this is deliberately
+     a single-purpose token, not a general tracking scale. */
+  --tracking-tight: -0.02em;
+
   /* --- Radius --- */
   --radius-sm: 4px;
   --radius-md: 6px;
@@ -129,10 +137,28 @@
      Flat rgba, not color-mix off a token - elevation shadows read as "a
      shadow" in both themes at roughly the same darkness in most real UI,
      so this deliberately doesn't try to tint them per-theme the way
-     surface/border colors do. */
-  --shadow-sm: 0 2px 6px -2px rgba(0, 0, 0, 0.2);
-  --shadow-md: 0 8px 20px rgba(0, 0, 0, 0.18);
-  --shadow-lg: 0 6px 14px -6px rgba(0, 0, 0, 0.35);
+     surface/border colors do.
+     Each is layered (multiple low-alpha shadows stacked, not one harder
+     -edged one) - kirria.com and basecamp.com both build elevation this
+     way; a single flat shadow reads as a hard-edged cutout, several thin
+     ones stacked at increasing spread/blur read as soft ambient depth.
+     Tuned so the deepest layer of each roughly anchors to the old single
+     -shadow's own reach, rather than introducing a new, unrelated
+     elevation scale. */
+  --shadow-sm:
+    0 1px 2px rgba(0, 0, 0, 0.06),
+    0 2px 4px -1px rgba(0, 0, 0, 0.08),
+    0 4px 8px -4px rgba(0, 0, 0, 0.1);
+  --shadow-md:
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    0 3px 6px -2px rgba(0, 0, 0, 0.08),
+    0 8px 16px -6px rgba(0, 0, 0, 0.12),
+    0 16px 28px -10px rgba(0, 0, 0, 0.14);
+  --shadow-lg:
+    0 2px 4px rgba(0, 0, 0, 0.05),
+    0 6px 12px -4px rgba(0, 0, 0, 0.1),
+    0 14px 24px -8px rgba(0, 0, 0, 0.16),
+    0 24px 40px -12px rgba(0, 0, 0, 0.2);
 
   /* --- Motion --- */
   --duration-fast: 0.15s;
