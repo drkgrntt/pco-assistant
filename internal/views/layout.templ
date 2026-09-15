@@ -82,13 +82,18 @@ templ Head(title string) {
 		// Cache-busted like every other static asset below, unlike before -
 		// favicons are cached unusually aggressively by browsers, so
 		// swapping the icon file in place without this could leave a
-		// visitor's already-cached old icon showing indefinitely.
+		// visitor's already-cached old icon showing indefinitely. The
+		// inline SVG favicon (Glacier's signal-line mark) is preferred by
+		// browsers that support rel="icon" with an SVG source; the PNG
+		// links stay as the fallback/apple-touch-icon for the browsers and
+		// contexts (iOS home screen, older favicon handling) that don't.
+		<link rel="icon" type="image/svg+xml" href={ "/static/favicon.svg?v=" + AssetVersion }/>
 		<link rel="icon" href={ "/static/icon-192.png?v=" + AssetVersion }/>
 		<link rel="apple-touch-icon" href={ "/static/icon-192.png?v=" + AssetVersion }/>
-		<meta name="theme-color" content="#2b7770"/>
+		<meta name="theme-color" content="#0E7C99"/>
 		<link rel="preconnect" href="https://fonts.googleapis.com"/>
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"/>
-		<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+		<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 		<link rel="stylesheet" href={ "/static/css/tokens.css?v=" + AssetVersion }/>
 		<link rel="stylesheet" href={ "/static/css/base.css?v=" + AssetVersion }/>
 		for _, f := range designSystemCSSFiles {
