@@ -32,6 +32,10 @@ tmp/
 main
 *templ.go
 
+# Admin app binary (e.g. `go build -o admin ./cmd/admin`) - anchored to
+# the repo root so it doesn't also match the cmd/admin/ source directory.
+/admin
+
 # OS X generated file
 .DS_Store
 
