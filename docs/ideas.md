@@ -135,12 +135,25 @@ the builder page's "Open in Planning Center" link.)
    the second song's row. Only the whole-plan service-length check has no
    row to attach to, so it stays a standalone banner near the top.
 
-**A related but distinct problem: discoverability, not friction.** A fair
+~~**A related but distinct problem: discoverability, not friction.** A fair
 amount of what actually pays off here (tag/relate suggestions, preference
 notes, avoid-pairing) only helps once someone's found it - it's not on the
 beaten path of "open a plan, drag songs around." Worth a lighter-weight
 onboarding nudge or empty-state prompt pointing at the highest-leverage
-features rather than leaving them to be discovered by accident.
+features rather than leaving them to be discovered by accident.~~ -
+**shipped**, see `docs/plans/shipped/onboarding-and-ambient-framing-plan.md`
+(persistent setup checklist + guided first-run/Build-page tours) and
+`docs/plans/shipped/help-system-and-nav-consolidation-plan.md`
+(click-to-open per-page help dialogs).
+
+**A narrower, still-open piece: nothing reaches someone who never gets
+past sign-in.** All of the above is in-app - useless to someone who
+bounces before ever seeing the tour. An actual welcome *email*, sent once
+on first sign-in, is a genuinely different mechanism (this app's first
+outbound-to-a-real-user email - `internal/notify` today only emails the
+operator, never an org's own people) - see
+`docs/plans/not-started/welcome-email-plan.md` for the design (not
+started).
 
 **Framing that's live in onboarding copy:** PCO is the live broadcast;
 this app is the private rehearsal studio - a safe place to test lineups
@@ -475,6 +488,9 @@ pattern as `song_tags`/`song_relationships`:**
     for the full open-questions writeup (join-key real-world coverage, the
     consent/opt-in model, data-quality/moderation, and the new
     org-written-data-read-cross-org tenancy shape) - not decided here.
+    **Design decisions resolved 2026-09-15** (see that doc's own
+    "Crowdsourced default: resolved decisions" section) - build itself
+    not started yet.
 
   Together, per-person range and per-song range are the prerequisite for
   the bigger payoff this keeps pointing at: a **preferred-key** suggestion
@@ -815,8 +831,10 @@ and the matrix view is the one of that doc's two pieces that's now done
 (see its own "Status" note). What's left, and now the only remaining
 piece in this whole vocal-range thread: the crowdsourced-default piece
 remains the priciest single item in this file - the first genuinely
-cross-org data pattern this app would have, needing a reliable join key
-and a real consent story before it's shippable.
+cross-org data pattern this app would have. Its design decisions (join
+key, consent model, moderation, tenancy shape) were resolved 2026-09-15
+(see that doc's own "Crowdsourced default: resolved decisions" section);
+the build itself hasn't started.
 
 Priciest of the rest: **stage density/band-balance checking** (a new
 capability/profile axis on both people and services, nothing existing to
