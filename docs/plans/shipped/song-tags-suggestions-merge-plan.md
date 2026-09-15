@@ -45,7 +45,7 @@ the same reason.
 
 ### Song Tag Suggestions (`internal/views/scheduling/song_tag_suggestions.templ`,
 `internal/server/controllers/song_tag_suggestions.go`) - see
-`docs/plans/in-progress/song-theme-and-lyric-tag-suggestions-plan.md` for
+`docs/plans/shipped/song-theme-and-lyric-tag-suggestions-plan.md` for
 how the theme-based second source was added
 
 A separate page: `scheduling.SongTagSuggestions` (shared title words,
@@ -306,13 +306,18 @@ it already ORs both sources together.
 
 ### 11. Docs
 
-- `docs/plans/in-progress/song-theme-and-lyric-tag-suggestions-plan.md`:
+- `docs/plans/shipped/song-theme-and-lyric-tag-suggestions-plan.md`:
   Derek/Claude to update directly (not part of this build) once this
   merge ships - its Phase 1 "UX" bullet and Phase 2 section 5 ("UX
   integration") both currently describe extending the now-deleted
   standalone page; they need a pointer to this doc + the new
   `SongTagSuggestionsPanel` location instead. Flagged here so it isn't
-  missed, not assigned to the build itself.
+  missed, not assigned to the build itself. **Done 2026-09-15**, as part
+  of splitting that doc's unbuilt Phase 2 into its own plan - see
+  `docs/plans/not-started/song-lyric-tag-suggestions-plan.md`'s own "UX
+  integration" section, which now describes this panel correctly instead
+  of the deleted page; the original doc's stale Phase 1/Phase 2 text was
+  left as-is for history, with a note pointing here.
 - `README.md`: update the "Song Tag Suggestions" feature bullet (~line
   59) if it names the standalone page/URL.
 - `docs/pco-api-risks.md`: no functional change to any PCO call pattern

@@ -1,17 +1,36 @@
 # Plan: PCO-Themes- and lyric-derived song tag suggestions
 
-**Status: in progress.** Phase 1 (PCO Themes-based suggestions) shipped
-2026-09-11 - `scheduling.SongThemeSuggestions`/`SongThemeValues`
+**Status: Phase 1 shipped 2026-09-11; Phase 2 spun out, not built.**
+Phase 1 (PCO Themes-based suggestions) shipped 2026-09-11 -
+`scheduling.SongThemeSuggestions`/`SongThemeValues`
 (`internal/scheduling/song_tag_suggestions.go`), a shared grouping helper
 refactored out of the existing title-word suggestions, a third labeled
-section ("From Planning Center themes") on
+section ("From Planning Center themes") on what was then
 `/scheduling/song-tag-suggestions`, and the extended nav badge check - see
 `docs/pco-api-risks.md`'s Changelog entry for the zero-new-PCO-calls
 detail. Phase 2 (lyric-derived suggestions - extending
 `song_arrangement_cache` with `Lyrics`/`LyricsEnabled`, section-label
 stripping, a new `SongLyricStopwords` list, a document-frequency ceiling)
-is not yet built; the "Resolved architecture" section below still
-describes it as designed, unbuilt.
+was never built and has been spun out to its own doc,
+`docs/plans/not-started/song-lyric-tag-suggestions-plan.md` - see that doc
+for its design content. This doc's own "Live PCO findings"/"Decisions"/
+Phase 2 "Resolved architecture" sections below are kept here unchanged,
+for the full build history they were spun out of - same convention as
+`docs/plans/shipped/vocal-range-plan.md`.
+
+**Stale-doc note (found 2026-09-15, while doing this split):** this doc's
+Phase 1 "UX" bullet and Phase 2's "UX integration" section below both
+describe extending the standalone `/scheduling/song-tag-suggestions` page
+- that page no longer exists. `docs/plans/shipped/
+song-tags-suggestions-merge-plan.md` shipped later the same day
+(2026-09-11) and merged both suggestion sources into a dismissible
+"Suggestions" panel (`SongTagSuggestionsPanel`,
+`internal/views/scheduling/song_tags.templ`) on `/scheduling/song-tags`
+instead - that merge plan's own "Docs" section (item 11) explicitly
+flagged this doc as needing an update to match, which never actually
+happened until now. The content below is left as originally written for
+history; `docs/plans/not-started/song-lyric-tag-suggestions-plan.md`'s own
+"UX integration" section describes the real, current panel instead.
 
 Written 2026-09-10 as a lyrics-only plan, prompted by revisiting
 `docs/ideas.md`'s "Sermon topic/passage matching" section's "Lyric-derived
