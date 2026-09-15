@@ -23,7 +23,7 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  font-family: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   margin: 0;
   font-size: var(--text-base);
   line-height: var(--leading-normal);
@@ -85,6 +85,7 @@ main {
    already produced, so this only makes the size a named, reusable value
    instead of changing it. */
 h1 {
+  font-family: "Sora", system-ui, -apple-system, "Segoe UI", sans-serif;
   font-size: var(--text-3xl);
   border-bottom: 3px solid var(--accent);
   padding-bottom: var(--space-2);
@@ -92,6 +93,7 @@ h1 {
 }
 
 h2 {
+  font-family: "Sora", system-ui, -apple-system, "Segoe UI", sans-serif;
   font-size: var(--text-2xl);
   color: var(--accent);
 }

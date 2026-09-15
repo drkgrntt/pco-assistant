@@ -5,42 +5,44 @@
    anything. See /style-guide (DesignSystemController, gated to
    APP_ENV=local) for a live, rendered reference of all of this.
 
-   Color tokens were the original design system before this file existed
-   and are unchanged here - light values on bare :root, dark overrides
+   Color tokens were the original design system before this file existed;
+   the "Glacier" visual identity (cool cyan-blue accent, cooler neutrals,
+   slightly larger radius) re-tuned their values in place, without
+   touching any token name - light values on bare :root, dark overrides
    under prefers-color-scheme and the explicit [data-theme] toggle (see
    scheduling-global.js's toggleTheme). Spacing/typography/radius/shadow/motion
-   are new: chosen to exactly match the values already in use across the
-   app wherever a match existed, so introducing them is a pure rename, not
-   a redesign - swapping a literal 0.75rem for var(--space-3) computes to
-   the exact same pixel value. */
+   are new relative to that original system: chosen to exactly match the
+   values already in use across the app wherever a match existed, so
+   introducing them was a pure rename, not a redesign - swapping a literal
+   0.75rem for var(--space-3) computes to the exact same pixel value. */
 :root {
   color-scheme: light dark;
 
   /* --- Color: Canvas & Elevation ---
-     Cool/slate, not warm - hue ~218 (blue-gray) rather than the ~30-40
-     (amber/mustard) these used to sit at. Not a pure hue rotation
-     anymore: a straight swap at the old warm saturation/lightness read
-     as noticeably grayer at 218 than the same numbers did at 30-40 (blue
-     reads heavier/grayer than amber at equal S/L), so --bg/--border/
-     --surface-hover got their saturation pulled back and lightness
-     nudged up in light mode to land soft rather than flat gray -
-     --text/--muted stay put, they were never the complaint. Dark mode is
-     untouched (not the complaint either). Status colors (accent/danger/
-     success/pending below) are untouched too - "pending" is deliberately
-     amber by convention, not part of this. */
-  --bg: hsl(218deg 22% 97%);
+     Glacier: cool cyan-blue, hue ~191-195, rather than the blue-gray
+     ~218 these sat at before - a crisper, less neutral-gray cast than
+     the previous pass, tuned to sit next to the new cyan --accent below
+     rather than read as an unrelated gray. --text/--muted move with it
+     (Glacier pulls them cyan-tinted too, unlike the previous blue-gray
+     pass which left them alone) - see each token's derivation in this
+     change's own report/commit for the exact hex this was tuned from.
+     Dark mode gets the same hue family, not a flat invert - see the
+     `@media (prefers-color-scheme: dark)` block below. Status colors
+     (danger/success/pending) get their own Glacier-era hues below;
+     "pending" stays amber by convention, not part of this. */
+  --bg: hsl(195deg 44% 96%);
   --surface: hsl(0deg 0% 100%);
-  --surface-hover: hsl(218deg 45% 99%);
-  --text: hsl(218deg 8% 18%);
-  --border: hsl(218deg 28% 91%);
-  --muted: hsl(218deg 11% 38%);
+  --surface-hover: hsl(195deg 91% 99%);
+  --text: hsl(191deg 48% 11%);
+  --border: hsl(191deg 33% 88%);
+  --muted: hsl(191deg 18% 38%);
   /* --control-border is --border's own hue/saturation, just much darker -
      1.4.11 Non-text Contrast (Finding 5,
      docs/plans/shipped/wcag-aa-audit-plan.md): --border itself computes to
-     only ~1.16:1 (on --bg) / ~1.25:1 (on --surface), far under the 3:1 a
+     only ~1.18:1 (on --bg) / ~1.28:1 (on --surface), far under the 3:1 a
      form control's own resting-state boundary needs, since it's the only
      visual cue an input/select/textarea has before it's focused. Bumping
-     --border itself that far (91% lightness down to ~56%) would land it as
+     --border itself that far (88% lightness down to ~46%) would land it as
      a heavy, obviously-out-of-place mid-gray everywhere else it's already
      used today (card edges, table rows, dividers - see tokens.css's own
      Color: Canvas & Elevation comment and forms.css's own use of it) - a
@@ -49,21 +51,21 @@
      borders (forms.css) instead, per that finding's own resolved
      alternative. Computed the same way as every other pair in this file's
      audit: light --control-border on --bg is ~3.42:1, on --surface
-     ~3.67:1; dark --control-border (below) on --bg is ~3.39:1 - all clear
+     ~3.71:1; dark --control-border (below) on --bg is ~3.42:1 - all clear
      3:1 with real margin. */
-  --control-border: hsl(218deg 28% 56%);
+  --control-border: hsl(191deg 33% 46%);
 
   /* --- Color: Brand & Accents --- */
-  --accent: hsl(174deg 47% 32%);
-  --accent-solid: hsl(174deg 47% 32%);
-  --accent-subtle: hsl(174deg 25% 92%);
+  --accent: hsl(193deg 83% 33%);
+  --accent-solid: hsl(193deg 83% 33%);
+  --accent-subtle: hsl(193deg 44% 93%);
 
   /* --- Color: Status (softened, contextual) --- */
-  --danger: hsl(10deg 52% 45%);
-  --danger-subtle: hsl(11deg 59% 94%);
+  --danger: hsl(0deg 49% 47%);
+  --danger-subtle: hsl(1deg 56% 96%);
 
-  --success: hsl(120deg 25% 33%);
-  --success-subtle: hsl(120deg 21% 94%);
+  --success: hsl(160deg 47% 34%);
+  --success-subtle: hsl(160deg 40% 95%);
 
   --pending: hsl(40deg 69% 32%);
   --pending-subtle: hsl(42deg 56% 93%);
@@ -93,9 +95,13 @@
      text-2xl/text-xl back h1/h2 explicitly now (see base.css) - the same
      sizes the browser's own default h1/h2 rules already produced at a
      1rem base, just no longer implicit.
-     Weights: normal/medium/semibold match Figtree's three loaded weights
-     (400/500/600) - see layout.templ's Google Fonts link; bold (700) is
-     defined for completeness even though nothing here uses it yet. */
+     Weights: normal/medium/semibold/bold (400/500/600/700) match Public
+     Sans's four loaded weights - see layout.templ's Google Fonts link;
+     bold (700) is loaded for the many plain <strong> tags throughout the
+     app's body copy (browser default bold, not this token directly) even
+     though --font-bold itself is only reached for completeness in
+     /style-guide today. Headings (h1/h2, base.css) render in the second
+     loaded family, Sora, at 600/700 rather than this body scale. */
   --text-xs: 0.75rem;
   --text-sm: 0.8rem;
   --text-md: 0.9rem;
@@ -113,10 +119,15 @@
   --leading-tight: 1.2;
   --leading-normal: 1.4;
 
-  /* --- Radius --- */
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
+  /* --- Radius ---
+     Glacier bumped these up modestly from the original 4/6/8 (kept
+     proportional, not a flat +Npx) for a slightly softer, more rounded
+     card/button feel - deliberately short of Glacier's own marketing
+     comps (12-16px), which were sized for large standalone cards, not
+     this app's dense real UI. */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
   --radius-full: 999px;
 
   /* The comfortable-tap-target height/width shared by every form control,
@@ -145,51 +156,51 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: hsl(218deg 8% 10%); /* Slightly deeper dark for better contrast */
-    --surface: hsl(218deg 8% 14%); /* Elevated card surface */
-    --surface-hover: hsl(218deg 9% 18%);
-    --text: hsl(218deg 20% 89%);
-    --border: hsl(218deg 10% 22%);
-    --muted: hsl(218deg 10% 62%);
+    --bg: hsl(195deg 42% 7%); /* Slightly deeper dark for better contrast */
+    --surface: hsl(191deg 37% 11%); /* Elevated card surface */
+    --surface-hover: hsl(191deg 41% 15%);
+    --text: hsl(189deg 37% 93%);
+    --border: hsl(194deg 31% 19%);
+    --muted: hsl(192deg 16% 62%);
     /* See :root's own --control-border comment above - same hue/saturation
-       as dark --border, just much lighter (22% to 44%) for the same 3:1
+       as dark --border, just much lighter (19% to 38%) for the same 3:1
        reason. */
-    --control-border: hsl(218deg 10% 44%);
+    --control-border: hsl(194deg 31% 38%);
 
-    --accent: hsl(173deg 43% 60%);
-    --accent-subtle: hsl(172deg 29% 15%);
+    --accent: hsl(190deg 71% 58%);
+    --accent-subtle: hsl(189deg 48% 12%);
 
-    --danger: hsl(12deg 63% 67%);
-    --danger-subtle: hsl(12deg 35% 17%);
+    --danger: hsl(5deg 71% 69%);
+    --danger-subtle: hsl(5deg 39% 14%);
 
-    --success: hsl(120deg 27% 65%);
-    --success-subtle: hsl(120deg 18% 14%);
+    --success: hsl(155deg 51% 58%);
+    --success-subtle: hsl(155deg 34% 11%);
 
-    --pending: hsl(40deg 61% 62%);
-    --pending-subtle: hsl(40deg 36% 15%);
+    --pending: hsl(39deg 62% 61%);
+    --pending-subtle: hsl(39deg 37% 12%);
   }
 }
 
 :root[data-theme="dark"] {
-  --bg: hsl(218deg 8% 10%);
-  --surface: hsl(218deg 8% 14%);
-  --surface-hover: hsl(218deg 9% 18%);
-  --text: hsl(218deg 20% 89%);
-  --border: hsl(218deg 10% 22%);
-  --muted: hsl(218deg 10% 62%);
-  --control-border: hsl(218deg 10% 44%);
+  --bg: hsl(195deg 42% 7%);
+  --surface: hsl(191deg 37% 11%);
+  --surface-hover: hsl(191deg 41% 15%);
+  --text: hsl(189deg 37% 93%);
+  --border: hsl(194deg 31% 19%);
+  --muted: hsl(192deg 16% 62%);
+  --control-border: hsl(194deg 31% 38%);
 
-  --accent: hsl(173deg 43% 60%);
-  --accent-subtle: hsl(172deg 29% 15%);
+  --accent: hsl(190deg 71% 58%);
+  --accent-subtle: hsl(189deg 48% 12%);
 
-  --danger: hsl(12deg 63% 67%);
-  --danger-subtle: hsl(12deg 35% 17%);
+  --danger: hsl(5deg 71% 69%);
+  --danger-subtle: hsl(5deg 39% 14%);
 
-  --success: hsl(120deg 27% 65%);
-  --success-subtle: hsl(120deg 18% 14%);
+  --success: hsl(155deg 51% 58%);
+  --success-subtle: hsl(155deg 34% 11%);
 
-  --pending: hsl(40deg 61% 62%);
-  --pending-subtle: hsl(40deg 36% 15%);
+  --pending: hsl(39deg 62% 61%);
+  --pending-subtle: hsl(39deg 37% 12%);
 }
 
 /* color-scheme itself (native form control/scrollbar theming) follows the
