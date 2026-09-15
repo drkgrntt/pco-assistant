@@ -361,6 +361,56 @@ consider disabling mutating routes while "viewing as" so it defaults to
 read-only support access rather than full write access to a customer's
 live PCO data.
 
+## Planning pass, 2026-09-15 (continued): usage signals - sign-ins and setup-page adoption per org
+
+Derek asked whether admin could show "what people are using more than
+others" from data already on hand. First pass built a login-frequency
+signal; Derek then clarified mid-build that the real question is *setup
+feature adoption* - each org's home page shows the same 8-item onboarding
+checklist (`HomeController.buildOnboardingChecklist`,
+`internal/server/controllers/home.go`) as a per-org "have they actually
+used the setup pages" signal, and that's what he wants visible from
+admin, not just login frequency. Both are now **built**, as two more
+columns on `GET /orgs` (`cmd/admin/main.go`'s `orgsPage`,
+`cmd/admin/views/orgs.templ`):
+
+- **Sign-in frequency**: migration `00048_people_sign_in_count.sql` adds
+  `people.sign_in_count`, incremented (not overwritten) by
+  `UpsertPerson` on every sign-in. `auth.Store.OrgActivityByOrganization`
+  rolls that up per org (person count, total sign-ins, most recent
+  `updated_at`) via a plain `GROUP BY` - `/orgs` shows People/Sign-ins/
+  Last active columns from it, with "Last active" flagged `.stale` past
+  30 days. This also fully covers the "Dormant-org / last-seen list"
+  brainstorm item above - struck, no separate view needed.
+  `cmd/admin/views/people.templ`'s own table also gained a Sign-ins
+  column from the same field.
+- **Setup-page adoption**: `internal/scheduling/admin_setup_completion.go`
+  is the new piece - `SetupCompletion` (8 bools, one per onboarding-
+  checklist category, Position Preferences excluded same as that
+  checklist since it lives in PCO not this app's DB) and
+  `Store.SetupCompletionByOrganization`, a single `UNION` query across the
+  8 backing tables (`song_relationships`, `song_roles`, `song_contexts`,
+  `song_tags`, `song_vocal_ranges`, `song_person_preferences`,
+  `person_relationships`, `person_vocal_ranges` - all org-scoped, matched
+  against the same tables `HasAnyX` already checks for the home page's own
+  checklist) rather than 8 separate round trips. Deliberately unscoped,
+  same documented cross-org exception as `feedback.Store.List`/
+  `auth.Store.ListOrganizations`/`ListPeople`/`OrgActivityByOrganization` -
+  this app still has no "app operator" access-control concept to safely
+  gate a cross-org read with on the main multi-tenant app itself. `/orgs`
+  shows it as a `N/8` count per org with a plain HTML `title` tooltip
+  breakdown (no JS added to this binary) via a small label table in
+  `orgs.templ`.
+- **Ruled out as not-cheap**: attributing `sets`/`rosters` draft-building
+  activity to an org (a deeper "how much are they actually scheduling"
+  signal) - neither table has an `organization_id` column at all (only
+  `service_type_id`/`plan_id`), confirmed via their migrations. Would need
+  a real join through those to attribute to an org; left as a future
+  decision, not built here.
+
+`go build ./...`/`go vet ./...`/`go test ./...`/`gofmt -l` all clean as of
+this pass.
+
 ### Further brainstorm (candidates, not commitments)
 
 Not designed, just worth keeping on the list - grounded in things that
@@ -370,9 +420,9 @@ already partly exist:
   `plan`/seat state may have drifted from Stripe, tied to whatever
   `jobs.BillingJobs` already reconciles on its own schedule; catch a
   broken sync before a customer notices.
-- **Dormant-org / last-seen list** - once `people.updated_at` exists, a
-  simple "hasn't signed in in 60+ days" view for support outreach or
-  spotting churn risk.
+- ~~**Dormant-org / last-seen list**~~ - built, see "usage signals" pass
+  above: `/orgs`' Last active column (`OrgActivityByOrganization`) covers
+  this directly.
 - **Force sign-out** - revoke every session for an org - building block
   (`DeleteSessionByID`) already exists - useful for a security incident or
   an offboarding request.
