@@ -438,7 +438,23 @@ no server-side state involved.
    request, no setup required - see `docs/pco-api-risks.md`'s Changelog
    entry for how it's wired.
 
-8. **`.env`**:
+8. **Session token encryption (optional for local dev, real value expected
+   before a real deployment).** `sessions.access_token`/`refresh_token`
+   (this app's stored PCO OAuth grant for each signed-in session) are
+   encrypted at the app layer (AES-256-GCM) before being written, using
+   `SESSION_TOKEN_ENCRYPTION_KEY` - a base64-standard-encoded 32-byte key.
+   Generate one with:
+   ```
+   openssl rand -base64 32
+   ```
+   Leave it unset to skip this in local dev - tokens are then stored in
+   plain text exactly as before, with a one-time startup WARN as a
+   reminder. Existing plaintext sessions upgrade to encrypted storage on
+   their own the next time each one's PCO token refreshes (no migration
+   script needed) - see `internal/auth/token_encryption.go` for the
+   format and reasoning.
+
+9. **`.env`**:
    ```
    PORT=8080
    APP_ENV=local
@@ -476,6 +492,8 @@ no server-side state involved.
    PCO_RETRY_ON_429_ENABLED=...
    PCO_RETRY_ON_429_MAX_ATTEMPTS=...
    PCO_RETRY_ON_429_MAX_WAIT_SECONDS=...
+
+   SESSION_TOKEN_ENCRYPTION_KEY=...
    ```
 
 ## Makefile

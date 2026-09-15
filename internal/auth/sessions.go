@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"time"
 )
 
@@ -63,17 +64,29 @@ type Session struct {
 // table doesn't hand out anything replayable - that protection doesn't
 // extend to accessToken/refreshToken, which have to be stored recoverable
 // since outbound PCO calls need the literal value back (see the migration
-// that added these columns for the tradeoff this implies).
+// that added these columns for the tradeoff this implies). They're
+// encrypted at the app layer before being written (see
+// token_encryption.go's encryptToken/decryptToken and its doc comment for
+// the format and the optional-key behavior).
 func (s *Store) CreateSession(ctx context.Context, personID, personName, organizationID, organizationName, accessToken, refreshToken string, tokenExpiresAt time.Time) (token string, err error) {
 	token, err = randomToken()
 	if err != nil {
 		return "", err
 	}
 
+	encryptedAccessToken, err := s.encryptToken(accessToken)
+	if err != nil {
+		return "", fmt.Errorf("encrypt access token: %w", err)
+	}
+	encryptedRefreshToken, err := s.encryptToken(refreshToken)
+	if err != nil {
+		return "", fmt.Errorf("encrypt refresh token: %w", err)
+	}
+
 	_, err = s.db.ExecContext(ctx, `
 		INSERT INTO sessions (id, person_id, person_name, organization_id, organization_name, expires_at, access_token, refresh_token, token_expires_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-	`, hashToken(token), personID, personName, organizationID, organizationName, time.Now().Add(SessionTTL), accessToken, refreshToken, tokenExpiresAt)
+	`, hashToken(token), personID, personName, organizationID, organizationName, time.Now().Add(SessionTTL), encryptedAccessToken, encryptedRefreshToken, tokenExpiresAt)
 	if err != nil {
 		return "", err
 	}
@@ -95,6 +108,13 @@ func (s *Store) GetSession(ctx context.Context, token string) (Session, error) {
 	)
 	if err != nil {
 		return Session{}, err
+	}
+
+	if session.AccessToken, err = s.decryptToken(session.AccessToken); err != nil {
+		return Session{}, fmt.Errorf("decrypt access token: %w", err)
+	}
+	if session.RefreshToken, err = s.decryptToken(session.RefreshToken); err != nil {
+		return Session{}, fmt.Errorf("decrypt refresh token: %w", err)
 	}
 
 	return session, nil
@@ -123,6 +143,13 @@ func (s *Store) MostRecentSession(ctx context.Context) (Session, error) {
 	)
 	if err != nil {
 		return Session{}, err
+	}
+
+	if session.AccessToken, err = s.decryptToken(session.AccessToken); err != nil {
+		return Session{}, fmt.Errorf("decrypt access token: %w", err)
+	}
+	if session.RefreshToken, err = s.decryptToken(session.RefreshToken); err != nil {
+		return Session{}, fmt.Errorf("decrypt refresh token: %w", err)
 	}
 
 	return session, nil
@@ -166,6 +193,14 @@ func (s *Store) SessionForBackgroundSync(ctx context.Context, organizationID str
 	if err != nil {
 		return Session{}, false, err
 	}
+
+	if session.AccessToken, err = s.decryptToken(session.AccessToken); err != nil {
+		return Session{}, false, fmt.Errorf("decrypt access token: %w", err)
+	}
+	if session.RefreshToken, err = s.decryptToken(session.RefreshToken); err != nil {
+		return Session{}, false, fmt.Errorf("decrypt refresh token: %w", err)
+	}
+
 	return session, true, nil
 }
 
@@ -174,10 +209,19 @@ func (s *Store) SessionForBackgroundSync(ctx context.Context, organizationID str
 // is unaffected, only which PCO credentials it authenticates API calls
 // with going forward.
 func (s *Store) UpdateSessionTokens(ctx context.Context, token, accessToken, refreshToken string, tokenExpiresAt time.Time) error {
-	_, err := s.db.ExecContext(ctx, `
+	encryptedAccessToken, err := s.encryptToken(accessToken)
+	if err != nil {
+		return fmt.Errorf("encrypt access token: %w", err)
+	}
+	encryptedRefreshToken, err := s.encryptToken(refreshToken)
+	if err != nil {
+		return fmt.Errorf("encrypt refresh token: %w", err)
+	}
+
+	_, err = s.db.ExecContext(ctx, `
 		UPDATE sessions SET access_token = $2, refresh_token = $3, token_expires_at = $4
 		WHERE id = $1
-	`, hashToken(token), accessToken, refreshToken, tokenExpiresAt)
+	`, hashToken(token), encryptedAccessToken, encryptedRefreshToken, tokenExpiresAt)
 	return err
 }
 
@@ -193,10 +237,19 @@ func (s *Store) DeleteSession(ctx context.Context, token string) error {
 // a live browser session's actual cookie value. Skips the hashToken step
 // UpdateSessionTokens does internally; everything else is identical.
 func (s *Store) UpdateSessionTokensByID(ctx context.Context, id, accessToken, refreshToken string, tokenExpiresAt time.Time) error {
-	_, err := s.db.ExecContext(ctx, `
+	encryptedAccessToken, err := s.encryptToken(accessToken)
+	if err != nil {
+		return fmt.Errorf("encrypt access token: %w", err)
+	}
+	encryptedRefreshToken, err := s.encryptToken(refreshToken)
+	if err != nil {
+		return fmt.Errorf("encrypt refresh token: %w", err)
+	}
+
+	_, err = s.db.ExecContext(ctx, `
 		UPDATE sessions SET access_token = $2, refresh_token = $3, token_expires_at = $4
 		WHERE id = $1
-	`, id, accessToken, refreshToken, tokenExpiresAt)
+	`, id, encryptedAccessToken, encryptedRefreshToken, tokenExpiresAt)
 	return err
 }
 

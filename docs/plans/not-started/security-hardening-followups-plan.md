@@ -48,19 +48,19 @@ middleware/rate_limit.go`, applied to `/auth/pco/start`,
 
 ### High
 
-- **PCO access/refresh tokens stored unencrypted at rest**
+- **Done 2026-09-15** - see `internal/auth/token_encryption.go`.
+  ~~PCO access/refresh tokens stored unencrypted at rest~~
   (`sessions.access_token`/`refresh_token`, migration `00014_sessions_
-  pco_tokens.sql`, read/written by `internal/auth/sessions.go`). This is
-  multi-tenant SaaS holding real third-party OAuth grants - a DB leak
-  today hands out live PCO access for every connected organization, not
-  just this app's own data. PCO's refresh tokens rotate but don't expire
-  on a fixed schedule, so this is standing access, not a one-time
-  exposure. Needs a real decision, not a default: encrypt at the app
-  layer (AES-GCM) before writing, decrypt only when building an outbound
-  PCO request - key source (a new env var vs. something KMS-backed) is
-  the open question, plus a migration/backfill plan for existing
-  plaintext rows. Bigger than a quick fix; the reason it wasn't done
-  same-day as the rest of this list.
+  pco_tokens.sql`, read/written by `internal/auth/sessions.go`). Encrypted
+  at the app layer (AES-256-GCM) before every write, decrypted on every
+  read; key comes from an optional `SESSION_TOKEN_ENCRYPTION_KEY` env var
+  (base64-encoded 32 bytes, `openssl rand -base64 32`) - unset means
+  encryption is skipped (plain text, as before) with a one-time startup
+  WARN, matching this repo's Stripe/Mailgun/R2 "optional for local dev"
+  convention. No migration/backfill script: a format-tagged ciphertext
+  (`enc:v1:` prefix) lets legacy plaintext rows keep decrypting unchanged,
+  so every session self-upgrades to encrypted storage on its own next PCO
+  token refresh (automatic every ~2 hours).
 
 ### Medium
 

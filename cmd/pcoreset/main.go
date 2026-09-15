@@ -71,7 +71,7 @@ func main() {
 	defer db.Close()
 
 	ctx := context.Background()
-	session, err := auth.NewStore(db).MostRecentSession(ctx)
+	session, err := auth.NewStore(db, auth.LoadTokenEncryptionKeyFromEnv()).MostRecentSession(ctx)
 	if err != nil {
 		logger.Fatal("no signed-in session found - sign in at http://localhost:8080/login first, pcoreset acts as whichever PCO user last signed in", "error", err)
 	}

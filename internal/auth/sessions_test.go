@@ -36,7 +36,7 @@ func dbTestStore(t *testing.T) *Store {
 		t.Skip("set RUN_DB_TESTS=1 to run this DB-backed test against a real Postgres (DB_* env vars)")
 	}
 	db := database.New()
-	return NewStore(db.DB())
+	return NewStore(db.DB(), nil)
 }
 
 // testScopeID returns a random, test-only id, prefixed and suffixed so it
