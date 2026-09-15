@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"pco-assistant/internal/auth"
 
@@ -65,7 +66,7 @@ func (c *Client) handleCheckoutCompleted(ctx context.Context, store *auth.Store,
 
 	return store.UpdateOrganizationSubscription(
 		ctx, session.ClientReferenceID,
-		session.Customer.ID, sub.ID, string(sub.Status), c.planForSubscription(sub),
+		session.Customer.ID, sub.ID, string(sub.Status), c.planForSubscription(sub), trialEndFrom(sub),
 	)
 }
 
@@ -89,7 +90,7 @@ func (c *Client) handleSubscriptionChanged(ctx context.Context, store *auth.Stor
 
 	return store.UpdateOrganizationSubscription(
 		ctx, orgID,
-		sub.Customer.ID, sub.ID, string(sub.Status), c.planForSubscription(&sub),
+		sub.Customer.ID, sub.ID, string(sub.Status), c.planForSubscription(&sub), trialEndFrom(&sub),
 	)
 }
 
@@ -109,8 +110,21 @@ func (c *Client) handleSubscriptionDeleted(ctx context.Context, store *auth.Stor
 
 	return store.UpdateOrganizationSubscription(
 		ctx, orgID,
-		sub.Customer.ID, sub.ID, string(stripe.SubscriptionStatusCanceled), c.planForSubscription(&sub),
+		sub.Customer.ID, sub.ID, string(stripe.SubscriptionStatusCanceled), c.planForSubscription(&sub), trialEndFrom(&sub),
 	)
+}
+
+// trialEndFrom converts Stripe's own trial_end (unix seconds, 0 when the
+// subscription has none) into the *time.Time UpdateOrganizationSubscription
+// expects - nil when there's no trial_end, so that call's COALESCE leaves
+// organizations.trial_ends_at untouched rather than zeroing it out for the
+// common case (most events carry no trial_end at all).
+func trialEndFrom(sub *stripe.Subscription) *time.Time {
+	if sub.TrialEnd == 0 {
+		return nil
+	}
+	t := time.Unix(sub.TrialEnd, 0)
+	return &t
 }
 
 // planForSubscription reads the plan off the subscription's first item's

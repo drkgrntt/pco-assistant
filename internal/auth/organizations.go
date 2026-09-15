@@ -99,16 +99,46 @@ func (s *Store) ListOrganizations(ctx context.Context) ([]Organization, error) {
 	return orgs, rows.Err()
 }
 
+// SetOrganizationTrialEnd directly updates trial_ends_at for an org with
+// no Stripe subscription yet (still on the pre-Stripe signup trial) -
+// the admin app's (cmd/admin) path for extending a not-yet-paying org's
+// trial. Unlike UpdateOrganizationSubscription's trialEndsAt (synced
+// *from* Stripe via webhook once a subscription exists), there's no
+// Stripe object to be the source of truth here yet, so this writes the
+// column directly. See docs/plans/in-progress/admin-tooling-plan.md's
+// "Trial extension / credit" section - once an org has a
+// stripe_subscription_id, extend via billing.Client.ExtendTrial instead
+// and let the webhook round-trip it back here.
+func (s *Store) SetOrganizationTrialEnd(ctx context.Context, id string, trialEnd time.Time) error {
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE organizations
+		SET trial_ends_at = $2, updated_at = now()
+		WHERE id = $1
+	`, id, trialEnd)
+	return err
+}
+
 // UpdateOrganizationSubscription is the billing webhook's write path
 // (see internal/billing) - sets status/plan/Stripe ids together after
 // any subscription lifecycle event (checkout completed, subscription
 // updated or canceled). Unlike UpsertOrganization, this is never called
 // from the sign-in path and never touches name.
-func (s *Store) UpdateOrganizationSubscription(ctx context.Context, id, stripeCustomerID, stripeSubscriptionID, status, plan string) error {
+//
+// trialEndsAt is Stripe's own trial_end for the subscription, or nil when
+// the subscription has none (the normal case for most events - this
+// isn't the pre-Stripe signup trial, it's Stripe's own concept, which
+// this app now also uses to extend/pause billing on an already-paying
+// org - see docs/plans/in-progress/admin-tooling-plan.md's "Trial
+// extension" section). COALESCEd against the existing value rather than
+// unconditionally written, so an event with no trial_end (the common
+// case) never clobbers trial_ends_at back to zero - only an event that
+// actually carries a trial_end moves it.
+func (s *Store) UpdateOrganizationSubscription(ctx context.Context, id, stripeCustomerID, stripeSubscriptionID, status, plan string, trialEndsAt *time.Time) error {
 	_, err := s.db.ExecContext(ctx, `
 		UPDATE organizations
-		SET stripe_customer_id = $2, stripe_subscription_id = $3, status = $4, plan = $5, updated_at = now()
+		SET stripe_customer_id = $2, stripe_subscription_id = $3, status = $4, plan = $5,
+			trial_ends_at = COALESCE($6, trial_ends_at), updated_at = now()
 		WHERE id = $1
-	`, id, stripeCustomerID, stripeSubscriptionID, status, plan)
+	`, id, stripeCustomerID, stripeSubscriptionID, status, plan, trialEndsAt)
 	return err
 }
