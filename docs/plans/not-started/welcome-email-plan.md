@@ -27,6 +27,18 @@ only sends *inbound* notifications to the app operator (feedback
 submissions -> Derek's configured `recipientEmail`), never anything to an
 org's own people.
 
+## Prerequisite: unsubscribe (2026-09-16)
+
+This would be the app's first email ever sent to a real org person
+(rather than just to Derek, as `SendFeedback` is) - the moment that's
+true, every such send needs a working, honored opt-out, not just as
+courtesy but because CAN-SPAM requires it for a message with any
+commercial content, which `welcomeHTML`'s protect-team/protect-service
+line (#2 below) makes this. See
+`docs/plans/not-started/email-unsubscribe-plan.md` for the full design -
+it changes `SendWelcome`'s signature (below) and must land first, or
+alongside, this plan's own build order.
+
 ## Decisions made (2026-09-15)
 
 1. **One email for every brand-new person**, not two tiers split by
@@ -77,22 +89,28 @@ exists to provide (see its own doc comment in `internal/auth/people.go`:
 
 ## `internal/notify` changes
 
-- New `SendWelcome(ctx context.Context, recipientEmail, personName,
-  organizationName string) error`, same shape as `SendFeedback`: logs
-  and returns nil instead of sending when `!hasCredentials()` (local dev
-  needs no real Mailgun setup, same as today), bounded by the existing
-  `sendTimeout`, sender something like
+- New `SendWelcome(ctx context.Context, organizationID, personID,
+  recipientEmail, personName, organizationName string) error` - the
+  `organizationID`/`personID` params (both already in scope at the
+  `Callback` call site) are new versus this plan's original shape, added
+  by `docs/plans/not-started/email-unsubscribe-plan.md` so `SendWelcome`
+  can check suppression and build an unsubscribe link; see that plan for
+  why. Otherwise same shape as `SendFeedback`: logs and returns nil
+  instead of sending when `!canSendToUsers()` (the unsubscribe plan's
+  stricter, real-recipient gate - local dev still needs no real Mailgun
+  setup), bounded by the existing `sendTimeout`, sender something like
   `fmt.Sprintf("Resonance <welcome@%s>", c.fromDomain)` (a second sender
   identity, `welcome@` vs. `feedback@`, both at the same configured
   from-domain - no new env var needed; `fromDomain` already exists on
   `Client` as of the `MG_FROM_DOMAIN` change that made outbound mail show
   as `@resonanceonline.org` instead of the Mailgun sending domain
   `mg.resonanceonline.org`).
-- New `welcomeHTML(personName, organizationName string) string` next to
-  the existing `feedbackHTML`, same "small string builder, not a templ
-  component" reasoning `feedbackHTML`'s own doc comment gives (still only
-  two kinds of outbound email total - a dedicated templating layer is
-  still overkill).
+- New `welcomeHTML(personName, organizationName, unsubscribeURL string)
+  string` next to the existing `feedbackHTML`, same "small string
+  builder, not a templ component" reasoning `feedbackHTML`'s own doc
+  comment gives (still only two kinds of outbound email total - a
+  dedicated templating layer is still overkill) - includes the
+  unsubscribe footer line the unsubscribe plan calls for.
 - Package doc comment ("just one kind so far... feedback submissions")
   needs updating once this actually ships, per CLAUDE.md's own
   "Architecture" callout for `internal/notify`.
@@ -112,6 +130,10 @@ verification alone doesn't guarantee against.
 
 ## Suggested build order
 
+0. `docs/plans/not-started/email-unsubscribe-plan.md`'s build order
+   (migration, `auth.Store` methods, token sign/verify,
+   `UnsubscribeController`) - steps 1-4 below assume `SendWelcome`
+   already has a `SuppressionChecker` and `UnsubscribeURL` to call.
 1. `UpsertPerson`'s signature change (`RETURNING sign_in_count`) +
    updating its one call site (`Callback`) to just log the new count for
    now, no email yet - small, isolated, easy to verify against existing
@@ -123,8 +145,11 @@ verification alone doesn't guarantee against.
 3. Wire the two together in `Callback` (goroutine dispatch, `signInCount
    == 1` + non-empty-email gating).
 
-Small enough that this is plausibly one PR, not three separate slices -
-listed only for review-checkpoint purposes.
+Steps 1-3 are small enough to plausibly be one PR, not three separate
+slices - listed only for review-checkpoint purposes. Step 0 (the
+unsubscribe plan) is substantial enough on its own - new migration, new
+env var, new controller/routes - to be its own PR landing first, not
+folded into this one.
 
 ## Verification note
 
