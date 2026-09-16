@@ -394,7 +394,14 @@ no server-side state involved.
    submission is also written to a `feedback` table regardless of Mailgun
    config, so it's on record even if the email side is unconfigured or
    fails - see `internal/feedback`. No in-app view exists yet; query the
-   table directly.
+   table directly. `MG_DOMAIN` is the Mailgun sending domain used for
+   authentication (typically a subdomain like `mg.example.com`, so it can
+   carry its own SPF/DKIM/MX records without touching the root domain's
+   real mail setup); `MG_FROM_DOMAIN` is optional and only changes what
+   shows in the outbound "From" address (e.g. `example.com` instead of
+   `mg.example.com`) - it defaults to `MG_DOMAIN` when unset, and doesn't
+   require any extra DNS since DMARC's default relaxed alignment treats a
+   subdomain and its root as the same organizational domain.
 
 5. **Backups (production only, optional for local dev).** A daily cron
    (`jobs.BackupJobs`) dumps the database with `pg_dump` and uploads it to
@@ -482,6 +489,7 @@ no server-side state involved.
 
    MG_DOMAIN=...
    MG_KEY=...
+   MG_FROM_DOMAIN=...
    FEEDBACK_RECIPIENT_EMAIL=...
 
    R2_ACCOUNT_ID=...
