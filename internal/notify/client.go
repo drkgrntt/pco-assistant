@@ -29,6 +29,7 @@ const sendTimeout = 10 * time.Second
 type Client struct {
 	mg             mailgun.Mailgun
 	mgDomain       string
+	fromDomain     string
 	recipientEmail string
 }
 
@@ -41,12 +42,28 @@ type Client struct {
 // false and SendFeedback logs the submission instead of calling Mailgun,
 // so local dev never needs real credentials and never risks emailing
 // anyone by accident.
-func New(mgDomain, mgKey, recipientEmail string) *Client {
+//
+// fromDomain is the domain shown in outbound "From" addresses - separate
+// from mgDomain because Mailgun's sending domain is deliberately a
+// subdomain (e.g. mg.resonanceonline.org, so it can carry its own MX/SPF
+// records without touching the root domain's real mail setup - see
+// docs/pco-api-risks.md-style reasoning in the Mailgun setup docs), while
+// mail should still visibly come from the root domain
+// (resonanceonline.org). DMARC's default "relaxed" alignment treats a
+// subdomain and its root as the same organizational domain, so this
+// doesn't need any DNS change beyond what mgDomain already has - it's
+// purely a display change. Falls back to mgDomain when blank, so
+// existing setups (and tests) that only configure mgDomain keep working
+// unchanged.
+func New(mgDomain, mgKey, fromDomain, recipientEmail string) *Client {
 	var mg mailgun.Mailgun
 	if mgDomain != "" && mgKey != "" {
 		mg = mailgun.NewMailgun(mgDomain, mgKey)
 	}
-	return &Client{mg: mg, mgDomain: mgDomain, recipientEmail: recipientEmail}
+	if fromDomain == "" {
+		fromDomain = mgDomain
+	}
+	return &Client{mg: mg, mgDomain: mgDomain, fromDomain: fromDomain, recipientEmail: recipientEmail}
 }
 
 // hasCredentials reports whether a Mailgun domain/key were configured -
@@ -67,7 +84,7 @@ func (c *Client) SendFeedback(ctx context.Context, submitterEmail, message strin
 		return nil
 	}
 
-	sender := fmt.Sprintf("Resonance Feedback <feedback@%s>", c.mgDomain)
+	sender := fmt.Sprintf("Resonance Feedback <feedback@%s>", c.fromDomain)
 	m := mailgun.NewMessage(sender, "Resonance feedback", "", c.recipientEmail)
 	m.SetHTML(feedbackHTML(submitterEmail, message))
 

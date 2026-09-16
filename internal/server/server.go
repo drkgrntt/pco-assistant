@@ -47,6 +47,7 @@ func New() *FiberServer {
 		notifyClient: notify.New(
 			os.Getenv("MG_DOMAIN"),
 			os.Getenv("MG_KEY"),
+			os.Getenv("MG_FROM_DOMAIN"),
 			os.Getenv("FEEDBACK_RECIPIENT_EMAIL"),
 		),
 		feedbackStore: feedback.NewStore(db.DB()),

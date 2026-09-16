@@ -82,9 +82,12 @@ exists to provide (see its own doc comment in `internal/auth/people.go`:
   and returns nil instead of sending when `!hasCredentials()` (local dev
   needs no real Mailgun setup, same as today), bounded by the existing
   `sendTimeout`, sender something like
-  `fmt.Sprintf("Resonance <welcome@%s>", c.mgDomain)` (a second sender
+  `fmt.Sprintf("Resonance <welcome@%s>", c.fromDomain)` (a second sender
   identity, `welcome@` vs. `feedback@`, both at the same configured
-  domain - no new env var needed).
+  from-domain - no new env var needed; `fromDomain` already exists on
+  `Client` as of the `MG_FROM_DOMAIN` change that made outbound mail show
+  as `@resonanceonline.org` instead of the Mailgun sending domain
+  `mg.resonanceonline.org`).
 - New `welcomeHTML(personName, organizationName string) string` next to
   the existing `feedbackHTML`, same "small string builder, not a templ
   component" reasoning `feedbackHTML`'s own doc comment gives (still only
