@@ -27,53 +27,58 @@ templ Home(personName, organizationName string, data HomeData) {
 			</p>
 		}
 
-		if len(data.UpcomingPlans) > 0 {
+		// The hero card - the page's one primary destination (Build a
+		// Service) plus what needs attention before getting there, in one
+		// bordered unit instead of a separate "Workflows" heading further
+		// down the page. Reuses components.Card's own .position-group CSS
+		// class directly rather than the Card component itself, since Card
+		// hardcodes an h3 title and this needs to stay an h2 - the page's
+		// other top-level section (Setup, below) is also an h2, and an h3
+		// ahead of it would invert the document's heading order.
+		<section class="position-group">
 			<h2>Needs attention</h2>
 			<p class="muted">The next upcoming plan for each service type - plus the next one still needing work, when the very next plan is already fully planned.</p>
-			<ul class="plan-list">
-				for _, plan := range data.UpcomingPlans {
-					<li class={ templ.KV("plan-list-followup", plan.IsNextUnplanned) }>
-						if plan.IsNextUnplanned {
-							<span class="muted plan-list-followup-label">Then still needs work:</span>
-						}
-						<a href={ templ.URL(plan.TargetURL()) }>
-							if plan.Title != "" {
-								{ plan.Title }
-							} else {
-								{ plan.Dates }
+			if len(data.UpcomingPlans) > 0 {
+				<ul class="plan-list">
+					for _, plan := range data.UpcomingPlans {
+						<li class={ templ.KV("plan-list-followup", plan.IsNextUnplanned) }>
+							if plan.IsNextUnplanned {
+								<span class="muted plan-list-followup-label">Then still needs work:</span>
 							}
-						</a>
-						<span class="muted">{ plan.ServiceTypeName }</span>
-						<span class="badge-label">Songs</span>
-						@components.PlanStatusBadge(plan.SetStatus)
-						<span class="badge-label">Team</span>
-						@components.PlanStatusBadge(plan.RosterStatus)
-					</li>
-				}
-			</ul>
-		}
-
-		if data.SuggestionCount > 0 {
-			<p>
-				{ fmt.Sprintf("%d song tag suggestion(s) waiting for review.", data.SuggestionCount) }
-				<a href="/scheduling/song-tags">Review suggestions</a>
-			</p>
-		}
-
-		<h2>Workflows</h2>
-		<p class="muted">Where you'll spend most of your time week to week.</p>
-		<nav class="quick-links">
+							<a href={ templ.URL(plan.TargetURL()) }>
+								if plan.Title != "" {
+									{ plan.Title }
+								} else {
+									{ plan.Dates }
+								}
+							</a>
+							<span class="muted">{ plan.ServiceTypeName }</span>
+							<span class="badge-label">Songs</span>
+							@components.PlanStatusBadge(plan.SetStatus)
+							<span class="badge-label">Team</span>
+							@components.PlanStatusBadge(plan.RosterStatus)
+						</li>
+					}
+				</ul>
+			} else {
+				<p class="muted">Nothing needs attention right now.</p>
+			}
+			if data.SuggestionCount > 0 {
+				<p>
+					{ fmt.Sprintf("%d song tag suggestion(s) waiting for review.", data.SuggestionCount) }
+					<a href="/scheduling/song-tags">Review suggestions</a>
+				</p>
+			}
 			<a class="button primary" href="/scheduling/build">Build a Service</a>
-		</nav>
+		</section>
 
-		<h2>Setup</h2>
-		<p class="muted">
-			{ fmt.Sprintf("%d of %d set up so far.", data.Onboarding.Done, data.Onboarding.Trackable) }
-			Configure once, then the workflows above put it to use - each item below feeds a warning or suggestion on the Build page, grouped by which promise it serves (see <a href="/how-it-works">how it works</a>).
-		</p>
-		// Checklist form replaced the old flat Setup link list, then a
-		// since-removed dismissible nudge card, per Derek's "weak sauce"
-		// feedback - see
+		// Setup collapses into a one-line summary once every trackable item
+		// is done - it's the permanent home for setup, not a transient prompt
+		// (see OnboardingChecklist's doc comment), but a fully-configured org
+		// has no ongoing reason to see the full checklist on every visit.
+		// Stays open by default for any org still mid-setup. Checklist form
+		// replaced the old flat Setup link list, then a since-removed
+		// dismissible nudge card, per Derek's "weak sauce" feedback - see
 		// docs/plans/shipped/onboarding-and-ambient-framing-plan.md's
 		// Phase 3. Reuses .plan-list's card-row treatment (already used
 		// for "Needs attention" above); each item's Done state
@@ -86,42 +91,51 @@ templ Home(personName, organizationName string, data HomeData) {
 		// genuinely serves both (vocal range) is split across both groups
 		// by its own person-side/song-side halves rather than picked into
 		// one arbitrarily, per that plan doc's own reasoning.
-		for _, group := range data.Onboarding.Groups {
-			<h3>{ group.Title }</h3>
-			<p class="muted">{ group.Intro }</p>
-			<ul class="plan-list">
-				for _, item := range group.Items {
-					<li>
-						<a href={ templ.URL(item.Href) }>{ item.Label }</a>
-						<span class="muted">{ item.Description }</span>
-						if item.Trackable {
-							if item.Done {
-								@components.Badge("published", "Done")
-							} else {
-								@components.Badge("status-pending", "Not set up")
+		<details class="home-setup" open?={ data.Onboarding.Done < data.Onboarding.Trackable }>
+			<summary class="home-setup-toggle">
+				<h2>Setup</h2>
+				<p class="muted">
+					{ fmt.Sprintf("%d of %d set up so far.", data.Onboarding.Done, data.Onboarding.Trackable) }
+					Configure once, then Build a Service above puts it to use - each item below feeds a warning or suggestion on the Build page, grouped by which promise it serves (see <a href="/how-it-works">how it works</a>).
+				</p>
+			</summary>
+			for _, group := range data.Onboarding.Groups {
+				<h3>{ group.Title }</h3>
+				<p class="muted">{ group.Intro }</p>
+				<ul class="plan-list">
+					for _, item := range group.Items {
+						<li>
+							<a href={ templ.URL(item.Href) }>{ item.Label }</a>
+							<span class="muted">{ item.Description }</span>
+							if item.Trackable {
+								if item.Done {
+									@components.Badge("published", "Done")
+								} else {
+									@components.Badge("status-pending", "Not set up")
+								}
 							}
-						}
-					</li>
-				}
-				// Song Tag Suggestions isn't a one-time setup item (no
-				// done/not-done state to track), so it stays outside the
-				// checklist loop above - a review queue, appended only to
-				// the service group and only while something's actually
-				// waiting, same SuggestionCount fact the nudge paragraph
-				// above already computes, not a second lookup. Mirrors the
-				// nav dropdown's own version of this (see layout.templ,
-				// middleware.PopulateNavState). Links to the Song Tags
-				// page itself (its own Suggestions panel, not a dedicated
-				// page - see
-				// docs/plans/shipped/song-tags-suggestions-merge-plan.md).
-				if group.Title == "Protect the service" && data.SuggestionCount > 0 {
-					<li>
-						<a href="/scheduling/song-tags">Song tag suggestions</a>
-						<span class="muted">Review songs sharing a title word or theme and tag them together.</span>
-					</li>
-				}
-			</ul>
-		}
+						</li>
+					}
+					// Song Tag Suggestions isn't a one-time setup item (no
+					// done/not-done state to track), so it stays outside the
+					// checklist loop above - a review queue, appended only to
+					// the service group and only while something's actually
+					// waiting, same SuggestionCount fact the nudge paragraph
+					// above already computes, not a second lookup. Mirrors the
+					// nav dropdown's own version of this (see layout.templ,
+					// middleware.PopulateNavState). Links to the Song Tags
+					// page itself (its own Suggestions panel, not a dedicated
+					// page - see
+					// docs/plans/shipped/song-tags-suggestions-merge-plan.md).
+					if group.Title == "Protect the service" && data.SuggestionCount > 0 {
+						<li>
+							<a href="/scheduling/song-tags">Song tag suggestions</a>
+							<span class="muted">Review songs sharing a title word or theme and tag them together.</span>
+						</li>
+					}
+				</ul>
+			}
+		</details>
 	}
 }
 
