@@ -1,3 +1,36 @@
+/* The home page's hero card (home.templ) - the .position-group class
+   itself (components/card.css) supplies the bordered-card look; this just
+   gives the "Build a Service" CTA some breathing room above it, and pulls
+   the intro paragraph a little closer to the h2 above it than
+   .position-group's default child spacing would on its own. */
+.position-group .button.primary {
+  margin-top: var(--space-4);
+}
+
+/* The Setup section's collapse-once-done wrapper (home.templ) - open by
+   default while any trackable item is still unset, closed by default once
+   everything's done (HomeController.buildOnboardingChecklist's
+   Done/Trackable counts), so a fully-configured org sees one summary line
+   instead of the full checklist on every visit. Keeps the native <summary>
+   marker (unlike song-tags.css's .song-tag-add-details family, which hides
+   it) - this toggle carries a full heading + paragraph, not a short inline
+   link, so the disclosure triangle is the only cue that it's collapsible. */
+.home-setup {
+  margin-top: var(--space-6);
+}
+
+.home-setup-toggle {
+  cursor: pointer;
+}
+
+.home-setup-toggle h2 {
+  display: inline;
+}
+
+.home-setup-toggle p {
+  margin-top: var(--space-2);
+}
+
 /* The "Needs attention" list's optional second row per service type
    (HomePlanRow.IsNextUnplanned, home.templ) - shown only when the
    chronologically-next plan is already fully planned and a later one
