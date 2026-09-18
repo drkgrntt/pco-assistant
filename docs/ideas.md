@@ -765,6 +765,11 @@ pattern as `song_tags`/`song_relationships`:**
   highest-ceiling item on that list, gated on adoption data from the
   lighter integrations first.
 
+  See `docs/plans/not-started/multi-week-matrix-view-plan.md` for the full
+  cost-model writeup (which calls bundle for free vs. which scale with
+  weeks shown, not people shown) and the scroll-triggered incremental
+  loading design for large/boundless scope - not decided here.
+
 ## Run sheet (day-of output)
 
 Most of what a worship leader needs for the printed/PDF page carried into
