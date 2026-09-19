@@ -276,7 +276,14 @@ somewhere to put it.
   Attachments`, `scheduling.SongAttachmentInfo`.
 
 **Not in PCO's data model at all - would need local storage, same
-pattern as `song_tags`/`song_relationships`:**
+pattern as `song_tags`/`song_relationships`:** (a 2026-09-18 investigation
+found PCO *does* have its own native tag/tag-group mechanism, which
+`song_tags`/`song_contexts` turn out to structurally duplicate rather than
+fill a gap in - `song_relationships`/`person_relationships`' pairwise
+edges are the actual gap PCO has none of. See
+`docs/plans/in-progress/pco-native-tags-plan.md`. The items below - capo
+notes, instrumentation, who-leads - are unaffected: genuinely no PCO field
+for any of them.)
 
 - **Capo notes** - confirmed this session: PCO has zero API field for
   capo anywhere. A local note ("capo 2, shapes of G") is the only way to
