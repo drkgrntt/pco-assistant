@@ -227,7 +227,7 @@ type SetBuilderData struct {
 	// tags, keyed by PCOTagGroup.ID - kept as its own map rather than a
 	// nested Tags field on PCOTagGroup itself (see that type's own doc
 	// comment, internal/scheduling/pco_song_tags.go, for why it stays
-	// plain metadata). See docs/plans/in-progress/pco-native-tags-plan.md.
+	// plain metadata). See docs/plans/shipped/pco-native-tags-plan.md.
 	PCOTagGroups []scheduling.PCOTagGroup
 	PCOGroupTags map[string][]scheduling.PCOTag
 

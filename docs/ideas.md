@@ -281,7 +281,7 @@ found PCO *does* have its own native tag/tag-group mechanism, which
 `song_tags`/`song_contexts` turn out to structurally duplicate rather than
 fill a gap in - `song_relationships`/`person_relationships`' pairwise
 edges are the actual gap PCO has none of. See
-`docs/plans/in-progress/pco-native-tags-plan.md`. The items below - capo
+`docs/plans/shipped/pco-native-tags-plan.md`. The items below - capo
 notes, instrumentation, who-leads - are unaffected: genuinely no PCO field
 for any of them.)
 

@@ -94,6 +94,7 @@ that first. Facts worth adding here that aren't in CLAUDE.md:
 | Edit/remove a plan item (`UpdatePlanItem`/`RemovePlanItem`, `plan_items.go`) | shipped | one `UpdateItem`/`DeleteItem` call each, same "rare user click, not a render path" reasoning as the row above - no caching |
 | Drag-and-drop reposition of a header/foreign item (`RepositionPlanItem`, `plan_items.go`) | shipped | one uncached `GetItems` fetch (must be live, not cached - the whole point is computing a correct new order against the plan's *current* real sequence; a cached/stale list would silently reorder against the wrong baseline) plus one `ReorderItems` call, skipped entirely when the computed order matches the current one (`itemOrderEqual`) - see the `item_reorder` full-list-contract fact below |
 | "PCO Tags" candidate-list annotation (`ListPCOSongTagsForOrg`, `internal/scheduling/pco_song_tags.go`) | shipped | tag-group/tag vocabulary (`ListPCOTagGroups`/`ListPCOTagGroupTags`) cached ~60s per org, one `GetTagGroups(Include: []string{"tags"})` call, same shape as `FetchActiveSongs`; per-candidate assigned-tags map built with one `Songs#index` call *per org tag* (`where[song_tag_ids]=<id>`, paged by `Meta.TotalCount`), fanned out via `RunConcurrently`/`PCOFanOutLimit` - not one call per song - also cached ~60s per org. The one-song, uncached `ListPCOSongTags` (`GET songs/{id}/tags`) is reserved for right after `AssignPCOSongTag` writes, to reflect that write back immediately instead of waiting out the 60s window |
+| "Player Tags" read-only person-tag surfacing (`ListPCOPersonTags`, `internal/scheduling/pco_person_tags.go`) | shipped | deliberately uncached, unlike everything else in this table - one `GetPersonTags` call per person, on demand only (assigned roster rows at roster-render time, or one clicked candidate), never a whole-pool batch fetch, since there's no bounded "list every tag" call worth memoizing the way there is for an org's tag vocabulary or song library |
 
 ## Live-verified PCO API facts (worth not re-checking)
 
@@ -1040,7 +1041,7 @@ out to 100-200 sequential round trips per load.
   read-once contract means a later clean tick is the only way to learn
   that's resolved).
 - **"PCO Tags" additive read+assign lens shipped (2026-09-20)** - build
-  order step 1 of `docs/plans/in-progress/pco-native-tags-plan.md` (that
+  order step 1 of `docs/plans/shipped/pco-native-tags-plan.md` (that
   plan's final direction: `song_contexts`/`song_tags` stay local
   permanently; this is a new, separate, no-local-table feature reading and
   assigning real PCO song-scoped Tags/TagGroups from the Build page).
@@ -1070,3 +1071,31 @@ out to 100-200 sequential round trips per load.
   every new PCO call here is either 60s-cached or a rare, explicit
   user-triggered write, matching this doc's existing tolerances for that
   shape of call.
+- **"PCO Tags" write live-verified against a real PCO org (2026-09-20)** -
+  per `pco-native-tags-plan.md`'s own "Verification note," confirmed
+  `AssignSongTags` isn't just returning 200 without actually persisting: a
+  throwaway probe (`cmd/tagverifyprobe`, built, run, and deleted in the
+  same session per this project's established throwaway-tool convention)
+  assigned a real tag to a real song in the dev org, then re-fetched that
+  song's tags with a *separate, independent* `GetSongTags` call (not the
+  write call's own response) and confirmed the tag was there, then
+  restored the song's original tag state. Round-tripped correctly - no gap
+  between what this app writes and what PCO's own server actually stores.
+- **"Player Tags" read-only person-tag surfacing shipped (2026-09-20)** -
+  Option A of `docs/plans/shipped/pco-person-tags-plan.md`: person-
+  scoped counterpart to "PCO Tags" above, but read-only (no assign UI) and
+  deliberately uncached, unlike every other PCO-data pattern in this file.
+  `ListPCOPersonTags` (`internal/scheduling/pco_person_tags.go`) calls
+  `GetPersonTags` once per person, on demand only - a roster's assigned
+  rows (`rosters_builder.go`'s `personTagsByPerson` fan-out, mirroring the
+  existing `blockoutsByPerson` pattern) and a clicked candidate's warnings
+  panel (`computeCandidateWarnings`, `rosters_candidate_warnings.go`).
+  Deliberately NOT given `pcoTagVocab`'s cache-aside treatment: unlike an
+  org's song library or its tag vocabulary, there's no bounded "list every
+  tag" call to memoize here - the closest analogue would be fetching every
+  candidate's tags for the whole eligibility pool up front, which has no
+  natural bound the way a 15-20-tag vocabulary or an org's song count
+  does, so this stays a small number of on-demand, per-person calls
+  instead of an eager batch. Shares the `PCOTag{ID, GroupID, Name}` type
+  with `pco_song_tags.go` rather than defining a separate PersonTag type -
+  same PCO resource shape either way.

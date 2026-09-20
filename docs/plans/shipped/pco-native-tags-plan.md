@@ -1,5 +1,18 @@
 # Plan: PCO native tags — a new, additive "PCO Tags" feature (not a migration)
 
+**Status: shipped 2026-09-20.** Built end-to-end per this doc's Handoff
+notes/build order and merged to `main` (`d4522c5`/`0184b36`): song-scoped
+tag-group/tag vocabulary + candidate-list annotation
+(`internal/scheduling/pco_song_tags.go`), the assign-picker on the Build
+page's candidate detail card and browse/filter chips on the Songs tab
+(`sets_builder.go`, `set_builder.templ`), the `AssignPCOSongTag` write
+handler (`sets_detail.go`), and the "Song Tags" → "Song Labels" UI rename
+this plan's final direction required. The "Verification note" below is
+also done - a real `AssignSongTags` write was live-confirmed against the
+dev PCO org via a separate, independent read-back
+(see `docs/pco-api-risks.md`'s Changelog, 2026-09-20 entry). This doc is
+kept as-is below as the original design record.
+
 Prompted by a 2026-09-18 investigation session: PCO Services has its own
 real `Tag`/`TagGroup` mechanism (org-editable groups, each `required`
 and/or multi-select, attachable to People, Songs/Arrangements, Media, and

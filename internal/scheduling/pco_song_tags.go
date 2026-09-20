@@ -1,7 +1,7 @@
 package scheduling
 
 // "PCO Tags" - the additive, read+assign lens onto real PCO song-scoped
-// Tags/TagGroups (see docs/plans/in-progress/pco-native-tags-plan.md).
+// Tags/TagGroups (see docs/plans/shipped/pco-native-tags-plan.md).
 // Deliberately separate from song_tags.go/song_contexts.go: those stay
 // exactly as they are (local tables, renamed to "Song Labels" in the UI -
 // see that plan's final decision), this file is a thin, no-local-table
@@ -225,7 +225,7 @@ var (
 // silent page cap), fanned out concurrently via RunConcurrently/
 // PCOFanOutLimit - NOT one call per song. An org typically has a handful
 // of tags (~15-20, confirmed against a real dev org - see
-// docs/plans/in-progress/pco-native-tags-plan.md's open question 1)
+// docs/plans/shipped/pco-native-tags-plan.md's open question 1)
 // relative to its song count (hundreds+), so this is bounded and cheap
 // regardless of library size - the same "batch by filter value, not by
 // row" shape FetchActiveSongs' own Hidden filter and personNameMapForIDs'

@@ -610,7 +610,7 @@ type candidateLookups struct {
 	arrangementCache   map[string]scheduling.SongArrangementInfo
 	// pcoTagGroups/pcoGroupTags/pcoTagsBySong back the additive "PCO Tags"
 	// lens (see internal/scheduling/pco_song_tags.go and
-	// docs/plans/in-progress/pco-native-tags-plan.md) - read/assign only,
+	// docs/plans/shipped/pco-native-tags-plan.md) - read/assign only,
 	// no local table, sitting alongside the untouched local
 	// contextsBySong/tagsBySong above. pcoGroupTags (group id -> that
 	// group's own available tags) isn't part of PCOTagGroup itself (see

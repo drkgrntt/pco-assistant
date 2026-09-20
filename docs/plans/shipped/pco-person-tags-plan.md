@@ -1,10 +1,14 @@
 # Plan: PCO person tags for roster candidate matching
 
-**Option A (read-only "Player Tags" surfacing) is built, 2026-09-20** - see
-"Option A implementation spec" near the end for what shipped and where.
-Options B/C/D remain research-only, not committed - see their own
-sections below. Prompted by a 2026-09-19 follow-on to
-`docs/plans/in-progress/pco-native-tags-plan.md` (the Song-scoped "PCO
+**Status: shipped 2026-09-20 (Option A only).** Option A (read-only
+"Player Tags" surfacing) is built and merged to `main` (`7e9b248`/
+`2bfc1c2`) - see "Option A implementation spec" near the end for the exact
+file list. Options B/C/D remain research-only, deliberately not committed
+- this doc stays in `shipped/` for Option A's own design record, but
+revisit it (not `not-started/`) if B/C/D ever get picked up, since most of
+their own research (live-verified PCO facts, open questions) already
+lives in this same file. Prompted by a 2026-09-19 follow-on to
+`docs/plans/shipped/pco-native-tags-plan.md` (the Song-scoped "PCO
 Tags" feature): once that plan confirmed PCO's real `Tag`/`TagGroup`
 mechanism also covers **People** (`TagsFor: "person"` - live-confirmed,
 see that plan's Handoff notes; a real example already seen in the wild is
@@ -263,7 +267,7 @@ clear.
 
 ## Key files referenced above
 
-- `docs/plans/in-progress/pco-native-tags-plan.md` - the Song-scoped
+- `docs/plans/shipped/pco-native-tags-plan.md` - the Song-scoped
   sibling feature this plan reuses `go-pco`'s Tag/TagGroup mechanism,
   CRUD-blocked finding, and full-replace-per-call `assign_tags` behavior
   from. Read its Handoff notes before touching `go-pco` for this feature.
