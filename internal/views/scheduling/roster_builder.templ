@@ -792,4 +792,5 @@ templ CandidateWarningsFragment(view CandidatePersonView) {
 	if view.FrequencyWarning == "" && view.BlockoutWarning == "" && view.CrossTeamWarning == "" {
 		<span class="muted">No conflicts found.</span>
 	}
+	@personTagsLine(view.PCOPersonTags)
 }

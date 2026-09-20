@@ -79,6 +79,12 @@ func (sc *SchedulingController) computeCandidateWarnings(ctx context.Context, or
 		SchedulePreference: schedulePreference,
 	}
 
+	// Tags have nothing to do with the plan date, so this runs unconditionally
+	// - unlike the warnings below, it isn't gated behind the early return.
+	if tags, err := sc.store.ListPCOPersonTags(ctx, personID); err == nil {
+		view.PCOPersonTags = tags
+	}
+
 	if planDate.IsZero() {
 		return view
 	}

@@ -2,7 +2,9 @@ package scheduling
 
 import (
 	"fmt"
+	"strings"
 
+	"pco-assistant/internal/scheduling"
 	"pco-assistant/internal/views/components"
 )
 
@@ -119,6 +121,30 @@ templ personVocalRangeLine(a AssignmentView) {
 	}
 }
 
+// personTagsLine renders a person's real Planning Center person-scoped tags
+// (e.g. "Player Tags: Electric Guitar, Vocals") - read-only, no filtering,
+// no assignment, same "just omit it" convention as personVocalRangeLine
+// above. Shared between an assigned person's own card (personDetailCard)
+// and a candidate's conflict-check result (CandidateWarningsFragment,
+// roster_builder.templ), since PCO person tags aren't tied to being
+// assigned - see scheduling.ListPCOPersonTags.
+templ personTagsLine(tags []scheduling.PCOTag) {
+	if len(tags) > 0 {
+		<p class="muted">
+			<strong>Player Tags:</strong>
+			{ " " + personTagNames(tags) }
+		</p>
+	}
+}
+
+func personTagNames(tags []scheduling.PCOTag) string {
+	names := make([]string, len(tags))
+	for i, t := range tags {
+		names[i] = t.Name
+	}
+	return strings.Join(names, ", ")
+}
+
 // personDetailCard is one assigned person's detail card - hidden until
 // selectPersonRow (scheduling-build.js) reveals it, in response to clicking that
 // person's own row in a position's assignment list (roster_builder.templ).
@@ -132,6 +158,7 @@ templ personDetailCard(data RosterBuilderData, a AssignmentView) {
 			@personBadgeSpans(a)
 		</div>
 		@personVocalRangeLine(a)
+		@personTagsLine(a.PCOPersonTags)
 		if a.Notes != "" {
 			<p class="build-detail-notes">{ a.Notes }</p>
 		}

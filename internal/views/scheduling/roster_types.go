@@ -179,6 +179,11 @@ type AssignmentView struct {
 	VocalRangeLowOctave        int
 	VocalRangeHighPitchClass   int
 	VocalRangeHighOctave       int
+
+	// PCOPersonTags is this person's real Planning Center person-scoped tags
+	// (e.g. "Instruments Played: Electric Guitar") - read-only display, no
+	// local storage, no filtering logic. See scheduling.ListPCOPersonTags.
+	PCOPersonTags []scheduling.PCOTag
 }
 
 // CandidatePersonView is a person eligible for a position but not currently
@@ -193,6 +198,11 @@ type CandidatePersonView struct {
 	FrequencyWarning   string
 	BlockoutWarning    string
 	CrossTeamWarning   string
+
+	// PCOPersonTags - see AssignmentView.PCOPersonTags. Populated on demand
+	// by computeCandidateWarnings (rosters_candidate_warnings.go), not
+	// eagerly for the whole candidate pool.
+	PCOPersonTags []scheduling.PCOTag
 }
 
 // PersonSuggestionView is one recommended person for a specific open

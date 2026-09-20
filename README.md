@@ -256,6 +256,18 @@ with at least Viewer access can still sign in.
   file gets checked against that plan's own songs automatically, surfacing
   as a badge on the Build page's Songs tab - see that entry for the
   mismatch-vs-tip distinction
+- **Player Tags** - a read-only surfacing of Planning Center's own real
+  person-scoped Tags (e.g. an "Instruments Played" tag group your org
+  already configured in Planning Center itself), shown alongside a
+  person's vocal range wherever the roster builder already shows one: on
+  each assigned roster row's detail card, and in a clicked candidate's
+  warnings panel when filling an open position. Not editable here -
+  Planning Center blocks Tag/Tag Group writes over the OAuth API the same
+  way song-scoped tags do (see PCO Tags above) - manage the tags
+  themselves from Planning Center's own admin screens. Fetched live,
+  per person, on demand rather than cached or batch-fetched for an entire
+  candidate pool up front, since there's no bounded "list every tag"
+  call worth memoizing the way the song library is
 - **Build a Service (Team tab)** - the same page as the Songs tab above,
   filling an upcoming plan's open positions from each position's real PCO
   eligibility list, with avoid-pairing conflict warnings, works-well/

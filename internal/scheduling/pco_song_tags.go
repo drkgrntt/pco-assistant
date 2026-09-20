@@ -34,7 +34,10 @@ type PCOTagGroup struct {
 // (ListPCOSongTags/ListPCOSongTagsForOrg). PCO's own Tag resource doesn't
 // distinguish "available" from "assigned", so both cases share this one
 // shape - GroupID is always populated (from the Tag's own TagGroup
-// relationship), not just when it's convenient for the caller.
+// relationship), not just when it's convenient for the caller. Also reused
+// as-is by pco_person_tags.go's ListPCOPersonTags - same PCO resource
+// shape regardless of whether the tag's own group is song- or
+// person-scoped, so there's no separate PersonTag type.
 type PCOTag struct {
 	ID      string
 	GroupID string
