@@ -467,6 +467,49 @@ func (sc *SchedulingController) QuickAddSongContext(c *fiber.Ctx) error {
 	return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(middleware.RequestContext(c), orgID, serviceTypeID, planID, errMsg)))
 }
 
+// AssignPCOSongTag backs the additive "PCO Tags" picker in
+// candidateDetailExtras (set_builder.templ) - unlike QuickAddSongTag/
+// QuickAddSongContext above, this doesn't touch this app's own DB at all;
+// it writes straight through to a real PCO song via
+// scheduling.Store.AssignPCOTagGroup (go-pco's AssignSongTags), immediate,
+// no draft/Publish step - see docs/plans/in-progress/
+// pco-native-tags-plan.md's "writes are immediate" decision. TagIDs is
+// expected to already be this one group's *complete* desired selection
+// (every checked checkbox, or the single chosen radio, from the picker
+// form) - AssignPCOTagGroup/AssignSongTags is a full replace per call, not
+// additive, so posting just the one tag that changed would silently wipe
+// out every other tag already assigned in that group. Empty string values
+// (the picker's own "None" radio for a single-select group) are filtered
+// out before calling the store, so clearing a group's assignment posts a
+// genuinely empty slice rather than a slice containing "".
+func (sc *SchedulingController) AssignPCOSongTag(c *fiber.Ctx) error {
+	orgID := middleware.CurrentOrganizationID(c)
+	serviceTypeID := c.Params("service_type_id")
+	planID := c.Params("plan_id")
+
+	var body struct {
+		SongID  string   `form:"song_id"`
+		GroupID string   `form:"group_id"`
+		TagIDs  []string `form:"tag_ids"`
+	}
+	errMsg := ""
+	if err := c.BodyParser(&body); err != nil {
+		errMsg = err.Error()
+	} else {
+		tagIDs := make([]string, 0, len(body.TagIDs))
+		for _, id := range body.TagIDs {
+			if id != "" {
+				tagIDs = append(tagIDs, id)
+			}
+		}
+		if err := sc.store.AssignPCOTagGroup(middleware.RequestContext(c), body.SongID, body.GroupID, tagIDs); err != nil {
+			errMsg = err.Error()
+		}
+	}
+
+	return render(c, views.SetBuilderBody(sc.buildSetBuilderDataWithErr(middleware.RequestContext(c), orgID, serviceTypeID, planID, errMsg)))
+}
+
 // QuickAddSongVocalRange is Part C of docs/plans/shipped/
 // vocal-range-plan.md - the Build page's quick-add-panel/row-kebab-menu
 // entry point for scheduling.Store's SetSongVocalRange, the same Store

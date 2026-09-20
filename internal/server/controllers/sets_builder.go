@@ -150,6 +150,19 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 	tagsBySong := songTagsBySong(allTags)
 	tagCategoryLabels := songTagCategoryLabelMap(tagCategories)
 
+	// pcoTagGroups/pcoGroupTags/pcoTagsBySong - the additive "PCO Tags"
+	// lens (see internal/scheduling/pco_song_tags.go). Best-effort like
+	// every lookup above: a failure just means no PCO Tags badges/picker
+	// render, not a broken page. pcoTagsBySong is built with one
+	// Songs#index call per org tag (see ListPCOSongTagsForOrg's own doc
+	// comment for why that's cheap), not per song.
+	pcoTagGroups, _ := sc.store.ListPCOTagGroups(ctx, organizationID)
+	pcoGroupTags := make(map[string][]scheduling.PCOTag, len(pcoTagGroups))
+	for _, g := range pcoTagGroups {
+		pcoGroupTags[g.ID], _ = sc.store.ListPCOTagGroupTags(ctx, organizationID, g.ID)
+	}
+	pcoTagsBySong, _ := sc.store.ListPCOSongTagsForOrg(ctx, organizationID, pcoTagGroups)
+
 	// SongsToReinforce/NewSongLabel below key off these two: which songs are
 	// tracked as genuinely new to the church (see the write-side loop
 	// above), and how many distinct plans each song's actually been
@@ -222,6 +235,8 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 	data.ContextTypes = contextTypes
 	data.TagValuesByCategory, _ = sc.store.DistinctSongTagValues(ctx, organizationID)
 	data.AllSongVocalRanges = vocalRangesBySong
+	data.PCOTagGroups = pcoTagGroups
+	data.PCOGroupTags = pcoGroupTags
 
 	inSet := make(map[string]bool, len(setSongs))
 	for _, ss := range setSongs {
@@ -253,7 +268,7 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 	// here from songs/inSet, already in hand, rather than a fresh fetch;
 	// searchCandidates builds the identical list on its own early-return
 	// path for this same list's htmx re-renders.
-	data.BrowsableSongs = buildBrowsableSongs(songs, inSet, rolesBySong, roleTypeLabels, tagsBySong, tagCategoryLabels)
+	data.BrowsableSongs = buildBrowsableSongs(songs, inSet, rolesBySong, roleTypeLabels, tagsBySong, tagCategoryLabels, pcoTagsBySong)
 
 	pendingDeletions, err := sc.store.ListPendingDeletions(ctx, set.ID)
 	if err != nil {
@@ -520,6 +535,9 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 		trackedNew:         trackedNew,
 		appearanceCounts:   appearanceCounts,
 		arrangementCache:   arrangementCache,
+		pcoTagGroups:       pcoTagGroups,
+		pcoGroupTags:       pcoGroupTags,
+		pcoTagsBySong:      pcoTagsBySong,
 	}
 
 	for _, song := range songs {
@@ -590,6 +608,19 @@ type candidateLookups struct {
 	trackedNew         map[string]bool
 	appearanceCounts   map[string]int
 	arrangementCache   map[string]scheduling.SongArrangementInfo
+	// pcoTagGroups/pcoGroupTags/pcoTagsBySong back the additive "PCO Tags"
+	// lens (see internal/scheduling/pco_song_tags.go and
+	// docs/plans/in-progress/pco-native-tags-plan.md) - read/assign only,
+	// no local table, sitting alongside the untouched local
+	// contextsBySong/tagsBySong above. pcoGroupTags (group id -> that
+	// group's own available tags) isn't part of PCOTagGroup itself (see
+	// that type's doc comment) - resolved once per render here, same
+	// pattern as every other *TypeLabels lookup in this struct, so
+	// candidateDetailExtras (set_builder.templ) can render each group's
+	// picker without its own store call.
+	pcoTagGroups  []scheduling.PCOTagGroup
+	pcoGroupTags  map[string][]scheduling.PCOTag
+	pcoTagsBySong map[string][]scheduling.PCOTag
 }
 
 // candidateSongView computes song's full CandidateSongView from l's
@@ -633,6 +664,7 @@ func (l candidateLookups) candidateSongView(song pco.SongData) views.CandidateSo
 		ContextsAttr:     contextsAttr,
 		Tags:             tagViews,
 		TagsAttr:         tagsAttr,
+		PCOTags:          l.pcoTagsBySong[song.ID],
 	}
 }
 
@@ -651,7 +683,7 @@ func (l candidateLookups) candidateSongView(song pco.SongData) views.CandidateSo
 // row's click-to-expand detail instead (CandidateDetails/
 // candidateDetailExtras, set_builder.templ). songs is expected already
 // title-ordered (fetchActiveSongs' own contract) - this doesn't re-sort.
-func buildBrowsableSongs(songs []pco.SongData, inSet map[string]bool, rolesBySong map[string][]scheduling.SongRole, roleTypeLabels map[string]string, tagsBySong map[string][]scheduling.SongTag, tagCategoryLabels map[string]string) []views.CandidateSongView {
+func buildBrowsableSongs(songs []pco.SongData, inSet map[string]bool, rolesBySong map[string][]scheduling.SongRole, roleTypeLabels map[string]string, tagsBySong map[string][]scheduling.SongTag, tagCategoryLabels map[string]string, pcoTagsBySong map[string][]scheduling.PCOTag) []views.CandidateSongView {
 	browsable := make([]views.CandidateSongView, 0, len(songs))
 	for _, song := range songs {
 		if inSet[song.ID] {
@@ -665,6 +697,7 @@ func buildBrowsableSongs(songs []pco.SongData, inSet map[string]bool, rolesBySon
 			NotSungInLabel: notSungInLabel(song.Attributes.LastScheduledAt, tagsBySong[song.ID]),
 			Roles:          roleViews,
 			Tags:           tagViews,
+			PCOTags:        pcoTagsBySong[song.ID],
 		})
 	}
 	return browsable
@@ -725,6 +758,18 @@ func (sc *SchedulingController) buildCandidateLookups(ctx context.Context, organ
 	candidateConflicts, _, _ := sc.store.AvoidPairings(ctx, organizationID, setID)
 	history := fetchRecentPlanHistory(ctx, serviceTypeID)
 
+	// pcoTagGroups/pcoGroupTags/pcoTagsBySong - see the identical block in
+	// buildSetBuilderData for the full doc comment; duplicated here rather
+	// than shared, same tradeoff every other lookup in this function
+	// already makes (buildSetBuilderData's own comment on this function
+	// explains why the duplication is cheap).
+	pcoTagGroups, _ := sc.store.ListPCOTagGroups(ctx, organizationID)
+	pcoGroupTags := make(map[string][]scheduling.PCOTag, len(pcoTagGroups))
+	for _, g := range pcoTagGroups {
+		pcoGroupTags[g.ID], _ = sc.store.ListPCOTagGroupTags(ctx, organizationID, g.ID)
+	}
+	pcoTagsBySong, _ := sc.store.ListPCOSongTagsForOrg(ctx, organizationID, pcoTagGroups)
+
 	return candidateLookups{
 		titles:             titles,
 		rolesBySong:        rolesBySong,
@@ -738,6 +783,9 @@ func (sc *SchedulingController) buildCandidateLookups(ctx context.Context, organ
 		trackedNew:         trackedNew,
 		appearanceCounts:   appearanceCounts,
 		arrangementCache:   arrangementCache,
+		pcoTagGroups:       pcoTagGroups,
+		pcoGroupTags:       pcoGroupTags,
+		pcoTagsBySong:      pcoTagsBySong,
 	}
 }
 
@@ -774,7 +822,7 @@ func (sc *SchedulingController) BuildCandidateDetails(c *fiber.Ctx) error {
 
 	set, err := sc.store.GetOrCreateSet(ctx, organizationID, serviceTypeID, planID)
 	if err != nil {
-		return render(c, views.CandidateDetails(views.CandidateSongView{}, "Couldn't load this song's details."))
+		return render(c, views.CandidateDetails(views.CandidateSongView{}, nil, nil, serviceTypeID, planID, "Couldn't load this song's details."))
 	}
 
 	songs, _ := fetchActiveSongs(ctx, organizationID)
@@ -786,13 +834,13 @@ func (sc *SchedulingController) BuildCandidateDetails(c *fiber.Ctx) error {
 		}
 	}
 	if song == nil {
-		return render(c, views.CandidateDetails(views.CandidateSongView{}, "Song not found."))
+		return render(c, views.CandidateDetails(views.CandidateSongView{}, nil, nil, serviceTypeID, planID, "Song not found."))
 	}
 
 	lookups := sc.buildCandidateLookups(ctx, organizationID, serviceTypeID, songs, set.ID)
 	cand := lookups.candidateSongView(*song)
 	cand.ArrangementInfo = resolveArrangementInfo(ctx, sc.store, organizationID, lookups.arrangementCache, songID)
-	return render(c, views.CandidateDetails(cand, ""))
+	return render(c, views.CandidateDetails(cand, lookups.pcoTagGroups, lookups.pcoGroupTags, serviceTypeID, planID, ""))
 }
 
 // candidateSearchLimit caps BuildCandidatesSearch's response - a broad or
@@ -937,7 +985,12 @@ func (sc *SchedulingController) searchCandidates(ctx context.Context, organizati
 		tagCategories, _ := sc.store.ListSongTagCategories(ctx)
 		tagsBySong := songTagsBySong(allTags)
 		tagCategoryLabels := songTagCategoryLabelMap(tagCategories)
-		return nil, 0, false, buildBrowsableSongs(songs, inSet, rolesBySong, roleTypeLabels, tagsBySong, tagCategoryLabels)
+		// pcoTagsBySong: cached (ListPCOSongTagsForOrg, ~60s TTL, see its own
+		// doc comment) - cheap enough to include even on this otherwise-
+		// pricier-lookups-avoiding branch.
+		pcoTagGroups, _ := sc.store.ListPCOTagGroups(ctx, organizationID)
+		pcoTagsBySong, _ := sc.store.ListPCOSongTagsForOrg(ctx, organizationID, pcoTagGroups)
+		return nil, 0, false, buildBrowsableSongs(songs, inSet, rolesBySong, roleTypeLabels, tagsBySong, tagCategoryLabels, pcoTagsBySong)
 	}
 
 	lookups := sc.buildCandidateLookups(ctx, organizationID, serviceTypeID, songs, set.ID)
@@ -962,8 +1015,14 @@ func (sc *SchedulingController) searchCandidates(ctx context.Context, organizati
 		if !candidateMatchesContext(contextsAttr, context) {
 			continue
 		}
+		// pcoTagNamesAttr folds this song's real PCO tag names into the same
+		// haystack tagsAttr already builds for the local song_tags values -
+		// what lets the "PCO Tags" browse chips (set_builder.templ,
+		// applyTagFilter) actually narrow the list when clicked, the same
+		// way the pre-existing local tag chips already do, rather than
+		// typing a tag name into the search box that then matches nothing.
 		_, tagsAttr := songTagViews(lookups.tagsBySong, lookups.tagCategoryLabels, song.ID)
-		if !candidateMatchesSearch(song.Attributes.Title, tagsAttr, query) {
+		if !candidateMatchesSearch(song.Attributes.Title, tagsAttr+" "+pcoTagNamesAttr(lookups.pcoTagsBySong, song.ID), query) {
 			continue
 		}
 		matches = append(matches, lookups.candidateSongView(song))
@@ -2252,6 +2311,24 @@ func songTagViews(tagsBySong map[string][]scheduling.SongTag, tagCategoryLabels 
 		values = append(values, strings.ToLower(t.Value))
 	}
 	return tagViews, strings.Join(values, " ")
+}
+
+// pcoTagNamesAttr is songTagViews' PCO-tags counterpart for search-text
+// purposes only (unlike songTagViews, there's no display view model to
+// build here - candidateDetailExtras/pcoTagPickers render cand.PCOTags
+// directly): songID's real PCO tag names, lowercased and space-joined, so
+// candidateMatchesSearch's existing substring haystack also matches on a
+// PCO tag's name, not just a local song_tags value.
+func pcoTagNamesAttr(pcoTagsBySong map[string][]scheduling.PCOTag, songID string) string {
+	tags := pcoTagsBySong[songID]
+	if len(tags) == 0 {
+		return ""
+	}
+	names := make([]string, 0, len(tags))
+	for _, t := range tags {
+		names = append(names, strings.ToLower(t.Name))
+	}
+	return strings.Join(names, " ")
 }
 
 // titleOrID looks up id in a string->string map, falling back to id itself

@@ -891,13 +891,13 @@ templ songBrowseMeta(song CandidateSongView) {
 // found); HasExtraMeta covers the common case of a song with nothing left
 // to reveal beyond what's already visible above, so the reveal doesn't
 // just look like nothing happened.
-templ CandidateDetails(cand CandidateSongView, errMsg string) {
+templ CandidateDetails(cand CandidateSongView, pcoTagGroups []scheduling.PCOTagGroup, pcoGroupTags map[string][]scheduling.PCOTag, serviceTypeID, planID, errMsg string) {
 	if errMsg != "" {
 		<p class="error" role="alert">{ errMsg }</p>
-	} else if !cand.HasExtraMeta() {
+	} else if !cand.HasExtraMeta() && !hasAnyPCOTagOptions(pcoTagGroups, pcoGroupTags) {
 		<p class="muted">Nothing else on record for this song.</p>
 	} else {
-		@candidateDetailExtras(cand)
+		@candidateDetailExtras(cand, pcoTagGroups, pcoGroupTags, serviceTypeID, planID)
 	}
 }
 
@@ -907,7 +907,10 @@ templ CandidateDetails(cand CandidateSongView, errMsg string) {
 // duplicate badges already visible before the click. Contexts stay here
 // rather than moving to songBrowseMeta - the issue that prompted this split
 // only asked for not-sung-recently/roles/tags at a glance, not contexts too.
-templ candidateDetailExtras(cand CandidateSongView) {
+// pcoTagPickers below is the additive "PCO Tags" lens's own block, appended
+// here rather than moving to songBrowseMeta for the same reason Contexts
+// stayed here.
+templ candidateDetailExtras(cand CandidateSongView, pcoTagGroups []scheduling.PCOTagGroup, pcoGroupTags map[string][]scheduling.PCOTag, serviceTypeID, planID string) {
 	if cand.NewSongLabel != "" {
 		@components.BadgeTitled("status-pending", cand.NewSongLabel, "New to the church - a repeat helps it stick")
 	}
@@ -922,6 +925,90 @@ templ candidateDetailExtras(cand CandidateSongView) {
 	}
 	for _, context := range cand.Contexts {
 		@components.Badge("", context.Label)
+	}
+	@pcoTagPickers(cand, pcoTagGroups, pcoGroupTags, serviceTypeID, planID)
+}
+
+// hasAnyPCOTagOptions reports whether there's at least one song-scoped PCO
+// tag group with at least one tag to actually pick from - used by
+// CandidateDetails so a song with nothing local to show (cand.HasExtraMeta
+// false) still reveals the PCO Tags picker when the org has PCO tags
+// configured, rather than always falling back to "Nothing else on record."
+func hasAnyPCOTagOptions(pcoTagGroups []scheduling.PCOTagGroup, pcoGroupTags map[string][]scheduling.PCOTag) bool {
+	for _, group := range pcoTagGroups {
+		if len(pcoGroupTags[group.ID]) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// pcoAssignedTagIDs reduces cand's full PCOTags list (every group's
+// assignments mixed together) down to just groupID's own assigned tag ids,
+// as a set - what pcoTagPickers checks each checkbox/radio against.
+func pcoAssignedTagIDs(tags []scheduling.PCOTag, groupID string) map[string]bool {
+	assigned := map[string]bool{}
+	for _, t := range tags {
+		if t.GroupID == groupID {
+			assigned[t.ID] = true
+		}
+	}
+	return assigned
+}
+
+// pcoTagPickers renders the additive "PCO Tags" assign/unassign block - one
+// small form per song-scoped PCO tag group that actually has tags to offer
+// (a group with nothing configured in PCO yet has nothing to pick from, so
+// it's skipped rather than shown empty). No shared multi-select component
+// exists to reach for (see docs/plans/in-progress/pco-native-tags-plan.md's
+// Handoff notes), so this is hand-rolled the same way the local Context/Tag
+// chip rows elsewhere in this file are.
+//
+// AllowMultipleSelections drives checkbox-like (multi-select) vs.
+// radio-like (single-select, picking one replaces whatever was selected -
+// a "None" radio clears the group entirely) toggle behavior, per group.
+// Each group gets its own <form>/submit rather than one combined submit for
+// every group at once - AssignPCOTagGroup/go-pco's AssignSongTags is a full
+// replace per call, scoped to one group, so mixing groups into a single
+// POST would have no correct way to express "leave group B alone, only
+// change group A." hx-trigger="change" submits the instant any
+// checkbox/radio inside the form changes - htmx's own change-event
+// delegation, no dedicated JS needed for this.
+templ pcoTagPickers(cand CandidateSongView, pcoTagGroups []scheduling.PCOTagGroup, pcoGroupTags map[string][]scheduling.PCOTag, serviceTypeID, planID string) {
+	for _, group := range pcoTagGroups {
+		{{ tags := pcoGroupTags[group.ID] }}
+		if len(tags) > 0 {
+			{{ assigned := pcoAssignedTagIDs(cand.PCOTags, group.ID) }}
+			<div class="pco-tag-group">
+				<span class="muted">PCO Tags: { group.Name }</span>
+				<form
+					class="inline pco-tag-picker"
+					hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/pco-song-tags", serviceTypeID, planID) }
+					hx-target="#set-builder-body"
+					hx-swap="outerHTML"
+					hx-trigger="change"
+				>
+					<input type="hidden" name="song_id" value={ cand.SongID }/>
+					<input type="hidden" name="group_id" value={ group.ID }/>
+					for _, tag := range tags {
+						<label class="pco-tag-pill">
+							if group.AllowMultipleSelections {
+								<input type="checkbox" name="tag_ids" value={ tag.ID } checked?={ assigned[tag.ID] }/>
+							} else {
+								<input type="radio" name="tag_ids" value={ tag.ID } checked?={ assigned[tag.ID] }/>
+							}
+							{ tag.Name }
+						</label>
+					}
+					if !group.AllowMultipleSelections {
+						<label class="pco-tag-pill">
+							<input type="radio" name="tag_ids" value="" checked?={ len(assigned) == 0 }/>
+							<span class="muted">None</span>
+						</label>
+					}
+				</form>
+			</div>
+		}
 	}
 }
 
@@ -1559,6 +1646,34 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 								<button type="button" class="role-filter" data-value={ v } onclick="applyTagFilter(this)">{ v }</button>
 							}
 						</div>
+					}
+				}
+			</div>
+		}
+		// "PCO Tags" browse chips - the additive lens's own discoverability
+		// section, next to (not replacing) the local "Browse by tag" section
+		// just above, same shortcut-not-a-new-filter-mechanism shape: a
+		// clicked chip just types that PCO tag's name into #candidate-search
+		// and re-triggers the same search request (applyTagFilter,
+		// scheduling-build.js - the exact same handler the local tag chips
+		// above already use, unchanged), which now also matches against each
+		// song's real PCO tag names (pcoTagNamesAttr, sets_builder.go) so
+		// this actually narrows the list rather than typing a name that
+		// matches nothing. One collapsibleSection per PCO tag group with any
+		// tags configured; a group with none yet is skipped rather than shown
+		// empty.
+		if len(data.PCOTagGroups) > 0 {
+			<div class="tag-filters">
+				for _, group := range data.PCOTagGroups {
+					{{ tags := data.PCOGroupTags[group.ID] }}
+					if len(tags) > 0 {
+						@collapsibleSection(fmt.Sprintf("pco-tag-filter-%s", group.ID), "PCO Tags: "+group.Name, false) {
+							<div class="role-filters">
+								for _, tag := range tags {
+									<button type="button" class="role-filter" data-value={ tag.Name } onclick="applyTagFilter(this)">{ tag.Name }</button>
+								}
+							</div>
+						}
 					}
 				}
 			</div>

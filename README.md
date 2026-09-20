@@ -57,8 +57,22 @@ with at least Viewer access can still sign in.
   another campus, or whatever fits your church - a per-org list you name
   yourself, not a fixed lookup) - shown as badges and filterable while
   building a set, the same way Song Roles is
+- **PCO Tags** - a read+assign lens onto Planning Center's own real Tag
+  Groups/Tags (song-scoped ones, e.g. a "Set" or "CCLI" group your org
+  already configured in Planning Center itself) - additive to, and
+  independent of, this app's own Song Labels/Song Roles/Song Contexts
+  above, which stay local-only. Surfaced right on the Build page: each
+  song's candidate detail card gets a picker per tag group (single- or
+  multi-select, matching that group's own PCO configuration) that writes
+  straight to Planning Center on change, full-replace per PCO's own
+  `assign_tags` semantics; the Songs tab also gets a "PCO Tags: <group>"
+  browse/filter section per group, the same way Song Roles/Song Contexts
+  already work. Because Planning Center blocks creating or editing Tag
+  Groups/Tags themselves over the OAuth API, this app only ever assigns
+  existing ones - manage the tags/groups from Planning Center's own admin
+  screens
 - **Song Tag Suggestions** - a non-AI suggestion tool, built into the Song
-  Tags setup page as a dismissible Suggestions panel (not a separate page),
+  Labels setup page as a dismissible Suggestions panel (not a separate page),
   that groups songs sharing a significant word in their titles (e.g. "King
   of Kings," "Christ the King," and "All Hail King Jesus" all sharing
   "king"), so you can review a group and tag them all at once instead of
@@ -88,7 +102,7 @@ with at least Viewer access can still sign in.
   so there's nothing to compute a range from automatically
 - **Song Vocal Range** - record each song's lowest and highest sung note,
   measured against the key you played it in, on a dedicated setup page
-  (mirroring Song Tags/Song Roles - a fact about the song itself, reused
+  (mirroring Song Labels/Song Roles - a fact about the song itself, reused
   across every plan it appears in, not a per-occurrence value) - or, just
   as easily, right from the Build page's Songs tab: a "Set song vocal
   range" quick-add item, a "Set vocal range" action in each row's "more

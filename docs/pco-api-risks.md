@@ -93,6 +93,7 @@ that first. Facts worth adding here that aren't in CLAUDE.md:
 | "Add item to plan" (`AddPlanItem`, `plan_items.go`) | shipped | one `CreateItem` call, no pre-fetch - see the sequence-auto-append fact below. Rides the same full-page rebuild every other Build-page mutation already pays (`buildSetBuilderDataWithErr`); no caching added or needed, since it's a rare, user-triggered click, not a render-path/hot-path call |
 | Edit/remove a plan item (`UpdatePlanItem`/`RemovePlanItem`, `plan_items.go`) | shipped | one `UpdateItem`/`DeleteItem` call each, same "rare user click, not a render path" reasoning as the row above - no caching |
 | Drag-and-drop reposition of a header/foreign item (`RepositionPlanItem`, `plan_items.go`) | shipped | one uncached `GetItems` fetch (must be live, not cached - the whole point is computing a correct new order against the plan's *current* real sequence; a cached/stale list would silently reorder against the wrong baseline) plus one `ReorderItems` call, skipped entirely when the computed order matches the current one (`itemOrderEqual`) - see the `item_reorder` full-list-contract fact below |
+| "PCO Tags" candidate-list annotation (`ListPCOSongTagsForOrg`, `internal/scheduling/pco_song_tags.go`) | shipped | tag-group/tag vocabulary (`ListPCOTagGroups`/`ListPCOTagGroupTags`) cached ~60s per org, one `GetTagGroups(Include: []string{"tags"})` call, same shape as `FetchActiveSongs`; per-candidate assigned-tags map built with one `Songs#index` call *per org tag* (`where[song_tag_ids]=<id>`, paged by `Meta.TotalCount`), fanned out via `RunConcurrently`/`PCOFanOutLimit` - not one call per song - also cached ~60s per org. The one-song, uncached `ListPCOSongTags` (`GET songs/{id}/tags`) is reserved for right after `AssignPCOSongTag` writes, to reflect that write back immediately instead of waiting out the 60s window |
 
 ## Live-verified PCO API facts (worth not re-checking)
 
@@ -1038,3 +1039,34 @@ out to 100-200 sequential round trips per load.
   clear a banner a previous tick left showing (`HadPCORateLimit`'s
   read-once contract means a later clean tick is the only way to learn
   that's resolved).
+- **"PCO Tags" additive read+assign lens shipped (2026-09-20)** - build
+  order step 1 of `docs/plans/in-progress/pco-native-tags-plan.md` (that
+  plan's final direction: `song_contexts`/`song_tags` stay local
+  permanently; this is a new, separate, no-local-table feature reading and
+  assigning real PCO song-scoped Tags/TagGroups from the Build page).
+  Vocabulary (`ListPCOTagGroups`/`ListPCOTagGroupTags`,
+  `internal/scheduling/pco_song_tags.go`) mirrors `FetchActiveSongs`'s
+  cache-aside shape exactly - one `GetTagGroups(Include: []string{"tags"})`
+  call per org, cached ~60s, reusing `songCacheTTL`/`songCacheEntryFresh`
+  rather than a second copy of the same constant/check. The
+  candidate-list-annotation half (`ListPCOSongTagsForOrg`, populating
+  `sets_builder.go`'s `candidateLookups.pcoTagsBySong`) resolves the
+  plan's open question 1 concretely: one `Songs#index` call *per org tag*
+  (`where[song_tag_ids]=<id>`, paged by `Meta.TotalCount`, not a silent
+  cap), fanned out via `RunConcurrently`/`PCOFanOutLimit` - not one call
+  per song, since an org typically has a handful of tags (~15-20) against
+  a library of hundreds+ songs, the same "batch by filter value" shape
+  `FetchActiveSongs`' own `Hidden` filter and `personNameMapForIDs`'
+  `where[id]=...` batching already use. Also cached ~60s per org,
+  alongside the vocabulary cache. `ListPCOSongTags` (one song, `GET
+  songs/{id}/tags`) is the one deliberately-uncached read in this file -
+  reserved for right after `AssignPCOSongTag` (`sets_detail.go`) writes a
+  group's new selection via `AssignPCOTagGroup`/go-pco's `AssignSongTags`,
+  so that one song's new assignment reflects back immediately rather than
+  waiting out the 60s window; every other candidate-list render goes
+  through the cached org-wide map instead. Writes are immediate, no
+  draft/Publish step, same treatment `PersonTeamPositionAssignment.
+  schedule_preference` already gets. No new hot-path hazard introduced -
+  every new PCO call here is either 60s-cached or a rare, explicit
+  user-triggered write, matching this doc's existing tolerances for that
+  shape of call.

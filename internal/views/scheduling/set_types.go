@@ -216,6 +216,21 @@ type SetBuilderData struct {
 	// any new filter semantics of its own.
 	TagValuesByCategory map[string][]string
 
+	// PCOTagGroups/PCOGroupTags back the additive "PCO Tags" filter-chip
+	// section (set_builder.templ, next to the local Context/Tag chip rows
+	// above) and each candidate's assign/unassign picker
+	// (candidateDetailExtras) - real PCO song-scoped TagGroups/Tags, read
+	// live (cached ~60s, see internal/scheduling/pco_song_tags.go), no
+	// local table. PCOTagGroups is every song-scoped group's own metadata
+	// (AllowMultipleSelections drives checkbox-like vs. radio-like
+	// toggling in the picker); PCOGroupTags is each group's own available
+	// tags, keyed by PCOTagGroup.ID - kept as its own map rather than a
+	// nested Tags field on PCOTagGroup itself (see that type's own doc
+	// comment, internal/scheduling/pco_song_tags.go, for why it stays
+	// plain metadata). See docs/plans/in-progress/pco-native-tags-plan.md.
+	PCOTagGroups []scheduling.PCOTagGroup
+	PCOGroupTags map[string][]scheduling.PCOTag
+
 	// BrowsableSongs is the "Browse all songs" list's empty-query-and-role
 	// state (CandidateSearchResults) - every active, not-yet-added song's
 	// id+title, in the same title order fetchActiveSongs already returns
@@ -671,6 +686,14 @@ type CandidateSongView struct {
 	// candidateMatchesContext - the context equivalent of RolesAttr.
 	Contexts     []SongContextView
 	ContextsAttr string
+	// PCOTags is this song's currently-assigned real PCO tags (across every
+	// song-scoped tag group) - the additive "PCO Tags" lens, read/assign
+	// only, alongside (not replacing) Contexts/Tags above. See
+	// internal/scheduling/pco_song_tags.go and docs/plans/in-progress/
+	// pco-native-tags-plan.md. Each PCOTag already carries its own GroupID,
+	// so candidateDetailExtras (set_builder.templ) can bucket these by
+	// group inline rather than needing a second grouped field here.
+	PCOTags []scheduling.PCOTag
 }
 
 // HasMeta reports whether c has anything at all to show in

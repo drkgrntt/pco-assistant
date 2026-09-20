@@ -552,6 +552,11 @@ func (sc *SchedulingController) RegisterRoutes(router fiber.Router) {
 	group.Post("/build/:service_type_id/:plan_id/song-roles", sc.QuickAddSongRole)
 	group.Post("/build/:service_type_id/:plan_id/song-contexts", sc.QuickAddSongContext)
 	group.Post("/build/:service_type_id/:plan_id/song-vocal-range", sc.QuickAddSongVocalRange)
+	// AssignPCOSongTag: the additive "PCO Tags" lens's one write action -
+	// see that handler's own doc comment (sets_detail.go) for why it's not
+	// grouped with the QuickAdd* routes just above despite sitting right
+	// next to them (writes straight to PCO, not this app's DB).
+	group.Post("/build/:service_type_id/:plan_id/pco-song-tags", sc.AssignPCOSongTag)
 	group.Post("/build/:service_type_id/:plan_id/person-relationships", sc.QuickAddPersonRelationship)
 	group.Post("/build/:service_type_id/:plan_id/position-preferences", sc.QuickAddPositionPreference)
 	// Transition notes (docs/plans/shipped/transition-notes-plan.md) - same

@@ -26,9 +26,9 @@ import (
 // here - with #song-tag-filter below just hiding non-matching cards
 // client-side (filterSongTagCards, scheduling-song-tags-contexts.js) for a large library.
 templ SongTags(personName, organizationName string, songs []pco.SongData, tagsBySong map[string][]scheduling.SongTag, categories []scheduling.SongTagCategory, categoryLabels map[string]string, panelData SongTagSuggestionsPanelData, errMsg string) {
-	@views.Layout("Song Tags", personName, organizationName) {
+	@views.Layout("Song Labels", personName, organizationName) {
 		@songTagsHelp()
-		<h1>Song Tags</h1>
+		<h1>Song Labels</h1>
 		<p class="muted">Tag songs with themes, scripture references, or ideas, so they're easier to find when planning around a sermon.</p>
 		<div class="song-tags-filter">
 			<label>
@@ -269,7 +269,7 @@ func capitalize(word string) string {
 templ songTagsHelp() {
 	<dialog id="song-tags-help" class="tour-dialog page-help-dialog">
 		<div class="tour-step">
-			<h2>Song Tags</h2>
+			<h2>Song Labels</h2>
 			<p>
 				Tag songs with themes, scripture references, or ideas, so they're
 				easier to find when planning around a sermon.
