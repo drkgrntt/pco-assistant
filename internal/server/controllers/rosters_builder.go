@@ -584,6 +584,23 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 		blockoutsMu.Unlock()
 	})
 
+	// personTagsByPerson - same relevantIDs (assigned-only) scope as
+	// blockoutsByPerson above, not the candidate pool - see
+	// pco_person_tags.go's own doc comment for why an eager per-candidate
+	// fetch is deliberately avoided. Best-effort: a failed fetch just leaves
+	// that person's tags empty.
+	personTagsByPerson := map[string][]scheduling.PCOTag{}
+	var personTagsMu sync.Mutex
+	scheduling.RunConcurrently(relevantIDs, func(id string) {
+		tags, err := sc.store.ListPCOPersonTags(ctx, id)
+		if err != nil {
+			return
+		}
+		personTagsMu.Lock()
+		personTagsByPerson[id] = tags
+		personTagsMu.Unlock()
+	})
+
 	schedulePreferenceFor := func(candidates []pco.PersonTeamPositionAssignmentData, personID string) string {
 		for _, pa := range candidates {
 			if pa.Relationships.Person.Data != nil && pa.Relationships.Person.Data.ID == personID {
@@ -701,6 +718,7 @@ func (sc *SchedulingController) buildRosterBuilderData(ctx context.Context, orga
 				av.VocalRangeHighPitchClass = highPC
 				av.VocalRangeHighOctave = highOct
 			}
+			av.PCOPersonTags = personTagsByPerson[ra.PersonID]
 			pg.Assigned = append(pg.Assigned, av)
 		}
 
