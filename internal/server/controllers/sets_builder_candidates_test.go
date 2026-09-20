@@ -123,7 +123,7 @@ func TestBuildBrowsableSongsExcludesSongsAlreadyInSet(t *testing.T) {
 	}
 	inSet := map[string]bool{"2": true}
 
-	got := buildBrowsableSongs(songs, inSet, nil, nil, nil, nil)
+	got := buildBrowsableSongs(songs, inSet, nil, nil, nil, nil, nil)
 
 	if len(got) != 1 {
 		t.Fatalf("expected 1 browsable song, got %d: %+v", len(got), got)
@@ -144,7 +144,7 @@ func TestBuildBrowsableSongsExcludesSongsAlreadyInSet(t *testing.T) {
 func TestBuildBrowsableSongsSkipsExpensiveFields(t *testing.T) {
 	songs := []pco.SongData{songDataItem("1", "Amazing Grace")}
 
-	got := buildBrowsableSongs(songs, nil, nil, nil, nil, nil)
+	got := buildBrowsableSongs(songs, nil, nil, nil, nil, nil, nil)
 
 	if len(got) != 1 {
 		t.Fatalf("expected 1 browsable song, got %d", len(got))
@@ -169,7 +169,7 @@ func TestBuildBrowsableSongsPopulatesRolesAndTags(t *testing.T) {
 	tagsBySong := map[string][]scheduling.SongTag{"1": {{Category: "theme", Value: "Hope"}}}
 	tagCategoryLabels := map[string]string{"theme": "Theme"}
 
-	got := buildBrowsableSongs(songs, nil, rolesBySong, roleTypeLabels, tagsBySong, tagCategoryLabels)
+	got := buildBrowsableSongs(songs, nil, rolesBySong, roleTypeLabels, tagsBySong, tagCategoryLabels, nil)
 
 	if len(got) != 1 {
 		t.Fatalf("expected 1 browsable song, got %d", len(got))
@@ -193,7 +193,7 @@ func TestBuildBrowsableSongsPreservesOrder(t *testing.T) {
 		songDataItem("3", "Come Thou Fount"),
 	}
 
-	got := buildBrowsableSongs(songs, nil, nil, nil, nil, nil)
+	got := buildBrowsableSongs(songs, nil, nil, nil, nil, nil, nil)
 
 	if len(got) != 3 {
 		t.Fatalf("expected 3 browsable songs, got %d", len(got))
