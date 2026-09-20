@@ -1210,7 +1210,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 		// At most one such message at a time, so this is a single
 		// conditional message, not a list/container.
 		if data.ServiceLengthWarning != "" {
-			<div class="warning">{ data.ServiceLengthWarning }</div>
+			@components.DismissibleWarning(data.ServiceLengthWarning)
 		}
 		if data.ReadOnly {
 			<p class="muted">This plan has already happened - shown read-only for reference.</p>
@@ -1507,8 +1507,13 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 								</td>
 								<td>
 									{ row.ItemTitle }
-									// Always rendered, same row-height reasoning as .song-meta above.
-									<div class="muted song-meta">{ row.ItemLength }</div>
+									// Only rendered when there's a length to show, same as
+									// item-description below - an item with neither doesn't
+									// reserve a blank line, so its title stays vertically
+									// centered in the row instead of sitting above empty space.
+									if row.ItemLength != "" {
+										<div class="muted song-meta">{ row.ItemLength }</div>
+									}
 									if row.ItemDescription != "" {
 										<div class="muted item-description">{ row.ItemDescription }</div>
 									}

@@ -143,18 +143,25 @@
    Remove, and the toggle itself renders here directly. */
 .build-detail-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
   margin-top: var(--space-2);
 }
 
-/* Duplicate/Remove split the row evenly; the row-menu toggle
-   (.build-detail-actions > .row-menu, the Disclosure's own wrapper div) is
-   a fixed icon-sized unit next to them and must not be squeezed by the
-   other two's flex-basis - mirrors .set-song-actions > * in
-   builder-rows.css treating its own icon-sized children the same way. */
+/* Duplicate/Remove split the row evenly when there's room; the row-menu
+   toggle (.build-detail-actions > .row-menu, the Disclosure's own wrapper
+   div) is a fixed icon-sized unit next to them and must not be squeezed by
+   the other two's flex-basis - mirrors .set-song-actions > * in
+   builder-rows.css treating its own icon-sized children the same way.
+   min-width keeps the label from forcing the button itself past the
+   sidebar's width (.build-glance is a deliberately fixed 18rem, see
+   build-page.css) - flex-wrap above lets Duplicate/Remove drop to their
+   own line instead of clipping/overflowing when the card is too narrow
+   for both plus the toggle on one line. */
 .build-detail-actions > button {
-  flex: 1 1 0;
+  flex: 1 1 8rem;
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: center;

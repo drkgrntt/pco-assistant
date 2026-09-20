@@ -101,8 +101,8 @@ thead th {
 
 /* Row-level hover only where rows are actually distinct records browsed
    one at a time - not the set builder's order-of-service table, where
-   .dragging/.drag-over already carry their own, differently-purposed
-   highlight states this would visually compete with. */
+   .dragging already carries its own, differently-purposed highlight state
+   this would visually compete with. */
 table.sortable tbody tr:hover,
 #position-assignments tbody tr:hover {
   background: var(--surface-hover);

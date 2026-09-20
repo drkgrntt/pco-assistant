@@ -321,7 +321,7 @@ templ rosterTopContent(data RosterBuilderData) {
 	</form>
 	@RosterStatusSummary(data)
 	for _, msg := range data.ExistingConflicts {
-		<div class="warning">{ msg }</div>
+		@components.DismissibleWarning(msg)
 	}
 	if data.ReadOnly {
 		<p class="muted">This plan has already happened - shown read-only for reference.</p>
