@@ -47,6 +47,16 @@
   color: var(--muted);
 }
 
+/* Read-only PCO Tags badges (songBadgeExtras, set_builder.templ) - an
+   outline instead of .tag-badge's filled gray, so a real Planning Center
+   tag reads as visually distinct from this app's own local tags at a
+   glance, without adding a whole new color to the badge family. */
+.badge.pco-tag {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+}
+
 .conflict-badge {
   display: inline-block;
   background: var(--danger-subtle);
