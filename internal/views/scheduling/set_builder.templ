@@ -391,8 +391,9 @@ templ badgeOverflowMenu(extras templ.Component) {
 // ConflictTitles/RecentlyRepeated.
 //
 // Once a row's total badge count passes badgeCollapseThreshold, the
-// lower-priority badges (roles, resurfaced transition-note prompts - see
-// songBadgeExtras) collapse behind a "+N more" Disclosure instead of
+// lower-priority badges (roles, local and PCO tags, resurfaced
+// transition-note prompts - see songBadgeExtras) collapse behind a "+N
+// more" Disclosure instead of
 // stacking directly on the row - see that const's own doc comment for why
 // and docs/issues.md's "busy row" feedback this responds to. The
 // higher-priority ones above (published/moved/info-pending status,
@@ -449,7 +450,7 @@ templ songBadgeSpans(song SetSongView) {
 			)
 		}
 	}
-	{{ extrasCount := len(song.Roles) + len(song.TransitionNotePrompts) }}
+	{{ extrasCount := len(song.Roles) + len(song.TransitionNotePrompts) + len(song.Tags) + len(song.PCOTags) }}
 	if extrasCount > 0 && songAlwaysVisibleBadgeCount(song)+extrasCount > badgeCollapseThreshold {
 		@components.Disclosure(
 			"badge-overflow",
@@ -525,17 +526,30 @@ func songAlwaysVisibleBadgeCount(song SetSongView) int {
 }
 
 // songBadgeExtras is songBadgeSpans' own "collapsible extras" group - role
-// badges and transition-note resurfacing prompts, the two "there's more
-// here, but it's not urgent" badge kinds a row can accumulate several of
-// (multiple assigned roles, more than one past debrief) - as opposed to
+// badges, tag badges (local and PCO - docs/issues.md: these weren't
+// showing anywhere on an in-set row, only on the not-yet-added candidate
+// list, see songCandidateMeta/candidateBadgeExtras below), and
+// transition-note resurfacing prompts - the "there's more here, but it's
+// not urgent" badge kinds a row can accumulate several of - as opposed to
 // the warnings/status badges above, which always stay visible regardless
 // of count (see songAlwaysVisibleBadgeCount). Rendered either directly
 // inline (a row under badgeCollapseThreshold) or inside the "+N more"
 // Disclosure's popup (see songBadgeSpans) - the same component either way,
-// so the two can never drift out of sync with each other.
+// so the two can never drift out of sync with each other. PCO tags use
+// the "pco-tag" badge kind (badge.css) rather than components.TagBadge's
+// "tag-badge" - same distinction candidateBadgeExtras draws between
+// cand.Tags and the picker in pcoTagPickers, just as a plain read-only
+// pill here instead of an assign/unassign form (no PCO tag editor exists
+// yet for an already-in-set song - see SetSongView.PCOTags).
 templ songBadgeExtras(song SetSongView) {
 	for _, role := range song.Roles {
 		@components.Badge("", role.Label)
+	}
+	for _, tag := range song.Tags {
+		@components.TagBadge(tag.Value, tag.Category)
+	}
+	for _, tag := range song.PCOTags {
+		@components.Badge("pco-tag", tag.Name)
 	}
 	for _, prompt := range song.TransitionNotePrompts {
 		@components.Disclosure(

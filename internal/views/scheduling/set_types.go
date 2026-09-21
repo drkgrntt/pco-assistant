@@ -493,6 +493,19 @@ type SetSongView struct {
 	// debrief **log**" - see that plan's own Schema section on why this
 	// stays append-only rather than a single overwritten value).
 	TransitionNotes []TransitionNoteEntryView
+
+	// Tags is this song's theme/scripture/idea tags (see song_tags.go),
+	// for display as badges - mirrors CandidateSongView.Tags. Adding a new
+	// one still goes through the row's own "Tag this song" quick action
+	// (quickActionRow "tag", set_builder.templ); this field only backs
+	// the read-only badge display, same as Roles above.
+	Tags []SongTagView
+	// PCOTags mirrors CandidateSongView.PCOTags - this song's currently
+	// assigned real PCO tags, shown read-only alongside Tags above. Unlike
+	// Tags, there's no assign/unassign UI for these on an in-set row yet -
+	// candidateDetailExtras' pcoTagPickers only covers not-yet-added
+	// songs.
+	PCOTags []scheduling.PCOTag
 }
 
 // TransitionNotePromptView is one resurfacing prompt on a song's own row -

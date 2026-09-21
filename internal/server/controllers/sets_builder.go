@@ -403,7 +403,7 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 		// set has a leader set. Feeds SetSongView.LeaderPersonName below,
 		// the same "resolve once here, not per-row" shape as titles.
 		leaderNames := personNameMapForIDs(ctx, distinctLeaderPersonIDs(setSongs))
-		data.ServiceOrder = renderServiceOrder(ctx, sc.store, organizationID, arrangementCache, attachmentCache, vocalRangesBySong, noteCategories.Data, itemNotes, merged, titles, rolesBySong, roleTypeLabels, history.RepeatedSongs, conflictTitlesBySong, transitionsByRow, leaderNames, transitionNotesBySongID, transitionNotePromptsByRow, personVocalRanges)
+		data.ServiceOrder = renderServiceOrder(ctx, sc.store, organizationID, arrangementCache, attachmentCache, vocalRangesBySong, noteCategories.Data, itemNotes, merged, titles, rolesBySong, roleTypeLabels, tagsBySong, tagCategoryLabels, pcoTagsBySong, history.RepeatedSongs, conflictTitlesBySong, transitionsByRow, leaderNames, transitionNotesBySongID, transitionNotePromptsByRow, personVocalRanges)
 
 		// ServiceLengthWarning: the one warning that stays a standalone,
 		// whole-plan banner rather than moving onto a row - it isn't
@@ -1898,7 +1898,7 @@ func buildSongNoteViews(itemID string, noteCategories []pco.ItemNoteCategoryData
 // leaderNames (already a parameter above, for SetSongView.LeaderPersonName)
 // doubles as this check's person-name source too, since the only person it
 // ever checks is a row's own leader.
-func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizationID string, arrangementCache map[string]scheduling.SongArrangementInfo, attachmentCache map[string][]scheduling.SongAttachmentInfo, vocalRangesBySong map[string]scheduling.SongVocalRange, noteCategories []pco.ItemNoteCategoryData, itemNotes map[string][]pco.ItemNoteData, rows []mergedRow, titles map[string]string, rolesBySong map[string][]scheduling.SongRole, roleTypeLabels map[string]string, repeated map[string]bool, conflictTitlesBySong map[string][]string, transitionsByRow map[int64]keyTransitionWarning, leaderNames map[string]string, transitionNotesBySongID map[string][]scheduling.TransitionNote, transitionNotePromptsByRow map[int64][]transitionNotePrompt, personVocalRanges map[string]scheduling.PersonVocalRange) []views.ServiceOrderRow {
+func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizationID string, arrangementCache map[string]scheduling.SongArrangementInfo, attachmentCache map[string][]scheduling.SongAttachmentInfo, vocalRangesBySong map[string]scheduling.SongVocalRange, noteCategories []pco.ItemNoteCategoryData, itemNotes map[string][]pco.ItemNoteData, rows []mergedRow, titles map[string]string, rolesBySong map[string][]scheduling.SongRole, roleTypeLabels map[string]string, tagsBySong map[string][]scheduling.SongTag, tagCategoryLabels map[string]string, pcoTagsBySong map[string][]scheduling.PCOTag, repeated map[string]bool, conflictTitlesBySong map[string][]string, transitionsByRow map[int64]keyTransitionWarning, leaderNames map[string]string, transitionNotesBySongID map[string][]scheduling.TransitionNote, transitionNotePromptsByRow map[int64][]transitionNotePrompt, personVocalRanges map[string]scheduling.PersonVocalRange) []views.ServiceOrderRow {
 	// A plain sequential loop, not scheduling.RunConcurrently - unlike
 	// before Phase 2 (docs/plans/shipped/pco-call-efficiency-rollout-plan.md), a song
 	// row's only per-row lookup, resolveArrangementCacheInfo, no longer
@@ -1931,6 +1931,7 @@ func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizati
 
 		ss := row.Song
 		roleViews, _ := songRoleViews(rolesBySong, roleTypeLabels, ss.SongID)
+		tagViews, _ := songTagViews(tagsBySong, tagCategoryLabels, ss.SongID)
 		// One lookup covers both ArrangementInfo (the formatted summary
 		// line) and the arrangement's Notes, which itemDescriptionFor
 		// (scheduling.go) falls back to as a publish-time Description
@@ -1972,6 +1973,8 @@ func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizati
 			VocalRange:       vocalRangesBySong[ss.SongID],
 			LeaderPersonID:   ss.LeaderPersonID,
 			LeaderPersonName: titleOrID(leaderNames, ss.LeaderPersonID),
+			Tags:             tagViews,
+			PCOTags:          pcoTagsBySong[ss.SongID],
 		}
 		if transition, ok := transitionsByRow[ss.ID]; ok {
 			songView.KeyTransitionLabel = transition.Label
