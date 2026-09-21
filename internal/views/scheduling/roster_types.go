@@ -34,9 +34,13 @@ type RosterBuilderData struct {
 	// already assigned to this roster - the Team tab's own top-of-page
 	// warning list (see RosterStatusSummary/roster_builder.templ). Unlike
 	// the Songs tab's equivalent same-set song conflicts, which moved onto
-	// each song's own row (see SetSongView.ConflictTitles and
+	// each song's own row (see SetSongView.Conflicts and
 	// docs/plans/shipped/in-place-set-warnings-plan.md), this one hasn't
-	// been revisited - kept as its own top-of-page list for now.
+	// been revisited - kept as its own top-of-page list for now. Also
+	// unlike the Songs tab's own avoid-pairing badge, this Team-tab list
+	// wasn't given a Dismiss action by docs/plans/shipped/
+	// dismissable-warnings-plan.md - that pass was deliberately scoped to
+	// the Songs tab only.
 	ExistingConflicts []string
 
 	// UnpublishedCount/PendingDeleteCount drive whether the Publish button

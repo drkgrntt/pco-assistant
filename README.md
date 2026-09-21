@@ -183,7 +183,14 @@ with at least Viewer access can still sign in.
   runs noticeably longer/shorter than that service type's recent average,
   a key-change warning when two back-to-back songs (nothing else between
   them) are a jarring half step apart, and each song's key/tempo/meter/length
-  shown right on the row (see Song Info above) - a non-song item already in
+  shown right on the row (see Song Info above). Avoid-pairing/repeated-song/
+  vocal-range-mismatch warnings are each individually dismissable (click to
+  expand, then Dismiss) rather than all-or-nothing: an avoid-pairing
+  dismissal is permanent for that song pair, while a repeated-song or
+  vocal-range dismissal only covers this specific plan occurrence, so the
+  same warning still fires correctly the next time it's a genuinely new
+  repeat - a faded badge marks a dismissed warning, with a Re-enable button
+  to bring it back - a non-song item already in
   the plan (a sermon slot, a header, a video) shows its own Planning
   Center length and description the same way, right under its title. The
   opposite nudge also runs

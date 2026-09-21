@@ -9,7 +9,7 @@ This is a scratch pad file for Derek to write down thoughts on priorities, but a
             - `docs/plans/not-started/max-consecutive-weeks-preference-plan.md` (the diva-preferences item)
 
 - Short term / smaller sized
-    - dismissable warnings on the build page (already has its own plan doc, from before this pass: `docs/plans/not-started/dismissable-warnings-plan.md`)
+    - dismissable warnings on the build page (already has its own plan doc, from before this pass: `docs/plans/shipped/dismissable-warnings-plan.md`) - **done 2026-09-20**. Songs tab only (avoid-pairing/recently-repeated/vocal-range-mismatch), Team tab deliberately left out of scope - see that doc's own Status line.
     - song and person detail pages (already has its own plan doc, from before this pass: `docs/plans/not-started/song-person-detail-pages-plan.md`)
     - vocal range crowdsourcing (already has its own plan doc, from before this pass: `docs/plans/not-started/vocal-range-matrix-and-crowdsourced-default-plan.md`)
     - security/prod-readiness follow-ups from the 2026-09-14 pre-launch

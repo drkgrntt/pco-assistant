@@ -32,8 +32,10 @@ import (
 // is worth keeping rather than stripping away.
 //
 // Tip/mismatch cells (vocalRangeMatrixCell below) reuse set_builder.templ's
-// own vocalRangeTipToggle/vocalRangeMismatchToggle/vocalRangeMenu
-// components verbatim, inside the exact same "vocal-range-badge"
+// own vocalRangeTipToggle/vocalRangeMismatchToggle components verbatim
+// (vocalRangeMenuReadOnly instead of vocalRangeMenu itself - see that
+// component's own doc comment for why the matrix doesn't get the
+// Dismiss/Re-enable action), inside the exact same "vocal-range-badge"
 // components.Disclosure wrapper the Songs tab's own per-song badge uses -
 // toggled by scheduling-build.js's existing toggleVocalRangeBadge, already
 // loaded on every page (see schedulingJSFiles, layout.templ) - rather than
@@ -154,7 +156,7 @@ templ vocalRangeMatrixCell(cell VocalRangeMatrixCell, isLeader bool) {
 					"",
 					"",
 					vocalRangeTipToggle("tip"),
-					vocalRangeMenu(cell.Message),
+					vocalRangeMenuReadOnly(cell.Message),
 				)
 			case VocalRangeMatrixMismatch:
 				@components.Disclosure(
@@ -164,7 +166,7 @@ templ vocalRangeMatrixCell(cell VocalRangeMatrixCell, isLeader bool) {
 					"",
 					"",
 					vocalRangeMismatchToggle("mismatch"),
-					vocalRangeMenu(cell.Message),
+					vocalRangeMenuReadOnly(cell.Message),
 				)
 			default:
 				<span class="vocal-range-matrix-unknown muted" title="No stored vocal range on file for this person or this song">—</span>

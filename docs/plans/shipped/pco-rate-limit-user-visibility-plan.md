@@ -176,8 +176,9 @@ What exists today, concretely:
   only once Phase 1 is live and it's clear a plain banner isn't cutting
   it, the same "ship the cheap thing first" sequencing this project
   already used for `docs/plans/shipped/vocal-range-plan.md`'s phases and
-  `docs/plans/not-started/dismissable-warnings-plan.md`'s modal-vs-
-  disclosure question.
+  `docs/plans/shipped/dismissable-warnings-plan.md`'s modal-vs-
+  disclosure question (resolved in favor of disclosure - see that doc's
+  Status line).
 
 ## Open questions
 

@@ -1,5 +1,50 @@
 # Plan: dismissable warnings on the Build page
 
+**Status: shipped 2026-09-20.** Built as scoped by the resolved answers to
+this doc's own "Open questions" below: avoid-pairing dismissals are
+permanent (organization + canonical song-pair, `avoidPairingSubjectKey`,
+order-independent like `scheduling.CreateSongRelationship`); recently-repeated
+and vocal-range-mismatch dismissals are per-occurrence
+(`recentRepeatSubjectKey`/`vocalRangeMismatchSubjectKey`, scoped to plan +
+song, or plan + song + leader). Detail affordance is `components.Disclosure`
+click-to-expand, not a new modal - this doc's own "modal's content" open
+question resolved against introducing one. Scope is Songs tab only
+(avoid-pairing, recently-repeated, vocal-range-mismatch) - the Team tab's
+structurally similar `FrequencyWarning`/`BlockoutWarning`/`CrossTeamWarning`
+family (`rosters_candidate_warnings.go`/`roster_builder.templ`) was
+deliberately left out of this pass, not deferred by accident; a second pass
+could extend the same `dismissed_warnings` table/`scheduling.Store` methods
+to that family without a schema change. Orphaned dismissal rows (the
+underlying relationship deleted after a dismissal exists) are left as
+harmless clutter, matching this doc's own "probably harmless" answer -
+no cleanup/cascade logic was added.
+
+Landed as: migration `internal/database/migrations/00049_dismissed_warnings.sql`
+(`dismissed_warnings` table, not `00042` as this doc's sketch guessed -
+migration numbers are assigned sequentially at build time, not reserved in
+advance); `internal/scheduling/dismissed_warnings.go`
+(`DismissWarning`/`UndismissWarning`/`DismissedWarningKeys`, `WarningKind*`
+consts); `internal/server/controllers/sets_builder_dismissals.go`
+(`DismissBuildWarning`/`UndismissBuildWarning` handlers, routed in
+`scheduling.go`); `SetSongView.Conflicts`/`CandidateSongView.Conflicts`
+(`[]views.ConflictBadgeView{Title, SubjectKey, Dismissed}`, replacing the
+old flat `[]string` `ConflictTitles` so each avoid-pairing badge carries its
+own independent dismissal key) plus `RecentlyRepeatedKey`/
+`RecentlyRepeatedDismissed` and `VocalRangeWarningKey`/
+`VocalRangeWarningDismissed`; new `dismissableWarningToggle`/
+`dismissableWarningMenu`/`dismissWarningActions` templ components
+(`set_builder.templ`, `.dismissable-warning-badge` family,
+`disclosure.css`) reused by the existing vocal-range-mismatch Disclosure
+rather than replacing it; `toggleDismissableWarningBadge`/
+`closeDismissableWarningBadges` (`scheduling-build.js`), registered
+alongside the other badge-closing pairs in the click-away/Escape listeners.
+Tests: `internal/scheduling/dismissed_warnings_db_test.go` (dismiss/
+undismiss/idempotent-redismiss/org-scoping, `RUN_DB_TESTS=1`) and
+`internal/server/controllers/sets_builder_dismissed_warnings_test.go`
+(render-time loud-vs-muted per badge, and recent-repeat's per-plan
+scoping - a dismissal on one plan doesn't suppress the same song's repeat
+warning on a different plan).
+
 Not built yet - written up for review before anyone picks it up. Prompted
 by direct feedback in `docs/issues.md`: "Can we make warnings on songs
 dismissable? Like, if you click it, it pulls up a modal saying the issue,

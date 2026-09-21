@@ -25,6 +25,42 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+// avoidPairingSubjectKey/recentRepeatSubjectKey/vocalRangeMismatchSubjectKey
+// compute the dismissed_warnings.subject_key for each of the three Songs-tab
+// warning kinds this app lets someone dismiss (docs/plans/shipped/
+// dismissable-warnings-plan.md) - the exact string DismissWarning/
+// UndismissWarning/DismissedWarningKeys (internal/scheduling/
+// dismissed_warnings.go) store and look up against.
+//
+// avoidPairingSubjectKey is permanent (organization + song-pair scoped, no
+// plan component) and canonical/order-independent - the same
+// lexicographic-order convention scheduling.CreateSongRelationship already
+// uses for song_relationships, so "avoid pairing A/B" and "avoid pairing
+// B/A" always resolve to the same key regardless of which song's row the
+// badge happens to render on.
+func avoidPairingSubjectKey(songIDA, songIDB string) string {
+	if songIDA > songIDB {
+		songIDA, songIDB = songIDB, songIDA
+	}
+	return songIDA + ":" + songIDB
+}
+
+// recentRepeatSubjectKey is per-occurrence (this exact song, on this exact
+// plan) - a genuinely new occurrence of the same song on a future plan gets
+// a different key, so it isn't silently suppressed by an old dismissal.
+func recentRepeatSubjectKey(planID, songID string) string {
+	return planID + ":" + songID
+}
+
+// vocalRangeMismatchSubjectKey is per-occurrence like recentRepeatSubjectKey
+// above, additionally scoped to the assigned leader - reassigning a song's
+// leader changes this key, so the new leader's own mismatch (or lack of
+// one) is judged fresh rather than inheriting whatever was dismissed
+// against the previous leader.
+func vocalRangeMismatchSubjectKey(planID, songID, leaderPersonID string) string {
+	return planID + ":" + songID + ":" + leaderPersonID
+}
+
 func (sc *SchedulingController) buildSetBuilderDataWithErr(ctx context.Context, organizationID, serviceTypeID, planID, errMsg string) views.SetBuilderData {
 	data := sc.buildSetBuilderData(ctx, organizationID, serviceTypeID, planID)
 	if errMsg != "" {
@@ -316,24 +352,47 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 	// where this used to be fetched (right before the Suggestions loop
 	// further down, where candidateConflicts is still needed unchanged) so
 	// existing's same-set avoid-pairing conflicts can be attributed onto
-	// each song's own row (see conflictTitlesBySong and
-	// SetSongView.ConflictTitles, and docs/plans/shipped/
+	// each song's own row (see conflictBadgesBySong and
+	// SetSongView.Conflicts, and docs/plans/shipped/
 	// in-place-set-warnings-plan.md) instead of a separate top-of-page
 	// list, before ServiceOrder is built below.
 	candidateConflicts, existing, err := sc.store.AvoidPairings(ctx, organizationID, set.ID)
 	if err != nil {
 		data.ErrMsg = appendErr(data.ErrMsg, err.Error())
 	}
-	// conflictTitlesBySong attributes each same-set avoid-pairing conflict
-	// back to *both* songs in the pair, by title - existing reports each
-	// pair once (SongID < ConflictsWith, see computeAvoidPairings), but a
-	// per-row badge needs to render on either side naming the other, the
-	// same shape CandidateSongView.ConflictTitles already gives a
-	// not-yet-added candidate (see candidateSongView).
-	conflictTitlesBySong := map[string][]string{}
+
+	// avoidPairingDismissed/recentRepeatDismissed/vocalRangeDismissed are
+	// this render's one lookup of every dismissed warning of each kind
+	// (docs/plans/shipped/dismissable-warnings-plan.md) - fetched once here,
+	// then checked inline via a plain map lookup wherever a warning's own
+	// dismissal state is needed below, the same "fetch once per render,
+	// check inline" shape as every other bulk lookup in this function.
+	// Best-effort like those: a failed lookup just means every warning of
+	// that kind renders as if nothing were dismissed (loud), not a broken
+	// page.
+	avoidPairingDismissed, _ := sc.store.DismissedWarningKeys(ctx, organizationID, scheduling.WarningKindAvoidPairing)
+	recentRepeatDismissed, _ := sc.store.DismissedWarningKeys(ctx, organizationID, scheduling.WarningKindRecentRepeat)
+	vocalRangeDismissed, _ := sc.store.DismissedWarningKeys(ctx, organizationID, scheduling.WarningKindVocalRangeMismatch)
+
+	// conflictBadgesBySong attributes each same-set avoid-pairing conflict
+	// back to *both* songs in the pair, as its own ConflictBadgeView -
+	// existing reports each pair once (SongID < ConflictsWith, see
+	// computeAvoidPairings), but a per-row badge needs to render on either
+	// side naming the other, the same shape CandidateSongView.Conflicts
+	// already gives a not-yet-added candidate (see candidateSongView). Each
+	// badge's SubjectKey is shared by both sides (avoidPairingSubjectKey is
+	// order-independent), so dismissing it from either song's row dismisses
+	// the same underlying pair.
+	conflictBadgesBySong := map[string][]views.ConflictBadgeView{}
 	for _, ex := range existing {
-		conflictTitlesBySong[ex.SongID] = append(conflictTitlesBySong[ex.SongID], titleOrID(titles, ex.ConflictsWith))
-		conflictTitlesBySong[ex.ConflictsWith] = append(conflictTitlesBySong[ex.ConflictsWith], titleOrID(titles, ex.SongID))
+		key := avoidPairingSubjectKey(ex.SongID, ex.ConflictsWith)
+		dismissed := avoidPairingDismissed[key]
+		conflictBadgesBySong[ex.SongID] = append(conflictBadgesBySong[ex.SongID], views.ConflictBadgeView{
+			Title: titleOrID(titles, ex.ConflictsWith), SubjectKey: key, Dismissed: dismissed,
+		})
+		conflictBadgesBySong[ex.ConflictsWith] = append(conflictBadgesBySong[ex.ConflictsWith], views.ConflictBadgeView{
+			Title: titleOrID(titles, ex.SongID), SubjectKey: key, Dismissed: dismissed,
+		})
 	}
 
 	// ServiceOrder: the plan's full order, with this set's own songs
@@ -403,7 +462,7 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 		// set has a leader set. Feeds SetSongView.LeaderPersonName below,
 		// the same "resolve once here, not per-row" shape as titles.
 		leaderNames := personNameMapForIDs(ctx, distinctLeaderPersonIDs(setSongs))
-		data.ServiceOrder = renderServiceOrder(ctx, sc.store, organizationID, arrangementCache, attachmentCache, vocalRangesBySong, noteCategories.Data, itemNotes, merged, titles, rolesBySong, roleTypeLabels, tagsBySong, tagCategoryLabels, pcoTagsBySong, history.RepeatedSongs, conflictTitlesBySong, transitionsByRow, leaderNames, transitionNotesBySongID, transitionNotePromptsByRow, personVocalRanges)
+		data.ServiceOrder = renderServiceOrder(ctx, sc.store, organizationID, planID, arrangementCache, attachmentCache, vocalRangesBySong, noteCategories.Data, itemNotes, merged, titles, rolesBySong, roleTypeLabels, tagsBySong, tagCategoryLabels, pcoTagsBySong, history.RepeatedSongs, conflictBadgesBySong, recentRepeatDismissed, vocalRangeDismissed, transitionsByRow, leaderNames, transitionNotesBySongID, transitionNotePromptsByRow, personVocalRanges)
 
 		// ServiceLengthWarning: the one warning that stays a standalone,
 		// whole-plan banner rather than moving onto a row - it isn't
@@ -490,10 +549,14 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 		roleViews, rolesAttr := songRoleViews(rolesBySong, roleTypeLabels, sug.SongID)
 		tagViews, tagsAttr := songTagViews(tagsBySong, tagCategoryLabels, sug.SongID)
 
-		var conflictTitles []string
+		var conflicts []views.ConflictBadgeView
 		for _, conflictSongID := range candidateConflicts[sug.SongID] {
-			conflictTitles = append(conflictTitles, titleOrID(titles, conflictSongID))
+			key := avoidPairingSubjectKey(sug.SongID, conflictSongID)
+			conflicts = append(conflicts, views.ConflictBadgeView{
+				Title: titleOrID(titles, conflictSongID), SubjectKey: key, Dismissed: avoidPairingDismissed[key],
+			})
 		}
+		recentRepeatKey := recentRepeatSubjectKey(planID, sug.SongID)
 
 		var arrangementInfo string
 		if info, ok := arrangementCache[sug.SongID]; ok {
@@ -502,16 +565,18 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 
 		data.Suggestions = append(data.Suggestions, views.SuggestionView{
 			CandidateSongView: views.CandidateSongView{
-				SongID:           sug.SongID,
-				Title:            titleOrID(titles, sug.SongID),
-				ConflictTitles:   conflictTitles,
-				RecentlyRepeated: repeated[sug.SongID],
-				NewSongLabel:     reinforcementLabel(trackedNew, appearanceCounts, sug.SongID),
-				ArrangementInfo:  arrangementInfo,
-				Roles:            roleViews,
-				RolesAttr:        rolesAttr,
-				Tags:             tagViews,
-				TagsAttr:         tagsAttr,
+				SongID:                    sug.SongID,
+				Title:                     titleOrID(titles, sug.SongID),
+				Conflicts:                 conflicts,
+				RecentlyRepeated:          repeated[sug.SongID],
+				RecentlyRepeatedKey:       recentRepeatKey,
+				RecentlyRepeatedDismissed: recentRepeatDismissed[recentRepeatKey],
+				NewSongLabel:              reinforcementLabel(trackedNew, appearanceCounts, sug.SongID),
+				ArrangementInfo:           arrangementInfo,
+				Roles:                     roleViews,
+				RolesAttr:                 rolesAttr,
+				Tags:                      tagViews,
+				TagsAttr:                  tagsAttr,
 			},
 			RelationshipLabel: strings.Join(sug.RelationshipTypes, ", "),
 		})
@@ -523,21 +588,24 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 	// that handler, further down this file) for the "Browse all songs"
 	// search list.
 	lookups := candidateLookups{
-		titles:             titles,
-		rolesBySong:        rolesBySong,
-		roleTypeLabels:     roleTypeLabels,
-		contextsBySong:     contextsBySong,
-		contextTypeLabels:  contextTypeLabels,
-		tagsBySong:         tagsBySong,
-		tagCategoryLabels:  tagCategoryLabels,
-		candidateConflicts: candidateConflicts,
-		repeated:           repeated,
-		trackedNew:         trackedNew,
-		appearanceCounts:   appearanceCounts,
-		arrangementCache:   arrangementCache,
-		pcoTagGroups:       pcoTagGroups,
-		pcoGroupTags:       pcoGroupTags,
-		pcoTagsBySong:      pcoTagsBySong,
+		titles:                titles,
+		rolesBySong:           rolesBySong,
+		roleTypeLabels:        roleTypeLabels,
+		contextsBySong:        contextsBySong,
+		contextTypeLabels:     contextTypeLabels,
+		tagsBySong:            tagsBySong,
+		tagCategoryLabels:     tagCategoryLabels,
+		candidateConflicts:    candidateConflicts,
+		repeated:              repeated,
+		trackedNew:            trackedNew,
+		appearanceCounts:      appearanceCounts,
+		arrangementCache:      arrangementCache,
+		pcoTagGroups:          pcoTagGroups,
+		pcoGroupTags:          pcoGroupTags,
+		pcoTagsBySong:         pcoTagsBySong,
+		planID:                planID,
+		avoidPairingDismissed: avoidPairingDismissed,
+		recentRepeatDismissed: recentRepeatDismissed,
 	}
 
 	for _, song := range songs {
@@ -621,6 +689,14 @@ type candidateLookups struct {
 	pcoTagGroups  []scheduling.PCOTagGroup
 	pcoGroupTags  map[string][]scheduling.PCOTag
 	pcoTagsBySong map[string][]scheduling.PCOTag
+	// planID/avoidPairingDismissed/recentRepeatDismissed back each
+	// candidate's own Conflicts[i].Dismissed/RecentlyRepeatedDismissed
+	// (docs/plans/shipped/dismissable-warnings-plan.md) - see the
+	// controller's avoidPairingSubjectKey/recentRepeatSubjectKey for how
+	// each candidate's own subject key is derived from these.
+	planID                string
+	avoidPairingDismissed map[string]bool
+	recentRepeatDismissed map[string]bool
 }
 
 // candidateSongView computes song's full CandidateSongView from l's
@@ -634,10 +710,14 @@ func (l candidateLookups) candidateSongView(song pco.SongData) views.CandidateSo
 	contextViews, contextsAttr := songContextViews(l.contextsBySong, l.contextTypeLabels, song.ID)
 	tagViews, tagsAttr := songTagViews(l.tagsBySong, l.tagCategoryLabels, song.ID)
 
-	var conflictTitles []string
+	var conflicts []views.ConflictBadgeView
 	for _, conflictSongID := range l.candidateConflicts[song.ID] {
-		conflictTitles = append(conflictTitles, titleOrID(l.titles, conflictSongID))
+		key := avoidPairingSubjectKey(song.ID, conflictSongID)
+		conflicts = append(conflicts, views.ConflictBadgeView{
+			Title: titleOrID(l.titles, conflictSongID), SubjectKey: key, Dismissed: l.avoidPairingDismissed[key],
+		})
 	}
+	recentRepeatKey := recentRepeatSubjectKey(l.planID, song.ID)
 
 	// Cache-only, deliberately no live-fetch fallback here (unlike
 	// resolveArrangementInfo for ServiceOrder) - Planning Center has no bulk
@@ -651,20 +731,22 @@ func (l candidateLookups) candidateSongView(song pco.SongData) views.CandidateSo
 	}
 
 	return views.CandidateSongView{
-		SongID:           song.ID,
-		Title:            song.Attributes.Title,
-		ConflictTitles:   conflictTitles,
-		RecentlyRepeated: l.repeated[song.ID],
-		NewSongLabel:     reinforcementLabel(l.trackedNew, l.appearanceCounts, song.ID),
-		NotSungInLabel:   notSungInLabel(song.Attributes.LastScheduledAt, l.tagsBySong[song.ID]),
-		ArrangementInfo:  arrangementInfo,
-		Roles:            roleViews,
-		RolesAttr:        rolesAttr,
-		Contexts:         contextViews,
-		ContextsAttr:     contextsAttr,
-		Tags:             tagViews,
-		TagsAttr:         tagsAttr,
-		PCOTags:          l.pcoTagsBySong[song.ID],
+		SongID:                    song.ID,
+		Title:                     song.Attributes.Title,
+		Conflicts:                 conflicts,
+		RecentlyRepeated:          l.repeated[song.ID],
+		RecentlyRepeatedKey:       recentRepeatKey,
+		RecentlyRepeatedDismissed: l.recentRepeatDismissed[recentRepeatKey],
+		NewSongLabel:              reinforcementLabel(l.trackedNew, l.appearanceCounts, song.ID),
+		NotSungInLabel:            notSungInLabel(song.Attributes.LastScheduledAt, l.tagsBySong[song.ID]),
+		ArrangementInfo:           arrangementInfo,
+		Roles:                     roleViews,
+		RolesAttr:                 rolesAttr,
+		Contexts:                  contextViews,
+		ContextsAttr:              contextsAttr,
+		Tags:                      tagViews,
+		TagsAttr:                  tagsAttr,
+		PCOTags:                   l.pcoTagsBySong[song.ID],
 	}
 }
 
@@ -828,7 +910,7 @@ func idsMissingFrom(ids []string, known map[string]string) []string {
 // already-60s-cached fetchActiveSongs/fetchRecentPlanHistory), so running
 // this for one song costs the same handful of queries as running it for a
 // whole search's worth of matches.
-func (sc *SchedulingController) buildCandidateLookups(ctx context.Context, organizationID, serviceTypeID string, songs []pco.SongData, setID int64) candidateLookups {
+func (sc *SchedulingController) buildCandidateLookups(ctx context.Context, organizationID, serviceTypeID, planID string, songs []pco.SongData, setID int64) candidateLookups {
 	titles := songTitleMap(songs)
 
 	roleTypes, _ := sc.store.ListSongRoleTypes(ctx)
@@ -853,6 +935,13 @@ func (sc *SchedulingController) buildCandidateLookups(ctx context.Context, organ
 	candidateConflicts, _, _ := sc.store.AvoidPairings(ctx, organizationID, setID)
 	history := fetchRecentPlanHistory(ctx, serviceTypeID)
 
+	// avoidPairingDismissed/recentRepeatDismissed - see the identical
+	// buildSetBuilderData block's doc comment; duplicated here rather than
+	// shared/threaded through, same tradeoff every other lookup in this
+	// function already makes.
+	avoidPairingDismissed, _ := sc.store.DismissedWarningKeys(ctx, organizationID, scheduling.WarningKindAvoidPairing)
+	recentRepeatDismissed, _ := sc.store.DismissedWarningKeys(ctx, organizationID, scheduling.WarningKindRecentRepeat)
+
 	// pcoTagGroups/pcoGroupTags/pcoTagsBySong - see the identical block in
 	// buildSetBuilderData for the full doc comment; duplicated here rather
 	// than shared, same tradeoff every other lookup in this function
@@ -866,21 +955,24 @@ func (sc *SchedulingController) buildCandidateLookups(ctx context.Context, organ
 	pcoTagsBySong, _ := sc.store.ListPCOSongTagsForOrg(ctx, organizationID, pcoTagGroups)
 
 	return candidateLookups{
-		titles:             titles,
-		rolesBySong:        rolesBySong,
-		roleTypeLabels:     roleTypeLabels,
-		contextsBySong:     contextsBySong,
-		contextTypeLabels:  contextTypeLabels,
-		tagsBySong:         tagsBySong,
-		tagCategoryLabels:  tagCategoryLabels,
-		candidateConflicts: candidateConflicts,
-		repeated:           history.RepeatedSongs,
-		trackedNew:         trackedNew,
-		appearanceCounts:   appearanceCounts,
-		arrangementCache:   arrangementCache,
-		pcoTagGroups:       pcoTagGroups,
-		pcoGroupTags:       pcoGroupTags,
-		pcoTagsBySong:      pcoTagsBySong,
+		titles:                titles,
+		rolesBySong:           rolesBySong,
+		roleTypeLabels:        roleTypeLabels,
+		contextsBySong:        contextsBySong,
+		contextTypeLabels:     contextTypeLabels,
+		tagsBySong:            tagsBySong,
+		tagCategoryLabels:     tagCategoryLabels,
+		candidateConflicts:    candidateConflicts,
+		repeated:              history.RepeatedSongs,
+		trackedNew:            trackedNew,
+		appearanceCounts:      appearanceCounts,
+		arrangementCache:      arrangementCache,
+		pcoTagGroups:          pcoTagGroups,
+		pcoGroupTags:          pcoGroupTags,
+		pcoTagsBySong:         pcoTagsBySong,
+		planID:                planID,
+		avoidPairingDismissed: avoidPairingDismissed,
+		recentRepeatDismissed: recentRepeatDismissed,
 	}
 }
 
@@ -932,7 +1024,7 @@ func (sc *SchedulingController) BuildCandidateDetails(c *fiber.Ctx) error {
 		return render(c, views.CandidateDetails(views.CandidateSongView{}, nil, nil, serviceTypeID, planID, "Song not found."))
 	}
 
-	lookups := sc.buildCandidateLookups(ctx, organizationID, serviceTypeID, songs, set.ID)
+	lookups := sc.buildCandidateLookups(ctx, organizationID, serviceTypeID, planID, songs, set.ID)
 	cand := lookups.candidateSongView(*song)
 	cand.ArrangementInfo = resolveArrangementInfo(ctx, sc.store, organizationID, lookups.arrangementCache, songID)
 	return render(c, views.CandidateDetails(cand, lookups.pcoTagGroups, lookups.pcoGroupTags, serviceTypeID, planID, ""))
@@ -1088,7 +1180,7 @@ func (sc *SchedulingController) searchCandidates(ctx context.Context, organizati
 		return nil, 0, false, buildBrowsableSongs(songs, inSet, rolesBySong, roleTypeLabels, tagsBySong, tagCategoryLabels, pcoTagsBySong)
 	}
 
-	lookups := sc.buildCandidateLookups(ctx, organizationID, serviceTypeID, songs, set.ID)
+	lookups := sc.buildCandidateLookups(ctx, organizationID, serviceTypeID, planID, songs, set.ID)
 
 	var matches []views.CandidateSongView
 	for _, song := range songs {
@@ -1961,14 +2053,18 @@ func buildSongNoteViews(itemID string, noteCategories []pco.ItemNoteCategoryData
 // plan's items/notes are sideloaded on one GetItems call, so there's no
 // per-song lookup left here at all.
 //
-// repeated/conflictTitlesBySong/transitionsByRow are the three per-row
-// warning inputs this now attaches directly onto each song's own
-// SetSongView (RecentlyRepeated/ConflictTitles/KeyTransitionLabel+Message)
-// instead of a separate top-of-page list - see
+// repeated/conflictBadgesBySong/transitionsByRow are three of the per-row
+// warning inputs this attaches directly onto each song's own SetSongView
+// (RecentlyRepeated/Conflicts/KeyTransitionLabel+Message) instead of a
+// separate top-of-page list - see
 // docs/plans/shipped/in-place-set-warnings-plan.md. transitionsByRow is
 // keyed by the *second* song's own row id (keyTransitionWarning.SongRowID),
 // so a row only ever picks up a transition badge for the pair ending at
-// itself, never the one starting from it.
+// itself, never the one starting from it. recentRepeatDismissed/
+// vocalRangeDismissed are the dismissal-key lookups
+// (docs/plans/shipped/dismissable-warnings-plan.md) that decide whether an
+// otherwise-live RecentlyRepeated/vocal-range-mismatch warning renders
+// loud or muted on this row.
 //
 // leaderNames resolves each SetSong.LeaderPersonID to a display name
 // (SetSongView.LeaderPersonName) - see distinctLeaderPersonIDs/
@@ -1993,7 +2089,7 @@ func buildSongNoteViews(itemID string, noteCategories []pco.ItemNoteCategoryData
 // leaderNames (already a parameter above, for SetSongView.LeaderPersonName)
 // doubles as this check's person-name source too, since the only person it
 // ever checks is a row's own leader.
-func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizationID string, arrangementCache map[string]scheduling.SongArrangementInfo, attachmentCache map[string][]scheduling.SongAttachmentInfo, vocalRangesBySong map[string]scheduling.SongVocalRange, noteCategories []pco.ItemNoteCategoryData, itemNotes map[string][]pco.ItemNoteData, rows []mergedRow, titles map[string]string, rolesBySong map[string][]scheduling.SongRole, roleTypeLabels map[string]string, tagsBySong map[string][]scheduling.SongTag, tagCategoryLabels map[string]string, pcoTagsBySong map[string][]scheduling.PCOTag, repeated map[string]bool, conflictTitlesBySong map[string][]string, transitionsByRow map[int64]keyTransitionWarning, leaderNames map[string]string, transitionNotesBySongID map[string][]scheduling.TransitionNote, transitionNotePromptsByRow map[int64][]transitionNotePrompt, personVocalRanges map[string]scheduling.PersonVocalRange) []views.ServiceOrderRow {
+func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizationID, planID string, arrangementCache map[string]scheduling.SongArrangementInfo, attachmentCache map[string][]scheduling.SongAttachmentInfo, vocalRangesBySong map[string]scheduling.SongVocalRange, noteCategories []pco.ItemNoteCategoryData, itemNotes map[string][]pco.ItemNoteData, rows []mergedRow, titles map[string]string, rolesBySong map[string][]scheduling.SongRole, roleTypeLabels map[string]string, tagsBySong map[string][]scheduling.SongTag, tagCategoryLabels map[string]string, pcoTagsBySong map[string][]scheduling.PCOTag, repeated map[string]bool, conflictBadgesBySong map[string][]views.ConflictBadgeView, recentRepeatDismissed map[string]bool, vocalRangeDismissed map[string]bool, transitionsByRow map[int64]keyTransitionWarning, leaderNames map[string]string, transitionNotesBySongID map[string][]scheduling.TransitionNote, transitionNotePromptsByRow map[int64][]transitionNotePrompt, personVocalRanges map[string]scheduling.PersonVocalRange) []views.ServiceOrderRow {
 	// A plain sequential loop, not scheduling.RunConcurrently - unlike
 	// before Phase 2 (docs/plans/shipped/pco-call-efficiency-rollout-plan.md), a song
 	// row's only per-row lookup, resolveArrangementCacheInfo, no longer
@@ -2063,7 +2159,7 @@ func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizati
 			PCOItemID:        ss.PCOItemID,
 			Notes:            buildSongNoteViews(ss.PCOItemID, noteCategories, itemNotes),
 			RecentlyRepeated: repeated[ss.SongID],
-			ConflictTitles:   conflictTitlesBySong[ss.SongID],
+			Conflicts:        conflictBadgesBySong[ss.SongID],
 			Attachments:      songAttachmentViews(attachmentCache[ss.SongID]),
 			VocalRange:       vocalRangesBySong[ss.SongID],
 			LeaderPersonID:   ss.LeaderPersonID,
@@ -2071,6 +2167,12 @@ func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizati
 			Tags:             tagViews,
 			PCOTags:          pcoTagsBySong[ss.SongID],
 		}
+		// RecentlyRepeatedKey/RecentlyRepeatedDismissed - see
+		// recentRepeatSubjectKey's own doc comment. Set unconditionally
+		// (even when RecentlyRepeated is false) since it's cheap and unused
+		// by the template in that case anyway.
+		songView.RecentlyRepeatedKey = recentRepeatSubjectKey(planID, ss.SongID)
+		songView.RecentlyRepeatedDismissed = recentRepeatDismissed[songView.RecentlyRepeatedKey]
 		if transition, ok := transitionsByRow[ss.ID]; ok {
 			songView.KeyTransitionLabel = transition.Label
 			songView.KeyTransitionMessage = transition.Message
@@ -2099,6 +2201,8 @@ func renderServiceOrder(ctx context.Context, store *scheduling.Store, organizati
 			songView.VocalRangeWarningLabel = warning.Label
 			songView.VocalRangeWarningMessage = warning.Message
 			songView.VocalRangeWarningIsTip = warning.IsTip
+			songView.VocalRangeWarningKey = vocalRangeMismatchSubjectKey(planID, ss.SongID, ss.LeaderPersonID)
+			songView.VocalRangeWarningDismissed = vocalRangeDismissed[songView.VocalRangeWarningKey]
 		}
 		songView.TransitionNotes = buildTransitionNoteViews(transitionNotesBySongID[ss.SongID], ss.SongID, titles)
 		for _, p := range transitionNotePromptsByRow[ss.ID] {
