@@ -1,0 +1,620 @@
+package scheduling
+
+import (
+	"fmt"
+
+	pco "github.com/drkgrntt/go-pco"
+
+	"pco-assistant/internal/scheduling"
+	"pco-assistant/internal/views"
+	"pco-assistant/internal/views/components"
+)
+
+// SongDetailData is everything one song's aggregate detail page shows,
+// assembled once by the controller (songDetailData, song_library.go) -
+// see that function's own doc comment for exactly which reads back each
+// field and docs/plans/in-progress/song-person-detail-pages-plan.md's
+// "Concrete architecture" section for the design this implements.
+//
+// Split into the same library-level-vs-per-song-data-owned-by-this-app
+// groups that plan doc's "What's actually reusable from the Build detail
+// cards" section describes: ArrangementInfoText/Structure/HasChordChart/
+// Attachments are read-only, org-wide cached facts (zero new PCO calls -
+// see songDetailData); everything else is this app's own local
+// scheduling data, called with a real song id instead of the flat setup
+// pages' own "" (unfiltered) reads.
+type SongDetailData struct {
+	Song                pco.SongData
+	SongID              string
+	ArrangementInfoText string
+	Structure           string
+	HasChordChart       bool
+	Attachments         []SongAttachmentView
+
+	Roles      []scheduling.SongRole
+	RoleTypes  []scheduling.SongRoleType
+	RoleLabels map[string]string
+
+	Tags              []scheduling.SongTag
+	TagCategories     []scheduling.SongTagCategory
+	TagCategoryLabels map[string]string
+
+	Contexts      []scheduling.SongContext
+	ContextTypes  []scheduling.SongContextType
+	ContextLabels map[int64]string
+
+	// Relationships/RelationshipTypes/RelationshipTypeLabels/SongTitles
+	// mirror RelationshipsTable's own data (relationships.templ) but
+	// scoped to this one song - OtherSongs is every other active song,
+	// for the "relate to another song" picker (a plain <select>, per the
+	// plan's own "no SongPickerField exists" note - see its "Views"
+	// section).
+	Relationships          []scheduling.SongRelationship
+	RelationshipTypes      []scheduling.SongRelationshipType
+	RelationshipTypeLabels map[string]string
+	OtherSongs             []pco.SongData
+	SongTitles             map[string]string
+
+	Preferences          []scheduling.SongPersonPreference
+	PreferenceTypes      []scheduling.SongPreferenceType
+	PreferenceTypeLabels map[string]string
+	PersonNames          map[string]string
+
+	VocalRange    scheduling.SongVocalRange
+	HasVocalRange bool
+
+	// TransitionNotes/AllSongs back songDetailTransitionNotesSection below -
+	// AllSongs is reused as the "other song" option list for a transition
+	// note's own optional pairing, same list as OtherSongs would give
+	// (every active song) but including this song itself is harmless there
+	// since transitionNotesSection's own template already excludes
+	// song.SongID from that <select> (see its "other_song_id" loop).
+	TransitionNotes []TransitionNoteEntryView
+	AllSongs        []pco.SongData
+}
+
+// SongDetailPage is one song's full-page aggregate view (GET
+// /scheduling/songs/:song_id) - Layout plus a back link to the library
+// index and SongDetailContent below. See song_library.go's own doc
+// comment for the phase-1 scope this belongs to.
+templ SongDetailPage(personName, organizationName string, data SongDetailData, errMsg string) {
+	@views.Layout(data.Song.Attributes.Title, personName, organizationName) {
+		<a href="/scheduling/songs" class="song-detail-back-link">← Song Library</a>
+		@SongDetailContent(data, errMsg)
+	}
+}
+
+// SongDetailContent is both the initial-render fragment and the htmx swap
+// target (id="song-detail-content") for every AddSongDetail*/
+// DeleteSongDetail* mutation on this page (song_library.go) - see
+// SongTagsList's own doc comment (song_tags.templ) for why errMsg lives
+// inside the swapped fragment rather than the page around it. Every
+// mutation handler re-renders this whole fragment rather than a narrower
+// piece - see renderSongDetail's own doc comment (song_library.go) for why
+// that's the right trade-off here, the same one QuickAddTransitionNote/
+// QuickAddSongTag already make for the Build page's own aggregate detail
+// card.
+templ SongDetailContent(data SongDetailData, errMsg string) {
+	<div id="song-detail-content">
+		if errMsg != "" {
+			<p class="error" role="alert">{ errMsg }</p>
+		}
+		<div class="song-detail-header">
+			<h1>{ data.Song.Attributes.Title }</h1>
+			<a href={ templ.URL(pcoSongURL(data.SongID)) } target="_blank" rel="noopener noreferrer" class="button">
+				Open in Planning Center
+			</a>
+		</div>
+		@songDetailArrangementCard(data)
+		<div class="song-detail-grid">
+			@songDetailRolesCard(data)
+			@songDetailTagsCard(data)
+			@songDetailContextsCard(data)
+			@songDetailVocalRangeCard(data)
+			@songDetailRelationshipsCard(data)
+			@songDetailPreferencesCard(data)
+		</div>
+		@songDetailTransitionNotesSection(data)
+	</div>
+}
+
+// songDetailArrangementCard is this song's library-level Planning Center
+// info - arrangement summary, structure, chord-chart badge, attachment
+// filenames - the same org-wide cached data songDetailCard already shows
+// on the Build page's sidebar (build_detail_card.templ), read-only here
+// (no forms: none of this is owned by this app - it's a live PCO fact,
+// edited in Planning Center itself, same as songDetailCard's own
+// treatment of it). Attachment filenames are plain text, not links: their
+// only existing download route (OpenSongAttachment) is scoped to a
+// specific plan/set-song, which this plan-independent page has no
+// equivalent of - see docs/plans/in-progress/song-person-detail-pages-plan.md.
+templ songDetailArrangementCard(data SongDetailData) {
+	@components.Card("Song info") {
+		if data.ArrangementInfoText != "" {
+			<p class="muted">{ data.ArrangementInfoText }</p>
+		} else {
+			<p class="muted">No arrangement info cached yet.</p>
+		}
+		if data.Structure != "" {
+			<p class="muted"><strong>Structure:</strong> { data.Structure }</p>
+		}
+		if data.HasChordChart {
+			@components.Badge("", "Chord chart")
+		}
+		if len(data.Attachments) > 0 {
+			<div class="song-detail-attachments muted">
+				<strong>Files:</strong>
+				<ul>
+					for _, a := range data.Attachments {
+						<li>{ a.Filename }</li>
+					}
+				</ul>
+			</div>
+		}
+	}
+}
+
+// songDetailRolesCard is this song's opener/response (or any other
+// DB-driven) role tagging - every role as a removable chip, plus an
+// inline "add a role" form. No Edit action: unlike the flat Song Roles
+// setup page (song_roles.templ), this page has no update route (see the
+// plan's own route list) - moving a role tag to a *different* song from
+// here would mean visiting that other song's own page instead, so
+// remove-then-add-elsewhere is the whole story.
+templ songDetailRolesCard(data SongDetailData) {
+	@components.Card("Roles") {
+		if len(data.Roles) == 0 {
+			<p class="muted">No roles assigned yet.</p>
+		} else {
+			<div class="song-role-chips">
+				for _, role := range data.Roles {
+					<span class="song-role-chip">
+						<span class="song-role-chip-title">{ displayNameOrID(data.RoleLabels, role.Role) }</span>
+						<button
+							class="danger icon-btn"
+							aria-label="Remove role"
+							title="Remove role"
+							hx-delete={ fmt.Sprintf("/scheduling/songs/%s/roles/%d", data.SongID, role.ID) }
+							hx-target="#song-detail-content"
+							hx-swap="outerHTML"
+							hx-confirm="Remove this role?"
+						>
+							@components.IconRemove()
+						</button>
+					</span>
+				}
+			</div>
+		}
+		<form
+			class="inline"
+			hx-post={ fmt.Sprintf("/scheduling/songs/%s/roles", data.SongID) }
+			hx-target="#song-detail-content"
+			hx-swap="outerHTML"
+		>
+			<label>
+				Role
+				<select name="role" required>
+					<option value="" selected disabled>Choose a role</option>
+					for _, t := range data.RoleTypes {
+						<option value={ t.Code }>{ t.Label }</option>
+					}
+				</select>
+			</label>
+			<button type="submit" class="primary">Add role</button>
+		</form>
+	}
+}
+
+// songDetailTagsCard mirrors SongTagCard (song_tags.templ) - trimmed of
+// its bulk-select checkbox (that moved to the library index page instead,
+// per the plan's "Bulk operations" section) and its Edit action, same "no
+// update route on this page" reasoning as songDetailRolesCard above.
+templ songDetailTagsCard(data SongDetailData) {
+	@components.Card("Labels") {
+		if len(data.Tags) == 0 {
+			<p class="muted">No labels yet.</p>
+		} else {
+			<div class="song-tag-chips">
+				for _, tag := range data.Tags {
+					<span class="tag-chip">
+						@components.TagBadge(tag.Value, displayNameOrID(data.TagCategoryLabels, tag.Category))
+						<button
+							class="danger icon-btn"
+							aria-label={ fmt.Sprintf("Remove %q label", tag.Value) }
+							title="Remove label"
+							hx-delete={ fmt.Sprintf("/scheduling/songs/%s/tags/%d", data.SongID, tag.ID) }
+							hx-target="#song-detail-content"
+							hx-swap="outerHTML"
+							hx-confirm="Remove this label?"
+						>
+							@components.IconRemove()
+						</button>
+					</span>
+				}
+			</div>
+		}
+		<form
+			class="inline"
+			hx-post={ fmt.Sprintf("/scheduling/songs/%s/tags", data.SongID) }
+			hx-target="#song-detail-content"
+			hx-swap="outerHTML"
+		>
+			<label>
+				Category
+				<select name="category">
+					for _, cat := range data.TagCategories {
+						<option value={ cat.Code }>{ cat.Label }</option>
+					}
+				</select>
+			</label>
+			<label>
+				Value
+				<input type="text" name="value" placeholder="e.g. Grace, Romans 8:1, New beginnings" required/>
+			</label>
+			<button type="submit" class="primary">Add label</button>
+		</form>
+	}
+}
+
+// songDetailContextsCard mirrors SongContextCard (song_contexts.templ),
+// same trim as songDetailTagsCard above. Reuses contextTypeOptions
+// (song_contexts.templ) for the add form's own <select> rather than
+// duplicating that option list.
+templ songDetailContextsCard(data SongDetailData) {
+	@components.Card("Contexts") {
+		if len(data.Contexts) == 0 {
+			<p class="muted">No contexts yet.</p>
+		} else {
+			<div class="song-context-chips">
+				for _, songCtx := range data.Contexts {
+					<span class="context-chip">
+						@components.Badge("context-badge", displayLabelOrID(data.ContextLabels, songCtx.ContextTypeID))
+						<button
+							class="danger icon-btn"
+							aria-label={ fmt.Sprintf("Remove %q context", displayLabelOrID(data.ContextLabels, songCtx.ContextTypeID)) }
+							title="Remove context"
+							hx-delete={ fmt.Sprintf("/scheduling/songs/%s/contexts/%d", data.SongID, songCtx.ID) }
+							hx-target="#song-detail-content"
+							hx-swap="outerHTML"
+							hx-confirm="Remove this context?"
+						>
+							@components.IconRemove()
+						</button>
+					</span>
+				}
+			</div>
+		}
+		if len(data.ContextTypes) == 0 {
+			<p class="muted">No contexts defined yet - add one on the <a href="/scheduling/song-contexts">Song Contexts</a> page first.</p>
+		} else {
+			<form
+				class="inline"
+				hx-post={ fmt.Sprintf("/scheduling/songs/%s/contexts", data.SongID) }
+				hx-target="#song-detail-content"
+				hx-swap="outerHTML"
+			>
+				<label>
+					Context
+					<select name="context_type_id" required>
+						<option value="" selected disabled>Choose a context</option>
+						@contextTypeOptions(data.ContextTypes)
+					</select>
+				</label>
+				<button type="submit" class="primary">Add context</button>
+			</form>
+		}
+	}
+}
+
+// songDetailOtherSongID returns whichever side of a canonicalized
+// SongRelationship isn't songID - see CreateSongRelationship's own doc
+// comment (song_relationships.go) on why the pair is stored in
+// lexicographic order rather than in "entered" order, so a relationship
+// involving this song can have it on either side.
+func songDetailOtherSongID(rel scheduling.SongRelationship, songID string) string {
+	if rel.SongIDA == songID {
+		return rel.SongIDB
+	}
+	return rel.SongIDA
+}
+
+// songDetailRelationshipsCard mirrors RelationshipsTable (relationships.templ)
+// scoped to this one song - the "other song" side of each row instead of
+// two, since this song itself is already the page's own subject.
+templ songDetailRelationshipsCard(data SongDetailData) {
+	@components.Card("Related songs") {
+		if len(data.Relationships) == 0 {
+			<p class="muted">No relationships yet.</p>
+		} else {
+			<ul class="song-detail-entry-list">
+				for _, rel := range data.Relationships {
+					<li>
+						@components.Badge("", displayNameOrID(data.RelationshipTypeLabels, rel.RelationshipType))
+						<span>{ displayNameOrID(data.SongTitles, songDetailOtherSongID(rel, data.SongID)) }</span>
+						if rel.Notes != "" {
+							<span class="muted">{ rel.Notes }</span>
+						}
+						<button
+							class="danger icon-btn"
+							aria-label="Remove relationship"
+							title="Remove relationship"
+							hx-delete={ fmt.Sprintf("/scheduling/songs/%s/relationships/%d", data.SongID, rel.ID) }
+							hx-target="#song-detail-content"
+							hx-swap="outerHTML"
+							hx-confirm="Remove this relationship?"
+						>
+							@components.IconRemove()
+						</button>
+					</li>
+				}
+			</ul>
+		}
+		<form
+			class="inline"
+			hx-post={ fmt.Sprintf("/scheduling/songs/%s/relationships", data.SongID) }
+			hx-target="#song-detail-content"
+			hx-swap="outerHTML"
+		>
+			<label>
+				Song
+				<select name="other_song_id" required>
+					<option value="" selected disabled>Choose a song</option>
+					for _, s := range data.OtherSongs {
+						<option value={ s.ID }>{ s.Attributes.Title }</option>
+					}
+				</select>
+			</label>
+			<label>
+				Relationship
+				<select name="relationship_type">
+					for _, t := range data.RelationshipTypes {
+						<option value={ t.Code }>{ t.Label }</option>
+					}
+				</select>
+			</label>
+			<label>
+				Notes
+				<input type="text" name="notes"/>
+			</label>
+			<button type="submit" class="primary">Add relationship</button>
+		</form>
+	}
+}
+
+// songDetailPreferencesCard mirrors PreferencesTable (preferences.templ)
+// scoped to this one song - the person side alone per row, since this
+// song is already the page's own subject. Uses PersonPickerField
+// (person_picker.templ), same as the flat Song/Person Preferences setup
+// page, per the plan's own "no SongPickerField exists" note (the person
+// side already has a real picker component, unlike the song side).
+templ songDetailPreferencesCard(data SongDetailData) {
+	@components.Card("Person preferences") {
+		if len(data.Preferences) == 0 {
+			<p class="muted">No preferences set yet.</p>
+		} else {
+			<ul class="song-detail-entry-list">
+				for _, pref := range data.Preferences {
+					<li>
+						@components.Badge("", displayNameOrID(data.PreferenceTypeLabels, pref.Preference))
+						<span>{ displayNameOrID(data.PersonNames, pref.PersonID) }</span>
+						if pref.Notes != "" {
+							<span class="muted">{ pref.Notes }</span>
+						}
+						<button
+							class="danger icon-btn"
+							aria-label="Remove preference"
+							title="Remove preference"
+							hx-delete={ fmt.Sprintf("/scheduling/songs/%s/preferences/%d", data.SongID, pref.ID) }
+							hx-target="#song-detail-content"
+							hx-swap="outerHTML"
+							hx-confirm="Remove this preference?"
+						>
+							@components.IconRemove()
+						</button>
+					</li>
+				}
+			</ul>
+		}
+		<form
+			class="inline"
+			hx-post={ fmt.Sprintf("/scheduling/songs/%s/preferences", data.SongID) }
+			hx-target="#song-detail-content"
+			hx-swap="outerHTML"
+		>
+			@PersonPickerField("Person", "person_id", "song-detail-pref")
+			<label>
+				Preference
+				<select name="preference">
+					for _, t := range data.PreferenceTypes {
+						<option value={ t.Code }>{ t.Label }</option>
+					}
+				</select>
+			</label>
+			<label>
+				Notes
+				<input type="text" name="notes"/>
+			</label>
+			<button type="submit" class="primary">Add preference</button>
+		</form>
+	}
+}
+
+// songDetailVocalRangeCard mirrors SongVocalRanges' own entry form
+// (song_vocal_range.templ) scoped to this one song - reuses
+// computeVocalRangeNotePair/vocalRangeLine/vocalRangePreviewControls
+// unchanged. Unlike the roles/tags/contexts/relationships/preferences
+// cards above, there's no separate "no update route" caveat here: a
+// resubmit of this same form for this song upserts in place
+// (SetSongVocalRange's ON CONFLICT clause - see SongVocalRangesTable's own
+// doc comment for the identical reasoning on the flat setup page), so the
+// form is always shown, pre-filled with the current values when there are
+// any, and a single submit both creates and edits.
+templ songDetailVocalRangeCard(data SongDetailData) {
+	@components.Card("Vocal range") {
+		{{ measured := computeVocalRangeNotePair(data.VocalRange.ReferenceKey, data.VocalRange.LowestPitchClass, data.VocalRange.LowestOctave, data.VocalRange.HighestPitchClass, data.VocalRange.HighestOctave, data.VocalRange.ReferenceKey) }}
+		if data.HasVocalRange && measured.OK {
+			@vocalRangeLine("As measured", data.VocalRange.ReferenceKey, measured)
+			@vocalRangePreviewControls(data.VocalRange)
+			<form
+				hx-delete={ fmt.Sprintf("/scheduling/songs/%s/vocal-range/%d", data.SongID, data.VocalRange.ID) }
+				hx-target="#song-detail-content"
+				hx-swap="outerHTML"
+				hx-confirm="Delete this vocal range?"
+			>
+				<button type="submit" class="danger">Delete vocal range</button>
+			</form>
+		} else {
+			<p class="muted">No vocal range recorded yet.</p>
+		}
+		<form
+			class="inline"
+			hx-post={ fmt.Sprintf("/scheduling/songs/%s/vocal-range", data.SongID) }
+			hx-target="#song-detail-content"
+			hx-swap="outerHTML"
+		>
+			<label>
+				Measured in key
+				<input type="text" name="reference_key" value={ data.VocalRange.ReferenceKey } placeholder="e.g. G, Bb, F#m" list="key-options" required/>
+			</label>
+			@musicalKeyOptions()
+			<div class="form-row-break"></div>
+			<div class="form-field-group">
+				<label>
+					Lowest note
+					<input
+						id="song-detail-vocal-range-lowest-input"
+						type="text"
+						name="lowest_note"
+						if data.HasVocalRange && measured.OK {
+							value={ formatVocalNoteDisplay(measured.LowPitchClass, measured.LowOctave) }
+						}
+						placeholder="e.g. G3"
+						list="vocal-note-options"
+						required
+					/>
+				</label>
+				<button
+					type="button"
+					class="icon-btn play"
+					aria-label="Play lowest note"
+					title="Play lowest note"
+					onclick="playVocalNoteFromInput('song-detail-vocal-range-lowest-input')"
+				>
+					@components.IconPlay()
+				</button>
+			</div>
+			<div class="form-field-group">
+				<label>
+					Highest note
+					<input
+						id="song-detail-vocal-range-highest-input"
+						type="text"
+						name="highest_note"
+						if data.HasVocalRange && measured.OK {
+							value={ formatVocalNoteDisplay(measured.HighPitchClass, measured.HighOctave) }
+						}
+						placeholder="e.g. D5"
+						list="vocal-note-options"
+						required
+					/>
+				</label>
+				<button
+					type="button"
+					class="icon-btn play"
+					aria-label="Play highest note"
+					title="Play highest note"
+					onclick="playVocalNoteFromInput('song-detail-vocal-range-highest-input')"
+				>
+					@components.IconPlay()
+				</button>
+			</div>
+			@vocalNoteOptions()
+			<button type="submit" class="primary">Save vocal range</button>
+		</form>
+	}
+}
+
+// songDetailTransitionNotesSection mirrors transitionNotesSection
+// (build_detail_card.templ) - same content shape and same "debrief is
+// almost always written about a plan that already happened, and never
+// touches a plan's own draft, so it's safe and necessary to keep this
+// writable regardless of any plan's own read-only state" reasoning that
+// doc comment gives - just posting to this song's own
+// /scheduling/songs/:song_id/transition-notes routes
+// (AddSongDetailTransitionNote/DeleteSongDetailTransitionNote,
+// song_library.go) instead of a plan-scoped Build-page route, and
+// re-rendering #song-detail-content instead of #set-builder-body.
+templ songDetailTransitionNotesSection(data SongDetailData) {
+	@collapsibleSection("song-detail-transition-notes", "Debrief & talking points", false) {
+		<p class="muted">Persistent notes about this song - or a specific transition into/out of it - that carry forward to the next time it's scheduled.</p>
+		if len(data.TransitionNotes) == 0 {
+			<p class="muted">No notes on file yet.</p>
+		} else {
+			<ul class="transition-note-list">
+				for _, note := range data.TransitionNotes {
+					<li class="transition-note-entry">
+						<div class="transition-note-entry-head">
+							@components.Badge("", note.KindLabel)
+							if note.Direction == "into" {
+								<span class="muted">{ fmt.Sprintf("Into %s", note.OtherTitle) }</span>
+							} else if note.Direction == "from" {
+								<span class="muted">{ fmt.Sprintf("From %s", note.OtherTitle) }</span>
+							}
+						</div>
+						<p>{ note.Note }</p>
+						<div class="transition-note-entry-meta">
+							<span class="muted">{ note.CreatedAt }</span>
+							<form
+								hx-delete={ fmt.Sprintf("/scheduling/songs/%s/transition-notes/%d", data.SongID, note.ID) }
+								hx-target="#song-detail-content"
+								hx-swap="outerHTML"
+								hx-confirm="Remove this note?"
+							>
+								<button type="submit" class="danger icon-btn" aria-label="Remove note" title="Remove note">
+									@components.IconRemove()
+								</button>
+							</form>
+						</div>
+					</li>
+				}
+			</ul>
+		}
+		<form
+			class="build-detail-note-form"
+			hx-post={ fmt.Sprintf("/scheduling/songs/%s/transition-notes", data.SongID) }
+			hx-target="#song-detail-content"
+			hx-swap="outerHTML"
+		>
+			<label>
+				Kind
+				<select name="kind">
+					<option value="debrief">Debrief - what happened</option>
+					<option value="talking_point">Talking point - what to say next time</option>
+				</select>
+			</label>
+			<label>
+				Other song (optional)
+				<select name="other_song_id">
+					<option value="">No specific pairing - just this song</option>
+					for _, s := range data.AllSongs {
+						if s.ID != data.SongID {
+							<option value={ s.ID }>{ s.Attributes.Title }</option>
+						}
+					}
+				</select>
+			</label>
+			<label>
+				Direction (if a song is chosen above)
+				<select name="direction">
+					<option value="into">This song, into the other one</option>
+					<option value="from">The other one, into this song</option>
+				</select>
+			</label>
+			<label>
+				Note
+				<textarea name="note" rows="2" placeholder="e.g. the bridge ran long, or say this right before the key change" required></textarea>
+			</label>
+			<button type="submit">Add note</button>
+		</form>
+	}
+}

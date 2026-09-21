@@ -93,6 +93,26 @@
   background: var(--accent-subtle);
 }
 
+/* navMenuContent's group labels (layout.templ) - plain, non-interactive
+   captions splitting the "Setup" dropdown's dozen links into scannable
+   groups (Browse/Song setup/Preferences/Person setup) instead of either
+   one long flat list or splitting into separate top-level dropdowns -
+   see that templ's own doc comment for why. Matches table.css's header
+   label treatment (small, semibold, uppercase) rather than inventing a
+   new caption style. */
+.nav-dropdown-group-label {
+  padding: var(--space-2) calc(var(--space-2) + 0.1rem) var(--space-1);
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.nav-dropdown-group-label:not(:first-child) {
+  margin-top: var(--space-1);
+  border-top: 1px solid var(--border);
+}
+
 /* The set builder's per-row "more actions" menu (see toggleRowMenu/
    openQuickAction in scheduling-build.js) - the same open/closed, floating-menu
    shape as the header's .nav-dropdown-menu above, right-anchored instead

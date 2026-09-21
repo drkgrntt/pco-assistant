@@ -25,3 +25,12 @@ func adjacentPlanURL(serviceTypeID, planID, activeTab string) string {
 func pcoPlanURL(planID string) string {
 	return "https://services.planningcenteronline.com/" + "/plans/" + planID
 }
+
+// pcoSongURL builds the Planning Center Services web app URL for a song -
+// backs the song detail page's own "Open in Planning Center" deep link
+// (song_detail.templ), the song-library counterpart of pcoPlanURL above -
+// same reasoning: jumping to the real, live song record is one click
+// instead of hunting through Planning Center's own navigation.
+func pcoSongURL(songID string) string {
+	return "https://services.planningcenteronline.com/songs/" + songID
+}

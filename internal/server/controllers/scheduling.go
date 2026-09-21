@@ -508,6 +508,28 @@ func (sc *SchedulingController) RegisterRoutes(router fiber.Router) {
 	group.Delete("/song-tags/:id", sc.DeleteSongTag)
 	group.Post("/song-tags/suggestions/ignore", sc.IgnoreSongTagSuggestion)
 
+	// Song library index + per-song aggregate detail page
+	// (song_library.go, Phase 1 of
+	// docs/plans/in-progress/song-person-detail-pages-plan.md) - song side
+	// only; additive, reachable today only by direct URL (not yet linked
+	// from navMenuContent).
+	group.Get("/songs", sc.SongLibraryPage)
+	group.Get("/songs/:song_id", sc.SongDetailPage)
+	group.Post("/songs/:song_id/roles", sc.AddSongDetailRole)
+	group.Delete("/songs/:song_id/roles/:id", sc.DeleteSongDetailRole)
+	group.Post("/songs/:song_id/tags", sc.AddSongDetailTag)
+	group.Delete("/songs/:song_id/tags/:id", sc.DeleteSongDetailTag)
+	group.Post("/songs/:song_id/contexts", sc.AddSongDetailContext)
+	group.Delete("/songs/:song_id/contexts/:id", sc.DeleteSongDetailContext)
+	group.Post("/songs/:song_id/relationships", sc.AddSongDetailRelationship)
+	group.Delete("/songs/:song_id/relationships/:id", sc.DeleteSongDetailRelationship)
+	group.Post("/songs/:song_id/preferences", sc.AddSongDetailPreference)
+	group.Delete("/songs/:song_id/preferences/:id", sc.DeleteSongDetailPreference)
+	group.Post("/songs/:song_id/vocal-range", sc.SetSongDetailVocalRange)
+	group.Delete("/songs/:song_id/vocal-range/:id", sc.DeleteSongDetailVocalRange)
+	group.Post("/songs/:song_id/transition-notes", sc.AddSongDetailTransitionNote)
+	group.Delete("/songs/:song_id/transition-notes/:id", sc.DeleteSongDetailTransitionNote)
+
 	group.Get("/person-relationships", sc.PersonRelationshipsPage)
 	group.Post("/person-relationships", sc.CreatePersonRelationship)
 	group.Delete("/person-relationships/:id", sc.DeletePersonRelationship)
@@ -524,6 +546,19 @@ func (sc *SchedulingController) RegisterRoutes(router fiber.Router) {
 	group.Get("/position-preferences/assignments", sc.PositionAssignments)
 	group.Post("/position-preferences", sc.SetPositionPreference)
 	group.Delete("/position-preferences/:team_id/:team_position_id/:assignment_id", sc.DeletePositionPreference)
+
+	// People library (docs/plans/in-progress/song-person-detail-pages-plan.md,
+	// Phase 2) - a standalone index plus per-person detail page, purely
+	// additive alongside the flat person-relationships/vocal-range/
+	// preferences pages above (retiring those is Phase 3, not yet done).
+	group.Get("/people", sc.PersonLibraryPage)
+	group.Get("/people/:person_id", sc.PersonDetailPage)
+	group.Post("/people/:person_id/relationships", sc.AddPersonDetailRelationship)
+	group.Delete("/people/:person_id/relationships/:id", sc.DeletePersonDetailRelationship)
+	group.Post("/people/:person_id/vocal-range", sc.SetPersonDetailVocalRange)
+	group.Delete("/people/:person_id/vocal-range/:id", sc.DeletePersonDetailVocalRange)
+	group.Post("/people/:person_id/preferences", sc.AddPersonDetailPreference)
+	group.Delete("/people/:person_id/preferences/:id", sc.DeletePersonDetailPreference)
 
 	group.Get("/build", sc.BuildPage)
 	group.Get("/build/plans", sc.BuildPlans)

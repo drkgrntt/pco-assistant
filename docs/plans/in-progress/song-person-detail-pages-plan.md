@@ -1,17 +1,30 @@
 # Plan: standalone song and person detail pages
 
-Not built yet - written up for review before anyone picks it up, same
-spirit as `docs/plans/shipped/song-roles-bucket-redesign-plan.md` (a
-redesign of one of the same setup pages this plan also touches, shipped
-since this plan was first written - see "Interaction with the Song Roles
-bucket redesign" below, now updated to reflect that it already landed).
-Prompted by the same underlying complaint that drove
+**Status: in progress.** Phases 1-2 (song library + song detail page,
+people library + person detail page) are built, on branch
+`song-person-detail-pages`. Phase 3 as originally written below (a
+"retirement pass" deleting the eight flat setup pages this doc
+originally proposed replacing) was reconsidered and dropped before being
+attempted - see "Disposition of the 10 existing flat pages" for why, that
+section rewritten in place to reflect the reversal rather than left to
+contradict what actually shipped. What happened instead of a retirement
+pass: a lightweight nav-link addition for the two new pages, sitting
+alongside the existing ten links rather than replacing them.
+
+Originally written up for review before anyone picked it up, same spirit
+as `docs/plans/shipped/song-roles-bucket-redesign-plan.md` (a redesign of
+one of the same setup pages this plan also touches, shipped since this
+plan was first written - see "Interaction with the Song Roles bucket
+redesign" below). Prompted by the same underlying complaint that drove
 `docs/plans/shipped/song-tags-setup-redesign-plan.md`: that doc fixed
 "the ability to look through and organize things" for exactly one of
 seven song-related setup pages (Song Tags). This plan generalizes that
-fix to every song- and person-related setup page at once, and gives this
-app something it has never had at all - a standalone page for browsing
-the song library or the people roster, independent of any specific plan.
+fix's card-per-song/person *browsing* pattern into a genuinely new
+capability this app never had - a standalone page for browsing the song
+library or the people roster, and a single aggregate page for everything
+about one song or person - **as a second, complementary way in, not a
+replacement for the existing flat per-relationship-type setup pages**
+(see "Disposition" below for why that distinction turned out to matter).
 
 ## The problem
 
@@ -249,25 +262,61 @@ needed at all, just calling them with a real id instead of `""`).
 
 ## Disposition of the 10 existing flat pages
 
-Tested against CLAUDE.md's friction-reduction question - "is this the
-fast, obvious way to do the thing" - visiting up to seven separate pages
-to fully understand one song clearly fails that test once a single
-aggregate page exists. Per-page call:
+**Revised after Phases 1-2 shipped: none of the ten flat pages retire.
+All ten stay, permanently, alongside the two new aggregate pages.**
+
+The paragraph and per-page call below are what this section originally
+said, before that reversal - kept rather than deleted, since the reasoning
+in "why they'd retire" is still correct for the use case it was solving,
+just incomplete about a second use case that argues the other way. Tested
+against CLAUDE.md's friction-reduction question - "is this the fast,
+obvious way to do the thing" - visiting up to seven separate pages to
+fully understand *one* song clearly fails that test once a single
+aggregate page exists. That's still true, and is exactly what the two new
+pages are for. What that framing missed: a flat page solves a different,
+equally real task the aggregate pages make *worse*, not better -
+**sweeping through the whole library/roster assigning one relationship
+type at a time** ("go set every song's difficulty role," "go mark every
+person's vocal range"), especially during initial setup, when there's a
+batch of everything to fill in at once rather than one thing to look up.
+A flat page is one continuous scan-and-fill pass with zero navigation
+between entries; the identical task done one song/person at a time via
+the new detail pages means clicking into dozens or hundreds of individual
+pages in sequence - by CLAUDE.md's own friction-reduction question,
+*that's* the slow, non-obvious way to do a bulk pass. Retiring the flat
+pages would have fixed the single-entity-lookup friction this doc set out
+to solve by introducing a worse friction for the batch-entry case, net
+negative rather than net positive. Resolution: keep both - the flat pages
+as the batch-entry tool, the two new pages as the single-entity aggregate
+view, permanently coexisting rather than one superseding the other. The
+Setup nav dropdown now carries all twelve links (the original ten plus
+Songs/People) rather than the four links a full retirement would have
+left.
+
+Per-page call, id of what would have changed (now moot - every one of
+these keeps its existing flat page exactly as-is, additionally gaining an
+inline section covering the identical data on the new song/person detail
+page; both write through the same `scheduling.Store` methods, so there's
+no "which one is authoritative" concern - neither is a draft or cache of
+the other):
 
 - **Song Relationships, Song Roles, Song Vocal Range, and the "Song"
-  half of Song/Person Preferences** - **retired**, fully replaced by
-  inline sections on the new song detail page. No bulk-operation
-  precedent exists on any of these three today, so there's no tension to
-  resolve for them.
-- **Song Tags, Song Contexts** - **subsumed, not just retired**: their
-  existing card-per-song content (`SongTagCard`/`SongContextCard`) moves
-  onto the song detail page as two of its sections; their pages'
-  bulk-add forms move onto the new song library *index* page instead
-  (see "Bulk operations" below).
+  half of Song/Person Preferences** - would have been **retired**, fully
+  replaced by inline sections on the new song detail page. No
+  bulk-operation precedent exists on any of these three today, so there
+  was no tension to resolve for them either way.
+- **Song Tags, Song Contexts** - would have been **subsumed, not just
+  retired**: their existing card-per-song content
+  (`SongTagCard`/`SongContextCard`) also appears on the song detail page
+  as two of its sections now, same as the others above - but their
+  pages' bulk-add forms stay exactly where they are (see "Bulk
+  operations" below - the relocation described there never happened).
 - **Person Relationships, Vocal Range (person), and the "Person" half of
-  Song/Person Preferences** - **retired**, replaced by inline sections
-  on the new person detail page.
-- **Song Tag Suggestions** - **kept standalone, unchanged.** It's not a
+  Song/Person Preferences** - would have been **retired**, replaced by
+  inline sections on the new person detail page.
+- **Song Tag Suggestions** - **kept standalone, unchanged**, same call
+  as originally, independent of the reversal above - it was never a
+  retirement candidate. It's not a
   "look up one song's data" page at all - it's a cross-song discovery
   queue (shared-title-word grouping across the whole library, surfaced
   conditionally in the nav only when something's pending, same
@@ -279,40 +328,41 @@ aggregate page exists. Per-page call:
   suggestion - a nice-to-have worth a follow-up note, not a requirement
   of this plan.)
 - **Position Preferences** - **kept standalone, explicitly out of
-  scope.** It fails the "this is the same shape as the other nine"
-  test on two independent grounds: (1) it's not local data at all -
-  `PersonTeamPositionAssignment` lives entirely in PCO, which is why
-  `buildOnboardingChecklist` already marks it `Trackable: false`; (2)
-  there is no cheap way to ask PCO "this person's preferences across
-  every position" - `GetPersonTeamPositionAssignments` is scoped by
-  team+position, not by person, so surfacing it on a person's detail page
-  would mean fanning out across every team/position in the org on every
-  page load, a materially different and riskier PCO cost than the
-  local-DB reads every other page in this plan makes. Left as an open
-  question below rather than silently dropped.
+  scope**, same call as originally, independent of the reversal above -
+  it was never a retirement candidate either. It fails the "this is the
+  same shape as the other nine" test on two independent grounds: (1) it's
+  not local data at all - `PersonTeamPositionAssignment` lives entirely
+  in PCO, which is why `buildOnboardingChecklist` already marks it
+  `Trackable: false`; (2) there is no cheap way to ask PCO "this person's
+  preferences across every position" - `GetPersonTeamPositionAssignments`
+  is scoped by team+position, not by person, so surfacing it on a
+  person's detail page would mean fanning out across every team/position
+  in the org on every page load, a materially different and riskier PCO
+  cost than the local-DB reads every other page in this plan makes. Left
+  as an open question below rather than silently dropped.
 
-Net: **eight of ten pages retire** (two of those eight - Song Tags/Song
-Contexts - via their content moving rather than disappearing outright);
-two stay because their data genuinely doesn't fit this page's shape.
+Net: **all ten pages stay**, unchanged, permanently. The two new pages
+are purely additive - a second, complementary way in for the
+single-entity lookup/edit case, not a replacement for the flat pages'
+batch-entry case.
 
 ### Bulk operations
 
 `BulkCreateSongTag`/`BulkCreateSongContext` are the only bulk-apply-to-
 many-songs workflows in this codebase (confirmed - no other setup page
-has one). The task description calls this "a real tension against a
-one-entity-at-a-time page" - but Song Tags and Song Contexts **already
-prove bulk-ops and a card-per-entity layout coexist on one page today**:
-the bulk form sits above the per-song cards, and each card's own
-checkbox (`song-tag-bulk-checkbox`/`song-context-bulk-checkbox`) feeds
-it via `form="song-tag-bulk-form"`. The resolution here is the same
-pattern, relocated: the bulk-add form and its per-row checkboxes belong
-on the **library index** page (where "select several from the whole
-list" naturally lives), not on a single song's own detail page (which
-only ever needs "add one value to *this* song," the same inline form
-every other section on that page already has). This isn't a new
-mechanism to invent - `songTagBulkAddForm`/`songContextBulkAddForm` move
-essentially unchanged onto `SongLibraryIndex`, targeting the new index's
-lightweight rows' checkboxes instead of the old page's full cards.
+has one), and per the reversal above, they stay exactly where they are -
+on the existing Song Tags/Song Contexts flat pages, unchanged. The
+original version of this section (see git history if curious) had planned
+to relocate them onto the new song library index page, reasoning that Song
+Tags/Song Contexts already prove bulk-ops and a card-per-entity layout
+coexist on one page, so the same pattern could relocate onto the index.
+That relocation never happened: Phase 1's build (confirmed in its own
+report) deliberately left `song_tags.go`/`sets_contexts.go` untouched and
+gave the new library index no bulk-add UI of its own - a user who wants
+to bulk-apply a tag/context to many songs at once still uses the existing
+Song Tags/Song Contexts page for that; the library index and detail page
+cover the single-song browse/edit workflow only, consistent with the
+"flat pages stay for batch work" resolution above.
 
 ## Interaction with the Song Roles bucket redesign
 
@@ -336,41 +386,30 @@ than a flat table), not the retirement itself.
 ## Suggested build order (phased, mirroring how multi-part plans in
 `docs/plans/shipped/` get sequenced)
 
-1. **Song library index + song detail page**, fully additive - new
-   routes/views/controllers only, nothing existing touched or removed.
-   Verify every section (arrangement info through transition notes)
-   against a real multi-hundred-song library before moving on.
-2. **People library index + person detail page**, same additive
+1. **Song library index + song detail page** - shipped. Fully additive -
+   new routes/views/controllers only, nothing existing touched or
+   removed.
+2. **People library index + person detail page** - shipped. Same additive
    approach, including the local-data-derived index population described
    above.
-3. **Retirement pass**: repoint `navMenuContent`
-   (`internal/views/layout.templ`) at the two new pages instead of the
-   eight retiring links; update `buildOnboardingChecklist`
-   (`internal/server/controllers/home.go`) hrefs to point at the new
-   pages (anchors/query params to the right section, if that's easy -
-   otherwise just the page itself); collapse the eight-page forward-only
-   Help-dialog chain (`songRelationshipsHelp` → ... →
-   `personRelationshipsHelp` per their own doc comments) down to however
-   many steps the two new pages need; repoint
-   `BulkCreateSongTag`/`BulkCreateSongContext`'s render call at
-   `SongLibraryIndex` instead of `SongTagsList`/`SongContextsList`; then
-   delete the eight retired routes/handlers/templ files (`relationships.templ`,
-   `preferences.templ`, `song_roles.templ`, `song_vocal_range.templ`,
-   `song_tags.templ`, `song_contexts.templ`, `person_relationships.templ`,
-   `vocal_range.templ`) and their now-dead JS (most of
-   `scheduling-song-tags-contexts.js` folds into the new index page
-   instead of disappearing). Confirm first that Build's own quick-add
-   handlers (`QuickAddSongTag`, etc., registered under
-   `/scheduling/build/:service_type_id/:plan_id/...`) are fully
-   independent URLs from the retiring `/scheduling/song-tags` etc. routes
-   (confirmed during research - they are), so this pass can't break the
-   Build page.
-4. Update `README.md`'s feature list and this app's nav/setup
-   documentation per CLAUDE.md's "Keeping the docs current" section.
-
-Steps 1-2 can also each ship and be used standalone before step 3 begins
-- there's no requirement to retire anything until both new pages are
-confirmed solid in real use.
+3. **Retirement pass** - **dropped, not attempted**, per the reversal in
+   "Disposition of the 10 existing flat pages" above. What this step
+   originally specified (repointing `navMenuContent` at the two new pages
+   instead of the eight now-not-retiring links, updating
+   `buildOnboardingChecklist` hrefs, collapsing the eight-page Help-dialog
+   chain, repointing `BulkCreateSongTag`/`BulkCreateSongContext`'s render
+   call, deleting the eight flat pages' routes/handlers/templ files/JS)
+   did not happen and should not happen - all ten flat pages, their Help
+   dialogs, their bulk forms, and `buildOnboardingChecklist`'s existing
+   hrefs stay exactly as they were before this plan. **What actually
+   shipped in this step's place**: a small, purely additive nav-link
+   change (`internal/views/layout.templ`'s `navMenuContent`) adding
+   "Songs" and "People" links pointing at the two new pages, alongside -
+   not instead of - the original ten links.
+4. Update `README.md`'s feature list per CLAUDE.md's "Keeping the docs
+   current" section (the two new pages are a real user-facing feature) -
+   **not yet done**, pending sign-off that the two new pages are staying
+   as shipped.
 
 ## Open questions
 
@@ -378,26 +417,33 @@ confirmed solid in real use.
   technical reason (no per-person PCO query exists), but worth a
   deliberate call on whether a person's detail page should at least
   *link out* to Position Preferences pre-filtered/scrolled to that
-  person, versus leaving it fully disconnected. No default picked here.
-- **Exact visual shape of the library index rows** - a compact table
-  (sortable, dense) vs. a lighter card grid (visually consistent with the
-  detail page's own cards, worse at showing many at once). Real layout/
-  mockup decision, not resolvable from the codebase alone.
-- **Whether the onboarding checklist's per-item hrefs should deep-link
-  to a specific section of the new detail-page-adjacent pages** (e.g.
-  "Song relationships" pointing at `/scheduling/songs` with some
-  in-page scroll/filter hint) or just the plain index - a product-polish
-  call, not architecturally load-bearing either way.
+  person, versus leaving it fully disconnected. No default picked here -
+  still open, independent of the retirement reversal above.
+- **Exact visual shape of the library index rows** - **resolved**: card
+  grid, visually consistent with the detail page's own cards and with
+  this app's existing card-per-entity setup pages. Built this way in both
+  Phase 1 and Phase 2.
+- **Whether the onboarding checklist's per-item hrefs should deep-link to
+  a specific section of the new pages** - **moot now**: since the flat
+  pages the checklist already links to aren't retiring, there's no
+  pressure to repoint those hrefs at all. Still an open, low-priority
+  product-polish idea (the checklist *could* additionally point at the
+  new pages for some items) but no longer something blocking anything.
 
 ## Verification (once built)
 
-- `go build ./...` (empty output = success).
-- `make test`.
-- Live: confirm every retired page's create/edit/delete still works
-  identically from its new inline location; confirm Build's quick-add
-  actions (tag/relate/role/vocal-range) are untouched; confirm the bulk-
-  add-tag/bulk-add-context forms still work from the new index page;
-  confirm no new PCO call was introduced for the People index (check
-  `docs/pco-api-risks.md` needs no update - the whole point of the
-  local-data-derived scoping above is that it stays PCO-call-free beyond
-  the existing batched name/avatar lookup).
+- `go build ./...` (empty output = success) - passing as of both phases
+  shipping.
+- `make test` - passing.
+- Live: confirm the new song/person detail pages' create/edit/delete
+  actions work correctly and match what the corresponding flat page does
+  for the same data; confirm the *existing* flat pages, their Help
+  dialogs, and their bulk-add-tag/bulk-add-context forms are still fully
+  functional and unchanged (there should be zero behavior difference on
+  any of the original ten pages - this plan added two pages, it didn't
+  modify any existing one); confirm Build's quick-add actions
+  (tag/relate/role/vocal-range) are untouched; confirm no new PCO call
+  was introduced for the People index (check `docs/pco-api-risks.md`
+  needs no update - the whole point of the local-data-derived scoping
+  above is that it stays PCO-call-free beyond the existing batched
+  name/avatar lookup).
