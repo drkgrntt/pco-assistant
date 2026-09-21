@@ -130,6 +130,33 @@ func (s *Store) ListPersonVocalRanges(ctx context.Context, organizationID string
 	return ranges, rows.Err()
 }
 
+// DistinctPersonVocalRangePersonIDs returns every distinct person id with a
+// stored range in organizationID's person_vocal_ranges - the vocal-range
+// half of the People library index's local-data-derived person set (see
+// DistinctPersonRelationshipPersonIDs's doc comment,
+// internal/scheduling/person_relationships.go, for the full picture across
+// all three source tables).
+func (s *Store) DistinctPersonVocalRangePersonIDs(ctx context.Context, organizationID string) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT DISTINCT person_id FROM person_vocal_ranges WHERE organization_id = $1
+	`, organizationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	ids := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+
+	return ids, rows.Err()
+}
+
 // DeletePersonVocalRange deletes the range row identified by id within
 // organizationID. Returns sql.ErrNoRows if no such row exists (already
 // deleted, or belongs to a different organization).

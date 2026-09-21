@@ -1,0 +1,295 @@
+package scheduling
+
+import (
+	"fmt"
+
+	pco "github.com/drkgrntt/go-pco"
+
+	"pco-assistant/internal/scheduling"
+	"pco-assistant/internal/views"
+	"pco-assistant/internal/views/components"
+)
+
+// PersonDetailVocalRangeView is PersonDetailView's vocal-range section data -
+// ID is the underlying scheduling.PersonVocalRange row's own id (needed for
+// the Delete button's URL; personVocalRangeLine, which Line feeds, has no
+// id field of its own - it was built for the Build page's read-only
+// display, see person_detail_card.templ), Has mirrors
+// PersonVocalRange(...)'s sql.ErrNoRows case, and LowestDisplay/
+// HighestDisplay pre-fill the add/edit form's two text inputs with the
+// currently-stored value (a resubmit upserts in place - see
+// scheduling.SetPersonVocalRange's ON CONFLICT clause - so there's no
+// separate Edit button/route, just a form that already shows what's on
+// file).
+type PersonDetailVocalRangeView struct {
+	ID             int64
+	Has            bool
+	Line           AssignmentView
+	LowestDisplay  string
+	HighestDisplay string
+}
+
+// PersonDetailView is the person detail page's assembled render-ready
+// data - one aggregate struct (rather than PersonRelationships/
+// PersonVocalRanges/Preferences' own long positional-parameter lists,
+// person_relationships.templ/vocal_range.templ/preferences.templ) since
+// this page assembles three previously-separate setup pages' worth of data
+// about a single person into one render. See docs/plans/not-started/
+// song-person-detail-pages-plan.md's "Person side - almost none of it is
+// library-level" and "Views" sections - deliberately carries nothing about
+// assignment status, conflict warnings, or team/position info, since none
+// of that has meaning outside a specific plan occurrence.
+type PersonDetailView struct {
+	PersonID  string
+	Name      string
+	AvatarURL string
+
+	Relationships          []scheduling.PersonRelationship
+	RelationshipTypes      []scheduling.PersonRelationshipType
+	PersonNames            map[string]string // the *other* side's id -> display name
+	RelationshipTypeLabels map[string]string
+	RelationshipsErr       string
+
+	VocalRange    PersonDetailVocalRangeView
+	VocalRangeErr string
+
+	Preferences      []scheduling.SongPersonPreference
+	PreferenceTypes  []scheduling.SongPreferenceType
+	Songs            []pco.SongData
+	SongTitles       map[string]string
+	PreferenceLabels map[string]string
+	PreferencesErr   string
+}
+
+templ PersonDetailPage(personName, organizationName string, data PersonDetailView) {
+	@views.Layout(data.Name, personName, organizationName) {
+		<p class="muted"><a href="/scheduling/people">&larr; People</a></p>
+		<div class="person-detail-header">
+			@components.Avatar(data.AvatarURL)
+			<h1>{ data.Name }</h1>
+		</div>
+		<p class="muted">
+			Everything this app has on file for { data.Name } outside of any
+			specific plan - relationships, vocal range, and song preferences.
+			Assignment status and scheduling conflicts only exist in the
+			context of a real plan date, so they're not shown here; see the
+			Build page for those.
+		</p>
+
+		@components.Card("Relationships") {
+			@PersonDetailRelationshipsSection(data.PersonID, data.Relationships, data.RelationshipTypes, data.PersonNames, data.RelationshipTypeLabels, data.RelationshipsErr)
+		}
+
+		@components.Card("Vocal range") {
+			@PersonDetailVocalRangeSection(data.PersonID, data.VocalRange, data.VocalRangeErr)
+		}
+
+		@components.Card("Song preferences") {
+			@PersonDetailPreferencesSection(data.PersonID, data.Preferences, data.PreferenceTypes, data.Songs, data.SongTitles, data.PreferenceLabels, data.PreferencesErr)
+		}
+	}
+}
+
+// otherPersonID resolves one of personID's own relationships to whichever
+// side *isn't* personID - this page already knows who it's about, so every
+// row only needs to show who the relationship is *with*, unlike
+// PersonRelationshipsTable's flat page (person_relationships.templ), which
+// has to label both sides since it isn't scoped to one person.
+func otherPersonID(rel scheduling.PersonRelationship, personID string) string {
+	if rel.PersonIDA == personID {
+		return rel.PersonIDB
+	}
+	return rel.PersonIDA
+}
+
+// PersonDetailRelationshipsSection is both the initial-render fragment and
+// the htmx swap target (id="person-detail-relationships") for
+// AddPersonDetailRelationship/DeletePersonDetailRelationship
+// (internal/server/controllers/person_library.go) - see RelationshipsTable
+// (relationships.templ) for why errMsg lives inside the swapped fragment
+// rather than the page around it. Unlike the flat Person Relationships
+// page, there's no Edit button/route here (see the plan's route list) -
+// just add and delete, mirroring every other inline section on this page.
+templ PersonDetailRelationshipsSection(personID string, relationships []scheduling.PersonRelationship, relationshipTypes []scheduling.PersonRelationshipType, personNames map[string]string, typeLabels map[string]string, errMsg string) {
+	<div id="person-detail-relationships">
+		if errMsg != "" {
+			<p class="error" role="alert">{ errMsg }</p>
+		}
+		<ul class="person-detail-list">
+			for _, rel := range relationships {
+				<li>
+					<span>{ displayNameOrID(personNames, otherPersonID(rel, personID)) }</span>
+					<span class="muted">{ displayNameOrID(typeLabels, rel.RelationshipType) }</span>
+					if rel.Notes != "" {
+						<span class="muted">{ rel.Notes }</span>
+					}
+					<button
+						class="danger icon-btn"
+						aria-label="Delete relationship"
+						title="Delete relationship"
+						hx-delete={ fmt.Sprintf("/scheduling/people/%s/relationships/%d", personID, rel.ID) }
+						hx-target="#person-detail-relationships"
+						hx-swap="outerHTML"
+						hx-confirm="Delete this relationship?"
+					>
+						@components.IconRemove()
+					</button>
+				</li>
+			}
+			if len(relationships) == 0 {
+				<li class="muted">No relationships yet - add one to get a warning before two people who shouldn't be scheduled together end up on the same roster.</li>
+			}
+		</ul>
+		<form
+			id="person-detail-relationship-form"
+			class="inline"
+			hx-post={ fmt.Sprintf("/scheduling/people/%s/relationships", personID) }
+			hx-target="#person-detail-relationships"
+			hx-swap="outerHTML"
+			hx-on::after-request="if(event.detail.successful && event.detail.elt === this) resetSetupForm(this)"
+		>
+			@PersonPickerField("Relate to", "other_person_id", "other")
+			<label>
+				Relationship
+				<select name="relationship_type">
+					for _, t := range relationshipTypes {
+						<option value={ t.Code }>{ t.Label }</option>
+					}
+				</select>
+			</label>
+			<label>
+				Notes
+				<input type="text" name="notes"/>
+			</label>
+			<button type="submit" class="primary">Add</button>
+		</form>
+	</div>
+}
+
+// PersonDetailVocalRangeSection is both the initial-render fragment and the
+// htmx swap target (id="person-detail-vocal-range") for
+// SetPersonDetailVocalRange/DeletePersonDetailVocalRange
+// (internal/server/controllers/person_library.go). view.Line reuses
+// personVocalRangeLine's own markup (person_detail_card.templ) - the one
+// genuinely library-level piece of that card, see this page's own package
+// doc comment on PersonDetailView - instead of duplicating its
+// display+play-button logic here.
+templ PersonDetailVocalRangeSection(personID string, view PersonDetailVocalRangeView, errMsg string) {
+	<div id="person-detail-vocal-range">
+		if errMsg != "" {
+			<p class="error" role="alert">{ errMsg }</p>
+		}
+		if view.Has {
+			@personVocalRangeLine(view.Line)
+			<button
+				class="danger icon-btn"
+				aria-label="Delete vocal range"
+				title="Delete vocal range"
+				hx-delete={ fmt.Sprintf("/scheduling/people/%s/vocal-range/%d", personID, view.ID) }
+				hx-target="#person-detail-vocal-range"
+				hx-swap="outerHTML"
+				hx-confirm="Delete this vocal range?"
+			>
+				@components.IconRemove()
+			</button>
+		} else {
+			<p class="muted">No vocal range on file yet - record one so "can they hit this note" is a quick lookup instead of a guess in rehearsal.</p>
+		}
+		<form
+			id="person-detail-vocal-range-form"
+			class="inline"
+			hx-post={ fmt.Sprintf("/scheduling/people/%s/vocal-range", personID) }
+			hx-target="#person-detail-vocal-range"
+			hx-swap="outerHTML"
+		>
+			<label>
+				Lowest note
+				<input type="text" name="lowest_note" placeholder="e.g. G3" list="vocal-note-options" value={ view.LowestDisplay } required/>
+			</label>
+			<label>
+				Highest note
+				<input type="text" name="highest_note" placeholder="e.g. D5" list="vocal-note-options" value={ view.HighestDisplay } required/>
+			</label>
+			@vocalNoteOptions()
+			<button type="submit" class="primary">{ vocalRangeSubmitLabel(view.Has) }</button>
+		</form>
+	</div>
+}
+
+func vocalRangeSubmitLabel(hasRange bool) string {
+	if hasRange {
+		return "Update range"
+	}
+	return "Save"
+}
+
+// PersonDetailPreferencesSection is both the initial-render fragment and
+// the htmx swap target (id="person-detail-preferences") for
+// AddPersonDetailPreference/DeletePersonDetailPreference
+// (internal/server/controllers/person_library.go). The song side is picked
+// via a plain <select> of the active song library (fetchActiveSongs),
+// matching every existing setup page and the plan's own "no SongPickerField
+// exists" note - not the PersonPickerField the relationships section above
+// uses, since the person side here is already fixed (this page).
+templ PersonDetailPreferencesSection(personID string, preferences []scheduling.SongPersonPreference, preferenceTypes []scheduling.SongPreferenceType, songs []pco.SongData, songTitles map[string]string, preferenceLabels map[string]string, errMsg string) {
+	<div id="person-detail-preferences">
+		if errMsg != "" {
+			<p class="error" role="alert">{ errMsg }</p>
+		}
+		<ul class="person-detail-list">
+			for _, pref := range preferences {
+				<li>
+					<span>{ displayNameOrID(songTitles, pref.SongID) }</span>
+					<span class="muted">{ displayNameOrID(preferenceLabels, pref.Preference) }</span>
+					if pref.Notes != "" {
+						<span class="muted">{ pref.Notes }</span>
+					}
+					<button
+						class="danger icon-btn"
+						aria-label="Delete preference"
+						title="Delete preference"
+						hx-delete={ fmt.Sprintf("/scheduling/people/%s/preferences/%d", personID, pref.ID) }
+						hx-target="#person-detail-preferences"
+						hx-swap="outerHTML"
+						hx-confirm="Delete this preference?"
+					>
+						@components.IconRemove()
+					</button>
+				</li>
+			}
+			if len(preferences) == 0 {
+				<li class="muted">No song preferences yet - note whether this person is preferred or discouraged for a song so Build can suggest the right fit instead of a blank slate.</li>
+			}
+		</ul>
+		<form
+			id="person-detail-preference-form"
+			class="inline"
+			hx-post={ fmt.Sprintf("/scheduling/people/%s/preferences", personID) }
+			hx-target="#person-detail-preferences"
+			hx-swap="outerHTML"
+		>
+			<label>
+				Song
+				<select name="song_id" required>
+					<option value="" selected disabled>Choose a song</option>
+					for _, song := range songs {
+						<option value={ song.ID }>{ song.Attributes.Title }</option>
+					}
+				</select>
+			</label>
+			<label>
+				Preference
+				<select name="preference">
+					for _, t := range preferenceTypes {
+						<option value={ t.Code }>{ t.Label }</option>
+					}
+				</select>
+			</label>
+			<label>
+				Notes
+				<input type="text" name="notes"/>
+			</label>
+			<button type="submit" class="primary">Save</button>
+		</form>
+	</div>
+}

@@ -231,6 +231,41 @@ func (s *Store) ListPersonRelationships(ctx context.Context, organizationID, per
 	return relationships, rows.Err()
 }
 
+// DistinctPersonRelationshipPersonIDs returns every distinct person id
+// (either side of a relationship) referenced by organizationID's
+// person_relationships - one of three cheap local-DB queries the People
+// library index derives its person set from (see docs/plans/not-started/
+// song-person-detail-pages-plan.md's "songs are a cached library, people
+// are not" section, and DistinctSongPersonPreferencePersonIDs/
+// DistinctPersonVocalRangePersonIDs, this method's counterparts on the
+// other two tables that same index draws from). Same existence-check shape
+// as HasAnyPersonRelationships, just returning the actual ids instead of a
+// bool.
+func (s *Store) DistinctPersonRelationshipPersonIDs(ctx context.Context, organizationID string) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT DISTINCT person_id FROM (
+			SELECT person_id_a AS person_id FROM person_relationships WHERE organization_id = $1
+			UNION
+			SELECT person_id_b AS person_id FROM person_relationships WHERE organization_id = $1
+		) both_sides
+	`, organizationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	ids := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+
+	return ids, rows.Err()
+}
+
 func (s *Store) DeletePersonRelationship(ctx context.Context, organizationID string, id int64) error {
 	result, err := s.db.ExecContext(ctx, `DELETE FROM person_relationships WHERE id = $1 AND organization_id = $2`, id, organizationID)
 	if err != nil {

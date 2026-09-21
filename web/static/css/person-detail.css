@@ -1,0 +1,37 @@
+/* Backs internal/views/scheduling/person_detail.templ - the person detail
+   page's three inline sections (relationships, vocal range, song
+   preferences), each wrapped in components.Card (card.css). The cards and
+   inline add-forms reuse components.Card/forms.css unmodified; only the
+   relationships/preferences row lists need their own rule here. */
+
+.person-detail-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.person-detail-header h1 {
+  margin: 0;
+}
+
+.person-detail-list {
+  list-style: none;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.person-detail-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.person-detail-list li:last-child {
+  border-bottom: none;
+}
