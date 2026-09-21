@@ -1,0 +1,86 @@
+/* Backs internal/views/scheduling/song_detail.templ's SongDetailPage/
+   SongDetailContent - one song's full aggregate detail page. Deliberately
+   reuses existing, unmodified chip/badge/card styling wherever a section
+   mirrors an existing flat setup page's own look (.song-role-chips from
+   song-roles.css, .tag-chip from song-tags.css, .context-chip from
+   song-contexts.css, .transition-note-list/.build-detail-note-form from
+   components/build-detail-card.css - all load globally, see
+   designSystemCSSFiles in layout.templ) - this file only adds the
+   handful of classes genuinely new to this page: the back link, the
+   title/PCO-link header row, the section-card grid, and the attachments/
+   relationships/preferences list rows. See
+   docs/plans/not-started/song-person-detail-pages-plan.md. */
+
+.song-detail-back-link {
+  display: inline-block;
+  margin-bottom: var(--space-3);
+  color: var(--accent);
+  font-size: var(--text-sm);
+  text-decoration: none;
+}
+
+.song-detail-back-link:hover,
+.song-detail-back-link:focus-visible {
+  text-decoration: underline;
+}
+
+.song-detail-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.song-detail-header h1 {
+  margin: 0;
+}
+
+.song-detail-attachments ul {
+  margin: var(--space-1) 0 0;
+  padding-left: var(--space-5);
+}
+
+/* Same auto-fit/minmax reasoning as song-library.css's own
+   .song-library-grid - a fixed column count would need its own
+   breakpoint list for what's really just "as many section cards fit as
+   will, each never narrower than 18rem." */
+.song-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+  gap: var(--space-4);
+  align-items: start;
+  margin-bottom: var(--space-5);
+}
+
+/* Relationships' and Preferences' own rows (songDetailRelationshipsCard/
+   songDetailPreferencesCard) - a badge, the other song/person, optional
+   notes, and a remove button, each on one line with breathing room
+   between rows. Not reusing .song-tag-chips/.song-role-chips' own
+   wrapping-chip layout here since each row already carries more than a
+   single short label (notes text can run long), so a vertical list reads
+   better than wrapped inline chips. */
+.song-detail-entry-list {
+  list-style: none;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.song-detail-entry-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.song-detail-entry-list li .badge {
+  margin-right: 0;
+}
+
+.song-detail-entry-list .icon-btn {
+  margin-left: auto;
+}

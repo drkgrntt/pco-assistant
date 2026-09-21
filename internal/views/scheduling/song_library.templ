@@ -1,0 +1,160 @@
+package scheduling
+
+import (
+	"fmt"
+	"strings"
+
+	pco "github.com/drkgrntt/go-pco"
+
+	"pco-assistant/internal/scheduling"
+	"pco-assistant/internal/views"
+	"pco-assistant/internal/views/components"
+)
+
+// SongLibraryData is everything SongLibraryIndex needs, assembled once by
+// the controller (songLibraryData, song_library.go) - mirrors SetBuilderData's
+// own "one struct, one assembly function" shape for a page with several
+// independent sections, just far smaller. See
+// docs/plans/not-started/song-person-detail-pages-plan.md's "Concrete
+// architecture" section.
+type SongLibraryData struct {
+	Songs      []pco.SongData
+	SongTitles map[string]string
+
+	TagsBySong        map[string][]scheduling.SongTag
+	TagCategoryLabels map[string]string
+
+	ContextsBySong map[string][]scheduling.SongContext
+	ContextLabels  map[int64]string
+
+	// RolesBySong is this index's own per-song lookup (for each card's
+	// role badges) - RolesByRoleCode below is the *same underlying role
+	// data*, grouped the other way (by role code, not song id), for the
+	// "browse by role" section, which reuses SongRoleBuckets
+	// (song_roles.templ) verbatim rather than duplicating that grouping -
+	// see docs/plans/shipped/song-roles-bucket-redesign-plan.md and this
+	// plan's own "Interaction with the Song Roles bucket redesign"
+	// section.
+	RolesBySong     map[string][]scheduling.SongRole
+	RoleLabels      map[string]string
+	RoleTypes       []scheduling.SongRoleType
+	RolesByRoleCode map[string][]scheduling.SongRole
+}
+
+// SongLibraryIndex is the song library's standalone browse page (GET
+// /scheduling/songs) - a lightweight card per active song (title plus a
+// handful of summary badges: roles, contexts, label count), each linking
+// to that song's own aggregate detail page (SongDetailPage,
+// song_detail.templ), plus a "browse by role" section beneath it that
+// reuses the existing Song Roles bucket cards unchanged (see
+// SongLibraryData's own doc comment). Every active song renders
+// unconditionally, same "a local-DB/cached read is cheap regardless of
+// library size" reasoning SongTags/SongContexts already established
+// (song_tags.templ) - #song-library-filter just hides non-matching cards
+// client-side (filterSongLibraryCards, scheduling-song-library.js) for a
+// large library.
+//
+// Deliberately not yet linked from navMenuContent (internal/views/layout.templ)
+// or wired into the setup pages' forward-only Help-dialog chain - see this
+// plan's own phasing: this page is additive only for now, reachable by
+// direct URL until a later retirement pass repoints the nav.
+templ SongLibraryIndex(personName, organizationName string, data SongLibraryData, errMsg string) {
+	@views.Layout("Song Library", personName, organizationName) {
+		<h1>Song Library</h1>
+		<p class="muted">Everything this app knows about your song library - labels, contexts, roles, relationships, preferences, vocal range, and debrief notes - one card per song. Click a song for its full detail page.</p>
+		if errMsg != "" {
+			<p class="error" role="alert">{ errMsg }</p>
+		}
+		<div class="song-library-filter">
+			<label>
+				Filter songs
+				<input
+					type="text"
+					id="song-library-filter"
+					placeholder="Filter by title, label, or context..."
+					autocomplete="off"
+					oninput="filterSongLibraryCards()"
+				/>
+			</label>
+		</div>
+		<div class="song-library-grid" id="song-library-grid">
+			if len(data.Songs) == 0 {
+				<p class="muted">No active songs found.</p>
+			}
+			for _, song := range data.Songs {
+				@songLibraryCard(song, data)
+			}
+		</div>
+		@collapsibleSection("song-library-by-role", "Browse by role", false) {
+			@SongRoleBuckets(data.Songs, data.RoleTypes, data.RolesByRoleCode, data.SongTitles, "")
+		}
+	}
+}
+
+// songLibraryCard is one song's lightweight index-page row: title (linking
+// to its own detail page), plus role/context badges and a label count -
+// see SongLibraryIndex's own doc comment for why this stays lightweight
+// rather than mirroring SongTagCard/SongContextCard's own full chip-plus-
+// inline-form shape (that content lives on the detail page instead).
+// data-search backs filterSongLibraryCards (scheduling-song-library.js):
+// title plus every role/context label and tag value already shown (or
+// summarized) on the card.
+templ songLibraryCard(song pco.SongData, data SongLibraryData) {
+	{{ tags := data.TagsBySong[song.ID] }}
+	{{ contexts := data.ContextsBySong[song.ID] }}
+	{{ roles := data.RolesBySong[song.ID] }}
+	<a
+		class="song-library-card"
+		href={ templ.SafeURL("/scheduling/songs/" + song.ID) }
+		data-search={ songLibraryCardSearchText(song, tags, contexts, data.ContextLabels, roles, data.RoleLabels) }
+	>
+		<h3>{ song.Attributes.Title }</h3>
+		if len(roles) == 0 && len(contexts) == 0 && len(tags) == 0 {
+			<p class="muted song-library-card-empty">No details yet</p>
+		} else {
+			<div class="song-library-card-badges">
+				for _, r := range roles {
+					@components.Badge("", displayNameOrID(data.RoleLabels, r.Role))
+				}
+				for _, songCtx := range contexts {
+					@components.Badge("context-badge", displayLabelOrID(data.ContextLabels, songCtx.ContextTypeID))
+				}
+				if len(tags) > 0 {
+					@components.Badge("", songTagCountLabel(len(tags)))
+				}
+			</div>
+		}
+	</a>
+}
+
+// songTagCountLabel renders the index card's own label-count badge text -
+// "1 label" vs "3 labels" - since a card shows how many labels a song has,
+// not each one individually (that's the detail page's job).
+func songTagCountLabel(n int) string {
+	if n == 1 {
+		return "1 label"
+	}
+	return fmt.Sprintf("%d labels", n)
+}
+
+// songLibraryCardSearchText builds one card's data-search attribute value -
+// title plus every role/context label and tag value, lowercased so
+// filterSongLibraryCards' own lowercased query matches case-insensitively -
+// the library-index counterpart of songTagCardSearchText/songContextCardSearchText
+// (song_tags.templ/song_contexts.templ), just combining all three facets
+// into one search string since this page has a single filter box rather
+// than per-facet chips.
+func songLibraryCardSearchText(song pco.SongData, tags []scheduling.SongTag, contexts []scheduling.SongContext, contextLabels map[int64]string, roles []scheduling.SongRole, roleLabels map[string]string) string {
+	parts := make([]string, 0, len(tags)+len(contexts)+len(roles)+1)
+	parts = append(parts, song.Attributes.Title)
+	for _, t := range tags {
+		parts = append(parts, t.Value)
+	}
+	for _, ctx := range contexts {
+		parts = append(parts, displayLabelOrID(contextLabels, ctx.ContextTypeID))
+	}
+	for _, r := range roles {
+		parts = append(parts, displayNameOrID(roleLabels, r.Role))
+	}
+	return strings.ToLower(strings.Join(parts, " "))
+}
