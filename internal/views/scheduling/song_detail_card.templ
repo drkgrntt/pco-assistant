@@ -123,9 +123,25 @@ templ DescriptionFormFragment(data SetBuilderData, song SetSongView, errMsg stri
 // the sidebar's Discard button/pending list both need to reflect it
 // immediately).
 templ LeaderFormFragment(data SetBuilderData, song SetSongView, errMsg string) {
-	@leaderForm(data, song, errMsg)
+	@leaderForm(data, song, errMsg, false)
 	@songBadgesOOB(song)
 	@songPublishPanelOOB(data)
+}
+
+// leaderFormsOOB re-renders every one of songs' own leaderForm as an OOB
+// push, each targeted by its own leader-form-<song.ID> id - see
+// buildLeaderFormRefreshViews (sets_builder.go) for what builds data/songs
+// and rosters_detail.go's AddRosterAssignment/RemoveRosterAssignment/
+// QuickAddPositionPreference for the only callers. Safe to call for every
+// set song regardless of whether that song's own card is currently open, or
+// even whether the Songs tab is the active one - htmx silently drops an OOB
+// fragment whose id has no match in the current DOM (see htmx's own
+// oobSwap), so this never errors, it just no-ops for whichever song cards
+// the responding tab hasn't rendered.
+templ leaderFormsOOB(data SetBuilderData, songs []SetSongView) {
+	for _, song := range songs {
+		@leaderForm(data, song, "", true)
+	}
 }
 
 templ SongNoteFormFragment(data SetBuilderData, song SetSongView, note SongNoteView, errMsg string) {
@@ -355,7 +371,7 @@ templ songDetailCard(data SetBuilderData, song SetSongView) {
 				}
 			} else {
 				@keyForm(data, song, "")
-				@leaderForm(data, song, "")
+				@leaderForm(data, song, "", false)
 				@descriptionForm(data, song, "")
 			}
 		</div>
@@ -747,12 +763,24 @@ templ musicalKeyOptions() {
 // stored value matches none of them, which would otherwise silently
 // reassign the leader to some other roster member the moment this form
 // re-renders, not merely fail to show the right one.
-templ leaderForm(data SetBuilderData, song SetSongView, errMsg string) {
+//
+// oob mirrors songVocalRangeLine's own param (see its doc comment) - the
+// same templ tagged onto this card's primary (non-OOB) render and onto
+// leaderFormsOOB's own push, so a Team-tab assignment change (which can add
+// or remove who's eligible here) can refresh this exact element by id
+// (leader-form-<song.ID>, only otherwise needed since hx-target="this"
+// covers this form's own direct submissions without one) without touching
+// any other song's card.
+templ leaderForm(data SetBuilderData, song SetSongView, errMsg string, oob bool) {
 	<form
+		id={ fmt.Sprintf("leader-form-%d", song.ID) }
 		class="build-detail-note-form"
 		hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/set-songs/%d/leader", data.ServiceTypeID, data.PlanID, song.ID) }
 		hx-target="this"
 		hx-swap="outerHTML"
+		if oob {
+			hx-swap-oob="true"
+		}
 	>
 		if errMsg != "" {
 			<p class="error" role="alert">{ errMsg }</p>

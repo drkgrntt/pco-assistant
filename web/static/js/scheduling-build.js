@@ -793,6 +793,63 @@ document.addEventListener("htmx:oobAfterSwap", function () {
   applyStoredCollapsibleState();
 });
 
+// openDetailCardRowIDs is openCollapsibleIDs' own counterpart for mechanism
+// B - the sidebar's .build-detail-card cards (personDetailCard/
+// candidateDetailCard/songDetailCard, all buildDetailCardShell). Those
+// always render `hidden` unconditionally (see that shell's own doc
+// comment), so an OOB swap that happens to replace a card's group -
+// candidateDetailGroupOOB (scoped to one position) or personDetailCardsOOB/
+// songDetailCardsOOB (the whole group, on a fuller rebuild) - silently
+// re-hides whatever card the user had open, unless that particular OOB
+// target doesn't happen to contain it. See docs/issues.md's "whether the
+// card stays open... appears to be buggy" report.
+//
+// Captured by data-row-id string, not a live element reference: htmx's own
+// oobSwap fires htmx:oobBeforeSwap with detail.target still pointing at the
+// existing (about-to-be-replaced) DOM node, but for an outerHTML-style OOB
+// swap that node is detached once the swap completes - detail.target on
+// the matching htmx:oobAfterSwap references the same now-detached node, not
+// the fresh one actually in the DOM, so querying it there would silently
+// find nothing. A fresh document-wide lookup by id after the swap (same
+// trick openCollapsibleIDs' own htmx:afterSwap listener above already
+// relies on) sidesteps that.
+//
+// A plain array, not a single id: one htmx response can carry more than one
+// OOB target (e.g. candidateDetailGroupOOB for the touched position plus,
+// elsewhere, personDetailCardsOOB for the whole group), and htmx dispatches
+// each OOB fragment's own before/swap/after sequence fully before moving to
+// the next one - so capturing right before a given target's swap and
+// restoring+clearing right after it is scoped correctly even though every
+// listener here shares this one module-level array.
+var openDetailCardRowIDs = [];
+
+document.addEventListener("htmx:oobBeforeSwap", function (event) {
+  var target = event.detail.target;
+  if (!target) {
+    return;
+  }
+  var cards = target.matches(".build-detail-card") ? [target] : target.querySelectorAll(".build-detail-card");
+  Array.prototype.forEach.call(cards, function (card) {
+    if (!card.hidden && card.dataset.rowId) {
+      openDetailCardRowIDs.push(card.dataset.rowId);
+    }
+  });
+});
+
+document.addEventListener("htmx:oobAfterSwap", function () {
+  if (openDetailCardRowIDs.length === 0) {
+    return;
+  }
+  var ids = openDetailCardRowIDs;
+  openDetailCardRowIDs = [];
+  ids.forEach(function (id) {
+    var card = document.querySelector('.build-detail-card[data-row-id="' + CSS.escape(id) + '"]');
+    if (card) {
+      card.hidden = false;
+    }
+  });
+});
+
 // The set builder's "find songs to add" list (see set_builder.templ) is
 // search-driven, not client-side filtered: #candidate-search's own
 // hx-get/hx-trigger (set_builder.templ) fires the actual request to

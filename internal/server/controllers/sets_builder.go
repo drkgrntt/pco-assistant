@@ -723,6 +723,101 @@ func rosterPersonOptions(personIDs []string, names map[string]string) []views.Ro
 	return opts
 }
 
+// buildLeaderFormRefreshViews computes just what leaderForm (song_detail_
+// card.templ) needs to re-render every set song's leader picker after a
+// Team-tab assignment change (see rosters_detail.go's
+// AddRosterAssignment/RemoveRosterAssignment/QuickAddPositionPreference,
+// the fix for docs/issues.md's "eligible leaders didn't populate" report) -
+// deliberately not a full buildSetBuilderData call, which also re-fetches
+// this plan from PCO and the whole active song library, neither of which a
+// roster-only edit can change. top is that same handler's own
+// already-recomputed RosterBuilderData (buildRosterLightData) - reusing its
+// Positions/Assigned means this costs zero extra roster lookups, only
+// ListSetSongs (local DB) plus, when some song's already-saved leader has
+// since fallen off the roster (leaderForm's own "not on this plan's team"
+// fallback option), one batched name lookup for just those stragglers.
+// ok is false when this plan has no draft set yet, in which case there's no
+// song card anywhere on the page for the returned (nil) songs to matter to.
+func (sc *SchedulingController) buildLeaderFormRefreshViews(ctx context.Context, organizationID, serviceTypeID, planID string, top views.RosterBuilderData) (views.SetBuilderData, []views.SetSongView, bool) {
+	data := views.SetBuilderData{ServiceTypeID: serviceTypeID, PlanID: planID}
+
+	set, found, err := sc.store.FindSet(ctx, organizationID, serviceTypeID, planID)
+	if err != nil || !found {
+		return data, nil, false
+	}
+	setSongs, err := sc.store.ListSetSongs(ctx, set.ID)
+	if err != nil || len(setSongs) == 0 {
+		return data, nil, false
+	}
+
+	vocalistPersonIDs, rosterNames := assignedPersonIDsAndNames(top.Positions)
+	data.RosterPersonOptions = rosterPersonOptions(vocalistPersonIDs, rosterNames)
+
+	// Only a saved leader who's since fallen off the roster needs a live
+	// name lookup - leaders still on the roster already have their name
+	// from rosterNames above, and most songs have no leader set at all.
+	missingIDs := idsMissingFrom(distinctLeaderPersonIDs(setSongs), rosterNames)
+	leaderNames := rosterNames
+	if len(missingIDs) > 0 {
+		fetched := personNameMapForIDs(ctx, missingIDs)
+		leaderNames = make(map[string]string, len(rosterNames)+len(fetched))
+		for id, name := range rosterNames {
+			leaderNames[id] = name
+		}
+		for id, name := range fetched {
+			leaderNames[id] = name
+		}
+	}
+
+	songs := make([]views.SetSongView, 0, len(setSongs))
+	for _, ss := range setSongs {
+		songs = append(songs, views.SetSongView{
+			ID:               ss.ID,
+			LeaderPersonID:   ss.LeaderPersonID,
+			LeaderPersonName: titleOrID(leaderNames, ss.LeaderPersonID),
+		})
+	}
+	return data, songs, true
+}
+
+// assignedPersonIDsAndNames collects every currently-assigned person across
+// every one of positions (RosterBuilderData.Positions) into rosterPersonOptions'
+// own (personIDs, names) shape, deduplicated the same way assignmentPersonIDs
+// (rosters_builder.go) dedupes []scheduling.RosterAssignment - the same
+// person can be assigned to more than one position - just sourced from the
+// already-built []views.PositionGroupView (buildLeaderFormRefreshViews'
+// input) instead of a fresh roster-assignment query.
+func assignedPersonIDsAndNames(positions []views.PositionGroupView) ([]string, map[string]string) {
+	var ids []string
+	names := make(map[string]string)
+	for _, pos := range positions {
+		for _, a := range pos.Assigned {
+			if a.PersonID == "" {
+				continue
+			}
+			if _, seen := names[a.PersonID]; !seen {
+				ids = append(ids, a.PersonID)
+			}
+			names[a.PersonID] = a.Name
+		}
+	}
+	return ids, names
+}
+
+// idsMissingFrom returns the subset of ids not already a key in known -
+// missingSongIDs' own shape, generalized past just song titles (this one's
+// used for buildLeaderFormRefreshViews' "which leaders need a live PCO name
+// lookup" check).
+func idsMissingFrom(ids []string, known map[string]string) []string {
+	var missing []string
+	for _, id := range ids {
+		if _, ok := known[id]; !ok {
+			missing = append(missing, id)
+		}
+	}
+	return missing
+}
+
 // buildCandidateLookups gathers everything candidateLookups needs to
 // compute a not-yet-added song's rich CandidateSongView - factored out of
 // searchCandidates so BuildCandidateDetails (the "Browse all songs" plain
