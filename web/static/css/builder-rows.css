@@ -159,6 +159,45 @@
   align-items: center;
 }
 
+/* pcoTagPickers' own PCO Tags group/form/pill markup (set_builder.templ) -
+   shipped with no matching CSS at all, so it rendered as bare stacked
+   <label>/<input> pairs. Pills stay a visible checkbox/radio (unlike
+   .tag-filter-chip's hide-the-input treatment in song-tags.css) since this
+   picker's job is to show current PCO assignment state, not just toggle a
+   client-side filter. */
+.pco-tag-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex-basis: 100%;
+}
+
+.pco-tag-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin: 0;
+}
+
+.pco-tag-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: color-mix(in srgb, var(--text) 8%, var(--surface));
+  color: var(--muted);
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.pco-tag-pill:has(input:checked) {
+  background: var(--accent-subtle);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
 @media (min-width: 640px) {
   #candidate-search {
     width: auto;
