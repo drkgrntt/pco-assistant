@@ -13,7 +13,7 @@ import (
 // SongDetailData is everything one song's aggregate detail page shows,
 // assembled once by the controller (songDetailData, song_library.go) -
 // see that function's own doc comment for exactly which reads back each
-// field and docs/plans/not-started/song-person-detail-pages-plan.md's
+// field and docs/plans/in-progress/song-person-detail-pages-plan.md's
 // "Concrete architecture" section for the design this implements.
 //
 // Split into the same library-level-vs-per-song-data-owned-by-this-app
@@ -127,7 +127,7 @@ templ SongDetailContent(data SongDetailData, errMsg string) {
 // treatment of it). Attachment filenames are plain text, not links: their
 // only existing download route (OpenSongAttachment) is scoped to a
 // specific plan/set-song, which this plan-independent page has no
-// equivalent of - see docs/plans/not-started/song-person-detail-pages-plan.md.
+// equivalent of - see docs/plans/in-progress/song-person-detail-pages-plan.md.
 templ songDetailArrangementCard(data SongDetailData) {
 	@components.Card("Song info") {
 		if data.ArrangementInfoText != "" {

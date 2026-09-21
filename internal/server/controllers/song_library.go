@@ -1,7 +1,7 @@
 package controllers
 
 // Song library index + song detail page
-// (docs/plans/not-started/song-person-detail-pages-plan.md, Phase 1 - song
+// (docs/plans/in-progress/song-person-detail-pages-plan.md, Phase 1 - song
 // side only). A standalone, per-song aggregate view of everything this
 // app's own database knows about one song - roles, labels (tags),
 // contexts, relationships to other songs, person preferences, vocal
@@ -92,7 +92,7 @@ func songRolesBySongID(roles []scheduling.SongRole) map[string][]scheduling.Song
 // read here is the same cheap, org-wide, local-DB-or-cached-PCO call an
 // existing flat setup page already makes (fetchActiveSongs,
 // ListSongTags/ListSongContext/ListSongRoles with songID ""), so this adds
-// no new PCO cost - see docs/plans/not-started/song-person-detail-pages-plan.md's
+// no new PCO cost - see docs/plans/in-progress/song-person-detail-pages-plan.md's
 // "Song side" section.
 func (sc *SchedulingController) songLibraryData(ctx context.Context, organizationID string) (views.SongLibraryData, string) {
 	songs, songsErr := fetchActiveSongs(ctx, organizationID)

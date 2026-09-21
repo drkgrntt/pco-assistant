@@ -15,7 +15,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// Phase 2 of docs/plans/not-started/song-person-detail-pages-plan.md: a
+// Phase 2 of docs/plans/in-progress/song-person-detail-pages-plan.md: a
 // standalone People library index (/scheduling/people) plus a per-person
 // detail page (/scheduling/people/:person_id) aggregating what used to be
 // spread across the Person Relationships and Vocal Range setup pages, plus

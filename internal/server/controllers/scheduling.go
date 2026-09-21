@@ -510,7 +510,7 @@ func (sc *SchedulingController) RegisterRoutes(router fiber.Router) {
 
 	// Song library index + per-song aggregate detail page
 	// (song_library.go, Phase 1 of
-	// docs/plans/not-started/song-person-detail-pages-plan.md) - song side
+	// docs/plans/in-progress/song-person-detail-pages-plan.md) - song side
 	// only; additive, reachable today only by direct URL (not yet linked
 	// from navMenuContent).
 	group.Get("/songs", sc.SongLibraryPage)
@@ -547,7 +547,7 @@ func (sc *SchedulingController) RegisterRoutes(router fiber.Router) {
 	group.Post("/position-preferences", sc.SetPositionPreference)
 	group.Delete("/position-preferences/:team_id/:team_position_id/:assignment_id", sc.DeletePositionPreference)
 
-	// People library (docs/plans/not-started/song-person-detail-pages-plan.md,
+	// People library (docs/plans/in-progress/song-person-detail-pages-plan.md,
 	// Phase 2) - a standalone index plus per-person detail page, purely
 	// additive alongside the flat person-relationships/vocal-range/
 	// preferences pages above (retiring those is Phase 3, not yet done).
