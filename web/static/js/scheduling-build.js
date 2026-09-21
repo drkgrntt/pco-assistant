@@ -945,6 +945,17 @@ function clearCandidateSearch() {
 // touch drag on the handle from also scrolling the page), not the whole
 // row, so tapping Remove/Replace elsewhere in the row still works.
 //
+// The dragged <tr> is physically moved through the live DOM as the pointer
+// crosses other rows' midpoints (docs/issues.md: "I'd like to see the
+// whole row to drag and take the spot, not just a line") rather than
+// staying put with a separate insertion-point indicator drawn elsewhere.
+// Its own hidden quick-action-row sibling(s) (set_builder.templ) are
+// deliberately left behind at the old position rather than moved along
+// with it - they render nothing while hidden, openQuickAction (above)
+// finds them by data-row-id via a document-wide query rather than DOM
+// adjacency, and the whole tbody gets replaced by the server's own
+// re-render on drop anyway, so nothing depends on where they sit mid-drag.
+//
 // Every row in the table - song or foreign, section header or plain item -
 // carries data-token identifying itself as a drop target ("row:<set_song
 // row id>" or "item:<pco_item_id>"). A song can appear more than once in
@@ -956,7 +967,8 @@ function clearCandidateSearch() {
 // Go controller for how that token turns into an anchor + position.
 (function () {
   var dragging = null;
-  var dragOverRow = null;
+  var startAfterToken = "";
+  var startNextSibling = null;
 
   function rowToken(row) {
     return (row && row.dataset.token) || "";
@@ -975,10 +987,17 @@ function clearCandidateSearch() {
     return sibling;
   }
 
-  function findDropTargetRow(tbody, clientY) {
+  // Excludes draggingRow - now that it's physically reordered through the
+  // list as it moves (see onPointerMove), it's one of tbody's own
+  // tr[data-token] rows and would otherwise sometimes match its own
+  // current position instead of a genuinely different row.
+  function findDropTargetRow(tbody, clientY, draggingRow) {
     var rows = tbody.querySelectorAll("tr[data-token]");
     var target = null;
     for (var i = 0; i < rows.length; i++) {
+      if (rows[i] === draggingRow) {
+        continue;
+      }
       var rect = rows[i].getBoundingClientRect();
       if (clientY >= rect.top + rect.height / 2) {
         target = rows[i];
@@ -987,46 +1006,54 @@ function clearCandidateSearch() {
     return target;
   }
 
-  function clearDragOverStyles(tbody) {
-    tbody.querySelectorAll(".drag-over, .drag-over-top").forEach(function (el) {
-      el.classList.remove("drag-over", "drag-over-top");
-    });
-  }
-
   function onPointerMove(event) {
     if (!dragging) {
       return;
     }
     var tbody = dragging.closest("tbody");
-    var target = findDropTargetRow(tbody, event.clientY);
-    if (target === dragging) {
-      target = dragOverRow; // dropping "on itself" - keep the last real target
-    }
-    clearDragOverStyles(tbody);
-    dragOverRow = target;
+    var target = findDropTargetRow(tbody, event.clientY, dragging);
     if (target) {
-      target.classList.add("drag-over");
+      if (target.nextElementSibling !== dragging) {
+        target.insertAdjacentElement("afterend", dragging);
+      }
       return;
     }
     // No target row means the pointer is above every row's midpoint - i.e.
-    // dropping at the very top of service. There's no "row above" to draw
-    // a bottom-edge marker on, so flag the first row's top edge instead.
+    // dropping at the very top of service.
     var firstRow = tbody.querySelector("tr[data-token]");
-    if (firstRow && firstRow !== dragging) {
-      firstRow.classList.add("drag-over-top");
+    if (firstRow && firstRow !== dragging && tbody.firstElementChild !== dragging) {
+      tbody.insertBefore(dragging, firstRow);
+    }
+  }
+
+  // Puts the dragged row back exactly where it started - used when a drag
+  // is cancelled (e.g. a touch gesture interrupted by a scroll) instead of
+  // dropped, so it doesn't visually stay wherever it last got dragged to
+  // with no matching server-side reposition.
+  function restoreStartPosition() {
+    if (!dragging) {
+      return;
+    }
+    var tbody = dragging.closest("tbody");
+    if (tbody) {
+      tbody.insertBefore(dragging, startNextSibling);
     }
   }
 
   function endDrag() {
     document.removeEventListener("pointermove", onPointerMove);
     document.removeEventListener("pointerup", onPointerUp);
-    document.removeEventListener("pointercancel", endDrag);
+    document.removeEventListener("pointercancel", onPointerCancel);
     if (dragging) {
       dragging.classList.remove("dragging");
-      clearDragOverStyles(dragging.closest("tbody"));
     }
     dragging = null;
-    dragOverRow = null;
+    startNextSibling = null;
+  }
+
+  function onPointerCancel() {
+    restoreStartPosition();
+    endDrag();
   }
 
   function onPointerUp() {
@@ -1034,16 +1061,15 @@ function clearCandidateSearch() {
       return;
     }
     var draggedRow = dragging;
-    var after = rowToken(dragOverRow);
+    // The row's own live DOM position already *is* the drop target, since
+    // it's been physically sitting there since the last onPointerMove.
+    var after = rowToken(previousTargetRow(draggedRow));
+    var unchanged = after === startAfterToken;
     endDrag();
 
     var rowID = draggedRow.dataset.rowId;
     var url = draggedRow.dataset.repositionUrl;
-    if (!rowID || !url) {
-      return;
-    }
-    // No-op if dropped back where it already was.
-    if (rowToken(previousTargetRow(draggedRow)) === after) {
+    if (!rowID || !url || unchanged) {
       return;
     }
 
@@ -1066,24 +1092,12 @@ function clearCandidateSearch() {
 
     event.preventDefault();
     dragging = row;
-    // Defaults to the row's own current predecessor, not null - the
-    // dragged row is itself one of the candidates findDropTargetRow
-    // considers, so if the pointer never actually crosses a genuinely
-    // different row's midpoint (most reliably reproduced by dragging the
-    // *last* row, where there's nothing below to cross), it resolves to
-    // "dropped on itself" every single pointermove, and previously fell
-    // back to a still-null dragOverRow - read by onPointerUp as "no
-    // target at all," which onPointerMove's own fallback treats as
-    // dropping at the very top of service. Starting from the real
-    // previous row instead means that same "never found a new target"
-    // case now correctly resolves to "still after whatever it already
-    // was," which the existing no-op check below then catches instead of
-    // firing off a real (and wrong) reposition to the top.
-    dragOverRow = previousTargetRow(row);
+    startAfterToken = rowToken(previousTargetRow(row));
+    startNextSibling = row.nextElementSibling;
     row.classList.add("dragging");
 
     document.addEventListener("pointermove", onPointerMove);
     document.addEventListener("pointerup", onPointerUp);
-    document.addEventListener("pointercancel", endDrag);
+    document.addEventListener("pointercancel", onPointerCancel);
   });
 })();

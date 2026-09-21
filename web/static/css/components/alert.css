@@ -15,6 +15,21 @@
   margin-block: var(--space-3);
 }
 
+/* Dismissible variant (components.DismissibleWarning) - lays the message
+   and an "x" button side by side, same closest-element-removal pattern as
+   .import-banner's own dismissible option (import-banner.css), just
+   client-side/session-only, not persisted. */
+.dismissible-warning {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.dismissible-warning .icon-btn {
+  flex-shrink: 0;
+}
+
 .error,
 .success {
   display: inline-block;

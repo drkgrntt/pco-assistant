@@ -1,0 +1,20 @@
+package components
+
+// DismissibleWarning renders a .warning banner with a client-side "x"
+// dismiss button, same closest-element-removal pattern as ImportBanner's
+// own dismissible option - for the plan page's page-level warnings
+// (service-length check, existing-conflict messages) once the reader has
+// seen them and wants them out of the way. Session-only/client-side, not
+// persisted anywhere - reappears on the next full render (e.g. after the
+// underlying condition is fixed and the page reloads, it won't show at
+// all; if it's still true, it comes back). Not used for the publish
+// panel's own PendingDeleteCount warnings, which describe a real
+// consequence of the next Publish and need to stay visible until then.
+templ DismissibleWarning(message string) {
+	<div class="warning dismissible-warning">
+		<span>{ message }</span>
+		<button type="button" class="icon-btn" aria-label="Dismiss" title="Dismiss" onclick="this.closest('.warning').remove()">
+			@IconX()
+		</button>
+	</div>
+}
