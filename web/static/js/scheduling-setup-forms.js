@@ -7,6 +7,9 @@
 // vocal range" quick-add form's prefill-from-selected-song
 // (fillVocalRangeFromSongSelect). Split out of the former single
 // scheduling.js - see scheduling-global.js's header for the same note.
+// Also backs the People library index's (person_library.templ) "Open"
+// button - goToPersonDetail, below - since it reuses this same
+// PersonPickerField picker just to navigate instead of fill a form field.
 
 // selectPerson fills a person picker's hidden person_id input and visible
 // search box from a clicked search result's data attributes (see
@@ -39,6 +42,24 @@ function selectPerson(el) {
   setTimeout(function () {
     resultsContainer.innerHTML = "";
   }, 0);
+}
+
+// goToPersonDetail navigates to a person's own detail page
+// (/scheduling/people/:person_id) using whichever person a PersonPickerField
+// picker (suffix-identified, same scheme as selectPerson above) currently
+// has selected - the People library index's (person_library.templ) "Open"
+// button next to its search box, for reaching someone this app has zero
+// local records for yet (PersonLibraryPage only lists people who already
+// have at least one - see that page's own doc comment). Does nothing if
+// nothing's been picked yet, same silent no-op every other button here
+// gets when its form isn't actually fillable.
+function goToPersonDetail(suffix) {
+  var idInput = document.getElementById(
+    "person-id-input" + (suffix ? "-" + suffix : "")
+  );
+  if (idInput && idInput.value) {
+    window.location.href = "/scheduling/people/" + idInput.value;
+  }
 }
 
 // Any further edit to a person search box invalidates whatever was

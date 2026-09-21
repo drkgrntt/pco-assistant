@@ -185,6 +185,32 @@ func (s *Store) ListSongPersonPreferences(ctx context.Context, organizationID, s
 	return preferences, rows.Err()
 }
 
+// DistinctSongPersonPreferencePersonIDs returns every distinct person id
+// referenced by organizationID's song_person_preferences - the preference
+// half of the People library index's local-data-derived person set (see
+// DistinctPersonRelationshipPersonIDs's doc comment, person_relationships.go,
+// for the full picture across all three source tables).
+func (s *Store) DistinctSongPersonPreferencePersonIDs(ctx context.Context, organizationID string) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT DISTINCT person_id FROM song_person_preferences WHERE organization_id = $1
+	`, organizationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	ids := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+
+	return ids, rows.Err()
+}
+
 func (s *Store) DeleteSongPersonPreference(ctx context.Context, organizationID string, id int64) error {
 	result, err := s.db.ExecContext(ctx, `DELETE FROM song_person_preferences WHERE id = $1 AND organization_id = $2`, id, organizationID)
 	if err != nil {

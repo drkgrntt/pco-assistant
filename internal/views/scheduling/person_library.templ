@@ -1,0 +1,52 @@
+package scheduling
+
+import (
+	"pco-assistant/internal/views"
+	"pco-assistant/internal/views/components"
+)
+
+// PersonLibraryRow is one person's summary row on the People library index
+// (PersonLibraryIndex below) - just enough to render a card and link to
+// that person's own detail page.
+type PersonLibraryRow struct {
+	PersonID  string
+	Name      string
+	AvatarURL string
+}
+
+// PersonLibraryIndex is the People library index page
+// (PersonLibraryPage, internal/server/controllers/person_library.go) - see
+// docs/plans/not-started/song-person-detail-pages-plan.md's "songs are a
+// cached library, people are not" section for why people only lists
+// people this app already has at least one local record for (relationships,
+// vocal range, or a song preference), not PCO's whole People directory:
+// unlike the song library, there's no cheap, complete, cacheable "list
+// every person" fetch to page through. A card grid, visually consistent
+// with the detail page's own card sections (components.Card) and this
+// app's other card-per-entity setup pages, not a table - a real layout
+// decision, not a default (see that plan doc's own open question on this,
+// resolved here).
+templ PersonLibraryIndex(personName, organizationName string, people []PersonLibraryRow, errMsg string) {
+	@views.Layout("People", personName, organizationName) {
+		<h1>People</h1>
+		<p class="muted">Everyone this app has at least one local record for - a relationship, a stored vocal range, or a song preference. Search below to open someone new and start their first record, which is what adds them here.</p>
+		if errMsg != "" {
+			<p class="error" role="alert">{ errMsg }</p>
+		}
+		<div class="person-library-search">
+			@PersonPickerField("Find a person", "person_id", "library")
+			<button type="button" class="primary" onclick="goToPersonDetail('library')">Open</button>
+		</div>
+		<div class="person-library-list">
+			for _, p := range people {
+				<a class="person-library-card" href={ templ.URL("/scheduling/people/" + p.PersonID) }>
+					@components.Avatar(p.AvatarURL)
+					<span>{ p.Name }</span>
+				</a>
+			}
+			if len(people) == 0 {
+				<p class="muted">No people recorded yet - search above to open someone and add their first relationship, vocal range, or song preference.</p>
+			}
+		</div>
+	}
+}
