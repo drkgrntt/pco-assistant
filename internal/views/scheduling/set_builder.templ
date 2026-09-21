@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
-	"strings"
 
 	"pco-assistant/internal/scheduling"
 	"pco-assistant/internal/views/components"
@@ -293,15 +292,15 @@ func afterValsJSON(after string) string {
 // or a key override can flip InfoPending without going through a full
 // #set-builder-body re-render (see DescriptionFormFragment/
 // KeyFormFragment, song_detail_card.templ).
-templ songBadges(song SetSongView) {
+templ songBadges(song SetSongView, serviceTypeID, planID string) {
 	<span id={ fmt.Sprintf("song-badges-%d", song.ID) }>
-		@songBadgeSpans(song)
+		@songBadgeSpans(song, serviceTypeID, planID)
 	</span>
 }
 
-templ songBadgesOOB(song SetSongView) {
+templ songBadgesOOB(song SetSongView, serviceTypeID, planID string) {
 	<span id={ fmt.Sprintf("song-badges-%d", song.ID) } hx-swap-oob="true">
-		@songBadgeSpans(song)
+		@songBadgeSpans(song, serviceTypeID, planID)
 	</span>
 }
 
@@ -329,6 +328,54 @@ templ keyTransitionMenu(message string, suggestion string) {
 	}
 }
 
+// dismissableWarningToggle/dismissableWarningMenu/dismissWarningActions back
+// every dismissable Songs-tab warning's own Disclosure (docs/plans/shipped/
+// dismissable-warnings-plan.md) - avoid-pairing and recently-repeated below
+// (songBadgeSpans/songCandidateMeta/candidateDetailExtras), plus the
+// vocal-range mismatch badge just below this, which reuses
+// dismissWarningActions directly since it already has its own toggle/menu
+// content (vocalRangeMenu). warningToggleClass picks the loud vs. muted
+// modifier class for whichever badge family is rendering - see
+// dismissed-warning.css for the actual styling. dismissWarningActions posts
+// to DismissBuildWarning/UndismissBuildWarning (sets_builder_dismissals.go),
+// re-rendering the whole #set-builder-body the same way every other
+// Songs-tab mutation on this page already does.
+templ dismissableWarningToggle(label string) {
+	⚠ { label }
+}
+
+templ dismissableWarningMenu(message string, dismissed bool, serviceTypeID, planID, warningKind, subjectKey string) {
+	<p>{ message }</p>
+	@dismissWarningActions(serviceTypeID, planID, warningKind, subjectKey, dismissed)
+}
+
+templ dismissWarningActions(serviceTypeID, planID, warningKind, subjectKey string, dismissed bool) {
+	if dismissed {
+		<form hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/warnings/undismiss", serviceTypeID, planID) } hx-target="#set-builder-body" hx-swap="outerHTML">
+			<input type="hidden" name="warning_kind" value={ warningKind }/>
+			<input type="hidden" name="subject_key" value={ subjectKey }/>
+			<button type="submit" class="dismiss-warning-action">Re-enable warning</button>
+		</form>
+	} else {
+		<form hx-post={ fmt.Sprintf("/scheduling/build/%s/%s/warnings/dismiss", serviceTypeID, planID) } hx-target="#set-builder-body" hx-swap="outerHTML">
+			<input type="hidden" name="warning_kind" value={ warningKind }/>
+			<input type="hidden" name="subject_key" value={ subjectKey }/>
+			<button type="submit" class="dismiss-warning-action">Dismiss</button>
+		</form>
+	}
+}
+
+// warningToggleClass appends the muted modifier class (dismissed-warning.css)
+// onto base when dismissed - the "reduced-opacity .conflict-badge modifier"
+// every dismissable warning badge's loud/muted split shares, whichever
+// badge family (base) it's layered onto.
+func warningToggleClass(base string, dismissed bool) string {
+	if dismissed {
+		return base + " warning-dismissed"
+	}
+	return base
+}
+
 // vocalRangeMismatchToggle/vocalRangeTipToggle/vocalRangeMenu are the
 // vocal-range warning Disclosure's toggle-button content and popup
 // contents (see songBadgeSpans above and SetSongView.VocalRangeWarning*) -
@@ -341,7 +388,9 @@ templ keyTransitionMenu(message string, suggestion string) {
 // as the latter (see the controller's vocalRangeWarningForSong). Both
 // variants share one popup content component, since the combined message
 // string already carries everything (one sentence per affected
-// vocalist).
+// vocalist) - plus, since docs/plans/shipped/dismissable-warnings-plan.md,
+// the same Dismiss/Re-enable action every other dismissable warning's popup
+// ends with (dismissWarningActions above).
 templ vocalRangeMismatchToggle(label string) {
 	⚠ { label }
 }
@@ -350,7 +399,23 @@ templ vocalRangeTipToggle(label string) {
 	{ label }
 }
 
-templ vocalRangeMenu(message string) {
+templ vocalRangeMenu(message string, dismissed bool, serviceTypeID, planID, subjectKey string) {
+	<p>{ message }</p>
+	@dismissWarningActions(serviceTypeID, planID, scheduling.WarningKindVocalRangeMismatch, subjectKey, dismissed)
+}
+
+// vocalRangeMenuReadOnly is vocalRangeMenu without the Dismiss/Re-enable
+// action - used by vocal_range_matrix.templ's grid cells, which show every
+// roster member's own verdict for a song (not just that song's assigned
+// leader), so a single cell doesn't correspond 1:1 with the Songs tab's own
+// per-song vocal-range-mismatch subject key
+// (planID:songID:leaderPersonID - see vocalRangeMismatchSubjectKey,
+// sets_builder.go). Dismissing from the matrix would either silently do
+// nothing (a non-leader cell has no matching key at all) or dismiss a
+// warning the Songs tab badge doesn't even show for that cell's person, so
+// this pass leaves the matrix read-only rather than wiring up a dismissal
+// affordance that doesn't map cleanly onto this page's own grain.
+templ vocalRangeMenuReadOnly(message string) {
 	<p>{ message }</p>
 }
 
@@ -386,9 +451,10 @@ templ badgeOverflowMenu(extras templ.Component) {
 // warnings, all rendered inline right on this row instead of a separate
 // top-of-page list - see docs/plans/shipped/in-place-set-warnings-plan.md
 // and, for the vocal-range warning, docs/plans/shipped/
-// vocal-range-plan.md's Phase 3. Mirrors songCandidateMeta's identical
-// ConflictBadge usage for a not-yet-added candidate's
-// ConflictTitles/RecentlyRepeated.
+// vocal-range-plan.md's Phase 3. Mirrors
+// candidateConflictAndRepeatBadges' identical dismissable-Disclosure usage
+// for a not-yet-added candidate's Conflicts/RecentlyRepeated (see
+// docs/plans/shipped/dismissable-warnings-plan.md).
 //
 // Once a row's total badge count passes badgeCollapseThreshold, the
 // lower-priority badges (roles, local and PCO tags, resurfaced
@@ -400,7 +466,7 @@ templ badgeOverflowMenu(extras templ.Component) {
 // avoid-pairing/repeat/key-transition/vocal-range warnings) always stay
 // directly on the row regardless of count - they're each capped at one
 // badge anyway, so they were never what made a row feel busy.
-templ songBadgeSpans(song SetSongView) {
+templ songBadgeSpans(song SetSongView, serviceTypeID, planID string) {
 	if song.Published {
 		@components.Badge("published", "Published")
 	}
@@ -410,11 +476,27 @@ templ songBadgeSpans(song SetSongView) {
 	if song.InfoPending {
 		@components.BadgeTitled("status-pending", "Note/key/leader pending", "This week's note, key, or leader changed since it was last published - Refresh song info (or Publish) to send it to Planning Center")
 	}
-	if len(song.ConflictTitles) > 0 {
-		@components.ConflictBadge(fmt.Sprintf("avoid pairing with %s", strings.Join(song.ConflictTitles, ", ")))
+	for _, c := range song.Conflicts {
+		@components.Disclosure(
+			"dismissable-warning-badge",
+			warningToggleClass("conflict-badge dismissed-warning-toggle", c.Dismissed),
+			"toggleDismissableWarningBadge(this)",
+			"",
+			"",
+			dismissableWarningToggle(fmt.Sprintf("avoid pairing with %s", c.Title)),
+			dismissableWarningMenu(fmt.Sprintf("Avoid pairing with %s.", c.Title), c.Dismissed, serviceTypeID, planID, scheduling.WarningKindAvoidPairing, c.SubjectKey),
+		)
 	}
 	if song.RecentlyRepeated {
-		@components.ConflictBadge("sung in each of the last two plans")
+		@components.Disclosure(
+			"dismissable-warning-badge",
+			warningToggleClass("conflict-badge dismissed-warning-toggle", song.RecentlyRepeatedDismissed),
+			"toggleDismissableWarningBadge(this)",
+			"",
+			"",
+			dismissableWarningToggle("sung in each of the last two plans"),
+			dismissableWarningMenu("Sung in each of the last two plans.", song.RecentlyRepeatedDismissed, serviceTypeID, planID, scheduling.WarningKindRecentRepeat, song.RecentlyRepeatedKey),
+		)
 	}
 	if song.KeyTransitionLabel != "" {
 		@components.Disclosure(
@@ -431,22 +513,22 @@ templ songBadgeSpans(song SetSongView) {
 		if song.VocalRangeWarningIsTip {
 			@components.Disclosure(
 				"vocal-range-badge",
-				"badge vocal-range-toggle",
+				warningToggleClass("badge vocal-range-toggle", song.VocalRangeWarningDismissed),
 				"toggleVocalRangeBadge(this)",
 				"",
 				"",
 				vocalRangeTipToggle(song.VocalRangeWarningLabel),
-				vocalRangeMenu(song.VocalRangeWarningMessage),
+				vocalRangeMenu(song.VocalRangeWarningMessage, song.VocalRangeWarningDismissed, serviceTypeID, planID, song.VocalRangeWarningKey),
 			)
 		} else {
 			@components.Disclosure(
 				"vocal-range-badge",
-				"conflict-badge vocal-range-toggle",
+				warningToggleClass("conflict-badge vocal-range-toggle", song.VocalRangeWarningDismissed),
 				"toggleVocalRangeBadge(this)",
 				"",
 				"",
 				vocalRangeMismatchToggle(song.VocalRangeWarningLabel),
-				vocalRangeMenu(song.VocalRangeWarningMessage),
+				vocalRangeMenu(song.VocalRangeWarningMessage, song.VocalRangeWarningDismissed, serviceTypeID, planID, song.VocalRangeWarningKey),
 			)
 		}
 	}
@@ -499,6 +581,14 @@ templ songBadgeSpans(song SetSongView) {
 // alongside len(song.Roles)+len(song.TransitionNotePrompts) (the
 // collapsible "extras" - see songBadgeExtras) to decide whether this row's
 // total badge count crosses badgeCollapseThreshold.
+//
+// A dismissed (muted) warning doesn't count toward this total the same way
+// a live one does (docs/plans/shipped/dismissable-warnings-plan.md) - it
+// still always renders directly on the row (see songBadgeSpans), just
+// muted, so there's no reason for its lower urgency to force everything
+// else on the row to collapse sooner than it otherwise would. Conflicts is
+// only excluded once every one of its entries is dismissed - a row with
+// even one still-live conflict counts the same single badge it always has.
 func songAlwaysVisibleBadgeCount(song SetSongView) int {
 	n := 0
 	if song.Published {
@@ -510,19 +600,33 @@ func songAlwaysVisibleBadgeCount(song SetSongView) int {
 	if song.InfoPending {
 		n++
 	}
-	if len(song.ConflictTitles) > 0 {
+	if hasLiveConflict(song.Conflicts) {
 		n++
 	}
-	if song.RecentlyRepeated {
+	if song.RecentlyRepeated && !song.RecentlyRepeatedDismissed {
 		n++
 	}
 	if song.KeyTransitionLabel != "" {
 		n++
 	}
-	if song.VocalRangeWarningLabel != "" {
+	if song.VocalRangeWarningLabel != "" && !song.VocalRangeWarningDismissed {
 		n++
 	}
 	return n
+}
+
+// hasLiveConflict reports whether at least one of conflicts is still
+// live (not dismissed) - see songAlwaysVisibleBadgeCount/
+// candidateAlwaysVisibleBadgeCount's own doc comments for why an
+// all-dismissed Conflicts list doesn't count toward the "always visible"
+// badge total the way a partially-live one does.
+func hasLiveConflict(conflicts []ConflictBadgeView) bool {
+	for _, c := range conflicts {
+		if !c.Dismissed {
+			return true
+		}
+	}
+	return false
 }
 
 // songBadgeExtras is songBadgeSpans' own "collapsible extras" group - role
@@ -751,7 +855,7 @@ templ rowMobileActionsItems(data SetBuilderData, i int) {
 // so once the row's total badge count crosses the threshold, those two
 // collapse behind a "+N more" toggle - the status/conflict badges above
 // them always stay visible regardless of count.
-templ songCandidateMeta(cand CandidateSongView) {
+templ songCandidateMeta(cand CandidateSongView, serviceTypeID, planID string) {
 	if cand.NewSongLabel != "" {
 		@components.BadgeTitled("status-pending", cand.NewSongLabel, "New to the church - a repeat helps it stick")
 	}
@@ -766,12 +870,7 @@ templ songCandidateMeta(cand CandidateSongView) {
 		// list-item.css's comment on that rule for why.
 		<span class="muted arrangement-info">{ cand.ArrangementInfo }</span>
 	}
-	if len(cand.ConflictTitles) > 0 {
-		@components.ConflictBadge(fmt.Sprintf("avoid pairing with %s", strings.Join(cand.ConflictTitles, ", ")))
-	}
-	if cand.RecentlyRepeated {
-		@components.ConflictBadge("sung in each of the last two plans")
-	}
+	@candidateConflictAndRepeatBadges(cand, serviceTypeID, planID)
 	{{ extrasCount := len(cand.Roles) + len(cand.Contexts) + len(cand.Tags) }}
 	if extrasCount > 0 && candidateAlwaysVisibleBadgeCount(cand)+extrasCount > badgeCollapseThreshold {
 		@components.Disclosure(
@@ -788,8 +887,44 @@ templ songCandidateMeta(cand CandidateSongView) {
 	}
 }
 
+// candidateConflictAndRepeatBadges renders a not-yet-added candidate's own
+// avoid-pairing/recently-repeated dismissable warnings - shared by
+// songCandidateMeta (the candidate list/suggestion rows) and
+// candidateDetailExtras (the "Browse all songs" click-to-expand detail
+// panel) below, the same "one component, never two copies" reasoning as
+// candidateBadgeExtras/songBadgeExtras. See songBadgeSpans' identical
+// treatment for a set song's own row - the only difference here is there's
+// no vocal-range-mismatch badge for a candidate (that warning only applies
+// to a song's assigned leader once it's actually in the set).
+templ candidateConflictAndRepeatBadges(cand CandidateSongView, serviceTypeID, planID string) {
+	for _, c := range cand.Conflicts {
+		@components.Disclosure(
+			"dismissable-warning-badge",
+			warningToggleClass("conflict-badge dismissed-warning-toggle", c.Dismissed),
+			"toggleDismissableWarningBadge(this)",
+			"",
+			"",
+			dismissableWarningToggle(fmt.Sprintf("avoid pairing with %s", c.Title)),
+			dismissableWarningMenu(fmt.Sprintf("Avoid pairing with %s.", c.Title), c.Dismissed, serviceTypeID, planID, scheduling.WarningKindAvoidPairing, c.SubjectKey),
+		)
+	}
+	if cand.RecentlyRepeated {
+		@components.Disclosure(
+			"dismissable-warning-badge",
+			warningToggleClass("conflict-badge dismissed-warning-toggle", cand.RecentlyRepeatedDismissed),
+			"toggleDismissableWarningBadge(this)",
+			"",
+			"",
+			dismissableWarningToggle("sung in each of the last two plans"),
+			dismissableWarningMenu("Sung in each of the last two plans.", cand.RecentlyRepeatedDismissed, serviceTypeID, planID, scheduling.WarningKindRecentRepeat, cand.RecentlyRepeatedKey),
+		)
+	}
+}
+
 // candidateAlwaysVisibleBadgeCount is songAlwaysVisibleBadgeCount's
-// songCandidateMeta counterpart - see that function's own doc comment.
+// songCandidateMeta counterpart - see that function's own doc comment,
+// including the same "a dismissed warning doesn't inflate this count"
+// carve-out.
 func candidateAlwaysVisibleBadgeCount(cand CandidateSongView) int {
 	n := 0
 	if cand.NewSongLabel != "" {
@@ -798,10 +933,10 @@ func candidateAlwaysVisibleBadgeCount(cand CandidateSongView) int {
 	if cand.NotSungInLabel != "" {
 		n++
 	}
-	if len(cand.ConflictTitles) > 0 {
+	if hasLiveConflict(cand.Conflicts) {
 		n++
 	}
-	if cand.RecentlyRepeated {
+	if cand.RecentlyRepeated && !cand.RecentlyRepeatedDismissed {
 		n++
 	}
 	return n
@@ -931,12 +1066,7 @@ templ candidateDetailExtras(cand CandidateSongView, pcoTagGroups []scheduling.PC
 	if cand.ArrangementInfo != "" {
 		<span class="muted arrangement-info">{ cand.ArrangementInfo }</span>
 	}
-	if len(cand.ConflictTitles) > 0 {
-		@components.ConflictBadge(fmt.Sprintf("avoid pairing with %s", strings.Join(cand.ConflictTitles, ", ")))
-	}
-	if cand.RecentlyRepeated {
-		@components.ConflictBadge("sung in each of the last two plans")
-	}
+	@candidateConflictAndRepeatBadges(cand, serviceTypeID, planID)
 	for _, context := range cand.Contexts {
 		@components.Badge("", context.Label)
 	}
@@ -1103,7 +1233,7 @@ templ CandidateSearchResults(serviceTypeID, planID string, candidates []Candidat
 	} else {
 		for _, cand := range candidates {
 			@components.ListItem("candidate-row", nil, cand.Title) {
-				@songCandidateMeta(cand)
+				@songCandidateMeta(cand, serviceTypeID, planID)
 				<form hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/songs", serviceTypeID, planID) } hx-target="#set-builder-body" hx-swap="outerHTML">
 					<input type="hidden" name="song_id" value={ cand.SongID }/>
 					<button type="submit" class="icon-btn" aria-label="Add to set" title="Add to set">
@@ -1217,7 +1347,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 		@SongStatusSummary(data)
 		// ServiceLengthWarning is the one warning check that stays a
 		// standalone banner rather than moving onto a song's own row (see
-		// SetSongView.RecentlyRepeated/ConflictTitles/KeyTransitionLabel,
+		// SetSongView.RecentlyRepeated/Conflicts/KeyTransitionLabel,
 		// rendered inline via songBadgeSpans instead) - it's a property of
 		// the whole plan, not any one song or pair, so there's no row to
 		// attach it to. See docs/plans/shipped/in-place-set-warnings-plan.md.
@@ -1315,7 +1445,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 									<div class="muted song-meta" id={ fmt.Sprintf("song-meta-%d", row.Song.ID) }>{ row.Song.ArrangementInfo }</div>
 								</td>
 								<td>
-									@songBadges(row.Song)
+									@songBadges(row.Song, data.ServiceTypeID, data.PlanID)
 								</td>
 								// .set-song-actions (the flex row of action
 								// buttons) lives on an inner div, not this <td>
@@ -1568,7 +1698,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 					for _, sug := range data.Suggestions {
 						@components.ListItem("", nil, sug.Title) {
 							<span class="muted">{ sug.RelationshipLabel }</span>
-							@songCandidateMeta(sug.CandidateSongView)
+							@songCandidateMeta(sug.CandidateSongView, data.ServiceTypeID, data.PlanID)
 							<form hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/songs", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
 								<input type="hidden" name="song_id" value={ sug.SongID }/>
 								<button type="submit" class="icon-btn" aria-label="Add to set" title="Add to set">
@@ -1587,7 +1717,7 @@ templ SetBuilderBodyContent(data SetBuilderData) {
 					for _, sug := range data.SongsToReinforce {
 						@components.ListItem("", nil, sug.Title) {
 							<span class="muted">{ sug.RelationshipLabel }</span>
-							@songCandidateMeta(sug.CandidateSongView)
+							@songCandidateMeta(sug.CandidateSongView, data.ServiceTypeID, data.PlanID)
 							<form hx-post={ fmt.Sprintf("/scheduling/sets/%s/%s/songs", data.ServiceTypeID, data.PlanID) } hx-target="#set-builder-body" hx-swap="outerHTML">
 								<input type="hidden" name="song_id" value={ sug.SongID }/>
 								<button type="submit" class="icon-btn" aria-label="Add to set" title="Add to set">

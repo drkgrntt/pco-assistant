@@ -33,7 +33,7 @@ func TestCandidateSongViewHasExtraMetaEachFieldTrue(t *testing.T) {
 		{"new song label", CandidateSongView{NewSongLabel: "Sung once"}},
 		{"arrangement info", CandidateSongView{ArrangementInfo: "Key of G, 4:32"}},
 		{"contexts", CandidateSongView{Contexts: []SongContextView{{ID: 1, Label: "Big church"}}}},
-		{"conflict titles", CandidateSongView{ConflictTitles: []string{"Other Song"}}},
+		{"conflicts", CandidateSongView{Conflicts: []ConflictBadgeView{{Title: "Other Song", SubjectKey: "a:b"}}}},
 		{"recently repeated", CandidateSongView{RecentlyRepeated: true}},
 	}
 	for _, tc := range cases {

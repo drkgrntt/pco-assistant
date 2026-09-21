@@ -657,12 +657,15 @@ func TestPCOItemsFingerprint(t *testing.T) {
 // store (safe as long as arrangementCache already has an entry for every
 // song row - see resolveArrangementCacheInfo's cache-hit path, which never
 // touches store on a hit) and returns the one song row whose SongID matches
-// - a small helper for the RecentlyRepeated/ConflictTitles/
+// - a small helper for the RecentlyRepeated/Conflicts/
 // KeyTransitionLabel tests below, which only care about one row's own
-// resulting SetSongView.
-func renderServiceOrderRow(t *testing.T, rows []mergedRow, cache map[string]scheduling.SongArrangementInfo, titles map[string]string, repeated map[string]bool, conflictTitlesBySong map[string][]string, transitionsByRow map[int64]keyTransitionWarning, songID string) views.SetSongView {
+// resulting SetSongView. planID "plan1" throughout - the dismissal-key
+// tests (sets_builder_dismissals_test.go) exercise the actual dismissal
+// wiring; these callers only care about which songs got which warning at
+// all, not the exact subject key.
+func renderServiceOrderRow(t *testing.T, rows []mergedRow, cache map[string]scheduling.SongArrangementInfo, titles map[string]string, repeated map[string]bool, conflictBadgesBySong map[string][]views.ConflictBadgeView, transitionsByRow map[int64]keyTransitionWarning, songID string) views.SetSongView {
 	t.Helper()
-	out := renderServiceOrder(context.Background(), nil, "org1", cache, nil, nil, nil, nil, rows, titles, nil, nil, nil, nil, nil, repeated, conflictTitlesBySong, transitionsByRow, nil, nil, nil, nil)
+	out := renderServiceOrder(context.Background(), nil, "org1", "plan1", cache, nil, nil, nil, nil, rows, titles, nil, nil, nil, nil, nil, repeated, conflictBadgesBySong, nil, nil, transitionsByRow, nil, nil, nil, nil)
 	for _, row := range out {
 		if row.IsSong && row.Song.SongID == songID {
 			return row.Song
@@ -685,36 +688,36 @@ func TestRenderServiceOrderPopulatesRecentlyRepeated(t *testing.T) {
 	cache := map[string]scheduling.SongArrangementInfo{}
 	repeated := map[string]bool{"song-a": true}
 
-	gotA := renderServiceOrderRow(t, rows, cache, map[string]string{}, repeated, map[string][]string{}, map[int64]keyTransitionWarning{}, "song-a")
+	gotA := renderServiceOrderRow(t, rows, cache, map[string]string{}, repeated, map[string][]views.ConflictBadgeView{}, map[int64]keyTransitionWarning{}, "song-a")
 	if !gotA.RecentlyRepeated {
 		t.Error("expected song-a's RecentlyRepeated to be true")
 	}
 
-	gotB := renderServiceOrderRow(t, rows, cache, map[string]string{}, repeated, map[string][]string{}, map[int64]keyTransitionWarning{}, "song-b")
+	gotB := renderServiceOrderRow(t, rows, cache, map[string]string{}, repeated, map[string][]views.ConflictBadgeView{}, map[int64]keyTransitionWarning{}, "song-b")
 	if gotB.RecentlyRepeated {
 		t.Error("expected song-b's RecentlyRepeated to be false")
 	}
 }
 
-// TestRenderServiceOrderPopulatesConflictTitles confirms conflictTitlesBySong
+// TestRenderServiceOrderPopulatesConflicts confirms conflictBadgesBySong
 // (built from Store.AvoidPairings' existing pairs - see buildSetBuilderData)
 // attaches each conflict's *other* song title onto this song's own
-// ConflictTitles, the same shape CandidateSongView.ConflictTitles already
+// Conflicts, the same shape CandidateSongView.Conflicts already
 // has for a not-yet-added candidate.
-func TestRenderServiceOrderPopulatesConflictTitles(t *testing.T) {
+func TestRenderServiceOrderPopulatesConflicts(t *testing.T) {
 	a := setSong("song-a", "", 0)
 	b := setSong("song-b", "", 1)
 	rows := []mergedRow{{Song: &a}, {Song: &b}}
 	cache := map[string]scheduling.SongArrangementInfo{}
 	titles := map[string]string{"song-a": "Song A", "song-b": "Song B"}
-	conflictTitlesBySong := map[string][]string{
-		"song-a": {"Song B"},
-		"song-b": {"Song A"},
+	conflictBadgesBySong := map[string][]views.ConflictBadgeView{
+		"song-a": {{Title: "Song B", SubjectKey: "song-a:song-b"}},
+		"song-b": {{Title: "Song A", SubjectKey: "song-a:song-b"}},
 	}
 
-	gotA := renderServiceOrderRow(t, rows, cache, titles, map[string]bool{}, conflictTitlesBySong, map[int64]keyTransitionWarning{}, "song-a")
-	if len(gotA.ConflictTitles) != 1 || gotA.ConflictTitles[0] != "Song B" {
-		t.Errorf("expected song-a's ConflictTitles to be [\"Song B\"], got %+v", gotA.ConflictTitles)
+	gotA := renderServiceOrderRow(t, rows, cache, titles, map[string]bool{}, conflictBadgesBySong, map[int64]keyTransitionWarning{}, "song-a")
+	if len(gotA.Conflicts) != 1 || gotA.Conflicts[0].Title != "Song B" {
+		t.Errorf("expected song-a's Conflicts to be [\"Song B\"], got %+v", gotA.Conflicts)
 	}
 }
 
@@ -735,12 +738,12 @@ func TestRenderServiceOrderAttachesKeyTransitionToSecondSongOnly(t *testing.T) {
 		f.ID: {SongRowID: f.ID, Label: "half-step from previous song", Message: "Song E (E) into Song F (F) is a half-step key change..."},
 	}
 
-	gotE := renderServiceOrderRow(t, rows, cache, map[string]string{}, map[string]bool{}, map[string][]string{}, transitionsByRow, "song-e")
+	gotE := renderServiceOrderRow(t, rows, cache, map[string]string{}, map[string]bool{}, map[string][]views.ConflictBadgeView{}, transitionsByRow, "song-e")
 	if gotE.KeyTransitionLabel != "" {
 		t.Errorf("expected song-e (the earlier song) to carry no key-transition badge, got %q", gotE.KeyTransitionLabel)
 	}
 
-	gotF := renderServiceOrderRow(t, rows, cache, map[string]string{}, map[string]bool{}, map[string][]string{}, transitionsByRow, "song-f")
+	gotF := renderServiceOrderRow(t, rows, cache, map[string]string{}, map[string]bool{}, map[string][]views.ConflictBadgeView{}, transitionsByRow, "song-f")
 	if gotF.KeyTransitionLabel == "" {
 		t.Error("expected song-f (the later song) to carry the key-transition badge label")
 	}

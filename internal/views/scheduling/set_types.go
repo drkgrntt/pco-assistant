@@ -76,7 +76,7 @@ type SetBuilderData struct {
 	// average (see the controller's serviceLengthWarning) - "" means
 	// nothing to flag. The one warning check that stays a standalone,
 	// whole-plan banner rather than moving onto a song's own row (see
-	// SetSongView.RecentlyRepeated/ConflictTitles/KeyTransitionLabel
+	// SetSongView.RecentlyRepeated/Conflicts/KeyTransitionLabel
 	// below): it isn't attributable to any one song or pair, just the set
 	// as a whole. See docs/plans/shipped/in-place-set-warnings-plan.md for
 	// why the other three warning checks that used to live in a
@@ -363,14 +363,27 @@ type SetSongView struct {
 	// (set_builder.templ) instead of the old top-of-page RepeatWarnings
 	// list - see docs/plans/shipped/in-place-set-warnings-plan.md.
 	RecentlyRepeated bool
-	// ConflictTitles lists the titles of other songs already in this set
-	// that this one has an avoid_pairing relationship with - mirrors
-	// CandidateSongView.ConflictTitles, rendered the same way (a
-	// components.ConflictBadge naming the other song(s)) instead of the old
-	// top-of-page ExistingConflicts list. Empty when there's no such
-	// conflict. The two songs in a pair aren't necessarily adjacent rows -
-	// see the controller's conflictTitlesBySong.
-	ConflictTitles []string
+	// RecentlyRepeatedKey/RecentlyRepeatedDismissed back this warning's own
+	// Dismiss/Re-enable action (docs/plans/shipped/
+	// dismissable-warnings-plan.md) - per-occurrence (plan + song), unlike
+	// Conflicts[i].SubjectKey below, which is permanent. RecentlyRepeatedKey
+	// is only meaningful when RecentlyRepeated is true; RecentlyRepeatedDismissed
+	// doesn't change whether the badge renders at all, only whether it
+	// renders loud or muted (see songBadgeSpans/songAlwaysVisibleBadgeCount).
+	RecentlyRepeatedKey       string
+	RecentlyRepeatedDismissed bool
+	// Conflicts lists this song's own avoid_pairing conflicts with other
+	// songs already in this set - one entry per conflicting song, each
+	// carrying its own permanent dismissal key (see ConflictBadgeView),
+	// since a song can conflict with more than one other song in the same
+	// set and each pairing dismisses independently. Mirrors
+	// CandidateSongView.Conflicts, rendered the same way (a
+	// components.ConflictBadge-styled Disclosure naming the other song, loud
+	// or muted depending on Dismissed) instead of the old top-of-page
+	// ExistingConflicts list. Empty when there's no such conflict. The two
+	// songs in a pair aren't necessarily adjacent rows - see the
+	// controller's conflictBadgesBySong.
+	Conflicts []ConflictBadgeView
 	// KeyTransitionLabel is a short, always-visible badge caption
 	// ("half-step from previous song") when this song's key is a half-step
 	// or tritone change from the song immediately before it in the order of
@@ -455,6 +468,16 @@ type SetSongView struct {
 	VocalRangeWarningLabel   string
 	VocalRangeWarningMessage string
 	VocalRangeWarningIsTip   bool
+	// VocalRangeWarningKey/VocalRangeWarningDismissed are this warning's own
+	// Dismiss/Re-enable state (docs/plans/shipped/
+	// dismissable-warnings-plan.md) - per-occurrence, keyed on plan + song +
+	// leader (see the controller's vocalRangeMismatchSubjectKey), so
+	// reassigning the leader re-scopes the key automatically rather than
+	// carrying a stale dismissal forward. Only meaningful when
+	// VocalRangeWarningLabel != ""; Dismissed doesn't hide the badge, only
+	// switches it to its muted styling (see songBadgeSpans).
+	VocalRangeWarningKey       string
+	VocalRangeWarningDismissed bool
 
 	// VocalRange is this song's stored vocal range row, zero-valued
 	// (ID == 0) when none is on file - unlike VocalRangeDisplay above
@@ -642,25 +665,47 @@ type RosterPersonOptionView struct {
 	Name     string
 }
 
+// ConflictBadgeView is one avoid-pairing conflict badge - one entry per
+// other song this song/candidate conflicts with (see
+// SetSongView.Conflicts/CandidateSongView.Conflicts), unlike the old flat
+// ConflictTitles []string this replaced: each pairing carries its own
+// permanent dismissal key (docs/plans/shipped/
+// dismissable-warnings-plan.md), independent of whichever other pairing(s)
+// the same song might also have, so dismissing "avoid pairing with X"
+// doesn't also silently dismiss "avoid pairing with Y" on the same row.
+// SubjectKey is the canonical, order-independent song-pair key (see the
+// controller's avoidPairingSubjectKey) - organization + song-pair scoped,
+// with no plan component, since this warning kind dismisses permanently
+// rather than per-occurrence.
+type ConflictBadgeView struct {
+	Title      string
+	SubjectKey string
+	Dismissed  bool
+}
+
 // CandidateSongView is a song not yet in the set, offered for adding via
 // the "Browse all songs" search list (see CandidateSearchResults,
 // BuildCandidatesSearch) - computed only for songs that actually match a
 // search/role-filter request, never for the whole library at once (see
-// that handler's doc comment for why). ConflictTitles lists the titles of
-// set songs it has an avoid_pairing relationship with (empty when there's
-// no conflict); RolesAttr/TagsAttr are space-separated codes/values kept
-// around from when filtering was client-side - now unused by any JS, but
-// left on the view model since songCandidateMeta (set_builder.templ) has
-// no other use for them and removing them buys nothing.
+// that handler's doc comment for why). Conflicts lists the set songs it
+// has an avoid_pairing relationship with (empty when there's no conflict);
+// RolesAttr/TagsAttr are space-separated codes/values kept around from when
+// filtering was client-side - now unused by any JS, but left on the view
+// model since songCandidateMeta (set_builder.templ) has no other use for
+// them and removing them buys nothing.
 type CandidateSongView struct {
-	SongID         string
-	Title          string
-	ConflictTitles []string
+	SongID    string
+	Title     string
+	Conflicts []ConflictBadgeView
 	// RecentlyRepeated is true when this song was sung in each of the last
 	// two past plans for this service type (see the controller's
 	// recentlyRepeatedSongs) - a nudge to think twice before adding it a
-	// third time in a row.
-	RecentlyRepeated bool
+	// third time in a row. RecentlyRepeatedKey/RecentlyRepeatedDismissed
+	// mirror SetSongView's own fields of the same name - see that struct's
+	// doc comment.
+	RecentlyRepeated          bool
+	RecentlyRepeatedKey       string
+	RecentlyRepeatedDismissed bool
 	// NewSongLabel is a short badge ("Sung once"/"Sung twice") for a song
 	// that's genuinely new to the church and hasn't been sung enough times
 	// to stick yet - see SetBuilderData.SongsToReinforce, which this
@@ -728,7 +773,7 @@ func (c CandidateSongView) HasExtraMeta() bool {
 	return c.NewSongLabel != "" ||
 		c.ArrangementInfo != "" ||
 		len(c.Contexts) > 0 ||
-		len(c.ConflictTitles) > 0 ||
+		len(c.Conflicts) > 0 ||
 		c.RecentlyRepeated
 }
 

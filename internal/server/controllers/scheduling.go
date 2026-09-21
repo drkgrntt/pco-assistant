@@ -537,6 +537,11 @@ func (sc *SchedulingController) RegisterRoutes(router fiber.Router) {
 	group.Get("/build/:service_type_id/:plan_id/candidates/search", sc.BuildCandidatesSearch)
 	group.Get("/build/:service_type_id/:plan_id/candidates/:song_id/details", sc.BuildCandidateDetails)
 	group.Post("/build/:service_type_id/:plan_id/candidates/:song_id/archive", sc.ArchiveSong)
+	// Dismissable Songs-tab warnings (docs/plans/shipped/
+	// dismissable-warnings-plan.md) - avoid-pairing/recently-repeated/
+	// vocal-range-mismatch, see sets_builder_dismissals.go.
+	group.Post("/build/:service_type_id/:plan_id/warnings/dismiss", sc.DismissBuildWarning)
+	group.Post("/build/:service_type_id/:plan_id/warnings/undismiss", sc.UndismissBuildWarning)
 	group.Post("/build/:service_type_id/:plan_id/items", sc.AddPlanItem)
 	group.Post("/build/:service_type_id/:plan_id/items/:item_id", sc.UpdatePlanItem)
 	group.Delete("/build/:service_type_id/:plan_id/items/:item_id", sc.RemovePlanItem)

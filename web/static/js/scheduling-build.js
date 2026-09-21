@@ -125,6 +125,37 @@ function closeVocalRangeBadges() {
   });
 }
 
+// The set builder's dismissable avoid-pairing/recently-repeated badges (see
+// songBadgeSpans/songCandidateMeta/candidateConflictAndRepeatBadges,
+// set_builder.templ) - docs/plans/shipped/dismissable-warnings-plan.md.
+// Same open/close idiom as toggleKeyTransitionBadge/toggleVocalRangeBadge
+// above, kept as its own wrapper class for the same reason: this popup is
+// an explanation (plus a Dismiss/Re-enable action button), not a row action
+// menu, and shouldn't close (or be closed by) the row's other menus/badges.
+// The vocal-range-mismatch badge also carries a Dismiss/Re-enable action
+// but reuses toggleVocalRangeBadge/closeVocalRangeBadges above instead of
+// this pair - it already had its own wrapper/toggle classes before
+// dismissal was added.
+function toggleDismissableWarningBadge(button) {
+  var wrapper = button.closest(".dismissable-warning-badge");
+  var opening = !wrapper.classList.contains("open");
+  closeDismissableWarningBadges();
+  if (opening) {
+    wrapper.classList.add("open");
+    button.setAttribute("aria-expanded", "true");
+  }
+}
+
+function closeDismissableWarningBadges() {
+  document.querySelectorAll(".dismissable-warning-badge.open").forEach(function (wrapper) {
+    wrapper.classList.remove("open");
+    var toggle = wrapper.querySelector(".dismissed-warning-toggle");
+    if (toggle) {
+      toggle.setAttribute("aria-expanded", "false");
+    }
+  });
+}
+
 // TagBadge's click-to-expand treatment for a long tag value (badge.templ,
 // candidateBadgeExtras/song_tags.templ) - same open/close idiom as
 // toggleKeyTransitionBadge/toggleTransitionNoteBadge/toggleVocalRangeBadge
@@ -418,6 +449,9 @@ document.addEventListener("click", function (event) {
   if (!event.target.closest(".vocal-range-badge")) {
     closeVocalRangeBadges();
   }
+  if (!event.target.closest(".dismissable-warning-badge")) {
+    closeDismissableWarningBadges();
+  }
   if (!event.target.closest(".tag-badge-wrap")) {
     closeTagBadges();
   }
@@ -441,6 +475,7 @@ document.addEventListener("keydown", function (event) {
     closeKeyTransitionBadges();
     closeTransitionNoteBadges();
     closeVocalRangeBadges();
+    closeDismissableWarningBadges();
     closeTagBadges();
     closeBadgeOverflows();
     closeMobileMenu();

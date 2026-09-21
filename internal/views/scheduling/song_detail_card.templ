@@ -104,16 +104,16 @@ templ KeyFormFragment(data SetBuilderData, song SetSongView, errMsg string) {
 	@keyForm(data, song, errMsg)
 	<div class="muted song-meta" id={ fmt.Sprintf("song-meta-%d", song.ID) } hx-swap-oob="true">{ song.ArrangementInfo }</div>
 	@songVocalRangeLine(song, true)
-	@songBadgesOOB(song)
+	@songBadgesOOB(song, data.ServiceTypeID, data.PlanID)
 	if next, ok := nextSongRowAfter(data.ServiceOrder, song.ID); ok {
-		@songBadgesOOB(next)
+		@songBadgesOOB(next, data.ServiceTypeID, data.PlanID)
 	}
 	@songPublishPanelOOB(data)
 }
 
 templ DescriptionFormFragment(data SetBuilderData, song SetSongView, errMsg string) {
 	@descriptionForm(data, song, errMsg)
-	@songBadgesOOB(song)
+	@songBadgesOOB(song, data.ServiceTypeID, data.PlanID)
 	@songPublishPanelOOB(data)
 }
 
@@ -124,7 +124,7 @@ templ DescriptionFormFragment(data SetBuilderData, song SetSongView, errMsg stri
 // immediately).
 templ LeaderFormFragment(data SetBuilderData, song SetSongView, errMsg string) {
 	@leaderForm(data, song, errMsg, false)
-	@songBadgesOOB(song)
+	@songBadgesOOB(song, data.ServiceTypeID, data.PlanID)
 	@songPublishPanelOOB(data)
 }
 
@@ -212,9 +212,9 @@ templ SongArrangementInfoRefreshFragment(data SetBuilderData, song SetSongView, 
 			@components.Badge("", "Chord chart")
 		</span>
 	}
-	@songBadgesOOB(song)
+	@songBadgesOOB(song, data.ServiceTypeID, data.PlanID)
 	if next, ok := nextSongRowAfter(data.ServiceOrder, song.ID); ok {
-		@songBadgesOOB(next)
+		@songBadgesOOB(next, data.ServiceTypeID, data.PlanID)
 	}
 	@songRefreshStatusOOB(song.ID, errMsg)
 }

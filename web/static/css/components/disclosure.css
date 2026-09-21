@@ -311,6 +311,100 @@
   display: block;
 }
 
+/* The set builder's dismissable avoid-pairing/recently-repeated badges
+   (see songBadgeSpans/songCandidateMeta/candidateConflictAndRepeatBadges,
+   set_builder.templ) - docs/plans/shipped/dismissable-warnings-plan.md.
+   Same floating-popover shape as .key-transition-badge above (see
+   toggleDismissableWarningBadge/closeDismissableWarningBadges,
+   scheduling-build.js), but its menu ends with a Dismiss/Re-enable action
+   button (see dismissWarningActions, set_builder.templ) rather than plain
+   explanatory text alone. The vocal-range-mismatch badge (.vocal-range-badge
+   above) reuses this same Dismiss/Re-enable action inside its own existing
+   wrapper/menu/toggle classes instead of this one - only the
+   .warning-dismissed toggle modifier below is shared between the two
+   families. */
+.dismissable-warning-badge {
+  position: relative;
+  display: inline-flex;
+}
+
+.dismissed-warning-toggle {
+  display: inline-block;
+  min-height: 0;
+  border: none;
+  line-height: 1;
+}
+
+.dismissed-warning-toggle:hover {
+  background: var(--danger-subtle);
+  border-color: transparent;
+}
+
+.dismissable-warning-badge-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 20;
+  max-width: 20rem;
+  margin-top: 0.3rem;
+  padding: var(--space-2) calc(var(--space-2) + 0.1rem);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+
+.dismissable-warning-badge-menu p {
+  margin: 0;
+}
+
+.dismissable-warning-badge.open .dismissable-warning-badge-menu {
+  display: block;
+}
+
+/* dismissWarningActions' own Dismiss/Re-enable submit button, inside
+   whichever badge family's menu it's rendered in
+   (.dismissable-warning-badge-menu or .vocal-range-badge-menu) - a small
+   plain-bordered action distinct from the explanatory text above it,
+   matching .row-menu-menu button's own minimal treatment rather than a
+   full-size form button. */
+.dismiss-warning-action {
+  display: inline-block;
+  margin-top: var(--space-2);
+  min-height: 0;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.dismiss-warning-action:hover {
+  background: var(--accent-subtle);
+  border-color: transparent;
+}
+
+/* warningToggleClass's muted modifier (set_builder.templ) - a dismissed
+   warning still renders (see songAlwaysVisibleBadgeCount/
+   candidateAlwaysVisibleBadgeCount for why it's excluded from the loud-badge
+   collapse count instead of being hidden outright), just visually
+   de-emphasized so a loud, unaddressed warning still reads as more urgent
+   than one someone already reviewed and dismissed. Reduced opacity rather
+   than a full color swap, so it stays recognizably the same badge family
+   (.conflict-badge/.badge) at a glance. */
+.warning-dismissed {
+  opacity: 0.55;
+}
+
+.warning-dismissed:hover {
+  opacity: 0.85;
+}
+
 /* The set builder's "+N more" badge overflow (see songBadgeSpans/
    songCandidateMeta, set_builder.templ) - collapses a row's
    lower-priority badges (roles, tags, resurfaced transition-note prompts)
