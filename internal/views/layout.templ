@@ -263,15 +263,26 @@ templ navToggleContent() {
 }
 
 templ navMenuContent() {
-	// Song/People library + detail pages (docs/plans/not-started/
-	// song-person-detail-pages-plan.md, Phases 1-2) - added here purely so
-	// they're clickable for review, ahead of that plan's own Phase 3
-	// retirement pass, which is what actually replaces the eight links
-	// below with these two. Until Phase 3 lands, both the old flat pages
-	// and these new aggregate pages coexist and stay independently
-	// functional.
+	// Song/People library + detail pages (docs/plans/in-progress/
+	// song-person-detail-pages-plan.md, Phases 1-2), plus the ten
+	// original flat setup pages - both kept permanently side by side,
+	// not one replacing the other (see that plan's "Disposition"
+	// section for why retiring the flat pages was reconsidered and
+	// dropped: they solve a real, different task - bulk-entry across
+	// the whole library/roster - that the per-entity pages make worse,
+	// not better). A dozen links in one flat list read as busy, so
+	// they're grouped here with plain non-interactive labels
+	// (.nav-dropdown-group-label) instead - splitting into separate
+	// top-level dropdowns was considered and rejected: "Song / Person
+	// Preferences" covers both sides and doesn't sort cleanly into a
+	// song-only or person-only menu, and promoting Songs/People to
+	// top-level nav billing would commit two brand-new, not-yet-proven
+	// pages to permanent prominence ahead of any real usage signal that
+	// they deserve it.
+	<div class="nav-dropdown-group-label">Browse</div>
 	<a href="/scheduling/songs">Songs</a>
 	<a href="/scheduling/people">People</a>
+	<div class="nav-dropdown-group-label">Song setup</div>
 	<a href="/scheduling/song-relationships">Song Relationships</a>
 	<a href="/scheduling/song-roles">Song Roles</a>
 	<a href="/scheduling/song-contexts">Song Contexts</a>
@@ -295,11 +306,18 @@ templ navMenuContent() {
 			@components.Badge("status-pending", "New")
 		}
 	</a>
+	<a href="/scheduling/song-vocal-range">Song Vocal Range</a>
+	<div class="nav-dropdown-group-label">Preferences</div>
+	// Covers both directions (a song's preferred/discouraged people and
+	// a person's preferred/discouraged songs) on one page - doesn't
+	// sort cleanly into "Song setup" or "Person setup" above/below, so
+	// it gets its own single-link group instead of being forced into
+	// one side.
 	<a href="/scheduling/song-preferences">Song / Person Preferences</a>
+	<div class="nav-dropdown-group-label">Person setup</div>
 	<a href="/scheduling/person-relationships">Person Relationships</a>
 	<a href="/scheduling/position-preferences">Position Preferences</a>
 	<a href="/scheduling/vocal-range">Vocal Range</a>
-	<a href="/scheduling/song-vocal-range">Song Vocal Range</a>
 }
 
 // genericHelpDialog is the Help button's (site-footer, above) last-resort
