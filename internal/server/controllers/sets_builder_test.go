@@ -809,6 +809,67 @@ func TestRosterPersonOptions(t *testing.T) {
 	}
 }
 
+// TestAssignedPersonIDsAndNames covers buildLeaderFormRefreshViews' own
+// roster-scan step (the fix for docs/issues.md's "eligible leaders didn't
+// populate" report) - a person assigned to more than one position on the
+// same roster contributes one id, not two, and an empty PersonID (a
+// position group with room left but nobody in it yet) is skipped rather
+// than producing a blank entry.
+func TestAssignedPersonIDsAndNames(t *testing.T) {
+	positions := []views.PositionGroupView{
+		{
+			TeamPositionName: "Lead Vocals",
+			Assigned: []views.AssignmentView{
+				{PersonID: "p1", Name: "Amy Adams"},
+				{PersonID: "", Name: ""},
+			},
+		},
+		{
+			TeamPositionName: "Harmony Vocals",
+			Assigned: []views.AssignmentView{
+				{PersonID: "p1", Name: "Amy Adams"},
+				{PersonID: "p2", Name: "Zed Zephyr"},
+			},
+		},
+	}
+
+	gotIDs, gotNames := assignedPersonIDsAndNames(positions)
+
+	wantIDs := []string{"p1", "p2"}
+	if len(gotIDs) != len(wantIDs) {
+		t.Fatalf("assignedPersonIDsAndNames() ids = %v, want %v", gotIDs, wantIDs)
+	}
+	for i := range wantIDs {
+		if gotIDs[i] != wantIDs[i] {
+			t.Errorf("id %d = %q, want %q", i, gotIDs[i], wantIDs[i])
+		}
+	}
+	wantNames := map[string]string{"p1": "Amy Adams", "p2": "Zed Zephyr"}
+	if len(gotNames) != len(wantNames) || gotNames["p1"] != wantNames["p1"] || gotNames["p2"] != wantNames["p2"] {
+		t.Errorf("assignedPersonIDsAndNames() names = %+v, want %+v", gotNames, wantNames)
+	}
+}
+
+// TestIdsMissingFrom covers buildLeaderFormRefreshViews' "which leaders need
+// a live PCO name lookup" filter - only an id absent from known should come
+// back, so a leader already resolved via the roster scan above never
+// triggers a redundant fetch.
+func TestIdsMissingFrom(t *testing.T) {
+	known := map[string]string{"p1": "Amy Adams"}
+
+	got := idsMissingFrom([]string{"p1", "p2", "p3"}, known)
+
+	want := []string{"p2", "p3"}
+	if len(got) != len(want) {
+		t.Fatalf("idsMissingFrom() = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("id %d = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
 // TestCandidateMatchesContext covers candidateMatchesContext's filtering
 // logic - the context-filter equivalent of candidateMatchesRole, which this
 // mirrors exactly (space-separated substring membership, "" matches

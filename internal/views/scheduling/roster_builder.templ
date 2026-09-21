@@ -651,7 +651,16 @@ templ positionGroupCard(serviceTypeID, planID string, schedulePreferenceOptions 
 // candidate card (unreachable anyway, since its row is gone from the
 // freshly-swapped candidate list above) is dropped along with it, without
 // touching any other position's own candidate cards.
-templ RosterAssignmentAddedResponse(serviceTypeID, planID string, group PositionGroupView, top RosterBuilderData, added *AssignmentView) {
+//
+// leaderFormsOOB(leaderData, leaderSongs) keeps the Songs tab's own leader
+// pickers in sync with who this add just made eligible - see that templ's
+// own doc comment and buildLeaderFormRefreshViews (sets_builder.go), the
+// fix for docs/issues.md's "eligible leaders didn't populate" report. The
+// Team tab is lazy-loaded once and only shown/hidden client-side afterward
+// (build_tabs.templ), never re-rendered on its own, so without this an
+// assignment made here would otherwise leave the Songs tab's card stale
+// until a full page reload.
+templ RosterAssignmentAddedResponse(serviceTypeID, planID string, group PositionGroupView, top RosterBuilderData, added *AssignmentView, leaderData SetBuilderData, leaderSongs []SetSongView) {
 	@positionGroupCard(serviceTypeID, planID, top.SchedulePreferenceOptions, group, top.ReadOnly)
 	@rosterTopOOB(top)
 	@rosterPublishPanelOOB(top)
@@ -660,6 +669,7 @@ templ RosterAssignmentAddedResponse(serviceTypeID, planID string, group Position
 	if added != nil {
 		@personDetailCardInsertOOB(top, *added)
 	}
+	@leaderFormsOOB(leaderData, leaderSongs)
 }
 
 // RosterAssignmentRemovedResponse is RemoveRosterAssignment's htmx
@@ -668,13 +678,17 @@ templ RosterAssignmentAddedResponse(serviceTypeID, planID string, group Position
 // person's own card. candidateDetailGroupOOB here picks up the opposite
 // change - the removed person re-entering group's Candidates (if still
 // eligible), whose row now needs a real candidate card to open.
-templ RosterAssignmentRemovedResponse(serviceTypeID, planID string, group PositionGroupView, top RosterBuilderData, removedAssignmentID int64) {
+// leaderFormsOOB - see RosterAssignmentAddedResponse's own doc comment;
+// a removal can just as easily drop someone who was a song's own leader
+// out of the eligible pool as an add can add one in.
+templ RosterAssignmentRemovedResponse(serviceTypeID, planID string, group PositionGroupView, top RosterBuilderData, removedAssignmentID int64, leaderData SetBuilderData, leaderSongs []SetSongView) {
 	@positionGroupCard(serviceTypeID, planID, top.SchedulePreferenceOptions, group, top.ReadOnly)
 	@rosterTopOOB(top)
 	@rosterPublishPanelOOB(top)
 	@rosterGlanceOOB(top)
 	@candidateDetailGroupOOB(serviceTypeID, planID, group)
 	@personDetailCardRemoveOOB(removedAssignmentID)
+	@leaderFormsOOB(leaderData, leaderSongs)
 }
 
 // RosterPositionGroupMutationResponse is QuickAddPositionPreference's htmx
@@ -684,6 +698,16 @@ templ RosterAssignmentRemovedResponse(serviceTypeID, planID string, group Positi
 // candidate pool (a newly-eligible person becomes a new candidate row,
 // each needing its own detail card to open into) - candidateDetailGroupOOB
 // covers exactly that.
+//
+// Deliberately no leaderFormsOOB push here, unlike RosterAssignmentAdded/
+// RemovedResponse above: song_detail_card.templ's leaderForm picker is
+// built from RosterPersonOptions, which is who's actually *assigned* to
+// this roster (vocalistPersonIDs, buildLeaderFormRefreshViews), not who's
+// merely eligible - QuickAddPositionPreference only writes an eligibility
+// preference straight to Planning Center (setPersonTeamPositionPreference),
+// it never adds anyone to Assigned, so it can't change who this plan's
+// song leader picker offers. Checked per docs/issues.md's report alongside
+// AddRosterAssignment/RemoveRosterAssignment, not skipped by omission.
 templ RosterPositionGroupMutationResponse(serviceTypeID, planID string, group PositionGroupView, top RosterBuilderData) {
 	@positionGroupCard(serviceTypeID, planID, top.SchedulePreferenceOptions, group, top.ReadOnly)
 	@rosterTopOOB(top)

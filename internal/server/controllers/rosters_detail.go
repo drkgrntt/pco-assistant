@@ -106,7 +106,8 @@ func (sc *SchedulingController) AddRosterAssignment(c *fiber.Ctx) error {
 		}
 	}
 
-	return render(c, views.RosterAssignmentAddedResponse(serviceTypeID, planID, group, top, addedView))
+	leaderData, leaderSongs, _ := sc.buildLeaderFormRefreshViews(ctx, orgID, serviceTypeID, planID, top)
+	return render(c, views.RosterAssignmentAddedResponse(serviceTypeID, planID, group, top, addedView, leaderData, leaderSongs))
 }
 
 // previouslyAddedPersonID returns the person id of whoever was most
@@ -176,7 +177,8 @@ func (sc *SchedulingController) RemoveRosterAssignment(c *fiber.Ctx) error {
 	sc.triggerPersonDataSync(c)
 	top.ErrMsg = appendErr(appendErr(errMsg, groupErrMsg), top.ErrMsg)
 
-	return render(c, views.RosterAssignmentRemovedResponse(serviceTypeID, planID, group, top, int64(rowID)))
+	leaderData, leaderSongs, _ := sc.buildLeaderFormRefreshViews(ctx, orgID, serviceTypeID, planID, top)
+	return render(c, views.RosterAssignmentRemovedResponse(serviceTypeID, planID, group, top, int64(rowID), leaderData, leaderSongs))
 }
 
 // QuickAddPersonRelationship/QuickAddPositionPreference back the roster
