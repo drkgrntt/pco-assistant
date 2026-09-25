@@ -76,7 +76,7 @@ that first. Facts worth adding here that aren't in CLAUDE.md:
 | Roster shared-fetch duplication (`GetTeamMembers`/`GetNeededPositions`/`GetTeams` fetched twice per click) | fixed | `rosterSharedPCOData` - fetch once, pass to both scoped builders |
 | Roster `GetTeams` call (a whole extra request per plan, just to resolve team ids to names) | fixed | `include=team` sideloaded on the `GetNeededPositions` call already being made - `GetTeams` eliminated, shared roster fetch now 2 calls not 3 |
 | `GetServiceTypes` (called independently by 3 pages) | fixed | cached `FetchServiceTypes`, 60s TTL, same shape as `FetchActiveSongs` |
-| `fetchRecentPlanHistory` (uncached, would've fired per debounced keystroke once candidates went search-driven) | fixed | cached per service type, 60s TTL |
+| `fetchRecentPlanHistory` (uncached, would've fired per debounced keystroke once candidates went search-driven) | fixed | cached per plan (not just per service type - see 2026-09-21 Changelog entry), 60s TTL |
 | Home page (`buildHomeData`, sequential per-service-type) | fixed | `RunConcurrently` fan-out |
 | Home page "needs attention" look-ahead (second row when the next plan's already fully planned) | mitigated | bounded to `homeLookAheadPlansCap` (3) candidates, rides the existing `GetPlans` call (`PerPage` bumped, not a second call) - checked in order, stops at the first unplanned candidate |
 | Publish/Refresh writes (sequential per song/assignment) | fixed | `RunConcurrently` fan-out, with ordering/error-collection made goroutine-safe (see Design decisions) |
@@ -1099,3 +1099,30 @@ out to 100-200 sequential round trips per load.
   instead of an eager batch. Shares the `PCOTag{ID, GroupID, Name}` type
   with `pco_song_tags.go` rather than defining a separate PersonTag type -
   same PCO resource shape either way.
+- **`fetchRecentPlanHistory` fixed to compare against the plan being built,
+  not "today" (2026-09-21)** - correctness bug, not a rate-limit one, but
+  it lives in this file since the fix changes the exact PCO calls this
+  hot path makes. Root cause: it called `GetPlans(Filter: "past", OrderBy:
+  "-sort_date", PerPage: 2)`, which finds the two most recent plans that
+  have already happened *relative to today* - the same two plans no matter
+  which plan (past, this week, or a month out) is currently being built.
+  For a plan being scheduled well into the future, with other plans
+  already on the calendar in between, that's the wrong pair: it flagged a
+  song as "sung in each of the last 2 plans" against occurrences that
+  don't actually precede it in the schedule, just happen to be the most
+  recent ones that have aired. Fixed by walking the specific plan's own
+  `previous_plan` relationship (`PlanRelationships.PreviousPlan`, go-pco
+  `plans.go`) back two steps instead - the same relationship
+  `buildSetBuilderData` already reads for the Previous/Next buttons
+  (`PrevPlanID`/`NextPlanID`), so this is PCO's own notion of "the plans
+  before this one," not a home-grown one. Call-count impact: previously 1
+  `GetPlans` (list) + 2 `GetItems` per uncached lookup; now up to 2
+  `GetPlan` (single) + 2 `GetItems` - one more call in the worst case, but
+  still covered by the existing 60s cache (`recentPlanHistoryCacheTTL`),
+  now keyed per plan (`recentPlanHistoryCacheKey`, `serviceTypeID + "/" +
+  planID`) instead of per service type alone, since the two plans being
+  compared now depend on which plan is being built, not just its service
+  type. See `fetchRecentPlanHistoryFromPCO`'s doc comment (`sets_builder.
+  go`) for the full reasoning and
+  `TestFetchRecentPlanHistoryWalksPreviousPlanNotTodaysPastPlans`
+  (`sets_builder_history_cache_test.go`) for the regression test.
