@@ -346,7 +346,7 @@ func (sc *SchedulingController) buildSetBuilderData(ctx context.Context, organiz
 	// than fetched right where the repeat check gets built) so
 	// history.AverageLength/RepeatedSongs are already in hand by the time
 	// the ServiceOrder block below needs them.
-	history := fetchRecentPlanHistory(ctx, serviceTypeID)
+	history := fetchRecentPlanHistory(ctx, serviceTypeID, planID)
 
 	// candidateConflicts/existing are fetched up front too - moved from
 	// where this used to be fetched (right before the Suggestions loop
@@ -933,7 +933,7 @@ func (sc *SchedulingController) buildCandidateLookups(ctx context.Context, organ
 	arrangementCache, _ := sc.store.SongArrangementInfo(ctx, organizationID)
 
 	candidateConflicts, _, _ := sc.store.AvoidPairings(ctx, organizationID, setID)
-	history := fetchRecentPlanHistory(ctx, serviceTypeID)
+	history := fetchRecentPlanHistory(ctx, serviceTypeID, planID)
 
 	// avoidPairingDismissed/recentRepeatDismissed - see the identical
 	// buildSetBuilderData block's doc comment; duplicated here rather than
@@ -1318,43 +1318,47 @@ func notSungInLabel(lastScheduledAt *time.Time, tags []scheduling.SongTag) strin
 	return "Not sung recently"
 }
 
-// recentTwoPlanLookback is how many of the most recent past plans
-// fetchRecentPlanHistory compares - "the two sets before it", per the
-// repeat-warning feature's own description.
+// recentTwoPlanLookback is how many plans, walked back from the one being
+// built via PCO's own previous_plan chain, fetchRecentPlanHistory compares
+// - "the two sets before it", per the repeat-warning feature's own
+// description. "Before it" means chronologically before *this plan*, not
+// before today - see fetchRecentPlanHistoryFromPCO's doc comment for why
+// that distinction matters and used to be wrong.
 const recentTwoPlanLookback = 2
 
-// recentPlanHistory bundles what buildSetBuilderData needs from a service
-// type's two most recent past plans: which songs repeated across both of
-// them (RepeatedSongs - what recentlyRepeatedSongs used to return on its
-// own) and their average total length (AverageLength), for the
-// service-length warning below. One GetPlans/GetItems round trip covers
-// both, rather than fetching the same two plans' items twice.
+// recentPlanHistory bundles what buildSetBuilderData needs from the two
+// plans immediately preceding the one being built (via PCO's own
+// previous_plan relationship, not "the two most recent past plans"): which
+// songs repeated across both of them (RepeatedSongs - what
+// recentlyRepeatedSongs used to return on its own) and their average total
+// length (AverageLength), for the service-length warning below.
 type recentPlanHistory struct {
 	RepeatedSongs map[string]bool
 	// AverageLength is the mean total item length (seconds) across the two
-	// plans compared - 0 when there weren't two past plans to compare,
-	// which serviceLengthWarning treats as "nothing to compare against"
-	// rather than "this plan is infinitely long."
+	// preceding plans - 0 when there weren't two to compare (this plan is
+	// first or second in its service type's sequence), which
+	// serviceLengthWarning treats as "nothing to compare against" rather
+	// than "this plan is infinitely long."
 	AverageLength int
 }
 
 // recentPlanHistoryCacheTTL bounds how stale a cached recentPlanHistory can
 // be - same value and reasoning as scheduling.FetchActiveSongs'
-// songCacheTTL (see pco_songs.go): the two most recent *past* plans for a
-// service type are effectively session-stable (a plan doesn't cross from
-// future to past mid-session in practice), so a minute of staleness costs
-// nothing, and this exists purely to stop re-fetching/re-summing the same
-// two plans' items on every full builder render (add/remove/publish/
-// discard already re-triggers buildSetBuilderData from scratch) and now,
-// since BuildCandidatesSearch also calls this, on every debounced
-// candidate search too - each call was otherwise a live GetPlans + 2x
-// GetItems, uncached, exactly the kind of hot-path PCO call CLAUDE.md's
-// own "PCO API calls" section says to cache when the underlying data is
-// session-stable like this.
+// songCacheTTL (see pco_songs.go): the two plans immediately preceding a
+// given plan (via PCO's own previous_plan chain) are effectively
+// session-stable - that chain doesn't change mid-session in practice - so a
+// minute of staleness costs nothing, and this exists purely to stop
+// re-fetching/re-summing the same two plans' items on every full builder
+// render (add/remove/publish/discard already re-triggers
+// buildSetBuilderData from scratch) and now, since BuildCandidatesSearch
+// also calls this, on every debounced candidate search too - each call was
+// otherwise up to 2x live GetPlan + 2x GetItems, uncached, exactly the kind
+// of hot-path PCO call CLAUDE.md's own "PCO API calls" section says to
+// cache when the underlying data is session-stable like this.
 const recentPlanHistoryCacheTTL = 60 * time.Second
 
-// cachedRecentPlanHistory is one service type's last-computed
-// recentPlanHistory, plus when it was computed.
+// cachedRecentPlanHistory is one plan's last-computed recentPlanHistory,
+// plus when it was computed.
 type cachedRecentPlanHistory struct {
 	history  recentPlanHistory
 	cachedAt time.Time
@@ -1365,63 +1369,91 @@ var (
 	recentPlanHistoryCache   = map[string]cachedRecentPlanHistory{}
 )
 
-// fetchRecentPlanHistory returns serviceTypeID's recent-plan history,
-// straight from Planning Center's own item data - not this tool's local
-// sets, since the point of both signals it backs is to compare against
-// what actually got sung/ran, regardless of whether it was built here.
-// Cached per service type (see recentPlanHistoryCacheTTL) - a PCO service
-// type id is already org-scoped (it belongs to exactly one PCO account),
-// so no separate organization key is needed, mirroring FetchActiveSongs'
-// own per-organization cache one level up. A transient PCO failure is
-// never cached (see fetchRecentPlanHistoryFromPCO's ok return) so it can't
-// pin a stale/empty result in for the rest of the window - same fail-safe
-// convention as FetchActiveSongs. The actual overlap computation lives in
-// songsInBoth so it can be unit tested without hitting Planning Center.
-func fetchRecentPlanHistory(ctx context.Context, serviceTypeID string) recentPlanHistory {
+// recentPlanHistoryCacheKey scopes the cache by the exact plan being built,
+// not just its service type - see fetchRecentPlanHistoryFromPCO's doc
+// comment for why the two plans being compared now depend on which plan is
+// being built, not just which service type it belongs to. A plan id is
+// only unique within its service type, hence the composite key.
+func recentPlanHistoryCacheKey(serviceTypeID, planID string) string {
+	return serviceTypeID + "/" + planID
+}
+
+// fetchRecentPlanHistory returns planID's recent-plan history, straight
+// from Planning Center's own item data - not this tool's local sets, since
+// the point of both signals it backs is to compare against what actually
+// got sung/ran, regardless of whether it was built here. Cached per plan
+// (see recentPlanHistoryCacheTTL/recentPlanHistoryCacheKey). A transient
+// PCO failure is never cached (see fetchRecentPlanHistoryFromPCO's ok
+// return) so it can't pin a stale/empty result in for the rest of the
+// window - same fail-safe convention as FetchActiveSongs. The actual
+// overlap computation lives in songsInBoth so it can be unit tested
+// without hitting Planning Center.
+func fetchRecentPlanHistory(ctx context.Context, serviceTypeID, planID string) recentPlanHistory {
 	now := time.Now()
+	cacheKey := recentPlanHistoryCacheKey(serviceTypeID, planID)
 
 	recentPlanHistoryCacheMu.Lock()
-	entry, ok := recentPlanHistoryCache[serviceTypeID]
+	entry, ok := recentPlanHistoryCache[cacheKey]
 	recentPlanHistoryCacheMu.Unlock()
 	if ok && now.Sub(entry.cachedAt) < recentPlanHistoryCacheTTL {
 		return entry.history
 	}
 
-	history, fetchOK := fetchRecentPlanHistoryFromPCO(ctx, serviceTypeID)
+	history, fetchOK := fetchRecentPlanHistoryFromPCO(ctx, serviceTypeID, planID)
 	if fetchOK {
 		recentPlanHistoryCacheMu.Lock()
-		recentPlanHistoryCache[serviceTypeID] = cachedRecentPlanHistory{history: history, cachedAt: now}
+		recentPlanHistoryCache[cacheKey] = cachedRecentPlanHistory{history: history, cachedAt: now}
 		recentPlanHistoryCacheMu.Unlock()
 	}
 	return history
 }
 
 // fetchRecentPlanHistoryFromPCO does fetchRecentPlanHistory's actual live
-// work. ok is false only for a genuine PCO call failure (not cache-worthy -
-// might well succeed a moment later); fewer than two past plans to compare
-// is a legitimate, stable answer (ok=true, zero-value recentPlanHistory),
-// same as any other successful-but-empty result - serviceLengthWarning
-// already treats AverageLength==0 as "nothing to compare against" rather
-// than "this plan is infinitely long," so callers see no behavior
-// difference from before this had a cache at all.
-func fetchRecentPlanHistoryFromPCO(ctx context.Context, serviceTypeID string) (history recentPlanHistory, ok bool) {
-	plans, err := pco.GetPlans(ctx, serviceTypeID, &pco.PlansParams{
-		Filter:  "past",
-		OrderBy: "-sort_date",
-		PerPage: recentTwoPlanLookback,
-	})
+// work: it walks *this plan's own* previous_plan relationship back two
+// steps to find "the two sets before it" - PCO's own chronologically-
+// adjacent-within-this-service-type chain, the same relationship
+// buildSetBuilderData already reads for the Previous/Next buttons (see its
+// PrevPlanID/NextPlanID comment) - rather than asking PCO for "the two most
+// recent plans before today" (the old `Filter: "past", OrderBy:
+// "-sort_date"` approach). Those are only the same two plans when nothing
+// else is scheduled between today and the plan being built; a plan
+// scheduled well into the future, with other plans already on the calendar
+// in between, would otherwise get compared against plans that don't
+// actually precede it, and flag a song as "recently repeated" against
+// occurrences that will be a month or more before it airs, not the two
+// occurrences immediately before it in the schedule.
+//
+// ok is false only for a genuine PCO call failure (not cache-worthy - might
+// well succeed a moment later); fewer than two preceding plans to compare
+// (this plan is first or second in its service type's sequence) is a
+// legitimate, stable answer (ok=true, zero-value recentPlanHistory), same
+// as any other successful-but-empty result - serviceLengthWarning already
+// treats AverageLength==0 as "nothing to compare against" rather than
+// "this plan is infinitely long."
+func fetchRecentPlanHistoryFromPCO(ctx context.Context, serviceTypeID, planID string) (history recentPlanHistory, ok bool) {
+	plan, err := pco.GetPlan(ctx, serviceTypeID, planID)
 	if err != nil {
 		return recentPlanHistory{}, false
 	}
-	if len(plans.Data) < recentTwoPlanLookback {
+	prevRel := plan.Data.Relationships.PreviousPlan.Data
+	if prevRel == nil {
 		return recentPlanHistory{}, true
 	}
 
-	items, err := pco.GetItems(ctx, serviceTypeID, plans.Data[0].ID, nil)
+	prevPlan, err := pco.GetPlan(ctx, serviceTypeID, prevRel.ID)
 	if err != nil {
 		return recentPlanHistory{}, false
 	}
-	prevItems, err := pco.GetItems(ctx, serviceTypeID, plans.Data[1].ID, nil)
+	prevPrevRel := prevPlan.Data.Relationships.PreviousPlan.Data
+	if prevPrevRel == nil {
+		return recentPlanHistory{}, true
+	}
+
+	items, err := pco.GetItems(ctx, serviceTypeID, prevRel.ID, nil)
+	if err != nil {
+		return recentPlanHistory{}, false
+	}
+	prevItems, err := pco.GetItems(ctx, serviceTypeID, prevPrevRel.ID, nil)
 	if err != nil {
 		return recentPlanHistory{}, false
 	}
