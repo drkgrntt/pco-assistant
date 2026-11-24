@@ -33,53 +33,11 @@ obvious way to do the thing, or does it hand the user a second UI pattern
 to learn / a reason to bounce back to PCO"). See "Reducing friction vs.
 Planning Center" in docs/ideas.md for what that looks like concretely.
 
-**Agent delegation**: not a blanket default, and different subagent types
-fit different phases of a task - not just "delegate or don't":
-
-- **general-purpose (isolation: worktree)** for a task that's
-  fully-specified upfront, self-contained, and either runs in parallel
-  with other independent work or benefits from not touching the live
-  checkout - a feature build you can completely spec before handing off,
-  with no need for the user to react mid-implementation, is the sweet
-  spot (four have run well this way so far: a new read-only page, a
-  warning-logic addition, a new outbound-email package, and the
-  live-sync-reflection poll-while-open banner + extended MergeSet
-  reconciliation, see docs/plans/shipped/live-sync-reflection-plan.md -
-  none of which touched files another one of them was also touching).
-- **Explore** for the reconnaissance a spec needs before it can be
-  written - "where does X live," "what's the existing pattern for Y,"
-  "what fields does this struct/response actually have." It's read-only
-  (no Edit/Write/Agent), so it can't wander into changing anything - one
-  broad-fan-out prompt replaces what would otherwise be several sequential
-  Read/Grep/Bash round trips spent just locating things before a real spec
-  can be written. Reach for it whenever the goal is still "find out," not
-  yet "change something."
-- **Plan** for turning an open-ended design doc or problem into the
-  concrete architecture a builder agent can execute without guessing - the
-  gap between a docs/plans/ doc that deliberately doesn't pick a mechanism
-  and lists "needs a real decision, not a default" open questions (see
-  `docs/plans/shipped/live-sync-reflection-plan.md`'s own phrasing) and an
-  exact function/file/field list ready to hand to a builder. Plan resolves
-  *how*, Explore resolves *where it lives*, general-purpose (worktree)
-  *writes the code*
-  - three phases of the same task, not competing options for the same one.
-
-Whichever type, keep doing the rest directly: anything needing iterative
-back-and-forth with the user (debugging against screenshots, "still
-broken, try this instead" loops - a subagent can't see a screenshot and
-wait for a reaction), git workflow (merge/deploy/branch cleanup -
-sequential, sometimes touches production, and gated on the user's own
-explicit go-ahead), small edits and doc changes, and anything touching
-secrets/env files or live-mutating verification against an external API
-(pulling a session token and curling the real PCO API to confirm its
-actual behavior, say) - worth doing carefully and visibly yourself even
-when it's just a handful of commands, not handed to a cold agent to
-explore blind. Each spawn re-derives full context from its prompt alone
-and costs real tokens (a general-purpose build runs on the order of
-100k+; an Explore/Plan pass scoped to research or design alone typically
-costs less) - real value for genuine parallel/isolated build work or the
-research/design phase ahead of it, wasted on anything a direct edit or a
-single Read/Grep would settle in one or two tool calls.
+**Agent delegation**: follow the global CLAUDE.md. Repo-specific: plan docs live in
+`docs/plans/`, with `docs/plans/shipped/live-sync-reflection-plan.md` as the worked
+example. To check what the PCO API really does, verify against the signed-in dev PCO
+account (pull a session token from the local `sessions` table); PCO has contradicted
+its own docs before.
 
 ## Commands
 
@@ -133,32 +91,6 @@ for a real (non-trivial) change:
    included one (confirm it landed at the expected version, not just that
    it ran), then `curl` the live URL (`pco.derekgarnett.com`) to confirm a
    real response.
-6. Wait for the user's explicit "delete the branch" before deleting it,
-   locally and on origin.
-
-Small/doc-only changes (a copy tweak, a README/docs/ideas.md correction) skip
-the branch ceremony - commit straight to `main` - but still only on the
-user's explicit ask to commit/push/deploy, same gating either way.
-
-Never run or touch the user's own local dev server (port 8080) directly -
-treat it as theirs, not something to start/stop/curl on their behalf.
-
-Never `cat`/`tail`/otherwise print a real `.env` file (local or on
-`debian`) - it's a live secrets file, and printing it puts every value in
-it into this conversation's transcript, not just the one you meant to
-check (this has actually happened - a `STRIPE_WEBHOOK_SECRET` leaked into
-a transcript this way). To check which keys exist without exposing
-values, `grep -o '^[A-Z_]*=' .env`; to check whether a specific key has a
-value set (not what it is), `grep -c '^KEY_NAME=.\+$' .env`. Appending new
-keys (`printf ... >> .env`) is fine and doesn't require reading the file
-first.
-
-When you need to confirm what Planning Center's API actually does rather
-than trust documentation or an assumption, verify it live against the
-signed-in dev PCO account instead of guessing - pull a session's access
-token from the local `sessions` table rather than assuming a doc is
-accurate; PCO's own behavior has contradicted its docs more than once
-this project's history.
 
 ## Keeping the docs current
 
